@@ -1,0 +1,31 @@
+server:
+  port: "8084"
+  mode: "release"
+  read_timeout: 10
+  write_timeout: 10
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "push_service"
+  sslmode: "disable"
+  timezone: "UTC"
+
+vapid:
+  public_key: ""
+  private_key: ""
+  subject: "mailto:admin@wideo11.com"
+
+ratelimit:
+  batch_size: 100
+  interval: "5s"
+  max_retries: 5
+
+nats:
+  urls:
+    - "nats://localhost:4222"
+  stream: "NOTIFICATION"
+  push_subject: "NOTIFICATION.push"
+  durable_consumer: "push-service"

@@ -29,8 +29,8 @@
 ## Phase 1: SSOT Config Service (Go)
 
 ### 1.1 Config Service Core
-- [ ] Initialize Go module: `services/config-service`
-- [ ] Set up GORM with PostgreSQL
+- [x] Initialize Go module: `services/config-service`
+- [x] Set up GORM with PostgreSQL
 - [ ] Create config schema (key, value, type, description, is_secret, environment)
 - [ ] Implement CRUD API for configs
 - [ ] Add caching layer (Redis)
@@ -81,21 +81,21 @@
 ## Phase 3: Core Microservices (Go + GORM)
 
 ### 3.1 Authentication Services
-- [ ] `auth-service`: JWT issuance/validation, token rotation
+- [x] `auth-service`: JWT issuance/validation, token rotation
 - [ ] `pin-service`: 6-digit PIN management, hashing (bcrypt/argon2)
 - [ ] `session-service`: Session creation, validation, revocation, device tracking
 - [ ] `device-service`: Device fingerprinting, trust scoring, known devices
-- [ ] `biometric-service`: WebAuthn/FIDO2 integration
+- [x] `biometric-service`: WebAuthn/FIDO2 integration
 
 ### 3.2 User Services
 - [ ] `user-service`: User CRUD, email/password auth (no social login)
 - [ ] `profile-service`: Profile data, avatar, bio, preferences
-- [ ] `settings-service`: User settings (theme, notifications, privacy)
+- [x] `settings-service`: User settings (theme, notifications, privacy)
 - [ ] `notification-service`: **Native push notification engine** (see Phase 3.7)
 
 ### 3.3 Video Services
 - [ ] `upload-service`: Chunked upload, virus scan (ClamAV), MinIO staging
-- [ ] `video-service`: Video metadata, processing status, quality variants
+- [x] `video-service`: Video metadata, processing status, quality variants
 - [ ] `transcoding-service`: FFmpeg workers, HLS/DASH generation (144p-8K)
 - [ ] `thumbnail-service`: Auto-gen + custom thumbnails, sprite sheets
 - [ ] `streaming-service`: HLS/DASH delivery, adaptive bitrate, signed URLs
@@ -121,15 +121,15 @@
 - [ ] `bot-service`: AI chatbot (RAG over docs), escalation
 
 ### 3.7 **Push Notification Service (Native - Zero Cost)**
-- [ ] `push-service`: **Core push notification engine**
-  - [ ] VAPID key generation & management (self-hosted, no Firebase/OneSignal)
-  - [ ] Web Push Protocol (RFC 8030) implementation
-  - [ ] Subscription management (endpoint, p256dh, auth keys)
-  - [ ] Payload encryption (AES-GCM)
-  - [ ] TTL, urgency, topic support
-  - [ ] Batch sending with rate limiting
-  - [ ] Delivery receipts & retry logic (exponential backoff)
-  - [ ] Subscription cleanup (expired, 410/404 handling)
+- [x] `push-service`: **Core push notification engine**
+  - [x] VAPID key generation & management (self-hosted, no Firebase/OneSignal)
+  - [x] Web Push Protocol (RFC 8030) implementation
+  - [x] Subscription management (endpoint, p256dh, auth keys)
+  - [x] Payload encryption (AES-GCM)
+  - [x] TTL, urgency, topic support
+  - [x] Batch sending with rate limiting
+  - [x] Delivery receipts & retry logic (exponential backoff)
+  - [x] Subscription cleanup (expired, 410/404 handling)
 - [ ] `push-gateway`: **Multi-platform gateway**
   - [ ] Web Push (browsers - Chrome, Firefox, Safari, Edge)
   - [ ] FCM/APNs **optional fallback only** (config-driven, not default)
@@ -137,14 +137,14 @@
   - [ ] Template engine (localization, variables)
   - [ ] Scheduling & delayed delivery
   - [ ] Analytics: sent, delivered, clicked, dismissed, failed
-- [ ] `push-preferences`: User notification preferences
-  - [ ] Granular opt-in/out per category (video, comments, live, ads, system)
-  - [ ] Quiet hours, timezone awareness
-  - [ ] Frequency capping
-  - [ ] Device-level preferences
+- [x] `push-preferences`: User notification preferences
+  - [x] Granular opt-in/out per category (video, comments, live, ads, system)
+  - [x] Quiet hours, timezone awareness
+  - [x] Frequency capping
+  - [x] Device-level preferences
 
 ### 3.8 **NATS JetStream Event Backbone**
-- [ ] `services/nats-client` - Shared Go client (connection pool, codec, retry)
+- [x] `services/nats-client` - Shared Go client (connection pool, codec, retry)
 - [ ] Stream definitions (per domain):
   - [ ] `VIDEO` stream: upload, processing, completed, failed, thumbnail, subtitle
   - [ ] `WALLET` stream: transaction, balance_change, withdrawal, royalty

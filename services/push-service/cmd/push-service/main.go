@@ -12,6 +12,7 @@ import (
 	"newproject/services/push-service/src/config"
 	"newproject/services/push-service/src/database"
 	"newproject/services/push-service/src/handler"
+	natsconsumer "newproject/services/push-service/src/nats"
 	"newproject/services/push-service/src/repository"
 	"newproject/services/push-service/src/service"
 )
@@ -58,6 +59,18 @@ func main() {
 	r.Use(gin.Recovery())
 	h.RegisterRoutes(r)
 
+	natsConsumer, err := natsconsumer.NewConsumer(cfg.NATS, pushService)
+	if err != nil {
+		log.Fatalf("failed to create NATS consumer: %v", err)
+	}
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+
+	if err := natsConsumer.Start(ctx); err != nil {
+		log.Fatalf("failed to start NATS consumer: %v", err)
+	}
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Server.Port,
 		Handler:           r,
@@ -76,9 +89,12 @@ func main() {
 	<-quit
 	log.Println("shutting down server...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stop()
+	natsConsumer.Close()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("server forced to shutdown: %v", err)
 	}
 

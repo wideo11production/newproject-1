@@ -12,6 +12,14 @@ type Config struct {
 	Database DatabaseConfig
 	VAPID    VAPIDConfig
 	RateLimit RateLimitConfig
+	NATS     NATSConfig
+}
+
+type NATSConfig struct {
+	URLs              []string
+	Stream            string
+	PushSubject       string
+	DurableConsumer   string
 }
 
 type ServerConfig struct {
@@ -87,6 +95,11 @@ func setDefaults() {
 	viper.SetDefault("ratelimit.batch_size", 100)
 	viper.SetDefault("ratelimit.interval", "5s")
 	viper.SetDefault("ratelimit.max_retries", 5)
+
+	viper.SetDefault("nats.urls", []string{"nats://localhost:4222"})
+	viper.SetDefault("nats.stream", "NOTIFICATION")
+	viper.SetDefault("nats.push_subject", "NOTIFICATION.push")
+	viper.SetDefault("nats.durable_consumer", "push-service")
 }
 
 func (c *DatabaseConfig) DSN() string {
