@@ -102,17 +102,17 @@
 - [x] `subtitle-service`: SRT/VTT upload, multi-language, auto-caption (Whisper)
 
 ### 3.4 Finance Services
-- [ ] `wallet-service`: Balance types (available, pending, held, withdrawable)
-- [ ] `accounting-service`: Double-entry ledger (journals, transactions, accounts)
-- [ ] `ledger-service`: Immutable audit trail, reconciliation
-- [ ] `withdrawal-service`: KYC, approval workflow, bank integration
-- [ ] `royalty-service`: SSOT-driven rates (INR/USD tiers), calculation engine
-- [ ] `billing-service`: Invoicing, tax, subscription management
+- [x] `wallet-service`: Balance types (available, pending, held, withdrawable)
+- [x] `accounting-service`: Double-entry ledger (journals, transactions, accounts)
+- [x] `ledger-service`: Immutable audit trail, reconciliation
+- [x] `withdrawal-service`: KYC, approval workflow, bank integration
+- [x] `royalty-service`: SSOT-driven rates (INR/USD tiers), calculation engine
+- [x] `billing-service`: Invoicing, tax, subscription management
 
 ### 3.5 Advertisement Services
-- [ ] `ads-service`: Ad inventory, placement, delivery (no Google AdSense)
-- [ ] `campaign-service`: Advertiser campaigns, budget, scheduling
-- [ ] `targeting-service`: Geo (country/state/city/locality), language, channel, category
+- [x] `ads-service`: Ad inventory, placement, delivery (no Google AdSense)
+- [x] `campaign-service`: Advertiser campaigns, budget, scheduling
+- [x] `targeting-service`: Geo (country/state/city/locality), language, channel, category
 - [ ] `analytics-service`: Views, clicks, CTR, reach, revenue aggregation
 
 ### 3.6 Support Services

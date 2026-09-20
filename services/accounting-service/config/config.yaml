@@ -1,0 +1,14 @@
+server:
+  port: "8081"
+  mode: "release"
+  read_timeout: 10
+  write_timeout: 10
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "accounting_service"
+  sslmode: "disable"
+  timezone: "UTC"
