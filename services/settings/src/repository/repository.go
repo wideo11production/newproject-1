@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/newproject/services/settings/src/model"
+	"newproject/services/settings/src/model"
 	"gorm.io/gorm"
 )
 

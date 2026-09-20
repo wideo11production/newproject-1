@@ -4,8 +4,13 @@ import (
 	"context"
 	"errors"
 
-	"github.com/newproject/services/settings/src/model"
-	"github.com/newproject/services/settings/src/repository"
+	"newproject/services/settings/src/model"
+	"newproject/services/settings/src/repository"
+)
+
+var (
+	ErrSettingExists  = errors.New("setting already exists")
+	ErrSettingNotFound = repository.ErrSettingNotFound
 )
 
 // SettingService handles settings-related business logic
@@ -29,7 +34,7 @@ func (s *SettingService) CreateSetting(
 ) (*model.Setting, error) {
 	// Check if setting already exists by key
 	if existing, err := s.settingRepo.GetByKey(ctx, key); err == nil && existing != nil {
-		return nil, errors.New("setting already exists")
+		return nil, ErrSettingExists
 	}
 	// Create new setting
 	setting := &model.Setting{

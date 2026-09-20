@@ -1,11 +1,11 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/newproject/services/settings/src/model"
-	"github.com/newproject/services/settings/src/service"
+	"newproject/services/settings/src/service"
 )
 
 // Handler holds the service dependencies for HTTP handlers
@@ -47,10 +47,10 @@ func (h *Handler) CreateSetting(c *gin.Context) {
 		return
 	}
 
-	setting, err := h.settingService.CreateSetting(c.Request.Context(), req.Key, req.Value, req.Description)
+		setting, err := h.settingService.CreateSetting(c.Request.Context(), req.Key, req.Value, req.Description)
 	if err != nil {
 		switch err {
-		case errors.New("setting already exists"):
+		case service.ErrSettingExists:
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -74,7 +74,7 @@ func (h *Handler) GetSettingByID(c *gin.Context) {
 	setting, err := h.settingService.GetSettingByID(c.Request.Context(), uid)
 	if err != nil {
 		switch err {
-		case errors.New("setting not found"):
+		case service.ErrSettingNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -92,7 +92,7 @@ func (h *Handler) GetSettingByKey(c *gin.Context) {
 	setting, err := h.settingService.GetSettingByKey(c.Request.Context(), key)
 	if err != nil {
 		switch err {
-		case errors.New("setting not found"):
+		case service.ErrSettingNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -127,7 +127,7 @@ func (h *Handler) UpdateSetting(c *gin.Context) {
 	existing, err := h.settingService.GetSettingByID(c.Request.Context(), uid)
 	if err != nil {
 		switch err {
-		case errors.New("setting not found"):
+		case service.ErrSettingNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -163,7 +163,7 @@ func (h *Handler) DeleteSetting(c *gin.Context) {
 
 	if err := h.settingService.DeleteSetting(c.Request.Context(), uid); err != nil {
 		switch err {
-		case errors.New("setting not found"):
+		case service.ErrSettingNotFound:
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

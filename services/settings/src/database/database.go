@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/newproject/services/settings/src/config"
-	"github.com/newproject/services/settings/src/model"
+	"newproject/services/settings/src/model"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

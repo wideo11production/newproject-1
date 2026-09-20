@@ -8,11 +8,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/newproject/services/settings/src/config"
-	"github.com/newproject/services/settings/src/database"
-	"github.com/newproject/services/settings/src/handler"
-	"github.com/newproject/services/settings/src/repository"
-	"github.com/newproject/services/settings/src/service"
+	"github.com/gin-gonic/gin"
+	"newproject/services/settings/src/config"
+	"newproject/services/settings/src/database"
+	"newproject/services/settings/src/handler"
+	"newproject/services/settings/src/repository"
+	"newproject/services/settings/src/service"
 )
 
 // main entry point for the settings service

@@ -2,9 +2,6 @@ package model
 
 import (
 	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // Setting stores key-value pairs for settings
