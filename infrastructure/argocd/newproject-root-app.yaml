@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: newproject-infrastructure
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/wideo11/infrastructure.git
+    targetRevision: HEAD
+    path: .
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: newproject-infrastructure
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      heal:
+        resourceFilters:
+        - kind: Namespace
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+      - PrunePropagationPolicy=foreground
+      - Validate=true
+      - Prune=true
+      - SelfHeal=true
+  ignoreDifferences:
+    - group: ""
+      kind: Namespace
+      jsonPointers:
+      - /metadata/labels
+  healthChecks:
+  - kind: Namespace
+    name: newproject-infrastructure
+    scope:
+      apiGroups: [""]
+      kinds: ["Namespace"]
+      namespaces: ["newproject-infrastructure"]

@@ -1,0 +1,148 @@
+# Default values for video-service.
+
+replicaCount: 3
+
+image:
+  repository: wideo11/video-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  limits:
+    cpu: "2"
+    memory: "4Gi"
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - video-service
+          topologyKey: kubernetes.io/hostname
+
+env:
+  - name: ENVIRONMENT
+    value: "production"
+  - name: PORT
+    value: "8080"
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: database-url
+  - name: REDIS_URL
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: redis-url
+  - name: NATS_URL
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: nats-url
+  - name: JWT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: jwt-secret
+  - name: MINIO_ENDPOINT
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: minio-endpoint
+  - name: MINIO_ACCESS_KEY
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: minio-access-key
+  - name: MINIO_SECRET_KEY
+    valueFrom:
+      secretKeyRef:
+        name: wideo11-secrets
+        key: minio-secret-key
+  - name: FFMPEG_PATH
+    value: "/usr/bin/ffmpeg"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: video-service.wideo11.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: video-service-tls
+      hosts:
+        - video-service.wideo11.com

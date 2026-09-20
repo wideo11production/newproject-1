@@ -1,0 +1,156 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: newproject-appset
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/instance: newproject-appset
+spec:
+  generators:
+    # Generate applications for backend microservices in services/
+    - list:
+        elements:
+          - name: auth-service
+            path: services/auth-service
+            type: helm
+          - name: config-service
+            path: services/config-service
+            type: helm
+          - name: dashboard-service
+            path: services/dashboard-service
+            type: helm
+          - name: nats-client
+            path: services/nats-client
+            type: helm
+          - name: push-service
+            path: services/push-service
+            type: helm
+          - name: webhook-receiver
+            path: services/webhook-receiver
+            type: helm
+    # Generate applications for frontend Next.js apps in apps/
+    - list:
+        elements:
+          - name: web
+            path: apps/web
+            type: helm
+          - name: auth
+            path: apps/auth
+            type: helm
+          - name: editor
+            path: apps/editor
+            type: helm
+          - name: admin
+            path: apps/admin
+            type: helm
+          - name: ads
+            path: apps/ads
+            type: helm
+          - name: monitor
+            path: apps/monitor
+            type: helm
+    # Generate applications for shared packages in packages/
+    - list:
+        elements:
+          - name: api-client
+            path: packages/api-client
+            type: helm
+          - name: auth
+            path: packages/auth
+            type: helm
+          - name: video-player
+            path: packages/video-player
+            type: helm
+          - name: editor-core
+            path: packages/editor-core
+            type: helm
+          - name: charts
+            path: packages/charts
+            type: helm
+          - name: dnd-dashboard
+            path: packages/dnd-dashboard
+            type: helm
+          - name: forms
+            path: packages/forms
+            type: helm
+          - name: i18n
+            path: packages/i18n
+            type: helm
+          - name: push-client
+            path: packages/push-client
+            type: helm
+          - name: ui
+            path: packages/ui
+            type: helm
+          - name: utils
+            path: packages/utils
+            type: helm
+          - name: constants
+            path: packages/constants
+            type: helm
+          - name: tsconfig
+            path: packages/tsconfig
+            type: helm
+          - name: tailwind-config
+            path: packages/tailwind-config
+            type: helm
+          - name: eslint-config
+            path: packages/eslint-config
+            type: helm
+  template:
+    metadata:
+      name: "{{name}}-app"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-options: prune=true,selfHeal=true
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/wideo11/infrastructure.git
+        targetRevision: HEAD
+        path: "{{path}}"
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: nameOverride
+              value: "{{name}}"
+            - name: fullnameOverride
+              value: ""
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: newproject-{{name}}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          heal:
+            resourceFilters:
+            - kind: Namespace
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - PrunePropagationPolicy=foreground
+          - Validate=true
+          - Prune=true
+          - SelfHeal=true
+          - RespectIgnored=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+        - group: ""
+          kind: Namespace
+          jsonPointers:
+          - /metadata/labels
+          - /metadata/annotations
+      healthChecks:
+      - kind: Namespace
+        scopes:
+        - apiGroups: [""]
+          kinds: ["Namespace"]
+          namespaces:
+          - newproject-{{name}}

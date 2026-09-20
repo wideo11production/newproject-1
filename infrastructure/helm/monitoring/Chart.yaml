@@ -1,0 +1,14 @@
+apiVersion: v2
+name: monitoring
+description: Monitoring Stack Helm Chart (Prometheus, AlertManager, Grafana-like dashboard)
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - wideo11
+  - monitoring
+  - prometheus
+  - alertmanager
+maintainers:
+  - name: Wideo11 Team
+    email: team@wideo11.com

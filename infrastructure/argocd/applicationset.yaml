@@ -1,0 +1,102 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: newproject-appset
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/instance: newproject-appset
+spec:
+  generators:
+    - directory:
+        path: apps/*
+        exclude: false
+        jsonPath: "{range .items[*]}{.metadata.name}{'\n'}{end}"
+    - directory:
+        path: services/*
+        exclude: false
+        jsonPath: "{range .items[*]}{.metadata.name}{'\n'}{end}"
+    - list:
+        elements:
+          - name: auth-service
+            path: services/auth-service
+            type: go
+            targetNamespace: newproject-auth-service
+          - name: config-service
+            path: services/config-service
+            type: go
+            targetNamespace: newproject-config-service
+          - name: dashboard-service
+            path: services/dashboard-service
+            type: go
+            targetNamespace: newproject-dashboard-service
+          - name: nats-client
+            path: services/nats-client
+            type: go
+            targetNamespace: newproject-nats-client
+          - name: push-service
+            path: services/push-service
+            type: go
+            targetNamespace: newproject-push-service
+          - name: webhook-receiver
+            path: services/webhook-receiver
+            type: go
+            targetNamespace: newproject-webhook-receiver
+  template:
+    metadata:
+      name: "{{path.basename}}-app"
+      namespace: argocd
+      annotations:
+        argocd.argoproj.io/sync-options: prune=true,selfHeal=true
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/wideo11/infrastructure.git
+        targetRevision: HEAD
+        path: "{{path}}"
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: nameOverride
+              value: "{{path.basename}}"
+            - name: fullnameOverride
+              value: ""
+            - name: namespace
+              value: "{{targetNamespace}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{targetNamespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+          heal:
+            resourceFilters:
+              - kind: Namespace
+        syncOptions:
+          - CreateNamespace=true
+          - PruneLast=true
+          - PrunePropagationPolicy=foreground
+          - Validate=true
+          - Prune=true
+          - SelfHeal=true
+          - RespectIgnored=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 5s
+            factor: 2
+            maxDuration: 3m
+      ignoreDifferences:
+        - group: ""
+          kind: Namespace
+          jsonPointers:
+            - /metadata/labels
+            - /metadata/annotations
+      healthChecks:
+        - kind: Namespace
+          scopes:
+            - apiGroups: [""]
+              kinds: ["Namespace"]
+              namespaces:
+                - "{{targetNamespace}}"

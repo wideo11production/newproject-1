@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: wideo11-services
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: config-service
+            path: helm/config-service
+          - name: auth-service
+            path: helm/auth-service
+          - name: user-service
+            path: helm/user-service
+          - name: video-service
+            path: helm/video-service
+          - name: wallet-service
+            path: helm/wallet-service
+          - name: ads-service
+            path: helm/ads-service
+          - name: monitoring
+            path: helm/monitoring
+  template:
+    metadata:
+      name: "{{name}}-app"
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/wideo11/infrastructure.git
+        targetRevision: HEAD
+        path: "{{path}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: wideo11-{{name}}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

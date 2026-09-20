@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: config-service
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/wideo11/infrastructure.git
+    targetRevision: HEAD
+    path: helm/config-service
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: wideo11-config
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

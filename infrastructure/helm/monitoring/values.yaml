@@ -1,0 +1,114 @@
+# Default values for monitoring stack.
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: prom/prometheus
+    tag: "v2.45.0"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  persistence:
+    enabled: true
+    size: 50Gi
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: prometheus.wideo11.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: prometheus-tls
+        hosts:
+          - prometheus.wideo11.com
+
+# AlertManager configuration
+alertmanager:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: prom/alertmanager
+    tag: "v0.26.0"
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: alertmanager.wideo11.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: alertmanager-tls
+        hosts:
+          - alertmanager.wideo11.com
+
+# Custom dashboard (similar to Grafana) configuration
+dashboard:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: wideo11/dashboard-service
+    tag: "latest"
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  ingress:
+    enabled: true
+    className: "nginx"
+    annotations:
+      cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    hosts:
+      - host: dashboard.wideo11.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: dashboard-tls
+        hosts:
+          - dashboard.wideo11.com
+  env:
+    - name: ENVIRONMENT
+      value: "production"
+    - name: PORT
+      value: "8080"
+    - name: PROMETHEUS_URL
+      value: "http://prometheus.monitoring.svc.cluster.local:9090"
+    - name: ALERTMANAGER_URL
+      value: "http://alertmanager.monitoring.svc.cluster.local:9093"
+
+# Global settings
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -11,3 +11,7 @@ keywords:
 maintainers:
   - name: Wideo11 Team
     email: team@wideo11.com
+dependencies:
+  - name: base
+    version: 0.1.0
+    repository: file://../base

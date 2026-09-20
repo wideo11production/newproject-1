@@ -1,0 +1,78 @@
+# Terraform variables for Wideo11 Infrastructure
+# Copy this file to terraform.tfvars and update the values
+
+project_id = "your-gcp-project-id"
+region     = "asia-south1"
+zone       = "asia-south1-a"
+environment = "dev"  # dev, staging, or production
+
+# Optional: Custom subnets (defaults will be used if not specified)
+# subnets = {
+#   "primary"   = "10.0.0.0/20"
+#   "secondary" = "10.0.16.0/20"
+#   "services"  = "10.0.32.0/20"
+# }
+
+# Optional: Custom secondary ranges for Pods and Services
+# secondary_ranges = {
+#   "primary" = {
+#     "pods"     = "10.10.0.0/14"
+#     "services" = "10.20.0.0/20"
+#   }
+# }
+
+# Optional: Custom master CIDR for GKE
+# master_cidr = "172.16.0.0/28"
+
+# Optional: Enable GKE Autopilot (set to true for autopilot mode)
+# enable_autopilot = true
+
+# Optional: Custom node pools
+# node_pools = [
+#   {
+#     name         = "general"
+#     machine_type = "e2-standard-4"
+#     disk_size_gb = 100
+#     min_count    = 2
+#     max_count    = 10
+#     labels       = {}
+#     taints       = []
+#   }
+# ]
+
+# Optional: Cloud SQL settings
+# cloudsql_tier         = "db-custom-4-16384"
+# cloudsql_disk_size_gb = 500
+# cloudsql_backup_enabled = true
+# cloudsql_maintenance_window = { day = "SUN", hour = 3 }
+
+# Optional: Redis settings
+# redis_tier         = "STANDARD_HA"
+# redis_memory_size_gb = 13
+
+# Optional: MinIO buckets configuration
+# minio_buckets = [
+#   {
+#     name       = "raw-uploads"
+#     versioning = true
+#     lifecycle_rules = [
+#       { action = "Delete", age = 7, prefix = "temp/" }
+#     ]
+#   }
+# ]
+
+# Optional: NATS JetStream settings
+# nats_node_count = 3
+# nats_machine_type = "n2-standard-4"
+# nats_disk_size_gb = 200
+
+# Optional: Load balancer managed certificates
+# managed_certs = [
+#   {
+#     name   = "wideo11-cert"
+#     domains = ["api.wideo11.com", "app.wideo11.com"]
+#   }
+# ]
+
+# Optional: Cert-manager email
+# cert_manager_email = "admin@wideo11.com"

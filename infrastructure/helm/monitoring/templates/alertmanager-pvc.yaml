@@ -1,0 +1,24 @@
+{{- if .Values.alertmanager.enabled }}
+{{- if .Values.alertmanager.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "monitoring.fullname" . }}-alertmanager-pvc
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+    app.kubernetes.io/component: alertmanager
+  {{- with .Values.alertmanager.persistence.annotations }}
+  annotations:
+    {{- toYaml .Values.alertmanager.persistence.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.alertmanager.persistence.size }}
+  {{- if .Values.alertmanager.persistence.storageClassName }}
+  storageClassName: {{ .Values.alertmanager.persistence.storageClassName }}
+  {{- end }}
+{{- end }}
+{{- end }}
