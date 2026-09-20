@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "files": [],
+  "references": [
+    { "path": "./packages/constants" },
+    { "path": "./packages/utils" },
+    { "path": "./packages/api-client" },
+    { "path": "./packages/ui" },
+    { "path": "./packages/auth" }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@wideo11/tailwind-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "tailwind.config.ts",
+  "files": [
+    "tailwind.config.ts",
+    "postcss.config.js"
+  ],
+  "dependencies": {
+    "tailwindcss": "catalog:",
+    "@tailwindcss/forms": "catalog:",
+    "@tailwindcss/typography": "catalog:",
+    "@tailwindcss/aspect-ratio": "catalog:",
+    "@tailwindcss/container-queries": "catalog:",
+    "postcss": "catalog:",
+    "autoprefixer": "catalog:"
+  }
+}

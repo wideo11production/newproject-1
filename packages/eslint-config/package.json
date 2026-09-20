@@ -1,0 +1,25 @@
+{
+  "name": "@wideo11/eslint-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "nextjs.js",
+    "react.js",
+    "node.js",
+    "library.js"
+  ],
+  "dependencies": {
+    "eslint": "catalog:",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "typescript-eslint": "^8.0.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-jsx-a11y": "^6.9.0",
+    "eslint-plugin-import": "^2.29.1",
+    "eslint-plugin-unused-imports": "^4.1.0",
+    "@next/eslint-plugin-next": "^14.2.7"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@wideo11/constants",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./app": "./src/app.ts",
+    "./limits": "./src/limits.ts",
+    "./theme": "./src/theme.ts",
+    "./api": "./src/api.ts",
+    "./events": "./src/events.ts"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "@wideo11/tsconfig": "workspace:*",
+    "@wideo11/eslint-config": "workspace:*"
+  }
+}

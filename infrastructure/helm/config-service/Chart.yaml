@@ -1,0 +1,13 @@
+apiVersion: v2
+name: config-service
+description: Config Service Helm Chart
+type: application
+version: 0.1.0
+appVersion: "0.0.1"
+keywords:
+  - wideo11
+  - config
+  - microservice
+maintainers:
+  - name: Wideo11 Team
+    email: team@wideo11.com
