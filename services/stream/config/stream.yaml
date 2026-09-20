@@ -1,0 +1,46 @@
+server:
+  port: "8083"
+  mode: "debug"  # change to "release" in production
+  read_timeout: 60s
+  write_timeout: 60s
+
+minio:
+  endpoint: "localhost:9000"
+  access_key: "minioadmin"
+  secret_key: "minioadmin"
+  use_ssl: false
+  bucket_name: "video-transcodes"
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "video_transcode"
+  sslmode: "disable"
+  timezone: "UTC"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
+
+transcode:
+  output_bucket: "video-transcodes"
+  temp_storage_path: "/tmp/video_transcode"
+  ffmpeg_path: "/usr/bin/ffmpeg"  # set to empty string to use mock
+  ffprobe_path: "/usr/bin/ffprobe" # set to empty string to use mock
+  preset: "medium"
+  crf: 23
+  max_width: 1920
+  max_height: 1080
+  keyframe_interval: 60
+  profile: "high"
+
+worker:
+  pool_size: 4          // Number of concurrent transcoding workers
+  queue_size: 100       // Maximum queued jobs
+  poll_interval: 5s     // How often to check for new jobs
+  job_timeout: 2h       // Maximum time per job
+  max_retries: 3        // Maximum retry attempts

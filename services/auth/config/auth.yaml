@@ -1,0 +1,26 @@
+server:
+  port: "8081"
+  mode: "debug"  # change to "release" in production
+  read_timeout: 10s
+  write_timeout: 10s
+
+webauthn:
+  display_name: "Wideo11"
+  id: "wideo11.com"  # relying party ID - must be a domain
+  origin: "https://wideo11.com"  # the origin where credentials are registered
+  icon_url: "https://wideo11.com/icon.png"  # optional icon
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "postgres"
+  password: "postgres"
+  dbname: "auth_biometric"
+  sslmode: "disable"
+  timezone: "UTC"
+
+redis:
+  host: "localhost"
+  port: 6379
+  password: ""
+  db: 0
