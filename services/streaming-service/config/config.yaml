@@ -1,0 +1,14 @@
+server:
+  port: "8089"
+  mode: "release"
+  read_timeout: 10
+  write_timeout: 10
+
+streaming:
+  minio:
+    endpoint: "localhost:9000"
+    bucket: "video-uploads"
+    secure: false
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+  url_sign_expiry: "24h"

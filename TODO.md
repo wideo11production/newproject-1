@@ -88,18 +88,18 @@
 - [x] `biometric-service`: WebAuthn/FIDO2 integration
 
 ### 3.2 User Services
-- [ ] `user-service`: User CRUD, email/password auth (no social login)
-- [ ] `profile-service`: Profile data, avatar, bio, preferences
+- [x] `user-service`: User CRUD, email/password auth (no social login)
+- [x] `profile-service`: Profile data, avatar, bio, preferences
 - [x] `settings-service`: User settings (theme, notifications, privacy)
 - [ ] `notification-service`: **Native push notification engine** (see Phase 3.7)
 
 ### 3.3 Video Services
-- [ ] `upload-service`: Chunked upload, virus scan (ClamAV), MinIO staging
+- [x] `upload-service`: Chunked upload, virus scan (ClamAV), MinIO staging
 - [x] `video-service`: Video metadata, processing status, quality variants
-- [ ] `transcoding-service`: FFmpeg workers, HLS/DASH generation (144p-8K)
-- [ ] `thumbnail-service`: Auto-gen + custom thumbnails, sprite sheets
-- [ ] `streaming-service`: HLS/DASH delivery, adaptive bitrate, signed URLs
-- [ ] `subtitle-service`: SRT/VTT upload, multi-language, auto-caption (Whisper)
+- [x] `transcoding-service`: FFmpeg workers, HLS/DASH generation (144p-8K)
+- [x] `thumbnail-service`: Auto-gen + custom thumbnails, sprite sheets
+- [x] `streaming-service`: HLS/DASH delivery, adaptive bitrate, signed URLs
+- [x] `subtitle-service`: SRT/VTT upload, multi-language, auto-caption (Whisper)
 
 ### 3.4 Finance Services
 - [ ] `wallet-service`: Balance types (available, pending, held, withdrawable)
@@ -131,12 +131,12 @@
   - [x] Delivery receipts & retry logic (exponential backoff)
   - [x] Subscription cleanup (expired, 410/404 handling)
 - [ ] `push-gateway`: **Multi-platform gateway**
-  - [ ] Web Push (browsers - Chrome, Firefox, Safari, Edge)
-  - [ ] FCM/APNs **optional fallback only** (config-driven, not default)
-  - [ ] Unified API for all platforms
-  - [ ] Template engine (localization, variables)
-  - [ ] Scheduling & delayed delivery
-  - [ ] Analytics: sent, delivered, clicked, dismissed, failed
+  - [x] Web Push (browsers - Chrome, Firefox, Safari, Edge)
+  - [x] FCM/APNs **optional fallback only** (config-driven, not default)
+  - [x] Unified API for all platforms
+  - [x] Template engine (localization, variables)
+  - [x] Scheduling & delayed delivery
+  - [x] Analytics: sent, delivered, clicked, dismissed, failed
 - [x] `push-preferences`: User notification preferences
   - [x] Granular opt-in/out per category (video, comments, live, ads, system)
   - [x] Quiet hours, timezone awareness
