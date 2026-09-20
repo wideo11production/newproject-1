@@ -35,6 +35,7 @@ type BiometricConfig struct {
 	RPID          string // Relying Party ID (domain)
 	RPName        string // Relying Party Name
 	Origin        string // The origin (scheme://host:port) of the web app
+	IconURL       string // Optional icon URL
 	Timeout       time.Duration // Timeout for WebAuthn operations
 	Attestation   string        // Preference for attestation conveyance (none, indirect, direct)
 	AuthenticatorSelection struct {

@@ -8,11 +8,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/newproject/services/email/src/config"
-	"github.com/newproject/services/email/src/database"
-	"github.com/newproject/services/email/src/handler"
-	"github.com/newproject/services/email/src/repository"
-	"github.com/newproject/services/email/src/service"
+	"github.com/gin-gonic/gin"
+	"newproject/services/email/src/config"
+	"newproject/services/email/src/database"
+	"newproject/services/email/src/handler"
+	"newproject/services/email/src/repository"
+	"newproject/services/email/src/service"
 )
 
 // main entry point for the email service

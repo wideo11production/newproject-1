@@ -2,18 +2,20 @@ package service
 
 import (
 	"context"
-	"errors"
 	"log"
 	"sync"
 	"time"
 
-	"newproject/services/stream/src/client"
-	"newproject/services/stream/src/config"
-	"newproject/services/stream/src/ffmpeg"
-	"newproject/services/stream/src/model"
-	"newproject/services/stream/src/repository"
-	"newproject/services/stream/src/worker"
+	"github.com/google/uuid"
+	"newproject/services/stream/client"
+	"newproject/services/stream/config"
+	"newproject/services/stream/ffmpeg"
+	"newproject/services/stream/model"
+	"newproject/services/stream/repository"
+	"newproject/services/stream/worker"
 )
+
+var ErrJobNotFound = repository.ErrJobNotFound
 
 // TranscodingService manages the transcoding worker pool and job queue
 type TranscodingService struct {
@@ -158,6 +160,11 @@ func (s *TranscodingService) GetJobOutputs(ctx context.Context, jobID uuid.UUID)
 // GetJobManifests returns the manifests for a transcoding job
 func (s *TranscodingService) GetJobManifests(ctx context.Context, jobID uuid.UUID) ([]*model.TranscodeManifest, error) {
 	return s.manifestRepo.GetByJobID(ctx, jobID)
+}
+
+// CancelJob cancels a transcoding job by updating its status
+func (s *TranscodingService) CancelJob(ctx context.Context, job *model.TranscodeJob) error {
+	return s.jobRepo.Update(ctx, job)
 }
 
 // Shutdown gracefully shuts down the transcoding service

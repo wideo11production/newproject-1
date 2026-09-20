@@ -6,8 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/newproject/services/user/src/model"
-	"github.com/newproject/services/user/src/service"
+	"newproject/services/user/src/service"
 )
 
 // Handler holds the service dependencies for HTTP handlers

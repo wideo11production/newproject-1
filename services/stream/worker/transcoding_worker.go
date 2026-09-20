@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"services/stream/config"
-	"services/stream/ffmpeg"
-	"services/stream/model"
-	"services/stream/repository"
+	"newproject/services/stream/config"
+	"newproject/services/stream/ffmpeg"
+	"newproject/services/stream/model"
+	"newproject/services/stream/repository"
 )
 
 // TranscodingWorker handles video transcoding jobs

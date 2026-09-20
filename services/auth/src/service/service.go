@@ -2,136 +2,141 @@ package service
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/duo-labs/webauthn"
+	"bytes"
+
 	"github.com/duo-labs/webauthn/protocol"
+	"github.com/duo-labs/webauthn/webauthn"
+	"github.com/google/uuid"
 	"newproject/services/auth/src/config"
 	"newproject/services/auth/src/model"
 	"newproject/services/auth/src/repository"
 )
 
-// BiometricService handles WebAuthn registration and authentication flows
+var (
+	ErrUserNotFound       = errors.New("user not found")
+	ErrCredentialExists   = errors.New("credential already exists for this user")
+	ErrInvalidChallenge   = errors.New("invalid or expired challenge")
+	ErrCredentialNotFound = errors.New("credential not found")
+	ErrInvalidSignature   = errors.New("invalid signature")
+)
+
 type BiometricService struct {
+	wa         *webauthn.WebAuthn
 	regRepo    repository.BiometricRegistrationRepository
 	chalRepo   repository.BiometricChallengeRepository
-	timeout    time.Duration
-	wa         *webauthn.WebAuthn
+	Timeout    time.Duration
 }
 
-// NewBiometricService creates a new BiometricService
 func NewBiometricService(
 	regRepo repository.BiometricRegistrationRepository,
 	chalRepo repository.BiometricChallengeRepository,
+	wa *webauthn.WebAuthn,
 	cfg *config.Config,
 ) *BiometricService {
-	// Initialize webauthn library
-	waConfig := &webauthn.Config{
-		RPDID:         cfg.Biometric.RPID,
-		RPName:        cfg.Biometric.RPName,
-		Origins:       []string{cfg.Biometric.Origin},
-		SigningAlgorithms: []webauthn.Algorithm{webauthn.AlgorithmES256, webauthn.AlgorithmRS256, webauthn.AlgorithmPS256},
-		AttestationPreference: webauthn.AttestationPreference(cfg.Biometric.Attestation),
-		AuthenticatorSelection: webauthn.AuthenticatorSelection{
-			AuthenticatorAttachment: webauthn.AuthenticatorAttachment(cfg.Biometric.AuthenticatorSelection.AuthenticatorAttachment),
-			RequireResidentKey:      cfg.Biometric.AuthenticatorSelection.RequireResidentKey,
-			UserVerification:        webauthn.UserVerificationRequirement(cfg.Biometric.AuthenticatorSelection.UserVerification),
-		},
+	if wa == nil {
+		waConfig := &webauthn.Config{
+			RPDisplayName: cfg.Biometric.RPName,
+			RPID:          cfg.Biometric.RPID,
+			RPOrigin:      cfg.Biometric.Origin,
+			RPIcon:        cfg.Biometric.IconURL,
+			AttestationPreference: protocol.ConveyancePreference(cfg.Biometric.Attestation),
+			AuthenticatorSelection: protocol.AuthenticatorSelection{
+				AuthenticatorAttachment: protocol.AuthenticatorAttachment(cfg.Biometric.AuthenticatorSelection.AuthenticatorAttachment),
+				RequireResidentKey:    boolPtr(cfg.Biometric.AuthenticatorSelection.RequireResidentKey),
+				UserVerification:      protocol.UserVerificationRequirement(cfg.Biometric.AuthenticatorSelection.UserVerification),
+			},
+			Timeout: 60000,
+		}
+		var err error
+		wa, err = webauthn.New(waConfig)
+		if err != nil {
+			panic(fmt.Sprintf("failed to create webauthn instance: %v", err))
+		}
 	}
-	wa, err := webauthn.New(waConfig)
-	if err != nil {
-		panic(fmt.Sprintf("failed to create webauthn instance: %v", err))
-	}
+
 	return &BiometricService{
-		regRepo:    regRepo,
-		chalRepo:   chalRepo,
-		timeout:    cfg.Biometric.Timeout,
-		wa:         wa,
+		wa:       wa,
+		regRepo:  regRepo,
+		chalRepo: chalRepo,
+		Timeout:   cfg.Biometric.Timeout,
 	}
 }
 
-// userWrapper implements webauthn.User for our user
-type userWrapper struct {
-	userID      uuid.UUID
-	service     *BiometricService
-	credential  model.BiometricRegistration // cached credential if needed
+func boolPtr(b bool) *bool {
+	return &b
 }
 
-// WebauthnID returns the user ID as a byte array
-func (u *userWrapper) WebauthnID() []byte {
+type userWrapper struct {
+	userID uuid.UUID
+	wa     *webauthn.WebAuthn
+	reg    repository.BiometricRegistrationRepository
+}
+
+func (u *userWrapper) WebAuthnID() []byte {
 	return u.userID[:]
 }
 
-// WebauthnName returns the username
-func (u *userWrapper) WebauthnName() string {
+func (u *userWrapper) WebAuthnName() string {
 	return u.userID.String()
 }
 
-// WebauthnDisplayName returns a display name
-func (u *userWrapper) WebauthnDisplayName() string {
+func (u *userWrapper) WebAuthnDisplayName() string {
 	return u.userID.String()
 }
 
-// WebauthnIcon returns an icon URL (empty)
-func (u *userWrapper) WebauthnIcon() string {
+func (u *userWrapper) WebAuthnIcon() string {
 	return ""
 }
 
-// WebauthnCredentials returns the user's registered credentials
-func (u *userWrapper) WebauthnCredentials() []webauthn.Credential {
-	if u.service == nil {
-		return nil
-	}
-	// Fetch the credential from the repository
-	reg, err := u.service.regRepo.GetByUserID(context.Background(), u.userID)
+func (u *userWrapper) WebAuthnCredentials() []webauthn.Credential {
+	reg, err := u.reg.GetByUserID(context.Background(), u.userID)
 	if err != nil {
-		if errors.Is(err, repository.ErrRegistrationNotFound) {
-			return nil
-		}
 		return nil
 	}
-	// Convert to webauthn.Credential
-	cred := webauthn.Credential{
-		ID:          reg.CredentialID,
-		PublicKey:   reg.PublicKey,
-		// Transports:  []protocol.TransportType{}, // optional
+	return []webauthn.Credential{
+		{
+			ID:        reg.CredentialID,
+			PublicKey: reg.PublicKey,
+		},
 	}
-	return []webauthn.Credential{cred}
 }
 
-// BeginRegistration starts a new registration ceremony for a user.
-// It returns the challenge and the session data to be stored.
 func (s *BiometricService) BeginRegistration(
 	ctx context.Context,
 	userID uuid.UUID,
 ) ([]byte, []byte, error) {
-	// Create a user wrapper
 	user := &userWrapper{
 		userID: userID,
-		service: s,
+		wa:     s.wa,
+		reg:    s.regRepo,
 	}
-	// Begin registration
-	sessionData, response, err := s.wa.BeginRegistration(user)
+
+	_, sessionData, err := s.wa.BeginRegistration(user)
 	if err != nil {
 		return nil, nil, err
 	}
-	// The response contains the challenge, timeout, etc.
-	// We need to extract the challenge to return to the client.
-	// The response is of type *protocol.CredentialCreation
-	// We'll marshal it to JSON to get the raw challenge? Actually, the response struct has a Challenge field.
-	// We'll assume response.Challenge is the challenge.
-	challenge := response.Challenge
-	return challenge, sessionData, nil
+
+	challenge, err := base64.RawURLEncoding.DecodeString(sessionData.Challenge)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sessionDataBytes, err := json.Marshal(sessionData)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return challenge, sessionDataBytes, nil
 }
 
-// FinishRegistration completes a registration ceremony.
-// It verifies the registration response and stores the credential.
 func (s *BiometricService) FinishRegistration(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -139,75 +144,77 @@ func (s *BiometricService) FinishRegistration(
 	publicKey []byte,
 	signCount uint32,
 	sessionData []byte,
-	response []byte,
+	rawBody []byte,
 ) error {
-	// Parse the response from the client
-	var regResponse protocol.CredentialCreation
-	if err := json.Unmarshal(response, &regResponse); err != nil {
-		return fmt.Errorf("failed to parse registration response: %w", err)
+	var sd webauthn.SessionData
+	if err := json.Unmarshal(sessionData, &sd); err != nil {
+		return ErrInvalidChallenge
 	}
-	// Create a user wrapper
+
 	user := &userWrapper{
 		userID: userID,
-		service: s,
+		wa:     s.wa,
+		reg:    s.regRepo,
 	}
-	// Finish registration
-	credential, err := s.wa.FinishRegistration(user, sessionData, &regResponse)
+
+	req := &http.Request{
+		Method: "POST",
+		Body:   io.NopCloser(bytes.NewReader(rawBody)),
+		Header: http.Header{},
+	}
+
+	cred, err := s.wa.FinishRegistration(user, sd, req)
 	if err != nil {
-		return fmt.Errorf("failed to finish registration: %w", err)
-	}
-	// Verify that the credential ID matches the provided one
-	if !equal(credential.ID, credentialID) {
-		return errors.New("credential ID mismatch")
-	}
-	// Verify that the public key matches (optional)
-	if !equal(credential.PublicKey, publicKey) {
-		return errors.New("public key mismatch")
-	}
-	// Check if a registration already exists for this user
-	existing, err := s.regRepo.GetByUserID(ctx, userID)
-	if err != nil && err != repository.ErrRegistrationNotFound {
 		return err
 	}
-	if existing != nil {
-		// Update existing registration
-		existing.CredentialID = credentialID
-		existing.PublicKey = publicKey
-		existing.SignCount = signCount
+
+	existing, err := s.regRepo.GetByUserID(ctx, userID)
+	if err == nil && existing != nil {
+		existing.CredentialID = cred.ID
+		existing.PublicKey = cred.PublicKey
+		existing.SignCount = cred.Authenticator.SignCount
+		existing.CredType = "public-key"
 		return s.regRepo.Update(ctx, existing)
 	}
-	// Create new registration
+
 	reg := &model.BiometricRegistration{
 		UserID:       userID,
-		CredentialID: credentialID,
-		PublicKey:    publicKey,
+		CredentialID: cred.ID,
+		PublicKey:    cred.PublicKey,
 		SignCount:    signCount,
+		CredType:     string(cred.AttestationType),
 	}
 	return s.regRepo.Create(ctx, reg)
 }
 
-// BeginAuthentication starts an authentication ceremony for a user.
-// It returns the challenge and the session data to be stored.
 func (s *BiometricService) BeginAuthentication(
 	ctx context.Context,
 	userID uuid.UUID,
 ) ([]byte, []byte, error) {
-	// Create a user wrapper
 	user := &userWrapper{
 		userID: userID,
-		service: s,
+		wa:     s.wa,
+		reg:    s.regRepo,
 	}
-	// Begin login
-	sessionData, response, err := s.wa.BeginLogin(user)
+
+	_, sessionData, err := s.wa.BeginLogin(user)
 	if err != nil {
 		return nil, nil, err
 	}
-	challenge := response.Challenge
-	return challenge, sessionData, nil
+
+	challenge, err := base64.RawURLEncoding.DecodeString(sessionData.Challenge)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sessionDataBytes, err := json.Marshal(sessionData)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return challenge, sessionDataBytes, nil
 }
 
-// FinishAuthentication completes an authentication ceremony.
-// It verifies the authentication response and updates the sign count.
 func (s *BiometricService) FinishAuthentication(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -217,50 +224,41 @@ func (s *BiometricService) FinishAuthentication(
 	clientDataJSON []byte,
 	newSignCount uint32,
 	sessionData []byte,
-	response []byte,
+	rawBody []byte,
 ) error {
-	// Parse the response from the client
-	var authResponse protocol.CredentialAssertion
-	if err := json.Unmarshal(response, &authResponse); err != nil {
-		return fmt.Errorf("failed to parse authentication response: %w", err)
+	var sd webauthn.SessionData
+	if err := json.Unmarshal(sessionData, &sd); err != nil {
+		return ErrInvalidChallenge
 	}
-	// Create a user wrapper
+
 	user := &userWrapper{
 		userID: userID,
-		service: s,
+		wa:     s.wa,
+		reg:    s.regRepo,
 	}
-	// Finish login
-	credential, err := s.wa.FinishLogin(user, sessionData, &authResponse)
-	if err != nil {
-		return fmt.Errorf("failed to finish login: %w", err)
+
+	req := &http.Request{
+		Method: "POST",
+		Body:   io.NopCloser(bytes.NewReader(rawBody)),
+		Header: http.Header{},
 	}
-	// Verify that the credential ID matches the provided one
-	if !equal(credential.ID, credentialID) {
-		return errors.New("credential ID mismatch")
-	}
-	// Update the sign count (only if new count is greater than stored count)
-	reg, err := s.regRepo.GetByUserID(ctx, userID)
+
+	cred, err := s.wa.FinishLogin(user, sd, req)
 	if err != nil {
 		return err
 	}
+
+	reg, err := s.regRepo.GetByCredentialID(ctx, cred.ID)
+	if err != nil {
+		return ErrCredentialNotFound
+	}
+
 	if newSignCount > reg.SignCount {
 		reg.SignCount = newSignCount
 		if err := s.regRepo.Update(ctx, reg); err != nil {
 			return err
 		}
 	}
-	return nil
-}
 
-// equal compares two byte slices for equality in constant time
-func equal(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return nil
 }

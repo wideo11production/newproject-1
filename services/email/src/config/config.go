@@ -9,6 +9,7 @@ import (
 
 type Config struct {
 	Server   ServerConfig
+	Database DatabaseConfig
 	SMTP     SMTPConfig
 }
 
@@ -17,6 +18,16 @@ type ServerConfig struct {
 	Mode         string
 	ReadTimeout  int
 	WriteTimeout int
+}
+
+type DatabaseConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+	TimeZone string
 }
 
 type SMTPConfig struct {
@@ -65,6 +76,19 @@ func setDefaults() {
 	viper.SetDefault("smtp.password", "")
 	viper.SetDefault("smtp.from", "no-reply@example.com")
 	viper.SetDefault("smtp.timeout", 10) // seconds
+
+	viper.SetDefault("database.host", "localhost")
+	viper.SetDefault("database.port", 5432)
+	viper.SetDefault("database.user", "postgres")
+	viper.SetDefault("database.password", "postgres")
+	viper.SetDefault("database.dbname", "email_service")
+	viper.SetDefault("database.sslmode", "disable")
+	viper.SetDefault("database.timezone", "UTC")
+}
+
+func (c *DatabaseConfig) DSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
+		c.Host, c.Port, c.User, c.Password, c.DBName, c.SSLMode, c.TimeZone)
 }
 
 func (c *SMTPConfig) Addr() string {

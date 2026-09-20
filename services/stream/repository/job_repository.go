@@ -3,10 +3,9 @@ package repository
 import (
 	"context"
 	"errors"
-	"time"
 
 	"github.com/google/uuid"
-	"newproject/services/stream/src/model"
+	"newproject/services/stream/model"
 	"gorm.io/gorm"
 )
 

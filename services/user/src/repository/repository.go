@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/google/uuid"
-	"github.com/newproject/services/user/src/model"
+	"newproject/services/user/src/model"
 	"gorm.io/gorm"
 )
 
@@ -18,7 +18,6 @@ var (
 type UserRepository interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByID(ctx context.Context, id uint) (*model.User, error)
-	GetByUUID(ctx context.)
 	GetByUUID(ctx context.Context, uuid uuid.UUID) (*model.User, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
 	Update(ctx context.Context, user *model.User) error

@@ -8,14 +8,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/newproject/services/profile/src/config"
-	"github.com/newproject/services/profile/src/database"
-	"github.com/newproject/services/profile/src/handler"
-	"github.com/newproject/services/profile/src/repository"
-	"github.com/newproject/services/profile/src/service"
-	"github.com/newproject/services/user/src/model" // for User model
-	"github.com/newproject/services/user/src/repository" // for user repository
-	"github.com/newproject/services/user/src/service" // for user service
+	"github.com/gin-gonic/gin"
+	"newproject/services/profile/src/config"
+	"newproject/services/profile/src/database"
+	"newproject/services/profile/src/handler"
+	"newproject/services/profile/src/repository"
+	"newproject/services/profile/src/service"
 )
 
 // main entry point for the profile service
@@ -42,14 +40,10 @@ func main() {
 	}
 
 	// Initialize repositories
-	userRepo := repository.NewUserRepository(db)
 	profileRepo := repository.NewProfileRepository(db)
 
-	// Initialize user service (needed by profile service)
-	userService := service.NewUserService(userRepo)
-
 	// Initialize profile service
-	profileService := service.NewProfileService(profileRepo, userService)
+	profileService := service.NewProfileService(profileRepo)
 
 	// Initialize handler
 	h := handler.NewHandler(profileService)

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -72,7 +71,7 @@ func (h *Handler) BeginRegistration(w http.ResponseWriter, r *http.Request) {
 		UserID:     userID,
 		Challenge:  challenge,
 		SessionData: sessionData,
-		ExpiresAt:  time.Now().Add(h.biometricService.timeout),
+		ExpiresAt:  time.Now().Add(h.biometricService.Timeout),
 	}
 	if err := h.chalRepo.Create(r.Context(), chal); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -188,7 +187,7 @@ func (h *Handler) BeginAuthentication(w http.ResponseWriter, r *http.Request) {
 		UserID:     userID,
 		Challenge:  challenge,
 		SessionData: sessionData,
-		ExpiresAt:  time.Now().Add(h.biometricService.timeout),
+		ExpiresAt:  time.Now().Add(h.biometricService.Timeout),
 	}
 	if err := h.chalRepo.Create(r.Context(), chal); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

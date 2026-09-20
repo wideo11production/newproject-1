@@ -8,11 +8,12 @@ import (
 	"os/signal"
 	"time"
 
-	"github.com/newproject/services/user/src/config"
-	"github.com/newproject/services/user/src/database"
-	"github.com/newproject/services/user/src/handler"
-	"github.com/newproject/services/user/src/repository"
-	"github.com/newproject/services/user/src/service"
+	"github.com/gin-gonic/gin"
+	"newproject/services/user/src/config"
+	"newproject/services/user/src/database"
+	"newproject/services/user/src/handler"
+	"newproject/services/user/src/repository"
+	"newproject/services/user/src/service"
 )
 
 // main entry point for the user service
@@ -71,7 +72,7 @@ func main() {
 
 	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Intercept)
+	signal.Notify(quit, os.Interrupt)
 	<-quit
 	log.Println("shutting down server...")
 

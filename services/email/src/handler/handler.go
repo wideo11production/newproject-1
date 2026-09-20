@@ -4,8 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/newproject/services/email/src/model"
-	"github.com/newproject/services/email/src/service"
+	"newproject/services/email/src/model"
+	"newproject/services/email/src/repository"
+	"newproject/services/email/src/service"
 )
 
 // Handler holds the service dependencies for HTTP handlers
@@ -103,7 +104,7 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 		Body:    req.Body,
 		IsHTML:  req.IsHTML,
 	}
-	if err := h.emailService.templateRepo.Create(c.Request.Context(), template); err != nil {
+	if err := h.emailService.CreateTemplate(c.Request.Context(), template); err != nil {
 		switch err {
 		case repository.ErrEmailTemplateNotFound:
 			c.JSON(http.StatusConflict, gin.H{"error": "template with this name already exists"})
@@ -120,7 +121,7 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 // Returns JSON: { "template": <template object> }
 func (h *Handler) GetTemplateByName(c *gin.Context) {
 	name := c.Param("name")
-	template, err := h.emailService.templateRepo.GetByName(c.Request.Context(), name)
+	template, err := h.emailService.GetTemplateByName(c.Request.Context(), name)
 	if err != nil {
 		switch err {
 		case repository.ErrEmailTemplateNotFound:
@@ -150,7 +151,7 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 	}
 
 	// Get the existing template
-	existing, err := h.emailService.templateRepo.GetByName(c.Request.Context(), name)
+	existing, err := h.emailService.GetTemplateByName(c.Request.Context(), name)
 	if err != nil {
 		switch err {
 		case repository.ErrEmailTemplateNotFound:
@@ -172,7 +173,7 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 		existing.IsHTML = req.IsHTML
 	}
 
-	if err := h.emailService.templateRepo.Update(c.Request.Context(), existing); err != nil {
+	if err := h.emailService.UpdateTemplate(c.Request.Context(), existing); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -184,7 +185,7 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 // Returns HTTP 204 No Content on success
 func (h *Handler) DeleteTemplateByName(c *gin.Context) {
 	name := c.Param("name")
-	template, err := h.emailService.templateRepo.GetByName(c.Request.Context(), name)
+	template, err := h.emailService.GetTemplateByName(c.Request.Context(), name)
 	if err != nil {
 		switch err {
 		case repository.ErrEmailTemplateNotFound:
@@ -194,7 +195,7 @@ func (h *Handler) DeleteTemplateByName(c *gin.Context) {
 		}
 		return
 	}
-	if err := h.emailService.templateRepo.DeleteByID(c.Request.Context(), template.ID); err != nil {
+	if err := h.emailService.DeleteTemplateByID(c.Request.Context(), template.ID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -204,7 +205,7 @@ func (h *Handler) DeleteTemplateByName(c *gin.Context) {
 // ListTemplates handles GET /email/templates
 // Returns JSON: { "templates": [<template object>] }
 func (h *Handler) ListTemplates(c *gin.Context) {
-	templates, err := h.emailService.templateRepo.List(c.Request.Context())
+	templates, err := h.emailService.ListTemplates(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

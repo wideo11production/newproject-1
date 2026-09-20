@@ -2,9 +2,6 @@ package model
 
 import (
 	"time"
-
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
 // EmailTemplate stores email templates for sending emails

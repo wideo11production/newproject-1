@@ -3,14 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"net/smtp"
-	"text/template"
+	texttmpl "text/template"
 
-	"github.com/newproject/services/email/src/config"
-	"github.com/newproject/services/email/src/model"
-	"github.com/newproject/services/email/src/repository"
+	"newproject/services/email/src/config"
+	"newproject/services/email/src/model"
+	"newproject/services/email/src/repository"
 )
 
 // EmailService handles sending emails
@@ -81,7 +80,7 @@ func (s *EmailService) SendTemplateEmail(
 	}
 
 	// Parse the template
-	tmpl, err := template.New("email").Parse(template.Body)
+	tmpl, err := texttmpl.New("email").Parse(template.Body)
 	if err != nil {
 		return fmt.Errorf("failed to parse template: %w", err)
 	}
@@ -94,4 +93,29 @@ func (s *EmailService) SendTemplateEmail(
 
 	// Send the email
 	return s.SendEmail(ctx, to, template.Subject, body.String(), template.IsHTML)
+}
+
+// CreateTemplate creates a new email template
+func (s *EmailService) CreateTemplate(ctx context.Context, tmpl *model.EmailTemplate) error {
+	return s.templateRepo.Create(ctx, tmpl)
+}
+
+// GetTemplateByName retrieves an email template by name
+func (s *EmailService) GetTemplateByName(ctx context.Context, name string) (*model.EmailTemplate, error) {
+	return s.templateRepo.GetByName(ctx, name)
+}
+
+// UpdateTemplate updates an existing email template
+func (s *EmailService) UpdateTemplate(ctx context.Context, tmpl *model.EmailTemplate) error {
+	return s.templateRepo.Update(ctx, tmpl)
+}
+
+// DeleteTemplateByID deletes an email template by ID
+func (s *EmailService) DeleteTemplateByID(ctx context.Context, id uint) error {
+	return s.templateRepo.DeleteByID(ctx, id)
+}
+
+// ListTemplates retrieves all email templates
+func (s *EmailService) ListTemplates(ctx context.Context) ([]*model.EmailTemplate, error) {
+	return s.templateRepo.List(ctx)
 }

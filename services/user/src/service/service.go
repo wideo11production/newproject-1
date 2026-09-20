@@ -2,18 +2,21 @@ package service
 
 import (
 	"context"
-	"errors"
-	"time"
 
 	"github.com/google/uuid"
-	"github.com/newproject/services/user/src/model"
-	"github.com/newproject/services/user/src/repository"
+	"newproject/services/user/src/model"
+	"newproject/services/user/src/repository"
 )
 
 // UserService handles user-related business logic
 type UserService struct {
 	userRepo repository.UserRepository
 }
+
+var (
+	ErrUserNotFound = repository.ErrUserNotFound
+	ErrUserExists   = repository.ErrUserExists
+)
 
 // NewUserService creates a new UserService
 func NewUserService(repo repository.UserRepository) *UserService {

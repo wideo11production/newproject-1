@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"context"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"newproject/services/stream/src/model"
-	"newproject/services/stream/src/service"
+	"newproject/services/stream/model"
+	"newproject/services/stream/service"
 )
 
 // TranscodingHandler handles HTTP requests for transcoding operations
@@ -200,7 +201,7 @@ func (h *TranscodingHandler) CancelJobHandler(c *gin.Context) {
 	// Update job status
 	job.Status = model.JobStatusCancelled
 	job.UpdatedAt = time.Now()
-	if err := h.transcodingService.jobRepo.Update(c.Request.Context(), job); err != nil {
+	if err := h.transcodingService.CancelJob(c.Request.Context(), job); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to cancel job"})
 		return
 	}

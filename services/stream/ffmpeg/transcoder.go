@@ -2,8 +2,6 @@ package ffmpeg
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"time"
 )
 

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -82,4 +83,9 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+func (c *DatabaseConfig) DSN() string {
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s TimeZone=%s",
+		c.Host, c.Port, c.User, c.Password, c.DBName, c.SSLMode, c.TimeZone)
 }
