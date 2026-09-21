@@ -41,8 +41,9 @@ func main() {
 	invoiceRepo := repository.NewInvoiceRepository(db)
 	itemRepo := repository.NewInvoiceItemRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
+	expenseRepo := repository.NewManualExpenseRepository(db)
 
-	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo)
+	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo)
 
 	h := handler.NewHandler(billingSvc)
 	r := gin.New()

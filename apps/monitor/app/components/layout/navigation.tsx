@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { BarChart3, Activity, Bell, Settings, Users, Zap } from 'lucide-react';
+import { BarChart3, Activity, Bell, Settings, Users, Zap, Search, Database } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
 
@@ -40,9 +40,10 @@ export function Navigation() {
   const navItems = [
     { href: '/', icon: BarChart3, label: 'Home' },
     { href: '/dashboards', icon: Activity, label: 'Dashboards' },
+    { href: '/dashboard/system-overview', icon: BarChart3, label: 'System Overview' },
+    { href: '/explore', icon: Search, label: 'Explore' },
     { href: '/alerts', icon: Bell, label: 'Alerts' },
-    { href: '/analytics', icon: BarChart3, label: 'Analytics' },
-    { href: '/users', icon: Users, label: 'Users' },
+    { href: '/analytics', icon: Database, label: 'Analytics' },
     { href: '/settings', icon: Settings, label: 'Settings' },
   ];
 

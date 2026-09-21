@@ -99,7 +99,7 @@ func (h *Handler) GetPlan(c *gin.Context) {
 	}
 	plan, err := h.svc.GetPlan(c.Request.Context(), uint(id))
 	if err != nil {
-		if err == repository.ErrPlanNotFound {
+		if err == repository.ErrSubscriptionPlanNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "plan not found"})
 			return
 		}
@@ -112,7 +112,7 @@ func (h *Handler) GetPlan(c *gin.Context) {
 func (h *Handler) GetPlanByCode(c *gin.Context) {
 	plan, err := h.svc.GetPlanByCode(c.Request.Context(), c.Param("code"))
 	if err != nil {
-		if err == repository.ErrPlanNotFound {
+		if err == repository.ErrSubscriptionPlanNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "plan not found"})
 			return
 		}
@@ -282,11 +282,11 @@ func (h *Handler) ListTaxRates(c *gin.Context) {
 
 func (h *Handler) CreateInvoice(c *gin.Context) {
 	var req struct {
-		UserID       uint                          `json:"user_id" binding:"required"`
-		SubscriptionID *uint                       `json:"subscription_id,omitempty"`
-		Items        []service.InvoiceItemRequest  `json:"items" binding:"required"`
-		DueDate      string                        `json:"due_date" binding:"required"`
-		Notes        string                        `json:"notes"`
+		UserID        uint                    `json:"user_id" binding:"required"`
+		SubscriptionID *uint                   `json:"subscription_id,omitempty"`
+		Items         []service.InvoiceItemRequest `json:"items" binding:"required"`
+		DueDate       string                    `json:"due_date" binding:"required"`
+		Notes         string                    `json:"notes"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -405,11 +405,11 @@ func (h *Handler) IssueInvoice(c *gin.Context) {
 
 func (h *Handler) RecordPayment(c *gin.Context) {
 	var req struct {
-		InvoiceID  uint   `json:"invoice_id" binding:"required"`
-		UserID     uint   `json:"user_id" binding:"required"`
-		Amount     string `json:"amount" binding:"required"`
-		Method     string `json:"method" binding:"required"`
-		Provider   string `json:"provider"`
+		InvoiceID uint   `json:"invoice_id" binding:"required"`
+		UserID    uint   `json:"user_id" binding:"required"`
+		Amount    string `json:"amount" binding:"required"`
+		Method    string `json:"method" binding:"required"`
+		Provider  string `json:"provider"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

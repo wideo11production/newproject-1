@@ -11,6 +11,6 @@ const nextConfig = {
     ]
   },
   transpilePackages: ['@wideo11/ui'],
-}
+};
 
-module.exports = nextConfig
+export default nextConfig

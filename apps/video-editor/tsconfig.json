@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "@wideo11/ui/*": ["../../packages/ui/src/*"],
+      "@wideo11/editor-core": ["../../packages/editor-core/src"],
+      "@wideo11/video-player": ["../../packages/video-player/src"],
+      "@wideo11/charts": ["../../packages/charts/src"],
+      "@wideo11/dnd-dashboard": ["../../packages/dnd-dashboard/src"],
+      "@wideo11/forms": ["../../packages/forms/src"],
+      "@wideo11/i18n": ["../../packages/i18n/src"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

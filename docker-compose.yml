@@ -176,6 +176,21 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
 
+  # Video Editor Frontend (Next.js)
+  video-editor:
+    build:
+      context: ./apps/video-editor
+      dockerfile: Dockerfile
+    container_name: wideo11-video-editor
+    ports:
+      - "3002:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
+    depends_on:
+      dashboard-service:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

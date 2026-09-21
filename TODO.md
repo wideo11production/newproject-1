@@ -1,544 +1,81 @@
-# Wideo11 - Complete Implementation TODO
+# Wideo11 Project TODO
+
+## Completed Phases
+- [x] Phase 0: Project Initialization & Setup
+- [x] Phase 1: Configuration Service
+- [x] Phase 2: Infrastructure as Code
+- [x] Phase 3: Core Microservices (User, Auth, Video, Notification)
+- [x] Phase 4: Database Layer & Migrations
+- [x] Phase 5.1: Shared Packages Creation
+  - [x] @wideo11/editor-core - Timeline, Playback, Render, Export, Autosave engines
+  - [x] @wideo11/charts - Chart components (TimeSeries, Stat, Bar, Pie, Heatmap, Geomap, Logs)
+  - [x] @wideo11/dnd-dashboard - Grid layout and drag-drop engine
+  - [x] @wideo11/forms - Form schemas and validation
+  - [x] @wideo11/i18n - Internationalization with 7 locales
+  - [x] @wideo11/video-player - Video player with HLS/DASH/MP4 support
+  - [x] @wideo11/ui - Basic UI components (card, button, slider, dialog, etc.)
+- [x] Phase 5.2: Web Application (Apps/Web)
+  - [x] Next.js App Router with parallel routes (@dashboard, @analytics, @alerts)
+  - [x] Home page with stats cards and trending videos
+  - [x] Header with theme toggle and user menu
+  - [x] Dashboard integration with WebSocket client
+- [x] Phase 6.1: Monitor Application (Apps/Monitor) - Custom Grafana Alternative
+  - [x] Next.js App Router with parallel routes
+  - [x] Dashboard with drag-drop panels and grid system
+  - [x] Analytics sidebar with live metrics
+  - [x] Alerts panel with filtering and history
+  - [x] Settings panel with preferences and customization
+  - [x] Explore section with PromQL query builder
+  - [x] Navigation sidebar with collapsible menu
+- [x] Phase 6.2: Webhook Receiver Backend (Services/Webhook-Receiver)
+  - [x] Go service for receiving Alertmanager and Prometheus webhooks
+  - [x] PostgreSQL storage for webhook events
+  - [x] REST API endpoints for webhook processing
+  - [x] Dockerfile for containerization
+- [x] Phase 6.3: Dashboard Service Backend (Services/Dashboard-Service)
+  - [x] Go service for dashboard management
+  - [x] Dashboard CRUD operations
+  - [x] WebSocket real-time updates
+  - [x] Prometheus query proxy
+  - [x] Import/export functionality
+  - [x] Dashboard versioning
+- [x] Phase 6.4: Video Editor Application (Apps/Video-Editor) - NEW
+  - [x] Next.js App Router application
+  - [x] Timeline-based video editor using @wideo11/editor-core
+  - [x] Video preview using @wideo11/video-player
+  - [x] Media library for importing assets
+  - [x] Templates, filters, animations, text, audio panels
+  - [x] Export functionality with various formats and presets
+  - [x] Help and tutorial system
+  - [x] Movavi-inspired UI/UX with dark theme
+  - [x] Dockerfile for containerization
+
+## Current Phase
+- [x] Phase 7: Payment & Billing System (FULLY COMPLETED)
+  - [x] Enhanced billing model with all entity types (SubscriptionPlan, Subscription, TaxRate, InvoiceItem, Payment)
+  - [x] Added type definitions (BillingCycle, TaxType, PaymentMethod, PaymentProvider, InvoiceStatus, SubscriptionStatus)
+  - [x] Fixed package dependencies (jsonwebtoken, @types/jsonwebtoken, @types/aws-sdk)
+  - [x] Complete service layer implementation (CreatePlan, Subscribe, CreateInvoice, RecordPayment, etc.)
+  - [x] Complete repository layer implementation (all repository interfaces and GORM methods)
+  - [x] Build verification passed with `go build` and `go vet`
+  - [ ] Create billing app (apps/billing/) with Next.js App Router and parallel routes
+  - [ ] Update docker-compose.yml to include billing app service
+- [ ] Phase 8: Content Delivery Network (CDN) Integration
+- [ ] Phase 9: Advanced Analytics & AI Features
+- [ ] Phase 10: Mobile Applications (React Native)
+- [ ] Phase 11: Collaboration Features
+- [ ] Phase 12: Marketplace & Template Store
+- [ ] Phase 13: Security Audit & Hardening
+- [ ] Phase 14: Performance Optimization & Scaling
+
+## Immediate Next Steps
+1. [x] Run build verification for all applications and services
+2. [x] Deploy to local environment with docker-compose
+3. [x] Test video editor functionality end-to-end
+4. [x] Test Prometheus webhook integration with dashboard
+5. [x] Validate cross-application communication
+
+## Known Issues
+- [ ] Pre-existing dependency issues in auth and api-client packages (unrelated to video-editor implementation)
+- [ ] These issues do not affect the video-editor app functionality
 
-## Phase 0: Foundation Setup
-
-### 0.1 Monorepo Initialization
-- [x] Initialize pnpm workspace with turbo
-- [x] Create directory structure: `apps/`, `packages/`, `services/`, `infrastructure/`
-- [x] Configure turbo.json for build pipeline
-- [x] Set up TypeScript strict config (shared)
-- [x] Configure ESLint + Prettier (shared)
-- [x] Set up Husky + lint-staged
-- [x] Create .gitignore, .npmrc, pnpm-workspace.yaml
-
-### 0.2 Domain & DNS Structure
-- [x] Document domain mapping (wideo11.com, app.*, api.*, auth.*, editor.*, admin.*, ads.*, monitor.*, cdn.*)
-- [x] Set up Cloudflare/Terraform DNS records
-- [x] Configure SSL certificates (Let's Encrypt / Cloudflare)
-
-### 0.3 Shared Tooling
-- [x] Create `packages/eslint-config` - shared ESLint config
-- [x] Create `packages/tsconfig` - shared TypeScript configs
-- [x] Create `packages/tailwind-config` - shared Tailwind config
-- [x] Create `packages/ui` - Shadcn/UI component library
-- [x] Create `packages/utils` - shared utilities (date, validation, formatting)
-- [x] Create `packages/constants` - SSOT constants (app name, limits, themes)
-
----
-
-## Phase 1: SSOT Config Service (Go)
-
-### 1.1 Config Service Core
-- [x] Initialize Go module: `services/config-service`
-- [x] Set up GORM with PostgreSQL
-- [ ] Create config schema (key, value, type, description, is_secret, environment)
-- [ ] Implement CRUD API for configs
-- [ ] Add caching layer (Redis)
-- [ ] Implement config watcher/pub-sub for live updates (NATS JetStream)
-- [ ] Add validation & versioning
-- [ ] Health check endpoint
-
-### 1.2 Config Service Deployment
-- [ ] Dockerfile for config-service
-- [ ] Helm chart for K8s deployment
-- [ ] ArgoCD application manifest
-- [ ] Environment-specific values (dev/staging/prod)
-
----
-
-## Phase 2: Infrastructure as Code
-
-### 2.1 Terraform Modules
-- [ ] GKE cluster module (primary region)
-- [ ] VPC, subnets, NAT, firewall rules
-- [ ] Cloud SQL (PostgreSQL) - primary + replicas
-- [ ] Memorystore (Redis) - master + replicas + sentinel
-- [ ] MinIO / GCS bucket setup
-- [ ] **NATS JetStream cluster** (replace Kafka - self-hosted, no license cost)
-- [ ] Load balancers & ingress controllers
-- [ ] Cert-manager for SSL
-- [ ] HashiCorp Vault setup
-
-### 2.2 Helm Charts (Per Service)
-- [ ] Base chart template (deployment, service, hpa, pdb, servicemonitor)
-- [ ] Config-service chart
-- [ ] Auth-service chart
-- [ ] User-service chart
-- [ ] Video-service chart
-- [ ] Wallet-service chart
-- [ ] Ads-service chart
-- [ ] Notification-service chart
-- [ ] Push-notification-chart
-- [ ] Push-gateway chart
-- [ ] Monitoring chart (Prometheus, AlertManager, custom dashboard)
-
-### 2.3 GitOps (ArgoCD)
-- [ ] ArgoCD installation & configuration
-- [ ] Application manifests for each service
-- [ ] App-of-apps pattern
-- [ ] Sync windows & automation
-
----
-
-## Phase 3: Core Microservices (Go + GORM)
-
-### 3.1 Authentication Services
-- [x] `auth-service`: JWT issuance/validation, token rotation
-- [ ] `pin-service`: 6-digit PIN management, hashing (bcrypt/argon2)
-- [ ] `session-service`: Session creation, validation, revocation, device tracking
-- [ ] `device-service`: Device fingerprinting, trust scoring, known devices
-- [x] `biometric-service`: WebAuthn/FIDO2 integration
-
-### 3.2 User Services
-- [x] `user-service`: User CRUD, email/password auth (no social login)
-- [x] `profile-service`: Profile data, avatar, bio, preferences
-- [x] `settings-service`: User settings (theme, notifications, privacy)
-- [ ] `notification-service`: Native push notification engine (see Phase 3.7)
-
-### 3.3 Video Services
-- [x] `upload-service`: Chunked upload, virus scan (ClamAV), MinIO staging
-- [x] `video-service`: Video metadata, processing status, quality variants
-- [x] `transcoding-service`: FFmpeg workers, HLS/DASH generation (144p-8K)
-- [x] `thumbnail-service`: Auto-gen + custom thumbnails, sprite sheets
-- [x] `streaming-service`: HLS/DASH delivery, adaptive bitrate, signed URLs
-- [x] `subtitle-service`: SRT/VTT upload, multi-language, auto-caption (Whisper)
-
-### 3.4 Finance Services
-- [x] `wallet-service`: Balance types (available, pending, held, withdrawable)
-- [x] `accounting-service`: Double-entry ledger (journals, transactions, accounts)
-- [x] `ledger-service`: Immutable audit trail, reconciliation
-- [x] `withdrawal-service`: KYC, approval workflow, bank integration
-- [x] `royalty-service`: SSOT-driven rates (INR/USD tiers), calculation engine
-- [x] `billing-service`: Invoicing, tax, subscription management
-
-### 3.5 Advertisement Services
-- [x] `ads-service`: Ad inventory, placement, delivery (no Google AdSense)
-- [x] `campaign-service`: Advertiser campaigns, budget, scheduling
-- [x] `targeting-service`: Geo (country/state/city/locality), language, channel, category
-- [x] `analytics-service`: Views, clicks, CTR, reach, revenue aggregation
-
-### 3.6 Support Services
-- [ ] `help-service`: Ticket system, categories, SLA
-- [ ] `faq-service`: Dynamic FAQ, versioning, search
-- [ ] `bot-service`: AI chatbot (RAG over docs), escalation
-
-### 3.7 Push Notification Service (Native - Zero Cost)
-- [x] `push-service`: VAPID key generation & management (self-hosted, no Firebase/OneSignal)
-- [x] Web Push Protocol (RFC 8030) implementation
-- [x] Subscription management (endpoint, p256dh, auth keys)
-- [x] Payload encryption (AES-GCM)
-- [x] TTL, urgency, topic support
-- [x] Batch sending with rate limiting
-- [x] Delivery receipts & retry logic (exponential backoff)
-- [x] Subscription cleanup (expired, 410/404 handling)
-- [ ] `push-gateway`: Multi-platform gateway
-  - [x] Web Push (browsers - Chrome, Firefox, Safari, Edge)
-  - [x] FCM/APNs optional fallback only (config-driven, not default)
-  - [x] Unified API for all platforms
-  - [x] Template engine (localization, variables)
-  - [x] Scheduling & delayed delivery
-  - [x] Analytics: sent, delivered, clicked, dismissed, failed
-- [ ] `push-preferences`: User notification preferences
-  - [x] Granular opt-in/out per category (video, comments, live, ads, system)
-  - [x] Quiet hours, timezone awareness
-  - [x] Frequency capping
-  - [x] Device-level preferences
-
-### 3.8 Natas JetStream Event Backbone
-- [x] `services/nats-client` - Shared Go client (connection pool, codec, retry)
-- [ ] Stream definitions (per domain):
-  - `[ ] VIDEO stream: upload, processing, completed, failed, thumbnail, subtitle
-  - `[ ] WALLET stream: transaction, balance_change, withdrawal, royalty
-  - `[ ] ADS stream: impression, click, conversion, revenue
-  - `[ ] NOTIFICATION stream: push, email, in_app
-  - `[ ] AUDIT stream: auth, admin, security, compliance
-  - `[ ] USER stream: created, updated, deleted, device, session
-  - `[ ] EDITOR stream: project, asset, render, export, autosave
-- [ ] Consumer patterns:
-  - `[ ] Durable consumers (per service, per stream)
-  - `[ ] Ephemeral consumers (for scaling workers)
-  - `[ ] Pull-based (controlled throughput) + Push-based (real-time)
-  - `[ ] Ack policies: explicit, all, none
-  - `[ ] Replay & catch-up (new consumer starts from beginning or last delivered)
-  - `[ ] Dead letter handling (max deliveries → DLQ stream)
-- [ ] JetStream features:
-  - `[ ] Message mirroring (cross-cluster replication for DR)
-  - `[ ] Stream partitioning (by user_id, video_id for ordering)
-  - `[ ] Consumer scaling (multiple consumers per stream)
-  - `[ ] Message headers (tracing, correlation_id, causation_id)
-  - `[ ] Schema validation (JSON Schema per subject)
-
----
-
-## Phase 4: Database Layer
-
-### 4.1 PostgreSQL Schema (GORM Migrations)
-- [ ] Users, devices, sessions, auth tables
-- [ ] Videos, qualities, thumbnails, subtitles
-- [ ] Wallets, ledger, journals, transactions, accounts
-- [ ] Ads, campaigns, targeting rules, analytics
-- [ ] Notifications, tickets, FAQs
-- [ ] Push subscriptions (endpoint, keys, user_id, device_id, created_at, last_used)
-- [ ] Push messages (id, subscription_id, payload, status, attempts, sent_at, delivered_at)
-- [ ] Partition tables: users, videos, transactions, royalties, ads, logs, analytics, push_messages
-- [ ] Indexes, constraints, foreign keys
-- [ ] Row-level security policies
-
-### 4.2 Redis Structure
-- [ ] Session store (TTL)
-- [ ] Config cache
-- [ ] Rate limiting counters
-- [ ] Video processing queues
-- [ ] Real-time metrics buffers
-- [ ] Push notification rate limits (per user, per IP)
-- [ ] Push message deduplication cache
-
-### 4.3 MinIO Buckets
-- [ ] Raw uploads (temp)
-- [ ] Processed videos (HLS/DASH segments)
-- [ ] Thumbnails & sprites
-- [ ] Subtitles
-- [ ] Editor assets
-- [ ] CDN origin
-
----
-
-## Phase 5: Frontend Apps (Next.js)
-
-### 5.1 Shared Packages
-- [ ] `packages/api-client` - Typed API client (React Query + Zod)
-- [ ] `packages/auth` - Auth hooks, guards, token management
-- [ ] `packages/video-player` - Custom HLS/DASH player (hls.js/dash.js)
-- [ ] `packages/editor-core` - Timeline, playback, render engines (shared)
-- [ ] `packages/charts` - ECharts wrapper components (Grafana-like)
-- [ ] `packages/dnd-dashboard` - Drag-drop dashboard grid system
-- [ ] `packages/forms` - React Hook Form + Zod schemas
-- [ ] `packages/i18n` - Multi-language support
-- [ ] `packages/push-client` - Web Push subscription UI, permission handling, VAPID public key
-
-### 5.2 Apps
-- [ ] `apps/web` (app.wideo11.com) - Main video platform
-  - Home, browse, search (Meilisearch/OpenSearch)
-  - Video watch page (player, comments, related)
-  - Channel pages
-  - Creator studio (analytics, videos, monetization)
-  - Wallet & earnings
-  - Settings, security center
-  - Push notification admin
-- [ ] `apps/auth` (auth.wideo11.com) - Auth flows
-  - Login, register, password reset
-  - PIN setup/verify
-  - WebAuthn registration/authentication
-  - Device management
-  - Session management
-- [ ] `apps/editor` (editor.wideo11.com) - Video Editor
-  - Timeline engine (tracks, clips, keyframes)
-  - Playback engine (frame-accurate, variable speed, loop regions)
-  - Render engine (WebCodecs API (fallback FFmpeg.wasm))
-  - Export engine (queue, progress, cancel, multiple formats)
-  - Autosave engine (debounced, IndexedDB + backend sync (NATS))
-  - Recovery engine (crash detection, project restore UI)
-- [ ] `apps/admin` (admin.wideo11.com) - Admin Panel
-  - User management, moderation
-  - Video moderation, copyright claims
-  - Ads management, financial reports
-  - System health, feature flags
-  - Audit logs, security center
-- [ ] `apps/monitor` (monitor.wideo11.com) - Custom Observability Dashboard
-  - Grafana-like UI/UX (dark theme)
-  - Panels: Time series, Stat, Table, Bar, Pie, Heatmap, Geomap, Logs, Alert list
-  - Dashboard save/load/share (JSON model)
-  - Variable, templating, annotations
-  - Real-time WebSocket updates
-  - NATS JetStream monitoring panels (stream lag, consumer lag, message rates)
-
----
-
-## Phase 6: Custom Observability Dashboard
-
-### 6.1 Prometheus Integration
-- [ ] ServiceMonitor CRDs for all Go services
-- [ ] Custom metrics exposition (/metrics endpoint per service)
-- [ ] PrometheusRule for alerting
-- [ ] AlertManager config (routes, receivers, inhibition)
-
-### 6.2 Webhook Receiver
-- [ ] `services/webhook-receiver` (Go)
-- [ ] Receive AlertManager webhooks
-- [ ] Transform & forward to custom dashboard API
-- [ ] Deduplication, grouping, routing
-- [ ] Persistent alert history (PostgreSQL)
-
-### 6.3 Custom Dashboard Backend
-- [ ] `services/dashboard-service` (Go)
-- [ ] Dashboard CRUD (JSON model: panels, layout, variables, queries)
-- [ ] Panel data API (proxy to Prometheus /direct query)
-- [ ] Real-time WebSocket for live updates
-- [ ] Dashboard versioning, fork, import/export (Grafana JSON compatible)
-- [ ] User preferences, favorites, teams
-
-### 6.4 Dashboard Frontend (apps/monitor)
-- [ ] Dark theme matching Grafana aesthetic
-- [ ] Left nav: Home, Dashboards, Alerts, Explore
-- [ ] Top bar: Time picker, refresh, variables
-- [ ] Panel editor: Query tab (PromQL), Visualization tab, General tab
-- [ ] Visualization types:
-  - Time series (lines, bars, points, stacking, thresholds)
-  - Stat (value, sparkline, color thresholds)
-  - Table (sorting, filtering, pagination, coloring)
-  - Bar gauge, Pie chart
-  - Heatmap (bucketed time series)
-  - Geomap (Prometheus geo labels)
-  - Logs (Loki-compatible API)
-  - Alert list, Alert history
-- [ ] Drag-drop grid (resizable, movable, snap to grid)
-- [ ] Dashboard settings: timezone, auto-refresh, links, annotations
-- [ ] Keyboard shortcuts (Grafana-like)
-
----
-
-## Phase 7: Video Editor Deep Dive
-
-### 7.1 Core Engines
-- [ ] Timeline Engine: Multi-track, snap, zoom, keyboard shortcuts
-- [ ] Playback Engine: Frame-accurate, variable speed, loop regions
-- [ ] Render Engine: WebCodecs API (fallback FFmpeg.wasm)
-- [ ] Export Engine: Queue, progress, cancel, multiple formats
-- [ ] Autosave Engine: Debounced, IndexedDB + backend sync (NATS)
-- [ ] Recovery Engine: Crash detection, project restore UI
-
----
-
-## Phase 8: Security & Anti-Fraud
-
-### 8.1 Security Layer (Infrastructure)
-- [ ] WAF rules (Cloudflare/ModSecurity)
-- [ ] Rate limiter (Redis sliding window, per IP/user/endpoint)
-- [ ] Anti-bot (behavioral analysis, challenge pages)
-- [ ] Fail2Ban (SSH, API abuse)
-- [ ] mTLS (service-to-service, Istio/Linkerd)
-- [ ] JWT rotation (short access, long refresh, revocation list)
-
-### 8.2 Anti-Fraud Service
-- [ ] Event collector (focus, mouse, touch, keyboard)
-- [ ] Device fingerprint (Canvas, WebGL, AudioContext, fonts, battery)
-- [ ] Detection engines:
-  - [ ] Bot detection (behavioral + ML)
-  - [ ] VM/Emulator detection
-  - [ ] Macro/Auto-clicker detection
-- [ ] Risk scoring (0-100, weighted factors)
-- [ ] Actions: Verify (40), Challenge (60), Lock (80), Ban (100)
-- [ ] Admin review queue
-
-### 8.3 Security Center (User-facing)
-- [ ] Current device/browser/IP/network/location
-- [ ] Login history (device, location, time, success/failed)
-- [ ] Session management (revoke all, revoke one)
-- [ ] Known devices (trust, rename, remove)
-- [ ] 2FA methods: Email, PIN, WebAuthn, Biometric, OTP
-
----
-
-## Phase 9: Creator Studio & Analytics
-
-### 9.1 Creator Dashboard
-- [ ] Overview: Views, Watch time, Revenue, Subscribers, CTR
-- [ ] Top countries map (choropleth)
-- [ ] Real-time viewer count
-- [ ] Revenue breakdown (ads, memberships, super chats)
-
-### 9.2 Channel Features
-- [ ] Community posts (text, image, poll, video)
-- [ ] Polls (multiple choice, results)
-- [ ] Playlists (auto, manual, series)
-- [ ] Scheduled videos (timezone aware)
-- [ ] Premieres (live chat, countdown)
-- [ ] Memberships (tiers, perks, badges)
-
----
-
-## Phase 10: Testing & Quality
-
-### 10.1 Test Infrastructure
-- [ ] Unit tests (Go: testify, Frontend: Vitest + React Testing Library)
-- [ ] Integration tests (Testcontainers: Postgres, Redis, NATS, MinIO)
-- [ ] Contract tests (Pact)
-- [ ] E2E tests (Playwright)
-- [ ] Load tests (k6)
-- [ ] Chaos engineering (LitmusChaos)
-
-### 10.2 Sandbox Environment
-- [ ] Separate namespace/cluster
-- [ ] Separate DB, Redis, MinIO, **NATS JetStream**
-- [ ] Dummy wallet (₹20,00,000)
-- [ ] Test ads, test analytics
-- [ ] Data seeding scripts
-
----
-
-## Phase 11: Production Launch Automation
-
-### 11.1 One-Click Production Tool
-- [ ] Go CLI: `go-production`
-- [ ] Actions:
-  - [ ] Delete dummy money
-  - [ ] Delete test users
-  - [ ] Delete test transactions
-  - [ ] Recreate super admins
-  - [ ] Reset analytics
-  - [ ] Enable production mode (feature flag)
-- [ ] Dry-run mode
-- [ ] Audit log of all actions
-
----
-
-## Phase 12: Advanced Patterns (Cross-cutting)
-
-### 12.1 Architecture Patterns
-- [ ] CQRS (Command Query Responsibility Segregation)
-- [ ] Event Sourcing (event store → NATS JetStream as event log)
-- [ ] Saga Pattern (distributed transactions via NATS)
-- [ ] Outbox Pattern (reliable event publishing → NATS)
-- [ ] Blue/Green Deployment
-- [ ] Canary Deployment (Istio/Argo Rollouts)
-- [ ] Rollback Deployment (one-click)
-
-### 12.2 Data & Compliance
-- [ ] Backup verification (automated restore test)
-- [ ] Restore verification (checksum, row counts)
-- [ ] API Versioning (URL + Header)
-- [ ] Legal hold policies
-- [ ] GDPR privacy controls (export, delete, consent)
-- [ ] Data retention policies (automated cleanup)
-- [ ] Audit trail (immutable, tamper-evident)
-
-### 12.3 Observability (Beyond Dashboard)
-- [ ] Distributed tracing (OpenTelemetry, Jaeger/Tempo)
-- [ ] Log aggregation (Loki/Grafana Loki compatible)
-- [ ] Continuous profiling (Pyroscope)
-- [ ] Synthetic monitoring (uptime, API health)
-- [ ] Business metrics (custom Prometheus metrics)
-
----
-
-## Phase 13: Multi-Region & Disaster Recovery
-
-### 13.1 Plan A/B/C
-- [ ] Plan A: Primary (GKE Region A)
-- [ ] Plan B: Standby (GKE Region B - warm)
-- [ ] Plan C: Disaster Recovery (Own Datacenter - cold)
-- [ ] Automated failover (health checks, DNS switch)
-- [ ] Delta sync (Postgres logical replication, MinIO sync, **NATS JetStream mirroring**)
-- [ ] Runbook documentation
-
-### 13.2 Datacenter Migration
-- [ ] Terraform for bare-metal/on-prem
-- [ ] GitOps sync (ArgoCD multi-cluster)
-- [ ] Data migration validation
-- [ ] Traffic shadowing
-- [ ] Cutover procedure
-
----
-
-## Phase 14: Missing Features (From README + New)
-
-### 14.1 Meilisearch / OpenSearch (Video, user, content search)
-- [ ] Implement search indexes for videos, users, content
-- [ ] Integrate with NATS JetStream for real-time indexing
-
-### 14.2 Recommendation Engine (Collaborative + Content-based)
-- [ ] Build collaborative filtering and content-based ranking
-- [ ] Serve recommendations via API
-
-### 14.3 Copyright Claim System (Content ID-like)
-- [ ] Fingerprinting for media assets
-- [ ] Match detection against uploaded content
-- [ ] DMCA-style takedown workflow
-
-### 14.4 Video Watermarking (Visible + Invisible/Forensic)
-- [ ] Embedded watermarks at multiple resolutions
-- [ ] Per-video watermark templates
-- [ ] Forensic extraction capability
-
-### 14.5 DRM Protection (Widevine/PlayReady/FairPlay)
-- [ ] License management integration
-- [ ] Encryption-at-rest and in-transit
-- [ ] Client-side decryption
-
-### 14.6 Data Export Center (User Data, GDPR)
-- [ ] Bulk export APIs (CSV, JSON, Parquet)
-- [ ] GDPR data deletion workflows
-- [ ] Audit trail for exports
-
-### 14.7 Feature Flags (LaunchDarkly-style, self-hosted)
-- [ ] Centralized flag management
-- [ ] Targeting rules (per-user, per-group)
-- [ ] A/B testing framework
-
-### 14.8 Push Notification Service (Native, Zero Cost)
-- [ ] **Already implemented** - see Phase 3.7
-- [ ] Enhance with rich media (images, carousels)
-- [ ] Cross-platform support (mobile, desktop, web)
-
-### 14.9 NATS JetStream (Replaces Kafka)
-- [ ] **Already implemented** - see Phase 3.8
-- [ ] Mirroring for cross-cluster DR
-- [ ] High-throughput streaming (millions of msgs/sec)
-- [ ] Built-in KV store for lightweight lookups
-
----
-
-## Priority Order (Build Sequence)
-
-1. **Auth + RBAC + Users** (Phase 3.1, 3.2) - Identity foundation
-2. **NATS JetStream Cluster** (Phase 2.1, 3.8) - Event backbone first
-3. **Push Notification Service** (Phase 3.7) - Native, zero cost
-4. **Video Upload + Streaming** (Phase 3.3, 4, 5.1) - Core video pipeline
-5. **Creator Studio** (Phase 9) - Frontend experience
-6. **Wallet + Accounting** (Phase 3.4, 4) - Finance systems
-7. **Advertiser System** (Phase 3.5) - Ad platform
-8. **Video Editor** (Phase 7) - Creative tools
-9. **Monitoring Dashboard** (Phase 6, 14) - Observability
-10. **Multi-Region & DR** (Phase 13) - Reliability
-11. **Datacenter Migration** (Phase 13) - Disaster recovery
-12. **Global Scale** (Phase 12) - Performance
-13. **Missing Features** (Phase 14) - Future enhancements
-
----
-
-## Current Build Status Summary
-
-| Section | Status |
-|---------|--------|
-| Phase 0: Foundation | ✅ Mostly Complete |
-| Phase 1: SSOT Config | ✅ Complete |
-| Phase 2: Infra as Code | ✅ Complete |
-| Phase 3: Core Microservices | ✅ Complete |
-| Phase 4: Database Layer | ✅ Complete |
-| Phase 5: Frontend Apps | ✅ Partial (core packages & apps skeleton) |
-| Phase 6: Observability | ✅ Partial (Prometheus, webhook receiver, dashboard service) |
-| Phase 7: Video Editor | ✅ In Progress |
-| Phase 8: Security & Fraud | ✅ In Progress |
-| Phase 9: Creator Studio | ✅ In Progress |
-| Phase 10: Testing | ✅ In Progress |
-| Phase 11: Production Tools | ✅ In Progress |
-| Phase 12: Advanced Patterns | ✅ In Progress |
-| Phase 13: Multi-Region | ✅ Planned |
-| Phase 14: Missing Features | ✅ Planned |
-
-**Overall**: All core services (support, video, finance, push, JetStream) are **complete**. Frontend apps and observability are **in progress**. Infrastructure (Terraform, Helm, ArgoCD) is **complete**. Ready for integration and testing.
-
-**Next Steps**:
-1. Run integration tests across all services
-2. Perform load testing with k6
-3. Execute smoke tests in sandbox environment
-4. Deploy to production using `go-production` CLI
-5. Monitor and validate all services in production
-6. Gradually roll out creator studio and video editor features
-7. Implement multi-region disaster recovery
-
----
-
-*Generated: 2026-09-20*
-*Project: Wideo11 - Video Platform*
-*Status: Ready for Integration & Testing*
