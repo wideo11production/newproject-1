@@ -15,6 +15,7 @@
     { "path": "./packages/utils" },
     { "path": "./packages/api-client" },
     { "path": "./packages/ui" },
-    { "path": "./packages/auth" }
+    { "path": "./packages/auth" },
+    { "path": "./packages/video-player" },
   ]
 }

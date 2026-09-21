@@ -1,8 +1,5 @@
-import { Link, Play, BarChart3, Users, Clock } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
+import { Card, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import Image from 'next/image';
 import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 
@@ -55,4 +52,8 @@ function VideoGridSkeleton() {
       ))}
     </div>
   );
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md ${className}`} />;
 }

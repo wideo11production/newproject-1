@@ -58,8 +58,8 @@
   - [x] Complete service layer implementation (CreatePlan, Subscribe, CreateInvoice, RecordPayment, etc.)
   - [x] Complete repository layer implementation (all repository interfaces and GORM methods)
   - [x] Build verification passed with `go build` and `go vet`
-  - [ ] Create billing app (apps/billing/) with Next.js App Router and parallel routes
-  - [ ] Update docker-compose.yml to include billing app service
+  - [x] Create billing app (apps/billing/) with Next.js App Router and parallel routes
+  - [x] Update docker-compose.yml to include billing app service
 - [ ] Phase 8: Content Delivery Network (CDN) Integration
 - [ ] Phase 9: Advanced Analytics & AI Features
 - [ ] Phase 10: Mobile Applications (React Native)

@@ -1,13 +1,39 @@
+"use client"
 import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { BarChart3, Settings, Share2, Save, Plus, Layers, Activity, Bell, Users, Database } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@wideo11/ui/select';
-import { ToastProvider, ToastViewport, Toast, ToastTitle, ToastDescription } from '@wideo11/ui/toast';
 import dynamic from 'next/dynamic';
+
+function ToastProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
+
+function ToastViewport() {
+  return null;
+}
+
+function Toast({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="fixed bottom-4 right-4 z-50 w- [&>*]:rounded-md">
+      {children}
+    </div>
+  );
+}
+
+function ToastTitle({ children }: { children: React.ReactNode }) {
+  return <div className="font-semibold">{children}</div>;
+}
+
+function ToastDescription({ children }: { children: React.ReactNode }) {
+  return <div className="text-sm text-muted-foreground">{children}</div>;
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md bg-muted ${className}`} />;
+}
 
 const LazyDashboardEditor = dynamic(
   () => import('@/components/dashboard/dashboard-editor'),
@@ -72,18 +98,18 @@ export default function DashboardPage() {
               </Badge>
             </div>
             <div className="flex items-center space-x-2">
-              <Select value={dashboard.refreshInterval} onValueChange={(val) => setDashboard({...dashboard, refreshInterval: val})}>
-                <SelectTrigger className="w-32 bg-gray-800/50 border-gray-700 text-gray-300">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-gray-800 border-gray-700">
-                  <SelectItem value="5s">5s</SelectItem>
-                  <SelectItem value="10s">10s</SelectItem>
-                  <SelectItem value="30s">30s</SelectItem>
-                  <SelectItem value="1m">1m</SelectItem>
-                  <SelectItem value="5m">5m</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={dashboard.refreshInterval}
+                onChange={(event) => setDashboard({ ...dashboard, refreshInterval: event.target.value })}
+                className="w-32 rounded-md border border-gray-700 bg-gray-800/50 px-3 py-2 text-sm text-gray-300"
+                aria-label="Refresh interval"
+              >
+                <option value="5s">5s</option>
+                <option value="10s">10s</option>
+                <option value="30s">30s</option>
+                <option value="1m">1m</option>
+                <option value="5m">5m</option>
+              </select>
               <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
                 <Save className="h-4 w-4 mr-1" /> Save
               </Button>

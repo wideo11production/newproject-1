@@ -191,9 +191,51 @@ services:
       dashboard-service:
         condition: service_healthy
 
+  # Billing Service (Go)
+  billing-service:
+    build:
+      context: ./services/billing-service
+      dockerfile: Dockerfile
+    container_name: wideo11-billing-service
+    ports:
+      - "8082:8082"
+    environment:
+      PORT: 8082
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: billing_service
+      DB_SSL_MODE: disable
+      LOG_LEVEL: debug
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Billing Frontend (Next.js)
+  billing:
+    build:
+      context: ./apps/billing
+      dockerfile: Dockerfile
+    container_name: wideo11-billing
+    ports:
+      - "3003:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://billing-service:8082
+    depends_on:
+      billing-service:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:
   nats_data:
   prometheus_data:
   alertmanager_data:
+  billing_data:

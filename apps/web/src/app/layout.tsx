@@ -4,9 +4,6 @@ import './globals.css';
 import { ReactNode, Suspense } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider } from '@wideo11/ui/toast';
-import { TooltipProvider } from '@wideo11/ui/tooltip';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { ThemeToggle, UserMenu, Loading } from './components/header';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -34,9 +31,7 @@ export default function RootLayout({
       <body className={inter.className} suppressContentEditableWarning>
         <QueryClientProvider client={queryClient}>
           <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
-            <ToastProvider>
-              <TooltipProvider>
-                <div className="flex h-screen flex-col bg-gray-950">
+            <div className="flex h-screen flex-col bg-gray-950">
                   <header className="border-b border-gray-800 bg-gray-900/50">
                     <div className="container mx-auto px-4 py-3 flex items-center justify-between">
                       <div className="flex items-center space-x-4">
@@ -66,11 +61,8 @@ export default function RootLayout({
                       </Suspense>
                     </main>
                   </div>
-                </div>
-              </TooltipProvider>
-            </ToastProvider>
+              </div>
           </ThemeProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
       </body>
     </html>

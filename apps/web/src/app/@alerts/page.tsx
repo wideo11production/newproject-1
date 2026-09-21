@@ -1,17 +1,32 @@
+"use client"
 import { Suspense, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { Bell, AlertCircle, CheckCircle2, Clock, Filter, Search } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import { Input } from '@wideo11/ui/input';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@wideo11/ui/select';
-import { Button } from '@wideo11/ui/button';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
 import { useQuery } from '@tanstack/react-query';
 
+interface Alert {
+  id: string;
+  name: string;
+  state: 'firing' | 'resolved';
+  severity: 'critical' | 'warning' | 'info';
+  description: string;
+  startsAt: string;
+}
+
+interface AlertHistoryProps {
+  filter: string;
+  search: string;
+}
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md ${className}`} />;
+}
+
 export default function AlertsRoute() {
-  const [filter, setFilter] = useState('all');
-  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
 
   return (
     <div className="h-full overflow-y-auto">
@@ -19,23 +34,23 @@ export default function AlertsRoute() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-gray-400">Alert History</h2>
           <div className="flex items-center space-x-2">
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-32 bg-gray-800/50 border-gray-700 text-gray-300">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="all">All Alerts</SelectItem>
-                <SelectItem value="firing">Firing</SelectItem>
-                <SelectItem value="resolved">Resolved</SelectItem>
-              </SelectContent>
-            </Select>
+            <select
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              className="w-32 rounded-md bg-gray-800/50 border border-gray-700 text-gray-300"
+              aria-label="Filter alerts"
+            >
+              <option value="all">All Alerts</option>
+              <option value="firing">Firing</option>
+              <option value="resolved">Resolved</option>
+            </select>
             <div className="relative">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
-              <Input
+              <input
                 placeholder="Search..."
                 className="pl-7 w-48 bg-gray-800/50 border-gray-700 text-gray-300"
                 value={search}
-                onValueChange={setSearch}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value)}
               />
             </div>
           </div>
@@ -49,7 +64,7 @@ export default function AlertsRoute() {
   );
 }
 
-function AlertHistory({ filter, search }: { filter: string; search: string }) {
+function AlertHistory({ filter, search }: AlertHistoryProps) {
   const { data: alerts, isLoading } = useQuery({
     queryKey: ['alerts-history', filter, search],
     queryFn: () => fetchAlerts(filter, search),
@@ -58,7 +73,7 @@ function AlertHistory({ filter, search }: { filter: string; search: string }) {
 
   if (isLoading) return <AlertsSkeleton />;
 
-  const filteredAlerts = (alerts || []).filter(alert => {
+  const filteredAlerts = (alerts || []).filter((alert: Alert) => {
     if (filter !== 'all' && alert.state !== filter) return false;
     if (search && !alert.name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
@@ -127,7 +142,7 @@ function AlertHistory({ filter, search }: { filter: string; search: string }) {
   );
 }
 
-async function fetchAlerts(filter: string, search: string) {
+async function fetchAlerts(filter: string, search: string): Promise<Alert[]> {
   return [
     {
       id: '1',

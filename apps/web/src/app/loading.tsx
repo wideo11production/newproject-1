@@ -1,5 +1,9 @@
-import { Skeleton } from '@wideo11/ui/skeleton';
+"use client"
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md ${className}`} />;
+}
 
 export default function Loading() {
   return (

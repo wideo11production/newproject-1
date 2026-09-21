@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "@types/react": "^18.2.0",
-    "@types/react-query": "^3.39.0",
     "typescript": "^5.3.0",
     "ts-node-dev": "^2.0.0"
   }

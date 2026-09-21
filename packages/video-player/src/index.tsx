@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
-import { Play, Pause, Volume2, VolumeX, Settings, Maximize, SkipBack, SkipForward, Subtitles, PiP, Download } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Settings, Maximize, SkipBack, SkipForward, Subtitles, Download } from 'lucide-react';
 
 export type VideoSource = {
   src: string;
@@ -21,7 +21,7 @@ export type VideoQuality = {
   url: string;
 };
 
-export interface VideoPlayerProps extends React.HTMLAttributes<HTMLVideoElement> {
+export interface VideoPlayerProps extends Omit<React.HTMLAttributes<HTMLVideoElement>, 'onError' | 'onProgress'> {
   sources: VideoSource[];
   subtitles?: SubtitleTrack[];
   qualities?: VideoQuality[];
@@ -31,7 +31,7 @@ export interface VideoPlayerProps extends React.HTMLAttributes<HTMLVideoElement>
   poster?: string;
   loop?: boolean;
   playsInline?: boolean;
-  crossOrigin?: string;
+  crossOrigin?: '' | 'anonymous' | 'use-credentials';
   onPlay?: () => void;
   onPause?: () => void;
   onProgress?: (progress: number) => void;
@@ -296,7 +296,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <QualitySelector 
             qualities={qualities} 
             current={state.selectedQuality}
-            onChange={setSourceForQuality}
+            onChange={(quality) => setSourceForQuality(quality, videoRef)}
           />
         )}
 
@@ -436,8 +436,6 @@ const VideoControls: React.FC = () => {
   );
 };
 
-export { useVideoPlayer, VideoPlayerProvider };
-export type { VideoSource, SubtitleTrack, VideoQuality, VideoPlayerProps };
 export default VideoPlayer;
 
 // Import ReactNode at top

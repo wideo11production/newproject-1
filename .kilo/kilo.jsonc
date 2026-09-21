@@ -1,3 +1,54 @@
 {
-  "$schema": "https://app.kilo.ai/config.json"
+  "models": {
+    "default": "google/gemini-2.5-pro",
+    "fallback": "google/gemini-2.5-pro"
+  },
+  
+  "providers": {
+    "openrouter": {
+      "prefer_byok": false,
+      "enabled": false
+    },
+    "openai-compatible": {
+      "nvidia": {
+        "name": "NVIDIA Local Engine",
+        "api_key": "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",
+        "base_url": "http://localhost:8000/v1",
+        "models": {
+          "gemini-2.5-pro": {
+            "name": "Local NVIDIA Processed Gemini 2.5 Pro",
+            "context_window": 128000
+          }
+        }
+      }
+    }
+  },
+
+  "features": {
+    "terminal_execution": "unrestricted",
+    "context_window_optimization": true
+  },
+
+  // 🔥 THE ABSOLUTE TIMEOUT OVERRIDE SYSTEM (Is block ko poora copy karein)
+  "engine": {
+    "timeout": 600,
+    "idle_timeout": 600,
+    "stream_idle_timeout": "600s"
+  },
+  "client_options": {
+    "connection_timeout_seconds": 600,
+    "read_timeout_seconds": 600,
+    "write_timeout_seconds": 600
+  },
+  "mcp": {
+    "global_timeout_seconds": 600,
+    "servers": {}
+  },
+  "transport": {
+    "offline_mode": true,
+    "connection_timeout": "600s",
+    "idle_timeout": "600s",
+    "max_retries": 10
+  }
 }
+

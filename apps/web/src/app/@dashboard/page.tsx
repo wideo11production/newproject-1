@@ -1,11 +1,14 @@
+"use client"
 import { Suspense, useState, useEffect } from 'react';
 import { Activity, BarChart3, Bell, CheckCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
 import { WebSocketClient } from '@/lib/websocket-client';
 import { useQuery } from '@tanstack/react-query';
+
+function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md ${className}`} />;
+}
 
 export default function DashboardRoute() {
   return (
@@ -83,9 +86,14 @@ function HealthChecks() {
   );
 }
 
+type Metric = {
+  name: string;
+  value: number;
+};
+
 function LiveMetrics() {
   const ws = WebSocketClient.getInstance();
-  const [metrics, setMetrics] = useState([]);
+  const [metrics, setMetrics] = useState<Metric[]>([]);
   
   useEffect(() => {
     ws.on('metric_update', (data) => {
@@ -145,7 +153,7 @@ function RecentAlerts() {
         <CardTitle className="text-sm font-medium text-gray-300">Recent Alerts</CardTitle>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-48">
+        <div className="h-48 overflow-y-auto">
           <div className="space-y-2">
             {alerts?.slice(0, 10).map((alert) => (
               <div key={alert.id} className="flex items-start space-x-2 text-sm">
@@ -161,7 +169,7 @@ function RecentAlerts() {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </CardContent>
     </Card>
   );

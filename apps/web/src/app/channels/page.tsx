@@ -1,9 +1,5 @@
-import { Users, Play, BarChart3 } from 'lucide-react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
-import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import Image from 'next/image';
-import { Suspense } from 'react';
+import { Card, CardContent } from '@wideo11/ui/card';
+import { Suspense, type HTMLAttributes } from 'react';
 import dynamic from 'next/dynamic';
 
 export const metadata = {
@@ -56,4 +52,8 @@ function ChannelCardSkeleton() {
       </CardContent>
     </Card>
   );
+}
+
+function Skeleton({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div {...props} className={`animate-pulse rounded-md ${className}`} />;
 }

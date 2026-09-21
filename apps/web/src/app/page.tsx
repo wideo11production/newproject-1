@@ -1,11 +1,11 @@
-import { Suspense } from 'react';
+"use client"
+import { Suspense, type HTMLAttributes } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import { Play, TrendingUp, Users, DollarSign, BarChart3 } from 'lucide-react';
+import { Play, TrendingUp, Users, DollarSign, BarChart3, type LucideIcon } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { metadata } from './layout';
 
@@ -98,7 +98,19 @@ export default function HomePage() {
   );
 }
 
-function StatCard({ title, value, change, icon: Icon, iconColor }) {
+function StatCard({
+  title,
+  value,
+  change,
+  icon: Icon,
+  iconColor,
+}: {
+  title: string;
+  value: string;
+  change: string;
+  icon: LucideIcon;
+  iconColor: string;
+}) {
   return (
     <Card className="bg-gray-900/50 border-gray-800">
       <CardContent className="pt-6">
@@ -134,5 +146,14 @@ function TrendingVideosSkeleton() {
         </Card>
       ))}
     </div>
+  );
+}
+
+function Skeleton({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      {...props}
+      className={`animate-pulse rounded-md bg-gray-700/50 ${className}`}
+    />
   );
 }

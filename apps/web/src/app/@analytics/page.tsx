@@ -1,8 +1,7 @@
 import { Suspense } from 'react';
-import { BarChart3, Database, Users, Globe, Activity, TrendingUp, DollarSign, Clock } from 'lucide-react';
+import { BarChart3, Database, Users, Globe, Activity, TrendingUp, DollarSign, Clock, Play } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 
 export default function AnalyticsRoute() {
@@ -126,4 +125,8 @@ function ChartSkeleton() {
       </CardContent>
     </Card>
   );
+}
+
+function Skeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`animate-pulse rounded-md ${className ?? ''}`} style={style} />;
 }
