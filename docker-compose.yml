@@ -1,7 +1,7 @@
-version: "3.9"
+version: '3.8'
 
 services:
-  # PostgreSQL with partitioning support
+  # PostgreSQL Database
   postgres:
     image: postgres:16-alpine
     container_name: wideo11-postgres
@@ -13,18 +13,16 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Redis Cluster (simplified for local)
+  # Redis for caching
   redis:
     image: redis:7-alpine
     container_name: wideo11-redis
-    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -35,208 +33,152 @@ services:
       timeout: 5s
       retries: 5
 
-  # NATS JetStream
+  # NATS JetStream for event streaming
   nats:
     image: nats:2.10-alpine
     container_name: wideo11-nats
-    command: ["-js", "-m", "8222"]
     ports:
       - "4222:4222"
       - "8222:8222"
+    command: ["-js", "-m", "8222"]
     volumes:
       - nats_data:/data
     healthcheck:
-      test: ["CMD", "nats", "server", "check", "jetstream"]
+      test: ["CMD", "nats", "server", "check", "streaming"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # MinIO
-  minio:
-    image: minio/minio:latest
-    container_name: wideo11-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-
-  # HashiCorp Vault
-  vault:
-    image: hashicorp/vault:1.15
-    container_name: wideo11-vault
-    environment:
-      VAULT_DEV_ROOT_TOKEN_ID: root
-      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
-    ports:
-      - "8200:8200"
-    cap_add:
-      - IPC_LOCK
-    healthcheck:
-      test: ["CMD", "vault", "status"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Meilisearch
-  meilisearch:
-    image: getmeili/meilisearch:v1.8
-    container_name: wideo11-meilisearch
-    environment:
-      MEILI_MASTER_KEY: masterKey
-      MEILI_NO_ANALYTICS: "true"
-    ports:
-      - "7700:7700"
-    volumes:
-      - meilisearch_data:/meili_data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # ClickHouse (Analytics)
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.3
-    container_name: wideo11-clickhouse
-    environment:
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: clickhouse
-    ports:
-      - "8123:8123"
-      - "9000:9000"
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Prometheus
+  # Prometheus for metrics
   prometheus:
-    image: prom/prometheus:v2.52
+    image: prom/prometheus:v2.48.0
     container_name: wideo11-prometheus
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--web.console.libraries=/etc/prometheus/console_libraries"
-      - "--web.console.templates=/etc/prometheus/consoles"
-      - "--web.enable-lifecycle"
     ports:
       - "9090:9090"
     volumes:
-      - ./infrastructure/docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9090/-/healthy"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # AlertManager
+  # AlertManager for alerting
   alertmanager:
-    image: prom/alertmanager:v0.27
+    image: prom/alertmanager:v0.27.0
     container_name: wideo11-alertmanager
-    command:
-      - "--config.file=/etc/alertmanager/alertmanager.yml"
-      - "--storage.path=/alertmanager"
     ports:
       - "9093:9093"
     volumes:
-      - ./infrastructure/docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9093/-/healthy"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # Grafana (for comparison/reference only - we build our own)
-  grafana:
-    image: grafana/grafana:11.0
-    container_name: wideo11-grafana
+  # Dashboard Service
+  dashboard-service:
+    build:
+      context: ./services/dashboard-service
+      dockerfile: Dockerfile
+    container_name: wideo11-dashboard-service
+    ports:
+      - "8080:8080"
     environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      PORT: 8080
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: dashboard
+      DB_SSL_MODE: disable
+      PROMETHEUS_URL: http://prometheus:9090
+      NATS_URL: nats://nats:4222
+      LOG_LEVEL: debug
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      prometheus:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Webhook Receiver
+  webhook-receiver:
+    build:
+      context: ./services/webhook-receiver
+      dockerfile: Dockerfile
+    container_name: wideo11-webhook-receiver
+    ports:
+      - "8081:8081"
+    environment:
+      PORT: 8081
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: webhook_receiver
+      DB_SSL_MODE: disable
+      DASHBOARD_SERVICE_URL: http://dashboard-service:8080
+      LOG_LEVEL: debug
+      ENVIRONMENT: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      dashboard-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Monitor Frontend (Next.js)
+  monitor:
+    build:
+      context: ./apps/monitor
+      dockerfile: Dockerfile
+    container_name: wideo11-monitor
     ports:
       - "3001:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      - prometheus
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Loki (Logs)
-  loki:
-    image: grafana/loki:2.9
-    container_name: wideo11-loki
-    command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
-    volumes:
-      - loki_data:/loki
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3100/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Jaeger (Tracing)
-  jaeger:
-    image: jaegertracing/all-in-one:1.57
-    container_name: wideo11-jaeger
     environment:
-      COLLECTOR_OTLP_ENABLED: true
-      SPAN_STORAGE_TYPE: badger
-    ports:
-      - "16686:16686"
-      - "4317:4317"
-      - "6831:6831/udp"
-    volumes:
-      - jaeger_data:/var/lib/jaeger
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:16686/"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
+    depends_on:
+      dashboard-service:
+        condition: service_healthy
 
-  # Mailhog (Email testing)
-  mailhog:
-    image: mailhog/mailhog:v1.0
-    container_name: wideo11-mailhog
+  # Web Frontend (Next.js)
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: wideo11-web
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
 
 volumes:
   postgres_data:
   redis_data:
   nats_data:
-  minio_data:
-  meilisearch_data:
-  clickhouse_data:
   prometheus_data:
   alertmanager_data:
-  grafana_data:
-  loki_data:
-  jaeger_data:

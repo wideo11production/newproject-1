@@ -1,0 +1,21 @@
+{
+  "name": "wideo11-push-client",
+  "version": "1.0.0",
+  "description": "Web Push subscription management (VAPID, endpoints, keys)",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-query": "^3.39.3",
+    "react-use-vapid": "^0.1.0",
+    "react-use-webpush": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}

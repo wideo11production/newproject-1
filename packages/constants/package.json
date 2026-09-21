@@ -1,28 +1,52 @@
 {
-  "name": "@wideo11/constants",
-  "version": "0.0.0",
-  "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./app": "./src/app.ts",
-    "./limits": "./src/limits.ts",
-    "./theme": "./src/theme.ts",
-    "./api": "./src/api.ts",
-    "./events": "./src/events.ts"
+  "APP_NAME": "Wideo11",
+  "DOMAINS": {
+    "MAIN": "app.wideo11.com",
+    "AUTH": "auth.wideo11.com",
+    "EDITOR": "editor.wideo11.com",
+    "ADMIN": "admin.wideo11.com",
+    "MONITOR": "monitor.wideo11.com",
+    "WEBHOOK": "webhooks.wideo11.com"
   },
-  "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts"
+  "COLORS": {
+    "PRIMARY": "#6366f1",
+    "ACCENT": "#f59e0b",
+    "BACKGROUND": "#0f172a",
+    "CARD": "#1e293b",
+    "SUCCESS": "#10b981",
+    "WARNING": "#f59e0b",
+    "ERROR": "#ef4444"
   },
-  "dependencies": {
-    "zod": "catalog:"
+  "PAGINATION": {
+    "DEFAULT_LIMIT": 20,
+    "MAX_LIMIT": 100,
+    "SINGLE_PAGE": 1
   },
-  "devDependencies": {
-    "typescript": "catalog:",
-    "@wideo11/tsconfig": "workspace:*",
-    "@wideo11/eslint-config": "workspace:*"
+  "QUALITY_LEVELS": {
+    "LOW": "360p",
+    "MEDIUM": "720p",
+    "HIGH": "1080p",
+    "ULTRA_HIGH": "4K"
+  },
+  "CHANNELS": {
+    "EMAIL": "email",
+    "PUSH": "push",
+    "IN_APP": "in-app",
+    "SMS": "sms"
+  },
+  "SECURITY": {
+    "JWT_EXPIRY_MINUTES": 30,
+    "JWT_EXPIRY_MAX_MINUTES": 24,
+    "REFRESH_TOKEN_TTL_DAYS": 7
+  },
+  "ANALYTICS": {
+    "EVENT_KEYS": {
+      "VIEW_START": "view_start",
+      "VIEW_END": "view_end",
+      "PLAY_BEGIN": "play_begin",
+      "PLAY_END": "play_end",
+      "SHARE": "share",
+      "SUBSCRIBE": "subscribe"
+    }
   }
 }

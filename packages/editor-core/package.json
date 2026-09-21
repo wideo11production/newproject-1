@@ -1,0 +1,21 @@
+{
+  "name": "wideo11-editor-core",
+  "version": "1.0.0",
+  "description": "Shared editor core: timeline, playback, render engines",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-query": "^3.39.3",
+    "zustand": "^4.5.0",
+    "lucide-react": "^0.57.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}

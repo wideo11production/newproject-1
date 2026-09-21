@@ -1,35 +1,19 @@
 {
-  "name": "@wideo11/utils",
-  "version": "0.0.0",
-  "private": true,
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
-  "exports": {
-    ".": "./src/index.ts",
-    "./date": "./src/date.ts",
-    "./validation": "./src/validation.ts",
-    "./formatting": "./src/formatting.ts",
-    "./crypto": "./src/crypto.ts",
-    "./array": "./src/array.ts",
-    "./object": "./src/object.ts",
-    "./string": "./src/string.ts"
-  },
+  "name": "wideo11-utils",
+  "version": "1.0.0",
+  "description": "Shared utility functions for Wideo11 (date, validation, formatting, etc.)",
+  "main": "src/index.ts",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
-    "test": "vitest run"
+    "test": "jest"
   },
   "dependencies": {
-    "zod": "catalog:",
-    "date-fns": "catalog:",
-    "clsx": "catalog:",
-    "tailwind-merge": "catalog:"
+    "date-fns": "^3.0.0",
+    "zod": "^3.22.0",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "typescript": "catalog:",
-    "@wideo11/tsconfig": "workspace:*",
-    "@wideo11/eslint-config": "workspace:*",
-    "vitest": "catalog:dev"
+    "@types/uuid": "^9.0.0",
+    "@types/zod": "^3.22.0",
+    "typescript": "^5.3.0"
   }
 }

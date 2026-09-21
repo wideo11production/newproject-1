@@ -1,0 +1,21 @@
+{
+  "name": "wideo11-forms",
+  "version": "1.0.0",
+  "description": "Form components with Zod validation (React Hook Form + Zod)",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.52.0",
+    "zod": "^3.22.0",
+    "zod-react-hook-form": "^0.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}

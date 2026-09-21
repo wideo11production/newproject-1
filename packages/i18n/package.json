@@ -1,0 +1,20 @@
+{
+  "name": "wideo11-i18n",
+  "version": "1.0.0",
+  "description": "Internationalization (i18n) support for Wideo11",
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-i18next": "^14.0.0",
+    "next-intl": "^0.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "ts-node-dev": "^2.0.0"
+  }
+}

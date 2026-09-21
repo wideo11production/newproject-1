@@ -1,19 +1,17 @@
 {
-  "name": "@wideo11/tailwind-config",
-  "version": "0.0.0",
-  "private": true,
-  "main": "tailwind.config.ts",
-  "files": [
-    "tailwind.config.ts",
-    "postcss.config.js"
+  "content": [
+    "./src/**/*.{html,js,ts,json}",
+    "./apps/**/*.{html,js,ts,jsx,tsx}"
   ],
-  "dependencies": {
-    "tailwindcss": "catalog:",
-    "@tailwindcss/forms": "catalog:",
-    "@tailwindcss/typography": "catalog:",
-    "@tailwindcss/aspect-ratio": "catalog:",
-    "@tailwindcss/container-queries": "catalog:",
-    "postcss": "catalog:",
-    "autoprefixer": "catalog:"
-  }
+  "theme": {
+    "extend": {
+      "colors": {
+        "wideo11-primary": "#6366f1",
+        "wideo11-accent": "#f59e0b",
+        "wideo11-bg": "#0f172a",
+        "wideo11-card": "#1e293b"
+      }
+    }
+  },
+  "plugins": []
 }

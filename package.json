@@ -1,35 +1,34 @@
 {
-  "name": "wideo11",
-  "version": "0.0.0",
+  "name": "wideo11-monorepo",
+  "version": "1.0.0",
   "private": true,
+  "description": "Wideo11 Video Platform - Monorepo with Next.js, Go microservices, and custom observability",
   "scripts": {
+    "dev": "turbo run dev --parallel",
     "build": "turbo run build",
-    "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "test:ui": "turbo run test:ui",
-    "format": "prettier --write \"**/*.{ts,tsx,json,md,yaml,yml}\"",
-    "typecheck": "tsc --build",
-    "typecheck:turbo": "turbo run typecheck",
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
-    "db:push": "turbo run db:push",
-    "docker:build": "turbo run docker:build",
-    "docker:push": "turbo run docker:push",
-    "prepare": "husky"
+    "clean": "turbo run clean && rm -rf node_modules .turbo",
+    "paimana:dev": "pnpm --filter @wideo11/paimana dev",
+    "web:dev": "pnpm --filter @wideo11/web dev",
+    "dashboard:dev": "pnpm --filter @wideo11/dashboard-service dev"
   },
   "devDependencies": {
-    "@commitlint/cli": "catalog:dev",
-    "@commitlint/config-conventional": "catalog:dev",
-    "husky": "^9.1.7",
-    "lint-staged": "catalog:dev",
-    "prettier": "catalog:",
-    "turbo": "catalog:dev",
-    "typescript": "catalog:"
+    "turbo": "^2.1.2",
+    "typescript": "^5.5.4",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.3",
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.4.0",
+    "husky": "^9.1.4",
+    "lint-staged": "^15.2.9"
   },
   "engines": {
     "node": ">=20.0.0",
     "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@9.7.1"
+  "packageManager": "pnpm@9.7.0"
 }
