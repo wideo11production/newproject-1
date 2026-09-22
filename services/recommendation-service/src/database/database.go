@@ -1,0 +1,242 @@
+package database
+import (
+	"fmt"
+
+	"newproject/services/recommendation-service/src/config"
+	// Using alias to avoid identifier conflict with "model" in this file
+	m "newproject/services/recommendation-service/src/model"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
+)
+
+// NewPostgresDB creates a new PostgreSQL database connection
+// PostgreSQL कनेक्शन बनाता है - कॉन्फिग .env से लोड होता है (SSOT)
+func NewPostgresDB(cfg *config.DatabaseConfig) (*gorm.DB, error) {
+	dsn := cfg.DSN()
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
+		Logger:      logger.Default.LogMode(logger.Info),
+		PrepareStmt: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sql.DB: %w", err)
+	}
+
+	// Connection pool settings - कनेक्शन पूल सेटिंग्स
+	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
+	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
+	sqlDB.SetConnMaxLifetime(cfg.ConnMaxLifetime)
+
+	return db, nil
+}
+
+// AutoMigrate runs database migrations including full-text search indexes
+// डेटाबेस माइग्रेशन चलाता है - फुल-टेक्स्ट सर्च इंडेक्स शामिल
+func AutoMigrate(db *gorm.DB) error {
+	// Enable pg_trgm extension for fuzzy matching
+	// pg_trgm एक्सटेंशन इनेबल करें फज़ी मैचिंग के लिए
+	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_trgm;").Error; err != nil {
+		return fmt.Errorf("failed to create pg_trgm extension: %w", err)
+	}
+
+	// Enable fuzzystrmatch for similarity functions
+	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch;").Error; err != nil {
+		return fmt.Errorf("failed to create fuzzystrmatch extension: %w", err)
+	}
+
+	// Run GORM auto-migration for all models
+	// GORM ऑटो-माइग्रेशन सभी मॉडल्स के लिए
+	if err := db.AutoMigrate(
+		&m.UserPreferenceMatrix{},
+		&m.UserCategoryInterest{},
+		&m.WatchDurationCurve{},
+		&m.ContentItem{},
+		&m.FeedCache{},
+		&m.SearchIndex{},
+		&m.UserInteraction{},
+		&m.LanguagePreference{},
+		&m.CurrencyPreference{},
+		&m.FeedItem{},
+		&m.TrendingScore{},
+		&m.DiscoveryCandidate{},
+	); err != nil {
+		return fmt.Errorf("failed to auto-migrate: %w", err)
+	}
+
+	// Create PostgreSQL full-text search indexes
+	// PostgreSQL फुल-टेक्स्ट सर्च इंडेक्स बनाएं (tsvector/tsquery)
+	if err := createFullTextSearchIndexes(db); err != nil {
+		return fmt.Errorf("failed to create full-text search indexes: %w", err)
+	}
+
+	// Create additional indexes for performance
+	// परफॉरमेंस के लिए अतिरिक्त इंडेक्स बनाएं
+	if err := createAdditionalIndexes(db); err != nil {
+		return fmt.Errorf("failed to create additional indexes: %w", err)
+	}
+
+	return nil
+}
+
+// createFullTextSearchIndexes creates PostgreSQL native tsvector/tsquery indexes
+// PostgreSQL नेटिव tsvector/tsquery फुल-टेक्स्ट सर्च इंडेक्स बनाता है
+func createFullTextSearchIndexes(db *gorm.DB) error {
+	indexes := []string{
+		// Content item full-text search index
+		// कंटेंट आइटम फुल-टेक्स्ट सर्च इंडेक्स
+		`CREATE INDEX IF NOT EXISTS idx_content_items_search_vector 
+		 ON content_items USING GIN(search_vector);`,
+
+		// Content title trigram index for fuzzy matching
+		// कंटेंट टाइटल ट्राइग्राम इंडेक्स फज़ी मैचिंग के लिए
+		`CREATE INDEX IF NOT EXISTS idx_content_items_title_trigram 
+		 ON content_items USING GIN(title gin_trgm_ops);`,
+
+		// Content description trigram index
+		`CREATE INDEX IF NOT EXISTS idx_content_items_desc_trigram 
+		 ON content_items USING GIN(description gin_trgm_ops);`,
+
+		// Search index table full-text index
+		`CREATE INDEX IF NOT EXISTS idx_search_indexes_search_vector 
+		 ON search_indexes USING GIN(search_vector);`,
+
+		// Search index trigram for fuzzy queries
+		`CREATE INDEX IF NOT EXISTS idx_search_indexes_term_trigram 
+		 ON search_indexes USING GIN(term gin_trgm_ops);`,
+
+		// User preference matrix search vector
+		`CREATE INDEX IF NOT EXISTS idx_user_pref_matrix_search 
+		 ON user_preference_matrices USING GIN(search_vector);`,
+
+		// Feed cache search
+		`CREATE INDEX IF NOT EXISTS idx_feed_cache_search 
+		 ON feed_caches USING GIN(search_vector);`,
+	}
+
+	for _, idx := range indexes {
+		if err := db.Exec(idx).Error; err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// createAdditionalIndexes creates additional performance indexes
+// परफॉरमेंस के लिए अतिरिक्त इंडेक्स बनाता है
+func createAdditionalIndexes(db *gorm.DB) error {
+	indexes := []string{
+		// User preference indexes
+		`CREATE INDEX IF NOT EXISTS idx_user_pref_matrix_user_id 
+		 ON user_preference_matrices (user_id);`,
+
+// Category interest indexes
+	`CREATE INDEX IF NOT EXISTS idx_user_category_interest_user_category 
+	 ON user_category_interests (user_id, category);`,
+
+		// Watch duration curve indexes
+		`CREATE INDEX IF NOT EXISTS idx_watch_duration_curve_user_content 
+		 ON watch_duration_curves (user_id, content_id);`,
+
+// Content item indexes
+	`CREATE INDEX IF NOT EXISTS idx_content_items_category_published 
+	 ON content_items (category, publish_date DESC);`,
+
+		`CREATE INDEX IF NOT EXISTS idx_content_items_language_currency 
+		 ON content_items (language, currency);`,
+
+		`CREATE INDEX IF NOT EXISTS idx_content_items_trending_score 
+		 ON content_items (trending_score DESC);`,
+
+		// Feed cache indexes
+		`CREATE INDEX IF NOT EXISTS idx_feed_cache_user_type 
+		 ON feed_caches (user_id, feed_type);`,
+
+		`CREATE INDEX IF NOT EXISTS idx_feed_cache_expires 
+		 ON feed_caches (expires_at);`,
+
+		// User interaction indexes
+		`CREATE INDEX IF NOT EXISTS idx_user_interaction_user_time 
+		 ON user_interactions (user_id, created_at DESC);`,
+
+		`CREATE INDEX IF NOT EXISTS idx_user_interaction_content_type 
+		 ON user_interactions (content_id, interaction_type);`,
+
+		// Trending score indexes
+		`CREATE INDEX IF NOT EXISTS idx_trending_score_content_time 
+		 ON trending_scores (content_id, calculated_at DESC);`,
+
+		// Discovery candidate indexes
+		`CREATE INDEX IF NOT EXISTS idx_discovery_candidate_user_score 
+		 ON discovery_candidates (user_id, score DESC);`,
+	}
+
+	for _, idx := range indexes {
+		if err := db.Exec(idx).Error; err != nil {
+			return fmt.Errorf("failed to create index: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// DSN returns the PostgreSQL connection string from config
+func DSN(cfg *config.DatabaseConfig) string {
+	return cfg.DSN()
+}
+
+// CreateSearchVector creates a tsvector from text fields
+// टेक्स्ट फील्ड्स से tsvector बनाता है PostgreSQL फुल-टेक्स्ट सर्च के लिए
+func CreateSearchVector(title, description, tags string, language string) string {
+	query := fmt.Sprintf(
+		"to_tsvector('%s', coalesce(%s, '') || ' ' || coalesce(%s, '') || ' ' || coalesce(%s, ''))",
+		language, title, description, tags,
+	)
+	return query
+}
+
+// SearchQuery creates a tsquery from search terms
+// सर्च टर्म्स से tsquery बनाता है PostgreSQL फुल-टेक्स्ट सर्च के लिए
+func SearchQuery(terms string, language string) string {
+	// Sanitize and format terms for tsquery
+	// tsquery के लिए टर्म्स को सैनेटाइज़ और फॉर्मेट करें
+	sanitized := sanitizeTsquery(terms)
+	return fmt.Sprintf("to_tsquery('%s', '%s')", language, sanitized)
+}
+
+// FuzzySearchQuery creates a fuzzy tsquery using trigram similarity
+// ट्राइग्राम सिमिलैरिटी का उपयोग करके फज़ी tsquery बनाता है
+func FuzzySearchQuery(term string, threshold float64) string {
+	return fmt.Sprintf(
+		"similarity(%s, '%s') > %f",
+		"term", term, threshold,
+	)
+}
+
+// sanitizeTsquery sanitizes input for tsquery
+func sanitizeTsquery(input string) string {
+	// Remove special characters that break tsquery
+	specialChars := []string{"&", "|", "!", ":", "*", ":", "(", ")"}
+	result := input
+	for _, char := range specialChars {
+		result = replaceAll(result, char, " ")
+	}
+	return result
+}
+
+func replaceAll(s, old, new string) string {
+	// Simple string replacement
+	for i := 0; i < len(s); i++ {
+		if i+len(old) <= len(s) && s[i:i+len(old)] == old {
+			s = s[:i] + new + s[i+len(old):]
+			i += len(new) - 1
+		}
+	}
+	return s
+}

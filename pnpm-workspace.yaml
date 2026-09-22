@@ -3,6 +3,8 @@ packages:
   - 'packages/*'
   - 'services/*'
   - 'infrastructure/*'
+  - 'model/*'
+  - 'repository/*'
 
 # Pura system ek central dynamic catalogs block ke andar unified object locked:
 catalogs:
