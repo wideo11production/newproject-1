@@ -1,10 +1,7 @@
-analytics-service/src/repository/analytics_repository.go
-
 package repository
 
 import (
     "time"
-    "gorm.io/gorm"
     "newproject/services/analytics-service/src/model"
 )
 
@@ -14,16 +11,16 @@ import (
 // Critical for understanding user engagement patterns across the platform
 
 type ClickStreamRepository interface {
-    Create(clickLog *model.ClickLog) error
-    BatchCreate(clickLogs []*model.ClickLog) error
-    GetByID(id uint) (*model.ClickLog, error)
-    GetByUUID(uuid string) (*model.ClickLog, error)
-    GetByUserID(userID uint, limit int) ([]*model.ClickLog, error)
-    GetByContentID(contentID string, limit int) ([]*model.ClickLog, error)
-    GetByCampaignID(campaignID uint, limit int) ([]*model.ClickLog, error)
-    GetByDateRange(startDate, endDate time.Time, limit int) ([]*model.ClickLog, error)
-    GetByCountry(country string, limit int) ([]*model.ClickLog, error)
-    GetByDevice(device string, limit int) ([]*model.ClickLog, error)
+    CreateClick(clickLog *model.ClickLog) error
+    BatchCreateClicks(clickLogs []*model.ClickLog) error
+    GetClickByID(id uint) (*model.ClickLog, error)
+    GetClickByUUID(uuid string) (*model.ClickLog, error)
+    GetClicksByUserID(userID uint, limit int) ([]*model.ClickLog, error)
+    GetClicksByContentID(contentID string, limit int) ([]*model.ClickLog, error)
+    GetClicksByCampaignID(campaignID uint, limit int) ([]*model.ClickLog, error)
+    GetClicksByDateRange(startDate, endDate time.Time, limit int) ([]*model.ClickLog, error)
+    GetClicksByCountry(country string, limit int) ([]*model.ClickLog, error)
+    GetClicksByDevice(device string, limit int) ([]*model.ClickLog, error)
     GetRecentClicks(limit int) ([]*model.ClickLog, error)
     GetClicksPerDay(startDate, endDate time.Time) ([]struct {
         Date        time.Time
@@ -124,9 +121,6 @@ type CreatorRevenueRepository interface {
 // Provides unified access to all analytics-related data entities
 // Supports both real-time and historical analytics queries
 
-type AnalyticsRepository interface {
-    ClickStreamRepository
-    RetentionRepository
-    ViewEventRepository
-    CreatorRevenueRepository
-}
+// Note: The composite AnalyticsRepository interface was removed due to
+// conflicting method signatures between sub-interfaces (Create, GetByID, etc.)
+// The individual repository interfaces should be used directly instead.

@@ -1,10 +1,7 @@
-analytics-service/src/repository/billing_repository.go
-
 package repository
 
 import (
     "time"
-    "gorm.io/gorm"
     "newproject/services/analytics-service/src/model"
 )
 
@@ -133,11 +130,6 @@ type ManualExpenseRepository interface {
 // Provides unified access to subscription, payment, and expense data
 // Supports comprehensive billing operations and reporting
 
-type BillingRepository interface {
-    PlanRepository
-    SubscriptionRepository
-    TaxRateRepository
-    InvoiceRepository
-    PaymentRepository
-    ManualExpenseRepository
-}
+// Note: The composite BillingRepository interface was removed due to
+// conflicting method signatures between sub-interfaces (Create, GetByID, etc.)
+// The individual repository interfaces should be used directly instead.

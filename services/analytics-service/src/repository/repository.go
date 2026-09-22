@@ -5,7 +5,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 	"newproject/services/analytics-service/src/model"
 )
@@ -59,6 +58,22 @@ type RevenueReportRepository interface {
 }
 
 type viewLogRepository struct {
+	db *gorm.DB
+}
+
+type clickLogRepository struct {
+	db *gorm.DB
+}
+
+type conversionRepository struct {
+	db *gorm.DB
+}
+
+type reachRepository struct {
+	db *gorm.DB
+}
+
+type revenueReportRepository struct {
 	db *gorm.DB
 }
 

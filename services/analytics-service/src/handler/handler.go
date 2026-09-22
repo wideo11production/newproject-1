@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -9,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
 	"newproject/services/analytics-service/src/model"
-	"newproject/services/analytics-service/src/repository"
 	"newproject/services/analytics-service/src/service"
 )
 
@@ -35,6 +33,16 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		analytics.GET("/reach", h.GetReachStats)
 		analytics.GET("/revenue", h.GetRevenueReports)
 		analytics.GET("/campaign/:campaign_id/analytics", h.GetCampaignAnalytics)
+	}
+
+	ai := r.Group("/ai")
+	{
+		ai.POST("/content/categorize", h.CategorizeContent)
+		ai.GET("/creators/:creator_id/recommendations", h.GetCreatorRecommendations)
+		ai.POST("/content/:content_id/predict-engagement", h.PredictEngagement)
+		ai.GET("/creators/:creator_id/revenue-forecast", h.GetRevenueForecast)
+		ai.GET("/trending-content", h.GetTrendingContent)
+		ai.GET("/creators/:creator_id/target-status", h.GetTargetStatus)
 	}
 }
 
@@ -183,7 +191,7 @@ func (h *Handler) RecordRevenue(c *gin.Context) {
 		return
 	}
 
-	revenue, err := h.svc.RecordRevenue(c.Request.Context(), req.CampaignID, date, req.Revenue, req.AdSpend, req.Conversions)
+	revenue, err := h.svc.RecordRevenue(c.Request.Context(), req.CampaignID, date, req.Revenue, req.AdSpend, strconv.Itoa(req.Conversions))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -302,4 +310,94 @@ func (h *Handler) GetCampaignAnalytics(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"analytics": analytics})
+}
+
+func (h *Handler) CategorizeContent(c *gin.Context) {
+	var req struct {
+		ContentID string `json:"content_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	categorization, err := h.svc.CategorizeContent(c.Request.Context(), req.ContentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"categorization": categorization})
+}
+
+func (h *Handler) GetCreatorRecommendations(c *gin.Context) {
+	creatorID, err := strconv.ParseUint(c.Param("creator_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid creator_id"})
+		return
+	}
+
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	recommendations, err := h.svc.RecommendCreators(c.Request.Context(), uint(creatorID), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"recommendations": recommendations})
+}
+
+func (h *Handler) PredictEngagement(c *gin.Context) {
+	contentID := c.Param("content_id")
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "7"))
+
+	prediction, err := h.svc.PredictEngagement(c.Request.Context(), contentID, days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"prediction": prediction})
+}
+
+func (h *Handler) GetRevenueForecast(c *gin.Context) {
+	creatorID, err := strconv.ParseUint(c.Param("creator_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid creator_id"})
+		return
+	}
+
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+
+	forecasts, err := h.svc.ForecastRevenue(c.Request.Context(), uint(creatorID), days)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"forecasts": forecasts})
+}
+
+func (h *Handler) GetTrendingContent(c *gin.Context) {
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "24"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	trending, err := h.svc.GetTrendingContent(c.Request.Context(), days, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"trending": trending})
+}
+
+func (h *Handler) GetTargetStatus(c *gin.Context) {
+	creatorID, err := strconv.ParseUint(c.Param("creator_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid creator_id"})
+		return
+	}
+
+	status, err := h.svc.GetCreatorTargetStatus(c.Request.Context(), uint(creatorID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"target_status": status})
 }
