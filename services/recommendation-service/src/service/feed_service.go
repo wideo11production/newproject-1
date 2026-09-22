@@ -8,10 +8,13 @@ import (
 	"log"
 	"math"
 	"net/http"
-	"strings"
 	"bytes"
 	"sort"
+	"strings"
+	"sync"
 	"time"
+
+	
 
 	"newproject/services/recommendation-service/src/model"
 	"newproject/services/recommendation-service/src/repository"
@@ -23,6 +26,7 @@ import (
 type FeedService struct {
 	repo *repository.RecommendationRepository
 	cfg  *config.Config
+	mu   sync.RWMutex // mutex for cache if we implement in-memory cache, but we are using repository cache
 }
 
 // NewFeedService creates a new feed service instance
@@ -63,17 +67,17 @@ func (f *FeedService) GetPersonalizedFeed(ctx context.Context, userID string, pa
 		log.Printf("Warning: Failed to check feed cache: %v", err)
 	}
 	if cachedFeed != nil && len(cachedFeed.FeedData) > 0 {
-// Return cached feed
-	return &FeedResponse{
-		FollowingFeed: f.extractFeedByType(cachedFeed.FeedData, "following", page, pageSize),
-		TrendingFeed:  f.extractFeedByType(cachedFeed.FeedData, "trending", page, pageSize),
-		DiscoveryFeed: f.extractFeedByType(cachedFeed.FeedData, "discovery", page, pageSize),
-		Page:          page,
-		PageSize:      pageSize,
-		TotalResults:  len(cachedFeed.FeedData),
-		FromCache:     true,
-		GeneratedAt:   time.Now(),
-	}, nil
+		// Return cached feed
+		return &FeedResponse{
+			FollowingFeed: f.extractFeedByType(cachedFeed.FeedData, "following", page, pageSize),
+			TrendingFeed:  f.extractFeedByType(cachedFeed.FeedData, "trending", page, pageSize),
+			DiscoveryFeed: f.extractFeedByType(cachedFeed.FeedData, "discovery", page, pageSize),
+			Page:          page,
+			PageSize:      pageSize,
+			TotalResults:  len(cachedFeed.FeedData),
+			FromCache:     true,
+			GeneratedAt:   time.Now(),
+		}, nil
 	}
 
 	// Generate fresh feed
@@ -97,8 +101,8 @@ func (f *FeedService) GetPersonalizedFeed(ctx context.Context, userID string, pa
 	allFeedItems = append(allFeedItems, trendingFeed.Items...)
 	allFeedItems = append(allFeedItems, discoveryFeed.Items...)
 
-	// Cache the combined feed
-	cacheExpiry := time.Now().Add(15 * time.Minute) // Cache for 15 minutes
+	// Cache the combined feed using TTL from config
+	cacheExpiry := time.Now().Add(f.cfg.Feed.CacheTTL)
 	feedCache := &model.FeedCache{
 		UserID:     userID,
 		FeedType:   "personalized",
@@ -131,7 +135,7 @@ func (f *FeedService) generateFollowingFeed(ctx context.Context, userID string, 
 
 	// Get content from followed users
 	if len(followedUsers) > 0 {
-		userContent, err := f.getContentFromFollowedUsers(ctx, followedUsers, language, currency, pageSize*2)
+		userContent, err := f.getContentFromFollowedUsers(ctx, followedUsers, language, currency, f.cfg.Feed.FollowingFeedLimit*2)
 		if err != nil {
 			log.Printf("Warning: Failed to get content from followed users: %v", err)
 		} else {
@@ -148,7 +152,7 @@ func (f *FeedService) generateFollowingFeed(ctx context.Context, userID string, 
 
 	// Get content from followed categories
 	if len(followedCategories) > 0 {
-		categoryContent, err := f.getContentFromFollowedCategories(ctx, followedCategories, language, currency, pageSize*2)
+		categoryContent, err := f.getContentFromFollowedCategories(ctx, followedCategories, language, currency, f.cfg.Feed.FollowingFeedLimit*2)
 		if err != nil {
 			log.Printf("Warning: Failed to get content from followed categories: %v", err)
 		} else {
@@ -167,8 +171,8 @@ func (f *FeedService) generateFollowingFeed(ctx context.Context, userID string, 
 	}
 
 	// If we don't have enough followed content, supplement with general content
-	if len(items) < pageSize {
-		generalContent, err := f.repo.GetContentItems(ctx, "", "", language, pageSize*2, 0)
+	if len(items) < f.cfg.Feed.FollowingFeedLimit {
+		generalContent, err := f.repo.GetContentItems(ctx, "", "", language, f.cfg.Feed.FollowingFeedLimit*2, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get general content: %w", err)
 		}
@@ -215,7 +219,7 @@ func (f *FeedService) generateFollowingFeed(ctx context.Context, userID string, 
 // generateTrendingFeed generates feed based on trending content
 func (f *FeedService) generateTrendingFeed(ctx context.Context, language string, currency string, page int, pageSize int) (*FeedItems, error) {
 	// Get trending scores from database
-	trendingScores, err := f.repo.GetTrendingScores(ctx, []string{}, pageSize*3)
+	trendingScores, err := f.repo.GetTrendingScores(ctx, []string{}, f.cfg.Feed.TrendingFeedLimit*3)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trending scores: %w", err)
 	}
@@ -249,8 +253,8 @@ func (f *FeedService) generateTrendingFeed(ctx context.Context, language string,
 	}
 
 	// If we don't have enough trending content, get recent popular content
-	if len(items) < pageSize {
-		recentContent, err := f.repo.GetContentItems(ctx, "", "", language, pageSize*2, 0)
+	if len(items) < f.cfg.Feed.TrendingFeedLimit {
+		recentContent, err := f.repo.GetContentItems(ctx, "", "", language, f.cfg.Feed.TrendingFeedLimit*2, 0)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get recent content: %w", err)
 		}
@@ -359,7 +363,7 @@ func (f *FeedService) generateDiscoveryFeed(ctx context.Context, userID string, 
 	}
 
 	// Get content from preferred languages
-	contentFromCategories, err := f.getContentFromCategoriesAndLanguages(ctx, topCategories, preferredLanguages, preferredCurrencies, pageSize*2)
+	contentFromCategories, err := f.getContentFromCategoriesAndLanguages(ctx, topCategories, preferredLanguages, preferredCurrencies, f.cfg.Feed.DiscoveryFeedLimit*2)
 	if err != nil {
 		log.Printf("Warning: Failed to get content from categories/languages: %v", err)
 	} else {
@@ -378,8 +382,8 @@ func (f *FeedService) generateDiscoveryFeed(ctx context.Context, userID string, 
 	}
 
 	// If we don't have enough discovery content, get diverse content
-	if len(items) < pageSize {
-		diverseContent, err := f.getDiverseContent(ctx, userID, preferredLanguages, preferredCurrencies, pageSize*2)
+	if len(items) < f.cfg.Feed.DiscoveryFeedLimit {
+		diverseContent, err := f.getDiverseContent(ctx, userID, preferredLanguages, preferredCurrencies, f.cfg.Feed.DiscoveryFeedLimit*2)
 		if err != nil {
 			log.Printf("Warning: Failed to get diverse content: %v", err)
 		} else {
@@ -449,6 +453,9 @@ func (f *FeedService) contentToFeedItem(content *model.ContentItem, feedType str
 		FollowScore:    0.0,
 		TrendingScore:  0.0,
 		DiscoveryScore: 0.0,
+		SimilarityScore: 0.0,
+		DiversityScore: 0.0,
+		NoveltyScore:   0.0,
 		PersonalizationScore: 0.0,
 		Metadata:       content.Metadata,
 		Reason:         "",
@@ -513,25 +520,43 @@ func (f *FeedService) calculatePersonalizationScore(content *model.ContentItem, 
 }
 
 // calculateDiscoveryScore calculates overall discovery score
-// Combines similarity, diversity, novelty, and Ollama AI inference score
+// Uses weights from config for diversity and AI inference, and fixed weights for similarity and novelty (can be made configurable)
 func (f *FeedService) calculateDiscoveryScore(content *model.ContentItem, prefMatrix *model.UserPreferenceMatrix, userID string) float64 {
 	similarity := f.calculateSimilarityScore(content, prefMatrix)
 	diversity := f.calculateDiversityScore(content, prefMatrix, userID)
 	novelty := f.calculateNoveltyScore(content, userID)
 	ollamaScore := f.getOllamaScore(context.TODO(), content, prefMatrix)
 
-	// Use weights from config for diversity and AI inference, and estimate for similarity and novelty
-	// We'll use: similarity weight = 0.3, diversity weight from config, novelty weight = 0.2, AI weight from config
-	// For simplicity, we'll use fixed weights here; in production, these should be configurable.
-	const similarityWeight = 0.3
-	const diversityWeight = 0.2
-	const noveltyWeight = 0.2
-	const ollamaWeight = 0.3
+	// Use weights from config
+	// Weights: FollowScore, EngagementScore, RecencyScore, DiversityScore, LanguageMatchScore, CurrencyMatchScore, AIInferenceScore
+	// For discovery, we combine similarity, diversity, novelty, and Ollama score.
+	// We'll use: similarity weight = FeedConfig.ScoreWeights.EngagementScore (as a proxy for relevance),
+	//            diversity weight = FeedConfig.ScoreWeights.DiversityScore,
+	//            novelty weight = FeedConfig.ScoreWeights.RecencyScore,
+	//            ollama weight = FeedConfig.ScoreWeights.AIInferenceScore
+	// But note: the weights in FeedScoreWeights are for the overall feed scoring, not specifically for discovery.
+	// For simplicity, we'll use the weights as follows:
+	//   similarity: 0.3 (fixed)
+	//   diversity: f.cfg.Feed.ScoreWeights.DiversityScore
+	//   novelty: 0.2 (fixed)
+	//   ollama: f.cfg.Feed.ScoreWeights.AIInferenceScore
+	// And then normalize so they sum to 1.
 
-	return similarityWeight*similarity +
+	similarityWeight := 0.3
+	diversityWeight := f.cfg.Feed.ScoreWeights.DiversityScore
+	noveltyWeight := 0.2
+	ollamaWeight := f.cfg.Feed.ScoreWeights.AIInferenceScore
+
+	totalWeight := similarityWeight + diversityWeight + noveltyWeight + ollamaWeight
+	if totalWeight == 0 {
+		// Avoid division by zero
+		return 0.0
+	}
+
+	return (similarityWeight*similarity +
 		diversityWeight*diversity +
 		noveltyWeight*novelty +
-		ollamaWeight*ollamaScore
+		ollamaWeight*ollamaScore) / totalWeight
 }
 
 // calculateSimilarityScore calculates how similar content is to user's interests
@@ -567,10 +592,10 @@ func (f *FeedService) calculateSimilarityScore(content *model.ContentItem, prefM
 func (f *FeedService) calculateDiversityScore(content *model.ContentItem, prefMatrix *model.UserPreferenceMatrix, userID string) float64 {
 	// In a real implementation, we would analyze user's watch history
 	// For now, return a score that encourages exploration of new categories
-	
+
 	// Check if this category is in user's top categories
 	categoryScore := prefMatrix.CategoryScores[content.Category]
-	
+
 	// If user has high preference for this category, lower diversity score
 	// If user has low or no preference, higher diversity score (encourages exploration)
 	if categoryScore > 0.7 {
@@ -587,7 +612,7 @@ func (f *FeedService) calculateNoveltyScore(content *model.ContentItem, userID s
 	// Check if content is recent (within last 7 days)
 	now := time.Now()
 	hoursSincePublish := now.Sub(content.PublishDate).Hours()
-	
+
 	if hoursSincePublish < 24 {
 		return 1.0 // Very new
 	} else if hoursSincePublish < 168 { // 7 days
@@ -709,7 +734,7 @@ func (f *FeedService) getContentFromCategoriesAndLanguages(ctx context.Context, 
 					// Check language and currency filters
 					langMatch := len(languages) == 0 || f.containsString(languages, item.Language)
 					currMatch := len(currencies) == 0 || f.containsString(currencies, item.Currency)
-					
+
 					if langMatch && currMatch {
 						seen[item.UUID] = true
 						allItems = append(allItems, item)
@@ -729,7 +754,7 @@ func (f *FeedService) getContentFromCategoriesAndLanguages(ctx context.Context, 
 				// Check language and currency filters
 				langMatch := len(languages) == 0 || f.containsString(languages, item.Language)
 				currMatch := len(currencies) == 0 || f.containsString(currencies, item.Currency)
-				
+
 				if langMatch && currMatch {
 					seen[item.UUID] = true
 					allItems = append(allItems, item)
@@ -780,7 +805,7 @@ func (f *FeedService) generateQueryHash(userID string, page int, pageSize int, l
 	sort.Strings(sortedUsers)
 
 	// Create hash string
-	hashStr := fmt.Sprintf("%s:%d:%d:%s:%s:%v:%v", 
+	hashStr := fmt.Sprintf("%s:%d:%d:%s:%s:%v:%v",
 		userID, page, pageSize, language, currency, sortedCats, sortedUsers)
 
 	// Simple hash (in production, use proper cryptographic hash)
@@ -873,9 +898,7 @@ func (f *FeedService) getOllamaScore(ctx context.Context, content *model.Content
 	}
 	// Sort by score descending
 	sort.Slice(topCategories, func(i, j int) bool {
-		// We need to extract scores again; for simplicity, we'll just sort by the string (not accurate but okay for demo)
-		// In production, we would sort by score properly
-		return true // Placeholder
+		return prefMatrix.CategoryScores[topCategories[i]] > prefMatrix.CategoryScores[topCategories[j]]
 	})
 	// Take top 3
 	if len(topCategories) > 3 {
@@ -888,6 +911,11 @@ func (f *FeedService) getOllamaScore(ctx context.Context, content *model.Content
 			topLanguages = append(topLanguages, fmt.Sprintf("%s (%.2f)", lang, score))
 		}
 	}
+	// Sort by score descending
+	sort.Slice(topLanguages, func(i, j int) bool {
+		return prefMatrix.LanguageScores[topLanguages[i]] > prefMatrix.LanguageScores[topLanguages[j]]
+	})
+	// Take top 3
 	if len(topLanguages) > 3 {
 		topLanguages = topLanguages[:3]
 	}
@@ -898,6 +926,11 @@ func (f *FeedService) getOllamaScore(ctx context.Context, content *model.Content
 			topCurrencies = append(topCurrencies, fmt.Sprintf("%s (%.2f)", curr, score))
 		}
 	}
+	// Sort by score descending
+	sort.Slice(topCurrencies, func(i, j int) bool {
+		return prefMatrix.CurrencyScores[topCurrencies[i]] > prefMatrix.CurrencyScores[topCurrencies[j]]
+	})
+	// Take top 3
 	if len(topCurrencies) > 3 {
 		topCurrencies = topCurrencies[:3]
 	}

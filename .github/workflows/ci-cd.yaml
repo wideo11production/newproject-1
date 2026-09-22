@@ -1,0 +1,64 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # This is needed for security scanning or deploying if we use the token
+      # We'll add more permissions as needed
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          # Install root dependencies if any
+          npm ci
+          # Install workspace dependencies (if using npm workspaces)
+          # Or we can install per package, but we'll do a simple install at root if there's a package.json
+          # If there's no root package.json, we'll skip and rely on package-specific
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+      - name: Run Go build and vet for all Go services
+        run: |
+          # We'll build and vet all Go services we know of
+          # Since we don't have a list, we'll search for go.mod files and run in their directories
+          find . -name go.mod -not -path "./node_modules/*" -execdir go build ./... \;
+          find . -name go.mod -not -path "./node_modules/*" -execdir go vet ./... \;
+
+      - name: Run npm build and test for all Node.js packages
+        run: |
+          # We'll find all package.json and run npm ci and npm test if test script exists
+          find . -name package.json -not -path "./node_modules/*" -execdir npm ci \;
+          find . -name package.json -not -path "./node_modules/*" -execdir npm test \;
+
+      - name: Security Scan (Example: using GitHub CodeQL)
+        uses: github/codeql-action/init@v2
+        with:
+          languages: go, javascript, typescript
+      - uses: github/codeql-action/analyze@v2
+
+      - name: Deploy (Placeholder)
+        # We'll use the GITHUB_TOKEN for any deployment that requires it
+        # For example, if we were to deploy to GitHub Pages or a container registry
+        run: echo "Deployment step would go here, using ${{ secrets.GITHUB_TOKEN }} for authentication"
