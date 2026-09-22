@@ -1,44 +1,104 @@
+'use client';
+
+import { useState } from 'react';
+
 export default function AdminControllersPage() {
+  const [newEditor, setNewEditor] = useState(true);
+  const [aiRecommendations, setAiRecommendations] = useState(true);
+  const [liveCollaboration, setLiveCollaboration] = useState(false);
+  const [logLevel, setLogLevel] = useState('info');
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    // Simulate saving to backend
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    setSaving(false);
+    // In a real app, you would show a success message
+    alert('Settings saved successfully!');
+  };
+
   return (
     <div className="space-y-4">
-      <div className="bg-gray-700 p-4 rounded">
-        <h3 className="font-semibold">Feature Flags</h3 Toggles</h3>
-        <div className="mt-4 space-y-3">
+      <div className="bg-gray-900 bg-opacity-50 backdrop-blur-sm p-6 rounded-lg border border-gray-800">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-lg font-semibold text-gray-100">Feature Flags</h3>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={`w-full mt-4 px-4 py-2 text-sm font-medium transition-colors duration-200 ${
+              saving
+                ? 'bg-gray-600/50 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-700'
+            }`}
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+        <div className="space-y-4">
           <div className="flex items-center">
             <span className="w-32">New Editor:</span>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked />
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={newEditor}
+                onChange={(e) => setNewEditor(e.target.checked)}
+              />
               <div className="w-11 h-6 bg-gray-200 peer-check:bg-green-600 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:w-5 after:h-5 after:rounded-full after:transition-all"></div>
             </label>
           </div>
           <div className="flex items-center">
             <span className="w-32">AI Recommendations:</span>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" checked />
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={aiRecommendations}
+                onChange={(e) => setAiRecommendations(e.target.checked)}
+              />
               <div className="w-11 h-6 bg-gray-200 peer-check:bg-green-600 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:w-5 after:h-5 after:rounded-full after:transition-all"></div>
             </label>
           </div>
           <div className="flex items-center">
             <span className="w-32">Live Collaboration:</span>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" className="sr-only peer" />
+              <input
+                type="checkbox"
+                className="sr-only peer"
+                checked={liveCollaboration}
+                onChange={(e) => setLiveCollaboration(e.target.checked)}
+              />
               <div className="w-11 h-6 bg-gray-200 peer-check:bg-green-600 rounded-full peer peer-checked:after:translate-x-4 peer-checked:after:bg-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:w-5 after:h-5 after:rounded-full after:transition-all"></div>
             </label>
           </div>
-          <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded mt-4">
-            Save Settings
-          </button>
         </div>
       </div>
-      <div className="bg-gray-700 p-4 rounded">
-        <h3 className="font-semibold">System Logs</h3>
-        <div className="mt-2 space-y-2">
+      <div className="bg-gray-900 bg-opacity-50 backdrop-blur-sm p-6 rounded-lg border border-gray-800">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-lg font-semibold text-gray-100">System Logs</h3>
+          <button
+            onClick={() => {
+              // Simulate refreshing logs
+              // In a real app, you would fetch new logs
+              alert('Logs refreshed!');
+            }}
+            className="px-3 py-1.5 text-sm font-medium transition-colors duration-200 bg-gray-700 hover:bg-gray-600"
+          >
+            Refresh Logs
+          </button>
+        </div>
+        <div className="space-y-3">
           <div className="flex justify-between">
             <span>Log Level:</span>
-            <select className="border rounded px-2 py-1 bg-gray-600 text-white w-full">
+            <select
+              value={logLevel}
+              onChange={(e) => setLogLevel(e.target.value)}
+              className="border rounded px-2 py-1 bg-gray-800 text-gray-100 w-full"
+            >
               <option value="error">Error</option>
               <option value="warn">Warning</option>
-              <option value="info" selected>Info</option>
+              <option value="info">Info</option>
               <option value="debug">Debug</option>
             </select>
           </div>

@@ -49,8 +49,6 @@
   - [x] Help and tutorial system
   - [x] Movavi-inspired UI/UX with dark theme
   - [x] Dockerfile for containerization
-
-## Current Phase
 - [x] Phase 7: Payment & Billing System (FULLY COMPLETED)
   - [x] Enhanced billing model with all entity types (SubscriptionPlan, Subscription, TaxRate, InvoiceItem, Payment)
   - [x] Added type definitions (BillingCycle, TaxType, PaymentMethod, PaymentProvider, InvoiceStatus, SubscriptionStatus)
@@ -79,8 +77,6 @@
   - [x] REST API endpoints: 6 AI endpoints exposed via /ai routes
   - [x] Build verification passed (go build && go vet)
   - [x] Fixed corrupted files and syntax errors from git state
-- [ ] Phase 10: Mobile Applications (React Native)
-- [ ] Phase 11: Collaboration Features
 - [x] Phase 12: Content Moderation & Copyright Protection
   - [x] VideoFingerprint model with SHA256 hash, visual token, color palette
   - [x] AudioFingerprint model with audio hash, sample rate, channels, bit depth
@@ -112,21 +108,66 @@
   - [x] All Hinglish documentation comments in code
   - [x] PowerShell syntax compliance (semicolon separators, no bash operators)
 - [x] Phase 14: Free Local AI Knowledge Assistant
-  - [x] Ollama Local AI & Qdrant RAG Core (services/bot-service/)
+  - [x] Olloma Local AI & Qdrant RAG Core (services/bot-service/)
   - [x] Full Functional API Endpoints (POST /ai/assistant/chat, GET /ai/assistant/context)
   - [x] NATS JetStream Event Integration
   - [x] Frontend UI Connection Layer (Port 3001 Grafana-style dashboard)
   - [x] PowerShell-Compliant Build Clean Check
   - [x] Comprehensive Hinglish Documentation Comments
 
-## Immediate Next Steps
-1. [x] Run build verification for all applications and services
-2. [x] Deploy to local environment with docker-compose
-3. [x] Test video editor functionality end-to-end
-4. [x] Test Prometheus webhook integration with dashboard
-5. [x] Validate cross-application communication
-6. [ ] Implement Phase 14: Free Local AI Knowledge Assistant
+## New Roadmap (Phases 1-6)
+### Phase 1: Next.js, Architecture & Core Logic (Strict Standards)
+- [ ] Performance & Rendering: Use Next.js 14+ App Router. Implement correct optimization boundaries: "use client" vs Server-Side Rendering (SSR), Next.js <Image /> optimization, and Component Lazy Loading.
+- [ ] Routing & Layouts: Implement Parallel Routes using @slots and handle fallback states cleanly using default.js files.
+- [ ] Authentication & Security: Use Next-Auth / Client Session securely. Implement a comprehensive middleware.ts that protects all application routes by default. Unregistered or unauthenticated users must only access specified open public routes, otherwise, they must be strictly redirected to the signup/login page. No data leak or unauthorized page exposure is allowed.
+- [ ] No Hardcoded Values: Every single URL, configuration, time, or asset path must be fetched dynamically from environment variables or configs.
+- [ ] WORKSPACE MONETIZATION & POLICY RULES (SSOT):
+      - [ ] Earnings-Focused Onboarding Copy: Update layout states to communicate the zero upfront entry cost philosophy. Explicitly define the ?2000 Minimum Balance (and its equivalent value scaling for international dynamic pricing matrices) not as a hidden subscription tier, but as a fully transparent, justified "Non-Refundable One-Time Setup & Ecosystem Activation Fee (Maintenance Buffer)". It must be held back from accrued platform user earnings only after they start generating content profits.
+      - [ ] Dual-Stage Confirmation Deletion Flow with Account Hold: 
+            * Stage 1 Intercept: When account deletion is requested, intercept the action with a UI block presenting a structural "Account Hold / Freeze" toggle mechanism. This lets the user stop platform activity while fully preserving their system metadata and keeping the accumulated Maintenance Buffer intact.
+            * Stage 2 Intercept: If the permanent action is continued, enforce a final validation prompt explicitly warning that the action is 100% permanent, non-refundable, and completely non-transferable to other email accounts or external hardware device signatures under any circumstances.
+      - [ ] Nominee Isolation & Inactivity Hard-Locks:
+            * Balance Masking Wrapper: Build a secure background scheduler routine tracking the inactivity matrix (e.g., a baseline parameter of 190 days without explicit user interaction logs). Upon automated notification trigger to the assigned nominee, the system's withdrawal interface must dynamically hide the ?2000 base buffer entirely. (Example: If the account total balance is ?3250, the automated nominee email interface must exclusively state that **?1250** is available for direct withdrawal).
+            * Post-Withdrawal Event Trigger: The exact millisecond the nominee successfully processes the ledger payout, a relational transactional cascade must occur: the original creator profile must be instantly updated to a status of PERMANENTLY_CLOSED.
+            * Hardware & Metadata Blacklist: The associated verified user identity, primary email string, and detailed hardware device fingerprint schemas must be stored in an immutable security blacklist database table to completely prevent future re-registration attempts on the platform.
 
-## Known Issues
+### Phase 2: UI/UX Consistency (Grafana & Movavi Video Editor Look & Feel)
+- [ ] Custom Observability Dashboard: Build a streamlined, high-performance monitoring panel on port 3001 using custom Shadcn UI grid components mapping directly to local Prometheus event scrapers. The styling, dark palette theme, and layout density must visually replicate a premium Grafana observability space.
+- [ ] Video Editor UI/UX: The video editor component must match the exact design language, timeline aesthetics, tracks, styling, and sleek dark color palettes of Movavi Video Editor.
+- [ ] SSOT Settings: System-wide UI and user settings must follow a Single Source of Truth (SSOT) model so users don't have to repeatedly re-configure their workspace.
+
+### Phase 3: Dedicated Sister's Dashboard (Special Request)
+- [ ] Read-Only Dashboard: Build a restricted, highly secure Read-Only Dashboard dedicated for Sister's account (credentials will be configured via env).
+- [ ] Financial Tracking: She should only be able to view today’s total revenue/amount credited and her exact split/share, resolved from the protected environmental variable (SISTER_SHARE_PERCENTAGE).
+- [ ] Dynamic Profit Sharing: Her profit-sharing percentage must be controlled via .env (e.g., SISTER_SHARE_PERCENTAGE), configured to allow gradual adjustments over a 2-year horizon without touching the codebase.
+
+### Phase 4: Monorepo, Microservices & GKE Cloud Infrastructure (Production-Grade Architecture)
+- [ ] Domain & Subdomains Setup: Main domain is wideo11.com. All subdomains are already configured in Hostinger DNS. Wire them completely via configuration. If any new subdomains are required, list them explicitly.
+- [ ] Automated Communication: Emails must look highly professional, following modern industry standards. In production, routing must be handled via a secure, authenticated Postfix server configuration.
+- [ ] Database & Schemas: Use GORM for all database operations with strictly defined structs and automated migrations. No manual DB updates are allowed. Everything changes through the SSOT schema layer.
+
+### Phase 5: High-Availability (HA), Auto-Healing, and Automated Dynamic Failover
+- [ ] Cluster Orchestration: Configure Kubernetes HPA (Horizontal Pod Autoscaler), Nginx Ingress, and HashiCorp Vault.
+- [ ] Database & Cache Clusters: Implement multi-replica failover setups for PostgreSQL and Redis (dada, papa, chacha master-replica architecture).
+- [ ] SSOT Network Provider Switching: In .env, networks for Plan A must be swappable via configuration values (e.g., swapping AIRTEL to TATA). Changing the name/value in the .env SSOT must automatically reconfigure the entire infrastructure network layout seamlessly.
+- [ ] Zero-Lag Hybrid Plan A & Plan B Auto-Healing Loop:
+      - [ ] Active-Standby Monitoring: Keep Plan B on immediate active-standby, tracking Plan A health endpoints continuously.
+      - [ ] Instant Failover Processing: If Plan A undergoes a critical network drop or service crash, route all active system storage traffic (uya_gu storage controller logs) instantly to Plan B without exposing user workflows to latency or transaction lag.
+      - [ ] Autonomous Diagnostics & RCA Report: Trigger background self-recovery workers immediately on Plan A (e.g., automated pod recreation, database state verification, memory buffer flushes). Simultaneously generate an explicit Root Cause Analysis (RCA) incident post-mortem report right on the custom metrics panel, outlining *what failed, why it broke, how it was healed, and the preventative validation rule added to ensure this exact failure pattern never breaks down the failover mechanism again.*
+      - [ ] Delta Sync & Graceful Switchback: Once Plan A is verified healthy, do not cut back traffic immediately. Plan A must first connect to Plan B's storage logs, download all data written during the outage, compile the chronological audit trail, and only execute a seamless switchback once delta synchronization hits 100%. Plan B then returns to active-standby.
+- [ ] Advanced Auto-Healing, Self-Reporting, and Root Cause Analysis (RCA) Engine:
+      - [ ] Automated Root Cause Analysis (RCA) & Logging: Whenever Plan A faces a network drop, service crash, or anomalous behavior, the system must instantly trigger a background diagnostics agent. This agent must automatically trace and log the precise breakdown event (e.g., connection timeouts, DNS resolution failure on Airtel/Tata, memory leaks, corrupt WAL logs). It must output a highly detailed, human-readable report straight to our Custom Dashboard.
+      - [ ] Autonomous Auto-Healing Protocols: Instead of just waiting for manual intervention, Plan A must have built-in self-recovery scripts (e.g., auto-restarting broken pods with fresh network interfaces, flushing corrupt Redis cache keys, or triggering automatic container health-checks). The transition of healing must be logged sequentially: [Detected Issue] -> [Triggered Recovery Strategy X] -> [Plan A Restored & Synced].
+      - [ ] Preventative Guardrails (Never Repeat the Same Failure): The system must implement dynamic runtime rules or policy updates based on the failure type. If a specific edge-case or configuration error triggers a failover, that exact error path must be dynamically blacklisted or isolated so that it can never break down the failover mechanism again. It must enforce strict preventative guardrails at the gateway and infrastructure layers to immunize the cluster against that specific threat pattern.
+      - [ ] Support for Developer Notes: The dashboard report must include a 'Developer Post-Mortem & Mental Replica' text summary block. This section will present a distilled, structured breakdown of the error lifecycle (What happened, Why it happened, How it was fixed, How to prevent it permanently). This allows the developer to easily study, copy, and log notes 4 times to ensure it perfectly saves into their personal mental database.
+
+### Phase 6: Live Implementation Steps Document (live_implementations.md)
+- [ ] Before writing the code, create a dedicated file named live_implementations.md at the root of the workspace.
+- [ ] Prerequisites List: Detail exactly what must be ready on the live production platform before starting deployment (e.g., network endpoints, access keys, baseline infrastructure).
+- [ ] Step-by-Step Blueprint: Outline a meticulous, chronological, step-by-step implementation guide (Step 1, Step 2, etc.) explaining what we are doing and why we are doing it, ensuring zero margin for error.## Immediate Next Steps
+1. [ ] Verify that live_implementations.md is created and contains the prerequisites and step-by-step blueprint.
+2. [ ] Review current code blocks for missing logic or functions related to the new roadmap.
+3. [ ] Begin implementing Phase 1 (Next.js, Architecture & Core Logic) after documentation is complete.## Known Issues
 - [ ] Pre-existing dependency issues in auth and api-client packages (unrelated to video-editor implementation)
 - [ ] These issues do not affect the video-editor app functionality
+

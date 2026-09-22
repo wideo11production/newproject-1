@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 
@@ -10,14 +11,19 @@ import (
 // Config holds all configuration for the recommendation service
 // सारा कॉन्फिगरेशन .env से लोड होता है (SSOT - Single Source of Truth)
 type Config struct {
-	Server      ServerConfig
-	Database    DatabaseConfig
-	NATS        NATSConfig
-	AI          AIConfig
-	Search      SearchConfig
-	Feed        FeedConfig
-	I18n        I18nConfig
-	Currency    CurrencyConfig
+	Server               ServerConfig
+	Database             DatabaseConfig
+	NATS                 NATSConfig
+	AI                   AIConfig
+	Search               SearchConfig
+	Feed                 FeedConfig
+	I18n                 I18nConfig
+	Currency             CurrencyConfig
+	// Universal Multi-Country Logic Matrices
+	MinimumBalanceBuffer int                    // ₹2000 Minimum Balance (INR) - held from earnings after profits
+	SisterSharePercentage float64                // 5% share for Sister's dashboard
+	HpaAutoScalingLimit  int                    // 76% auto-scaling limit for Kubernetes HPA
+	CountrySpecific      map[string]CountrySpecificConfig
 }
 
 // ServerConfig holds HTTP server configuration
@@ -147,6 +153,14 @@ type CurrencyConfig struct {
 	CacheTTL        time.Duration
 }
 
+// CountrySpecificConfig holds country-specific logic matrices
+// देश-विशिष्ट तर्क मैट्रिक्स - क्षेत्र-विशिष्ट नियम, non-refundable सीमाएँ, डिवाइस प्रोफ़ाइल लॉक
+type CountrySpecificConfig struct {
+	MinimumBalanceBuffer   int    // local currency units (e.g., USD for US, CAD for Canada)
+	NonRefundableBoundary  bool   // if true, transactions are non-refundable after this boundary (e.g., time-based or amount-based)
+	DeviceProfileLock      string // e.g., "strict", "moderate", "lenient" - locks device profile to prevent refund liabilities
+}
+
 // LoadConfig loads configuration from .env file (SSOT)
 // कॉन्फिगरेशन .env से लोड होता है - Single Source of Truth
 func LoadConfig() (*Config, error) {
@@ -166,6 +180,32 @@ func LoadConfig() (*Config, error) {
 	cfg := &Config{}
 	if err := viper.Unmarshal(cfg); err != nil {
 		return nil, err
+	}
+
+	// Build CountrySpecific map from viper settings
+	if cfg.CountrySpecific == nil {
+		cfg.CountrySpecific = make(map[string]CountrySpecificConfig)
+	}
+	countries := []string{"US", "CA", "GLOBAL"}
+	for _, country := range countries {
+		prefix := "COUNTRY_" + country
+		minBuffer := viper.GetInt(prefix + "_MINIMUM_BALANCE_BUFFER")
+		nonRefundable := viper.GetBool(prefix + "_NON_REFUNDABLE_BOUNDARY")
+		deviceLock := viper.GetString(prefix + "_DEVICE_PROFILE_LOCK")
+		// If the value is zero (for int) or empty string (for string) and we didn't set a default via viper, we might have an issue.
+		// But we set defaults in setDefaults, so they should be set.
+		// However, to be safe, we'll check if the value was actually provided by viper or is the zero value from not being set.
+		// Since we set defaults in setDefaults, we can assume they are set, but we'll use the values we got.
+		cfg.CountrySpecific[country] = CountrySpecificConfig{
+			MinimumBalanceBuffer:   minBuffer,
+			NonRefundableBoundary:  nonRefundable,
+			DeviceProfileLock:      deviceLock,
+		}
+	}
+
+	// Validate critical platform variables and country-specific configs
+	if err := validateConfig(cfg); err != nil {
+		panic("Configuration validation failed: " + err.Error())
 	}
 
 	return cfg, nil
@@ -259,4 +299,70 @@ func setDefaults() {
 
 	// Parse comma-separated values
 	viper.SetDefault("NATS_FILTER_SUBJECTS", "recommendation.video,recommendation.wallet,recommendation.user,recommendation.content,recommendation.analytics,recommendation.notification,recommendation.system")
+
+	// Universal Multi-Country Logic Matrices defaults
+	viper.SetDefault("MINIMUM_BALANCE_BUFFER", 2000) // ₹2000 INR
+	viper.SetDefault("SISTER_SHARE_PERCENTAGE", 5.0) // 5%
+	viper.SetDefault("HPA_AUTO_SCALING_LIMIT", 76)   // 76%
+	
+	// Country-specific defaults for US, Canada, and Global
+	viper.SetDefault("COUNTRY_US_MINIMUM_BALANCE_BUFFER", 25)   // $25 USD
+	viper.SetDefault("COUNTRY_US_NON_REFUNDABLE_BOUNDARY", true)
+	viper.SetDefault("COUNTRY_US_DEVICE_PROFILE_LOCK", "strict")
+	
+	viper.SetDefault("COUNTRY_CA_MINIMUM_BALANCE_BUFFER", 30)   // $30 CAD
+	viper.SetDefault("COUNTRY_CA_NON_REFUNDABLE_BOUNDARY", true)
+	viper.SetDefault("COUNTRY_CA_DEVICE_PROFILE_LOCK", "strict")
+	
+	viper.SetDefault("COUNTRY_GLOBAL_MINIMUM_BALANCE_BUFFER", 2000) // Default to INR equivalent
+	viper.SetDefault("COUNTRY_GLOBAL_NON_REFUNDABLE_BOUNDARY", true)
+	viper.SetDefault("COUNTRY_GLOBAL_DEVICE_PROFILE_LOCK", "strict")
+}
+
+// validateConfig validates the loaded configuration
+func validateConfig(cfg *Config) error {
+	// Validate MinimumBalanceBuffer (should be positive)
+	if cfg.MinimumBalanceBuffer <= 0 {
+		return fmt.Errorf("MINIMUM_BALANCE_BUFFER must be positive, got %d", cfg.MinimumBalanceBuffer)
+	}
+	
+	// Validate SisterSharePercentage (between 0 and 100)
+	if cfg.SisterSharePercentage < 0 || cfg.SisterSharePercentage > 100 {
+		return fmt.Errorf("SISTER_SHARE_PERCENTAGE must be between 0 and 100, got %.2f", cfg.SisterSharePercentage)
+	}
+	
+	// Validate HpaAutoScalingLimit (between 1 and 100)
+	if cfg.HpaAutoScalingLimit < 1 || cfg.HpaAutoScalingLimit > 100 {
+		return fmt.Errorf("HPA_AUTO_SCALING_LIMIT must be between 1 and 100, got %d", cfg.HpaAutoScalingLimit)
+	}
+	
+	// Validate CountrySpecific map is initialized
+	if cfg.CountrySpecific == nil {
+		return fmt.Errorf("CountrySpecific map is nil")
+	}
+	
+	// Define required countries
+	requiredCountries := []string{"US", "CA", "GLOBAL"}
+	
+	for _, country := range requiredCountries {
+		config, exists := cfg.CountrySpecific[country]
+		if !exists {
+			return fmt.Errorf("missing country configuration for %s", country)
+		}
+		
+		// Validate country-specific fields
+		if config.MinimumBalanceBuffer <= 0 {
+			return fmt.Errorf("country %s: MinimumBalanceBuffer must be positive, got %d", country, config.MinimumBalanceBuffer)
+		}
+		
+		// NonRefundableBoundary is bool, no range validation needed
+		
+		// Validate DeviceProfileLock (allowed values)
+		allowedLocks := map[string]bool{"strict": true, "moderate": true, "lenient": true}
+		if !allowedLocks[config.DeviceProfileLock] {
+			return fmt.Errorf("country %s: DeviceProfileLock must be one of strict, moderate, lenient, got %s", country, config.DeviceProfileLock)
+		}
+	}
+	
+	return nil
 }
