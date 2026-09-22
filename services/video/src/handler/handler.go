@@ -11,11 +11,16 @@ import (
 
 type Handler struct {
 	videoService *service.VideoService
+	moderator    *service.ModerationService
 }
 
-func NewHandler(vs *service.VideoService) *Handler {
+func NewHandler(
+	vs *service.VideoService,
+	moderator *service.ModerationService,
+) *Handler {
 	return &Handler{
 		videoService: vs,
+		moderator:    moderator,
 	}
 }
 
@@ -50,10 +55,18 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		clipsGroup.PUT("/move/:id", h.MoveClip)
 		clipsGroup.PUT("/trim/:id", h.TrimClip)
 		clipsGroup.PUT("/volume/:id", h.AdjustClipVolume)
+		clipsGroup.POST("/:id/verify-fingerprint", h.VerifyVideoFingerprint)
+		clipsGroup.POST("/:id/verify-audio", h.VerifyAudioFingerprint)
+	}
+
+	moderationGroup := r.Group("/moderation")
+	{
+		moderationGroup.GET("/duplicates/:hash", h.CheckForDuplicates)
+		moderationGroup.POST("/block/:clip_id", h.BlockDuplicateContent)
+		moderationGroup.GET("/license/:hash", h.CheckAudioLicense)
+		moderationGroup.POST("/validate-audio", h.ValidateAudioParameters)
 	}
 }
-
-// Project handlers
 
 func (h *Handler) CreateProject(c *gin.Context) {
 	var req struct {
@@ -143,8 +156,6 @@ func (h *Handler) DeleteProject(c *gin.Context) {
 	}
 	c.Status(http.StatusNoContent)
 }
-
-// Track handlers
 
 func (h *Handler) CreateTrack(c *gin.Context) {
 	var req struct {
@@ -251,8 +262,6 @@ func (h *Handler) ReorderTracks(c *gin.Context) {
 	}
 	c.Status(http.StatusOK)
 }
-
-// Clip handlers
 
 func (h *Handler) CreateClip(c *gin.Context) {
 	var req struct {
@@ -411,3 +420,105 @@ func (h *Handler) AdjustClipVolume(c *gin.Context) {
 	c.Status(http.StatusOK)
 }
 
+// VerifyVideoFingerprint - SHA256 visual token fingerprint computation from MinIO staging containers
+func (h *Handler) VerifyVideoFingerprint(c *gin.Context) {
+	clipID := c.Param("clip_id")
+	var req struct {
+		VideoData []byte                  `json:"video_data" binding:"required"`
+		Metadata  map[string]string       `json:"metadata"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fingerprint, err := h.moderator.VerifyVideoFingerprint(c.Request.Context(), clipID, req.VideoData, req.Metadata)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"fingerprint": fingerprint})
+}
+
+// VerifyAudioFingerprint - Audio frequency hash validation against free stock audio ledger
+func (h *Handler) VerifyAudioFingerprint(c *gin.Context) {
+	clipID := c.Param("clip_id")
+	var req struct {
+		AudioData    []byte                  `json:"audio_data" binding:"required"`
+		ExpectedHash string                  `json:"expected_hash"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	fingerprint, err := h.moderator.VerifyAudioFingerprint(c.Request.Context(), clipID, req.AudioData, req.ExpectedHash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"fingerprint": fingerprint})
+}
+
+// CheckForDuplicates - Scan global records layer for matching hashes
+func (h *Handler) CheckForDuplicates(c *gin.Context) {
+	hash := c.Param("hash")
+
+	found, err := h.moderator.CheckForDuplicateUploads(c.Request.Context(), hash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"duplicate": found})
+}
+
+// BlockDuplicateContent - Intercept pipeline lifecycle when duplicate detected
+func (h *Handler) BlockDuplicateContent(c *gin.Context) {
+	clipID := c.Param("clip_id")
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	err := h.moderator.BlockDuplicateContent(c.Request.Context(), clipID, req.Reason)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}
+
+// CheckAudioLicense - Validate audio against free stock audio ledger for licensing
+func (h *Handler) CheckAudioLicense(c *gin.Context) {
+	hash := c.Param("hash")
+
+	licensed, err := h.moderator.CheckAudioLicense(c.Request.Context(), hash)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"licensed": licensed})
+}
+
+// ValidateAudioParameters - Check audio technical specifications meet platform standards
+func (h *Handler) ValidateAudioParameters(c *gin.Context) {
+	var req struct {
+		SampleRate int     `json:"sample_rate" binding:"required"`
+		Channels   int     `json:"channels" binding:"required"`
+		BitDepth   int     `json:"bit_depth" binding:"required"`
+		Duration   float64 `json:"duration" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.moderator.ValidateAudioParameters(c.Request.Context(), req.SampleRate, req.Channels, req.BitDepth, req.Duration); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.Status(http.StatusOK)
+}
