@@ -1,22 +1,23 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { config } from '@wideo11/config';
 
 export const metadata: Metadata = {
   title: 'Admin Dashboard',
   description: 'Admin panel for Wideo11',
 };
 
-export default function Layout({
-  children, // This will be the children from the layout (if any)
-  metrics, // @slot/metrics
-  telemetry, // @slot/telemetry
-  controllers, // @slot/controllers
-}: {
+interface LayoutProps {
   children?: React.ReactNode;
-  metrics: React.ReactNode;
-  telemetry: React.ReactNode;
-  controllers: React.ReactNode;
-}) {
+  metrics?: React.ReactNode;
+  telemetry?: React.ReactNode;
+  controllers?: React.ReactNode;
+  [key: string]: React.ReactNode | undefined;
+}
+
+const LayoutComponent: React.FC<LayoutProps> = ({ children, metrics, telemetry, controllers }) => {
+  // Log config for verification (server side)
+  console.log("Config loaded:", { appUrl: config.NEXT_PUBLIC_APP_URL, buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: config.SISTER_SHARE_PERCENTAGE });
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100">
       {/* Sidebar */}
@@ -48,4 +49,6 @@ export default function Layout({
       </main>
     </div>
   );
-}
+};
+
+export default LayoutComponent;

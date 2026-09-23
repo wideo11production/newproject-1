@@ -6,13 +6,13 @@ import (
 	"log"
 
 	"github.com/google/uuid"
-	"github.com/qdrant/go-client/qdrant"
+	qq "github.com/qdrant/go-client/qdrant"
 	"github.com/sashabaranov/go-openai"
 )
 
 // QdrantClient wraps the Qdrant client and provides helper methods.
 type QdrantClient struct {
-	Client     *qdrant.Client
+	Client     *qq.Client
 	Collection string
 	OpenAIClient *openai.Client
 	Ctx        context.Context
@@ -20,11 +20,11 @@ type QdrantClient struct {
 
 // NewQdrantClient creates a new Qdrant client with the given configuration.
 func NewQdrantClient(host, port, apiKey string, openAIClient *openai.Client) (*QdrantClient, error) {
-	var opts []qdrant.ClientOption
+	var opts []qq.ClientOption
 	if apiKey != "" {
-		opts = append(opts, qdrant.WithAPIKey(apiKey))
+		opts = append(opts, qq.WithAPIKey(apiKey))
 	}
-	client, err := qdrant.NewClient(host+":"+port, opts...)
+	client, err := qq.NewClient(host+":"+port, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -45,11 +45,11 @@ func (c *QdrantClient) EnsureCollection(vectorSize int) error {
 	}
 	if !exists {
 		// Create collection with cosine distance (default for OpenAI embeddings)
-		err := c.Client.CreateCollection(c.Ctx, &qdrant.CreateCollection{
+		err := c.Client.CreateCollection(c.Ctx, &qq.CreateCollection{
 			CollectionName: c.Collection,
-			VectorsConfig: &qdrant.VectorsConfig{
-				Params: &qdrant.VectorParams{
-					Distance: qdrant.Distance_Cosine,
+			VectorsConfig: &qq.VectorsConfig{
+				Params: &qq.VectorParams{
+					Distance: qq.Distance_Cosine,
 					Size:     uint64(vectorSize),
 				},
 			},
@@ -75,7 +75,7 @@ func (c *QdrantClient) StoreKnowledge(content string) (string, error) {
 	pointID := uuid.New().String()
 
 	// Create point
-	point := &qdrant.Point{
+	point := &qq.Point{
 		Id:      pointID, // Qdrant expects a string or uint64; we'll use string.
 		Vectors: embedding,
 		Payload: map[string]interface{}{
@@ -85,7 +85,7 @@ func (c *QdrantClient) StoreKnowledge(content string) (string, error) {
 	}
 
 	// Upsert the point
-	_, err = c.Client.Upsert(c.Ctx, c.Collection, []*qdrant.Point{point}, nil)
+	_, err = c.Client.Upsert(c.Ctx, c.Collection, []*qq.Point{point}, nil)
 	if err != nil {
 		return "", err
 	}
@@ -102,7 +102,7 @@ func (c *QdrantClient) SearchKnowledge(query string, limit int) ([]string, error
 	}
 
 	// Perform search
-	searchResult, err := c.Client.Search(c.Ctx, &qdrant.SearchPoints{
+	searchResult, err := c.Client.Search(c.Ctx, &qq.SearchPoints{
 		CollectionName: c.Collection,
 		Vector:         queryEmbedding,
 		Limit:          uint64(limit),

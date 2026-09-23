@@ -27,7 +27,6 @@ export const usePersonalizedFeed = (userId: number): UsePersonalizedFeedReturn =
   const fetchFeed = useCallback(async () => {
     setLoading(true);
     setError(null);
-    error(null);
     // Abort controller for cleanup
     const controller = new AbortController();
 
@@ -71,7 +70,7 @@ export const usePersonalizedFeed = (userId: number): UsePersonalizedFeedReturn =
   }, [fetchFeed]);
 
   const refetch = useCallback(() => {
-    fetchFeed();
+    return fetchFeed();
   }, [fetchFeed]);
 
   return {

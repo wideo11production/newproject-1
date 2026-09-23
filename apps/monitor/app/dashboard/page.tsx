@@ -1,3 +1,4 @@
+"use client";
 import { Suspense, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BarChart3, Plus, Clock, Share2, Settings } from 'lucide-react';
@@ -101,6 +102,8 @@ interface Dashboard {
     to: string;
   };
   refresh?: string;
+  timeRange: string;
+  refreshInterval: string;
   variables?: Array<{
     name: string;
     type: string;
@@ -128,6 +131,8 @@ async function fetchDashboard(id: string): Promise<Dashboard> {
     uid: 'system-overview',
     tags: ['system', 'infrastructure', 'default'],
     refresh: '5s',
+    timeRange: '1h',
+    refreshInterval: '5s',
     time: {
       from: 'now-1h',
       to: 'now'

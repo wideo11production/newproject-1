@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+
+type VisibilityState = 'visible' | 'hidden' | 'prerender' | 'unloaded';
 
 type TelemetryEvent = {
   type: 'mousemove' | 'visibilitychange' | 'watchduration';

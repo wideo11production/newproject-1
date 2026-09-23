@@ -1,7 +1,8 @@
+"use client"
 import { useState, useEffect, Suspense, createContext, useContext } from 'react';
 import type { CSSProperties, DragEvent } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
-import { Button, buttonVariants } from '@wideo11/ui/button';
+import { Button } from '@wideo11/ui/button';
 const Badge = ({ children, className = '' }: { children: any; className?: string; variant?: string }) => (
   <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold ${className}`}>
     {children}
@@ -30,14 +31,27 @@ const SelectItem = ({ value, children }: { value: string; children: React.ReactN
   <option value={value}>{children}</option>
 );
 const SelectSeparator = () => null;
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
-import { Progress } from '@wideo11/ui/progress';
-import { Skeleton } from '@wideo11/ui/skeleton';
-import { Switch } from '@wideo11/ui/switch';
-import { Checkbox } from '@wideo11/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@wideo11/ui/radio-group';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
-import { Separator } from '@wideo11/ui/separator';
+
+interface DashboardPanel {
+  id: string;
+  type: string;
+  title: string;
+  data: any;
+  isLoading: boolean;
+  gridPos?: { x: number; y: number; w: number; h: number };
+  targets?: Array<Record<string, unknown>>;
+  options?: Record<string, unknown>;
+}
+
+interface DashboardState {
+  id: string;
+  title: string;
+  panels: DashboardPanel[];
+  timeRange: string;
+  refreshInterval: string;
+}
+
+import { Tooltip, TooltipTrigger, TooltipContent, Skeleton, ScrollArea, Progress, Switch, Checkbox, RadioGroup, RadioGroupItem, Separator } from '@wideo11/ui';
 type ToastProps = {
   children: React.ReactNode;
   variant?: 'default' | 'destructive';
@@ -375,11 +389,11 @@ const DashboardEditor = ({ dashboard, onSave, onUpdate }: {
     setPanels([...panels, newPanel]);
   };
 
-  const handleRemove = (id) => {
-    setPanels(panels.filter(p => p.id !== id));
+  const handleRemove = (id: string) => {
+    setPanels(panels.filter((p: any) => p.id !== id));
   };
 
-  const handleEdit = (panel) => {
+  const handleEdit = (panel: any) => {
     setSelectedPanel(panel);
     setShowEditor(true);
   };
@@ -413,7 +427,7 @@ const DashboardEditor = ({ dashboard, onSave, onUpdate }: {
           <div>
             <h2 className="text-lg font-semibold mb-2 text-gray-200">Dashboard</h2>
             <Button 
-              variant={buttonVariants({ variant: "outline" })} 
+              variant="outline"
               className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
               onClick={handleSave}
             >
@@ -456,14 +470,16 @@ const DashboardEditor = ({ dashboard, onSave, onUpdate }: {
               <SelectTrigger className="bg-gray-800 border-gray-700 text-gray-200">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="last_5m">Last 5 minutes</SelectItem>
-                <SelectItem value="last_15m">Last 15 minutes</SelectItem>
-                <SelectItem value="last_1h">Last 1 hour</SelectItem>
-                <SelectItem value="last_6h">Last 6 hours</SelectItem>
-                <SelectItem value="last_24h">Last 24 hours</SelectItem>
-                <SelectItem value="last_7d">Last 7 days</SelectItem>
-                <SelectItem value="last_30d">Last 30 days</SelectItem>
+              <SelectContent>
+                <div className="bg-gray-800 border-gray-700">
+                  <SelectItem value="last_5m">Last 5 minutes</SelectItem>
+                  <SelectItem value="last_15m">Last 15 minutes</SelectItem>
+                  <SelectItem value="last_1h">Last 1 hour</SelectItem>
+                  <SelectItem value="last_6h">Last 6 hours</SelectItem>
+                  <SelectItem value="last_24h">Last 24 hours</SelectItem>
+                  <SelectItem value="last_7d">Last 7 days</SelectItem>
+                  <SelectItem value="last_30d">Last 30 days</SelectItem>
+                </div>
               </SelectContent>
             </Select>
           </div>
@@ -474,13 +490,15 @@ const DashboardEditor = ({ dashboard, onSave, onUpdate }: {
               <SelectTrigger className="bg-gray-800 border-gray-700 text-gray-200">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="bg-gray-800 border-gray-700">
-                <SelectItem value="5s">5s</SelectItem>
-                <SelectItem value="10s">10s</SelectItem>
-                <SelectItem value="30s">30s</SelectItem>
-                <SelectItem value="1m">1 minute</SelectItem>
-                <SelectItem value="5m">5 minutes</SelectItem>
-                <SelectItem value="off">Off</SelectItem>
+              <SelectContent>
+                <div className="bg-gray-800 border-gray-700">
+                  <SelectItem value="5s">5s</SelectItem>
+                  <SelectItem value="10s">10s</SelectItem>
+                  <SelectItem value="30s">30s</SelectItem>
+                  <SelectItem value="1m">1 minute</SelectItem>
+                  <SelectItem value="5m">5 minutes</SelectItem>
+                  <SelectItem value="off">Off</SelectItem>
+                </div>
               </SelectContent>
             </Select>
           </div>
@@ -551,8 +569,8 @@ const DashboardHeader = ({ dashboard, onSave, onShare, onDelete }: {
   );
 };
 
-export default function Monitor() {
-  const [dashboard, setDashboard] = useState({
+const Monitor = () => {
+  const [dashboard, setDashboard] = useState<DashboardState>({
     id: 'default',
     title: 'System Overview',
     panels: [
@@ -592,9 +610,9 @@ export default function Monitor() {
     refreshInterval: '5s'
   });
 
-  const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState<Array<{ id: number; title: string; description: string; variant: 'default' | 'destructive' }>>([]);
 
-  const showToast = (title, description, variant = 'default') => {
+  const showToast = (title: string, description: string, variant: 'default' | 'destructive' = 'default') => {
     const id = Date.now();
     setToasts([...toasts, { id, title, description, variant }]);
     setTimeout(() => {
@@ -602,7 +620,7 @@ export default function Monitor() {
     }, 3000);
   };
 
-  const handleSave = async (updatedDashboard) => {
+  const handleSave = async (updatedDashboard: any) => {
     setDashboard(updatedDashboard);
     try {
       const response = await fetch('/api/dashboards', {
@@ -631,15 +649,15 @@ export default function Monitor() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDashboard(prev => ({
-        ...prev,
-        panels: prev.panels.map(panel => ({
+      setDashboard(prev => {
+        const updatedPanels = prev.panels.map(panel => ({
           ...panel,
-          data: Array.isArray(panel.data) 
+          data: Array.isArray(panel.data)
             ? panel.data.map(d => ({ ...d, value: d.value + Math.random() * 5 - 2.5 }))
             : panel.data
-        }))
-      }));
+        }));
+        return { ...prev, panels: updatedPanels };
+      });
     }, 5000);
 
     return () => clearInterval(interval);
@@ -669,7 +687,8 @@ export default function Monitor() {
           </Toast>
         ))}
       </div>
-      <ReactQueryDevtools initialIsOpen={false} />
     </ToastProvider>
   );
-}
+};
+
+export default Monitor;

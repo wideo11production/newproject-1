@@ -1,3 +1,4 @@
+"use client";
 import { useState, useRef, useEffect } from 'react';
 import { 
   Separator 
@@ -11,7 +12,10 @@ import {
   Type, 
   Image,
   Trash2,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  VolumeX,
+  Volume2,
+  Plus
 } from 'lucide-react';
 
 interface TimelineTrack {
@@ -214,9 +218,9 @@ export function TimelineTracks({
                               type: 'clip'
                             }}
                           >
-                            <div
-                              className=`absolute left-[${leftPercent * 100}%] top-0 h-full w-[${widthPercent * 100}%] bg-blue-500/50 border border-blue-500/70 rounded-lg cursor-grab active:cursor-grabbing hover:bg-blue-500/60 transition-all flex items-center justify-center overflow-hidden`
-                              style={{ zIndex: 10 }}
+<div
+                               className={`absolute left-[${leftPercent * 100}%] top-0 h-full w-[${widthPercent * 100}%] bg-blue-500/50 border border-blue-500/70 rounded-lg cursor-grab active:cursor-grabbing hover:bg-blue-500/60 transition-all flex items-center justify-center overflow-hidden`}
+                               style={{ zIndex: 10 }}
                               onContextMenu={(e) => {
                                 e.preventDefault();
                                 // Show context menu for clip

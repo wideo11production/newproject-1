@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button, buttonVariants } from '@wideo11/ui/button';
@@ -227,7 +228,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
           <ScrollArea className="h-full font-mono text-xs">
             <div className="space-y-1 p-2">
               {Array.from({ length: 8 }).map((_, i) => {
-                const levels = ['info', 'warn', 'error'];
+                const levels = ['info', 'warn', 'error'] as const;
                 const level = levels[i % 3];
                 const colors = {
                   info: 'text-blue-400',
@@ -305,7 +306,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
               draggable
               onDragStart={(e) => {
                 setDraggedItem(panel);
-                e.dataTransfer.effect = 'move';
+                e.dataTransfer.effectAllowed = 'move';
               }}
             >
               <CardHeader className="pb-2">

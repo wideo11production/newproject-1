@@ -1,10 +1,21 @@
+"use client";
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
 import { Bell, BellOff, CheckCircle2, AlertCircle } from 'lucide-react';
 
+type Alert = {
+  id: string;
+  state: 'firing' | 'resolved';
+  severity: string;
+  labels: { alertname: string; instance: string };
+  annotations: { summary: string; description: string };
+  startsAt: string;
+  endsAt: string;
+};
+
 export default function AlertsRoute() {
-  const [alerts, setAlerts] = useState([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
 
@@ -82,7 +93,7 @@ export default function AlertsRoute() {
                         {alert.startsAt ? new Date(alert.startsAt).toLocaleString() : 'Unknown time'}
                       </span>
                     </div>
-                    <p className="font-medium text-white">{alert.labels?.alertname || alert.title}</p>
+                    <p className="font-medium text-white">{alert.labels?.alertname || 'Unknown alert'}</p>
                     {alert.annotations?.summary && (
                       <p className="text-sm text-gray-300 mt-1">{alert.annotations.summary}</p>
                     )}
@@ -97,7 +108,7 @@ export default function AlertsRoute() {
   );
 }
 
-async function fetchAlertHistory() {
+async function fetchAlertHistory(): Promise<Alert[]> {
   return [
     {
       id: '1',

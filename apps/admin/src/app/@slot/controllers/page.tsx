@@ -37,9 +37,10 @@ export default function AdminControllersPage() {
         </div>
         <div className="space-y-4">
           <div className="flex items-center">
-            <span className="w-32">New Editor:</span>
+            <label htmlFor="new-editor" className="w-32">New Editor:</label>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
+                id="new-editor"
                 type="checkbox"
                 className="sr-only peer"
                 checked={newEditor}
@@ -49,9 +50,10 @@ export default function AdminControllersPage() {
             </label>
           </div>
           <div className="flex items-center">
-            <span className="w-32">AI Recommendations:</span>
+            <label htmlFor="ai-recommendations" className="w-32">AI Recommendations:</label>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
+                id="ai-recommendations"
                 type="checkbox"
                 className="sr-only peer"
                 checked={aiRecommendations}
@@ -61,9 +63,10 @@ export default function AdminControllersPage() {
             </label>
           </div>
           <div className="flex items-center">
-            <span className="w-32">Live Collaboration:</span>
+            <label htmlFor="live-collaboration" className="w-32">Live Collaboration:</label>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
+                id="live-collaboration"
                 type="checkbox"
                 className="sr-only peer"
                 checked={liveCollaboration}
@@ -90,8 +93,9 @@ export default function AdminControllersPage() {
         </div>
         <div className="space-y-3">
           <div className="flex justify-between">
-            <span>Log Level:</span>
+            <label htmlFor="log-level">Log Level:</label>
             <select
+              id="log-level"
               value={logLevel}
               onChange={(e) => setLogLevel(e.target.value)}
               className="border rounded px-2 py-1 bg-gray-800 text-gray-100 w-full"

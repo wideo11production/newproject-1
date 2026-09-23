@@ -1,3 +1,4 @@
+"use client";
 import { useState } from 'react';
 import { 
   Card, 
@@ -32,7 +33,8 @@ import {
   AlignRight,
   List,
   Layout,
-  Palette
+  Palette,
+  Play
 } from 'lucide-react';
 
 export function TextPanel() {
@@ -103,6 +105,15 @@ export function TextPanel() {
     }
   ];
 
+  const applyTextStyle = (style: typeof textStyles[number]) => {
+    setFontSize(style.fontSize);
+    setFontWeight(style.fontWeight);
+    setFontStyle(style.fontStyle);
+    setTextAlign(style.textAlign);
+    setTextColor(style.color);
+    setBackgroundColor(style.background);
+  };
+
   return (
     <div className="space-y-4">
       {/* Text Presets */}
@@ -118,7 +129,7 @@ export function TextPanel() {
                   key={style.id} 
                   className="flex items-center p-2 bg-[hsl(223_47%_11.2%)/30] border border-[hsl(217.2_32.6%_17.5%)] rounded-lg cursor-pointer hover:bg-[hsl(223_47%_11.2%)/50] transition-colors"
                   onClick={() => {
-                    setTextStyle(style);
+                    applyTextStyle(style);
                   }}
                 >
                   <div className="flex-1">
@@ -143,7 +154,7 @@ export function TextPanel() {
                     <Play className="h-3 w-3" />
                   </Button>
                 </div>
-              ))}
+              ))} 
             </ScrollAreaViewport>
             <ScrollAreaScrollbar className="w-2" />
           </ScrollArea>
@@ -209,45 +220,24 @@ export function TextPanel() {
             
             <div className="flex items-center space-x-2">
               <Label>Align</Label>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => setTextAlign('left')}
-                  className={`px-2 py-1 text-xs ${textAlign === 'left' ? 'bg-blue-500/30' : 'bg-transparent'} rounded`}
-                >
-                  <AlignLeft className="h-3 w-3" />
-                </button>
-                <button 
-                  onClick={() => setTextAlign('center')}
-                  className={`px-2 py-1 text-xs ${textAlign === 'center' ? 'bg-blue-500/30' : 'bg-transparent'} rounded`}
-                >
-                  <AlignCenter className="h-3 w-3" />
-                </button>
-                <button 
-                  onClick={() => setTextAlign('right')}
-                  className={`px-2 py-1 text-xs ${textAlign === 'right' ? 'bg-blue-500/30' : 'bg-transparent'} rounded`}
-                >
-                  <AlignRight className="h-3 w-3" />
-                </button>
-              </div>
+              <select
+                value={textAlign}
+                onChange={(e) => setTextAlign(e.target.value as 'left' | 'center' | 'right')}
+                className="border rounded px-2 py-1 bg-gray-800 text-white"
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
             </div>
-          </div>
-        </CardContent>
-      </div>
-      
-      {/* Color Controls */}
-      <div className="space-y-3">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-gray-200">Colors</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div className="space-y-3">
+            
             <div className="flex items-center space-x-2">
-              <Label>Text Color</Label>
+              <Label>Color</Label>
               <input
                 type="color"
                 value={textColor}
                 onChange={(e) => setTextColor(e.target.value)}
-                className="h-6 w-10"
+                className="h-3 w-3 p-0"
               />
             </div>
             
@@ -257,65 +247,12 @@ export function TextPanel() {
                 type="color"
                 value={backgroundColor}
                 onChange={(e) => setBackgroundColor(e.target.value)}
-                className="h-6 w-10"
+                className="h-3 w-3 p-0"
               />
-              <button 
-                onClick={() => setBackgroundColor('transparent')}
-                className="ml-2 text-xs hover:text-gray-300"
-              >
-                Transparent
-              </button>
             </div>
-          </div>
-        </CardContent>
-      </div>
-      
-      {/* Preview and Apply */}
-      <div className="space-y-4">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-gray-200">Preview</CardTitle>
-        </CardHeader>
-        <CardContent className="p-3">
-          <div 
-            className="h-[100px] flex items-center justify-center bg-[hsl(223_47%_11.2%)/30] border border-[hsl(217.2_32.6%_17.5%)] rounded-lg"
-          >
-            <div 
-              className="text-center max-w-[200px] text-xs"
-              style={{
-                fontSize: `${fontSize}px`,
-                fontWeight: fontWeight,
-                fontStyle: fontStyle,
-                textAlign: textAlign,
-                color: textColor,
-                backgroundColor: backgroundColor,
-                padding: '4px',
-                borderRadius: '2px'
-              }}
-            >
-              {textContent || 'Your text here...'}
-            </div>
-          </div>
-          <div className="mt-3 flex justify-end">
-            <Button 
-              variant="default" 
-              size="sm" 
-              onClick={() => {/* Add text to timeline */}}
-            >
-              Add to Timeline
-            </Button>
           </div>
         </CardContent>
       </div>
     </div>
   );
-}
-
-// Helper function to apply text style (would be implemented in real app)
-function setTextStyle(style: any) {
-  setFontSize(style.fontSize);
-  setFontWeight(style.fontWeight);
-  setFontStyle(style.fontStyle);
-  setTextAlign(style.textAlign);
-  setTextColor(style.color);
-  setBackgroundColor(style.background);
 }

@@ -9,7 +9,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "react-query": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "zod": "catalog:",

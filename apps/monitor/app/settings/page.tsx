@@ -1,3 +1,4 @@
+"use client";
 import { useState } from 'react';
 import { Settings, Clock, RefreshCw, Link2, Edit3, Globe, Save } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
@@ -6,14 +7,8 @@ import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@wideo11/ui/select';
 import { Switch } from '@wideo11/ui/switch';
-import { Textarea } from '@wideo11/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@wideo11/ui/tabs';
 import { Badge } from '@wideo11/ui/badge';
-
-export const metadata = {
-  title: 'Settings - Wideo11 Monitor',
-  description: 'Dashboard and system settings',
-};
 
 export default function SettingsPage() {
   const [timezone, setTimezone] = useState('UTC');

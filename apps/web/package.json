@@ -15,7 +15,8 @@
     "@wideo11/ui": "workspace:*",
     "lucide-react": "^0.321.0",
     "@tanstack/react-query": "^5.28.0",
-    "next-themes": "^0.3.0"
+    "next-themes": "^0.3.0",
+    "next-auth": "^5.0.0-beta.15"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

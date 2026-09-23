@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import { config } from '@wideo11/config';
 
 export const metadata: Metadata = {
   title: 'Video Editor',
@@ -7,6 +8,8 @@ export const metadata: Metadata = {
 };
 
 export default function EditorPage() {
+  // Log config for verification (server side)
+  console.log("Config loaded:", { appUrl: config.NEXT_PUBLIC_APP_URL, buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: config.SISTER_SHARE_PERCENTAGE });
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
       {/* Header */}

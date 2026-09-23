@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
 import { Skeleton } from '@wideo11/ui/skeleton';
@@ -11,8 +10,25 @@ import {
   TabsContent,
 } from '@wideo11/ui/tabs';
 
+interface MatrixResult {
+  metric?: Record<string, string>;
+  value?: [number, string];
+  values?: Array<[number, string]>;
+}
+
+interface ResultsData {
+  status?: string;
+  resultType?: string;
+  result?: MatrixResult[];
+}
+
+interface ResultsResponse {
+  data?: ResultsData;
+  errors?: Array<{ message?: string }>;
+}
+
 interface ResultsTableProps {
-  data: any;
+  data?: ResultsResponse;
   isLoading: boolean;
 }
 
@@ -74,7 +90,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                         </code>
                         {r.metric && Object.entries(r.metric).filter(([k]) => k !== '__name__').map(([k, v]) => (
                           <Badge key={k} variant="outline" className="ml-1 text-xs border-gray-700 text-gray-400">
-                            {k}="{v}"
+                            {k}="{String(v)}"
                           </Badge>
                         ))}
                       </td>
@@ -97,7 +113,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                     <tr className="border-b border-gray-800/50">
                       <td className="p-2"><code className="text-blue-400">scalar</code></td>
                       <td className="text-right p-2 text-gray-300 font-mono">
-                        {result?.[1]}
+                        {String(result?.[1] ?? '')}
                       </td>
                     </tr>
                   )}
@@ -105,7 +121,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                     <tr className="border-b border-gray-800/50">
                       <td className="p-2"><code className="text-blue-400">string</code></td>
                       <td className="text-right p-2 text-gray-300 font-mono">
-                        {result?.[1]}
+                        {String(result?.[1] ?? '')}
                       </td>
                     </tr>
                   )}
@@ -147,7 +163,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
           <CardContent>
             <ScrollArea className="h-60">
               <div className="space-y-4 p-2">
-                {resultType === 'matrix' && Array.isArray(result) && result.map((r, i) => (
+                {resultType === 'matrix' && Array.isArray(result) && result.map((r: MatrixResult, i: number) => (
                   <div key={i} className="space-y-1">
                     <div className="text-xs text-gray-400">
                       {r.metric?.__name__ || 'metric'}
@@ -157,8 +173,8 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                         fill="none"
                         strokeWidth={2}
                         className="stroke-blue-400 fill-blue-400/10"
-                        points={r.values?.map((v, i) => 
-                          `${(i / (r.values.length - 1)) * 100},${10 - (parseFloat(v[1].split(' ')[0]) % 10)}`
+                        points={r.values?.map((v: [number, string], i: number) => 
+                          `${(i / ((r.values?.length ?? 1) - 1)) * 100},${10 - (parseFloat(v[1].split(' ')[0]) % 10)}`
                         ).join(' ')}
                       />
                     </svg>

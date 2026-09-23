@@ -1,15 +1,77 @@
-import { useState, useRef, useEffect } from 'react';
-import { Textarea } from '@wideo11/ui/textarea';
+"use client"
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
+import { Card, CardContent } from '@wideo11/ui/card';
 import { Play, Copy, Trash2 } from 'lucide-react';
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@wideo11/ui/command';
+
+// Local Textarea component since @wideo11/ui doesn't export it
+const Textarea = React.forwardRef<
+  HTMLTextAreaElement,
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>
+>(({ className, value, onChange, onKeyDown, placeholder, rows, disabled, ...props }, ref) => (
+  <textarea
+    className={className}
+    value={value}
+    onChange={onChange}
+    onKeyDown={onKeyDown}
+    placeholder={placeholder}
+    rows={rows}
+    disabled={disabled}
+    {...props}
+    ref={ref}
+  />
+));
+Textarea.displayName = 'Textarea';
+
+// Local Command components since @wideo11/ui doesn't export them
+const Command = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<'div'> & { className?: string }
+>(({ children, className, ...props }, ref) => (
+  <div className={className} ref={ref} {...props} />
+));
+Command.displayName = 'Command';
+
+const CommandInput = React.forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement>
+>(({ className, ...props }, ref) => (
+  <input className={className} ref={ref} {...props} />
+));
+CommandInput.displayName = 'CommandInput';
+
+const CommandItem = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<'div'> & { className?: string; onSelect?: () => void }
+>(({ children, className, onSelect, ...props }, ref) => (
+  <div
+    className={className}
+    onClick={() => {
+      onSelect?.();
+    }}
+    ref={ref}
+    {...props}>
+    {children}
+  </div>
+));
+CommandItem.displayName = 'CommandItem';
+
+const CommandList = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<'div'> & { className?: string }
+>(({ children, className, ...props }, ref) => (
+  <div className={className} ref={ref} {...props} />
+));
+CommandList.displayName = 'CommandList';
+
+const CommandEmpty = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentPropsWithoutRef<'div'> & { className?: string }
+>(({ children, className, ...props }, ref) => (
+  <div className={className} ref={ref} {...props} />
+));
+CommandEmpty.displayName = 'CommandEmpty';
 
 interface QueryEditorProps {
   query: string;
@@ -91,9 +153,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
           size="sm"
           className="border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800"
           onClick={() => setShowFunctions(!showFunctions)}
-        >
-          Functions
-        </Button>
+        />
         <Button
           type="button"
           variant="outline"
@@ -139,7 +199,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
                 placeholder="Search functions..."
                 className="border-gray-700 text-gray-300"
                 value={searchFunction}
-                onValueChange={setSearchFunction}
+                onChange={(e) => setSearchFunction(e.target.value)}
               />
               <CommandList className="max-h-60">
                 <CommandEmpty>No function found.</CommandEmpty>

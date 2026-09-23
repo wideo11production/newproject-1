@@ -1,4 +1,3 @@
-import { Suspense } from 'react';
 import { BarChart3, Activity, Bell, Database, Users, TrendingUp, DollarSign, Clock, Server } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
@@ -12,8 +11,10 @@ export const metadata = {
   description: 'Custom Observability Dashboard - Grafana alternative with drag-drop panels',
 };
 
+// Lazy load the dashboard editor to improve initial page load performance
+// ssr: false ensures it only renders on client-side since it uses browser APIs
 const LazyDashboardEditor = dynamic(
-  () => import('./components/dashboard/dashboard-editor'),
+  () => import('@/components/dashboard/dashboard-editor'),
   {
     loading: () => <DashboardEditorSkeleton />,
     ssr: false,
@@ -103,6 +104,30 @@ export default function MonitorHome() {
         </div>
       </section>
 
+      {/* Live Dashboard Editor - System Overview */}
+      <section>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-medium text-gray-400">Live Dashboard - System Overview</h2>
+          <Link href="/dashboards/system-overview">
+            <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
+              Open Full View
+            </Button>
+          </Link>
+        </div>
+        <div className="h-[600px] bg-gray-900/30 border border-gray-700 rounded-lg overflow-hidden">
+          <LazyDashboardEditor 
+            dashboard={{ 
+              id: 'system-overview', 
+              title: 'System Overview', 
+              panels: [],
+              timeRange: '1h',
+              refreshInterval: '5s'
+            }} 
+            onUpdate={() => {}} 
+          />
+        </div>
+      </section>
+
       <section>
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-gray-400">Quick Actions</h2>
@@ -133,6 +158,14 @@ function StatCard({
   iconColor, 
   bgColor, 
   borderColor 
+}: {
+  title: string;
+  value: string;
+  change: string;
+  icon: typeof Activity;
+  iconColor: string;
+  bgColor: string;
+  borderColor: string;
 }) {
   const isPositive = change.startsWith('+');
   
@@ -152,7 +185,17 @@ function StatCard({
   );
 }
 
-function DashboardCard({ title, description, panels, icon: Icon }) {
+function DashboardCard({
+  title,
+  description,
+  panels,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  panels: number;
+  icon: typeof Activity;
+}) {
   return (
     <Card className="bg-gray-900/30 border-gray-700">
       <CardContent className="pt-6">

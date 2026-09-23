@@ -1,5 +1,6 @@
+"use client";
 import { useState } from 'react';
-import { BarChart3, Plus, LayoutDashboard, Share2, Edit3, Trash2, Clock, Users } from 'lucide-react';
+import { BarChart3, Plus, LayoutDashboard, Share2, Edit3, Trash2, Clock, Users, Settings } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
@@ -8,11 +9,6 @@ import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@wideo11/ui/dropdown-menu';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-
-export const metadata = {
-  title: 'Dashboards - Wideo11 Monitor',
-  description: 'List of dashboards',
-};
 
 export default function DashboardsPage() {
   const [searchQuery, setSearchQuery] = useState('');

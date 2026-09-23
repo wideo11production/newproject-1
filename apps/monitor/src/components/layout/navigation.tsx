@@ -1,7 +1,7 @@
+"use client";
 import Link from 'next/link';
 import { BarChart3, Activity, Bell, Settings, Users, Zap, Search, Database } from 'lucide-react';
-import { cn } from '@wideo11/ui/lib/utils';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
+import { cn, Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui';
 
 interface NavItemProps {
   href: string;

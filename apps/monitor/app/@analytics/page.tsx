@@ -1,10 +1,21 @@
+"use client";
 import { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
-import { Activity, Database, Users, Globe, TrendingUp, Zap } from 'lucide-react';
+import { Activity, Database, Users, Globe, TrendingUp, Zap, type LucideIcon } from 'lucide-react';
+
+type Metric = {
+  id: string;
+  name: string;
+  value: string;
+  unit: string;
+  change: number;
+  icon: LucideIcon;
+  status: 'healthy' | 'warning' | 'critical';
+};
 
 export default function AnalyticsRoute() {
-  const [metrics, setMetrics] = useState([]);
+  const [metrics, setMetrics] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,7 +55,14 @@ export default function AnalyticsRoute() {
   );
 }
 
-function MetricCard({ title, value, unit, change, icon: Icon, status }) {
+function MetricCard({
+  title,
+  value,
+  unit,
+  change,
+  icon: Icon,
+  status,
+}: Omit<Metric, 'name' | 'id'> & { title: string }) {
   const isPositive = change > 0;
   const statusColor = {
     healthy: 'text-green-400',
@@ -88,7 +106,7 @@ function MetricSkeleton() {
   );
 }
 
-async function fetchMetrics() {
+async function fetchMetrics(): Promise<Metric[]> {
   return [
     { id: '1', name: 'CPU Usage', value: '42.5', unit: '%', change: 3.2, icon: Activity, status: 'healthy' },
     { id: '2', name: 'Memory Usage', value: '68.3', unit: '%', change: -1.5, icon: Database, status: 'warning' },

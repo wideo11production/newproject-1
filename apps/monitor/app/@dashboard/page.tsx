@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect, Suspense } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';
 import { Badge } from '@wideo11/ui/badge';
@@ -10,8 +11,24 @@ const LazyAlertList = dynamic(() => import('@/components/alerts/alert-list'), {
   ssr: false
 });
 
+type Alert = {
+  id: string;
+  state: 'firing' | 'resolved';
+  severity: 'critical' | 'warning' | 'info';
+  labels: {
+    alertname: string;
+    instance: string;
+  };
+  annotations: {
+    summary: string;
+    description: string;
+  };
+  startsAt: string;
+  endsAt: string;
+};
+
 export default function DashboardRoute() {
-  const [alerts, setAlerts] = useState([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -47,7 +64,7 @@ export default function DashboardRoute() {
   );
 }
 
-async function fetchAlerts() {
+async function fetchAlerts(): Promise<Alert[]> {
   // In a real app, this would fetch from dashboard-service or webhook-receiver
   return [
     {

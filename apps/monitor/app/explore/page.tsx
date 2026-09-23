@@ -1,9 +1,11 @@
+"use client";
 import { useState, Suspense } from 'react';
 import { Play, Pause, RefreshCw, Search, BarChart3, Table as TableIcon, Code, Download, Share2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { Badge } from '@wideo11/ui/badge';
+import { Label } from '@wideo11/ui/label';
 import { Skeleton } from '@wideo11/ui/skeleton';
 import { ScrollArea } from '@wideo11/ui/scroll-area';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@wideo11/ui/select';
@@ -20,11 +22,6 @@ const LazyResultsTable = dynamic(() => import('@/components/explore/results-tabl
   loading: () => <Skeleton className="h-48 w-full bg-gray-700/50" />,
   ssr: false,
 });
-
-export const metadata = {
-  title: 'Explore - Wideo11 Monitor',
-  description: 'Explore Prometheus metrics and queries',
-};
 
 export default function ExplorePage() {
   const [query, setQuery] = useState('rate(http_requests_total[5m])');

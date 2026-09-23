@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { config } from '@wideo11/config';
 import { ReactNode, Suspense } from 'react';
 import { ThemeProvider } from 'next-themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -26,6 +27,8 @@ export default function RootLayout({
   analytics: ReactNode;
   alerts: ReactNode;
 }) {
+  // Log config for verification (server side)
+  console.log("Config loaded:", { appUrl: config.NEXT_PUBLIC_APP_URL, buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: config.SISTER_SHARE_PERCENTAGE });
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressContentEditableWarning>

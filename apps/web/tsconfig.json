@@ -19,9 +19,13 @@
     "jsx": "preserve",
     "incremental": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
       "@/*": [
         "src/*"
+      ],
+      "@wideo11/config": [
+        "../../packages/config/src"
       ],
       "@wideo11/ui/*": [
         "../../packages/ui/src/components/*"

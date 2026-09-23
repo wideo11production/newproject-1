@@ -1,8 +1,7 @@
+"use client"
 import { useState } from 'react';
 import { 
-  ScrollArea, 
-  ScrollAreaScrollbar, 
-  ScrollAreaViewport 
+  ScrollArea
 } from '@wideo11/ui/scroll-area';
 import { 
   Tabs, 
@@ -11,43 +10,20 @@ import {
   TabsContent 
 } from '@wideo11/ui/tabs';
 import { 
-  Button, 
-  ButtonVariant 
-} from '@wideo11/ui/button';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardContent 
-} from '@wideo11/ui/card';
-import { 
-  Input, 
-  InputGroup, 
-  InputAddon 
-} from '@wideo11/ui/input';
-import { 
-  Label 
-} from '@wideo11/ui/label';
-import { 
-  Separator 
-} from '@wideo11/ui/separator';
-import { 
-  Folder, 
   Film, 
   Palette, 
   Sparkles, 
   Type, 
   Music, 
-  HelpCircle, 
-  Settings 
+  HelpCircle 
 } from 'lucide-react';
-import { MediaLibrary } from '@/components/media/media-library';
-import { TemplatesPanel } from '@/components/templates/templates-panel';
-import { FiltersPanel } from '@/components/filters/filters-panel';
-import { AnimationsPanel } from '@/components/animations/animations-panel';
-import { TextPanel } from '@/components/text/text-panel';
-import { AudioPanel } from '@/components/audio/audio-panel';
-import { HelpPanel } from '@/components/help/help-panel';
+import { MediaLibrary } from '../media/media-library';
+import { TemplatesPanel } from '../templates/templates-panel';
+import { FiltersPanel } from '../filters/filters-panel';
+import { AnimationsPanel } from '../animations/animations-panel';
+import { TextPanel } from '../text/text-panel';
+import { AudioPanel } from '../audio/audio-panel';
+import { HelpPanel } from '../help/help-panel';
 
 export function Sidebar() {
   const [activeTab, setActiveTab] = useState<'media' | 'templates' | 'filters' | 'animations' | 'text' | 'audio' | 'help'>('media');
@@ -61,7 +37,7 @@ export function Sidebar() {
             defaultValue="media" 
             orientation="vertical" 
             className="w-full"
-            onValueChange={(value) => setActiveTab(value)}
+            onValueChange={(value) => setActiveTab(value as typeof activeTab)}
           >
             <TabsList className="flex flex-col gap-1">
               <TabsTrigger value="media">
@@ -114,7 +90,7 @@ export function Sidebar() {
         {/* Content Area */}
         <div className="flex-1 overflow-hidden">
           <ScrollArea className="h-full w-full">
-            <ScrollAreaViewport className="p-4 space-y-4">
+            <div className="p-4 space-y-4">
               {activeTab === 'media' && <MediaLibrary />}
               {activeTab === 'templates' && <TemplatesPanel />}
               {activeTab === 'filters' && <FiltersPanel />}
@@ -122,8 +98,7 @@ export function Sidebar() {
               {activeTab === 'text' && <TextPanel />}
               {activeTab === 'audio' && <AudioPanel />}
               {activeTab === 'help' && <HelpPanel />}
-            </ScrollAreaViewport>
-            <ScrollAreaScrollbar className="w-2" />
+            </div>
           </ScrollArea>
         </div>
       </div>

@@ -2,7 +2,7 @@ import './globals.css';
 import { ReactNode, Suspense } from 'react';
 import { Inter } from 'next/font/google';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Navigation } from './components/layout/navigation';
+import { Navigation } from '@/components/layout/navigation';
 
 const inter = Inter({ subsets: ['latin'] });
 

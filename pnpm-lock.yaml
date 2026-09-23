@@ -81,6 +81,18 @@ catalogs:
     '@radix-ui/react-tooltip':
       specifier: ^1.1.2
       version: 1.2.16
+    '@tanstack/react-query':
+      specifier: ^5.51.23
+      version: 5.103.1
+    '@types/aws-sdk':
+      specifier: ^2.7.0
+      version: 2.7.4
+    '@types/jsonwebtoken':
+      specifier: ^9.0.6
+      version: 9.0.10
+    '@types/node':
+      specifier: ^22.4.1
+      version: 22.20.4
     '@types/react':
       specifier: ^18.3.4
       version: 18.3.31
@@ -90,6 +102,9 @@ catalogs:
     autoprefixer:
       specifier: ^10.4.20
       version: 10.6.1
+    aws-sdk:
+      specifier: ^2.1692.0
+      version: 2.1693.0
     class-variance-authority:
       specifier: ^0.7.0
       version: 0.7.1
@@ -99,12 +114,21 @@ catalogs:
     eslint:
       specifier: ^9.9.0
       version: 9.39.5
+    jsonwebtoken:
+      specifier: ^9.0.2
+      version: 9.0.3
     lucide-react:
       specifier: ^0.428.0
       version: 0.428.0
     postcss:
       specifier: ^8.4.41
       version: 8.5.28
+    react:
+      specifier: ^18.3.1
+      version: 18.3.1
+    react-dom:
+      specifier: ^18.3.1
+      version: 18.3.1
     tailwind-merge:
       specifier: ^2.5.2
       version: 2.6.1
@@ -114,6 +138,9 @@ catalogs:
     typescript:
       specifier: ^5.5.4
       version: 5.9.3
+    zod:
+      specifier: ^3.23.8
+      version: 3.25.76
 
 importers:
 
@@ -142,6 +169,58 @@ importers:
         version: 2.11.2
       typescript:
         specifier: ^5.5.4
+        version: 5.9.3
+
+  apps/admin:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.28.0
+        version: 5.103.1(react@18.3.1)
+      '@wideo11/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@wideo11/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.321.0
+        version: 0.321.0(react@18.3.1)
+      next:
+        specifier: ^14.2.0
+        version: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-auth:
+        specifier: ^5.0.0-beta.15
+        version: 5.0.0-beta.32(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
+      next-themes:
+        specifier: ^0.3.0
+        version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.2.0
+        version: 18.3.7(@types/react@18.3.31)
+      autoprefixer:
+        specifier: ^10.0.0
+        version: 10.6.1(postcss@8.5.28)
+      eslint:
+        specifier: ^8.0.0
+        version: 8.57.1
+      postcss:
+        specifier: ^8.0.0
+        version: 8.5.28
+      tailwindcss:
+        specifier: ^3.3.0
+        version: 3.4.19(tsx@4.23.15)(yaml@2.9.1)
+      typescript:
+        specifier: ^5.0.0
         version: 5.9.3
 
   apps/billing:
@@ -197,6 +276,58 @@ importers:
         version: 1.0.7(tailwindcss@3.4.19(tsx@4.23.15)(yaml@2.9.1))
       typescript:
         specifier: ^5.4.0
+        version: 5.9.3
+
+  apps/editor:
+    dependencies:
+      '@tanstack/react-query':
+        specifier: ^5.28.0
+        version: 5.103.1(react@18.3.1)
+      '@wideo11/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@wideo11/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      lucide-react:
+        specifier: ^0.321.0
+        version: 0.321.0(react@18.3.1)
+      next:
+        specifier: ^14.2.0
+        version: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-auth:
+        specifier: ^5.0.0-beta.15
+        version: 5.0.0-beta.32(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
+      next-themes:
+        specifier: ^0.3.0
+        version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.2.0
+        version: 18.3.7(@types/react@18.3.31)
+      autoprefixer:
+        specifier: ^10.0.0
+        version: 10.6.1(postcss@8.5.28)
+      eslint:
+        specifier: ^8.0.0
+        version: 8.57.1
+      postcss:
+        specifier: ^8.0.0
+        version: 8.5.28
+      tailwindcss:
+        specifier: ^3.3.0
+        version: 3.4.19(tsx@4.23.15)(yaml@2.9.1)
+      typescript:
+        specifier: ^5.0.0
         version: 5.9.3
 
   apps/monitor:
@@ -332,6 +463,9 @@ importers:
       next:
         specifier: ^14.2.0
         version: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      next-auth:
+        specifier: ^5.0.0-beta.15
+        version: 5.0.0-beta.32(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
       next-themes:
         specifier: ^0.3.0
         version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -366,36 +500,36 @@ importers:
 
   packages/api-client:
     dependencies:
+      '@tanstack/react-query':
+        specifier: 'catalog:'
+        version: 5.103.1(react@18.3.1)
       axios:
         specifier: ^1.6.0
         version: 1.20.0
       react:
-        specifier: ^18.2.0
+        specifier: 'catalog:'
         version: 18.3.1
       react-dom:
-        specifier: ^18.2.0
+        specifier: 'catalog:'
         version: 18.3.1(react@18.3.1)
-      react-query:
-        specifier: ^3.39.3
-        version: 3.39.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       zod:
-        specifier: ^3.22.0
+        specifier: 'catalog:'
         version: 3.25.76
     devDependencies:
       '@types/react':
-        specifier: ^18.2.0
+        specifier: 'catalog:'
         version: 18.3.31
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@26.6.2)(typescript@5.9.3)
       typescript:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/auth:
     dependencies:
       aws-sdk:
-        specifier: ^2.1500.0
+        specifier: 'catalog:'
         version: 2.1693.0
       bcrypt:
         specifier: ^5.1.0
@@ -404,26 +538,26 @@ importers:
         specifier: ^5.9.3
         version: 5.10.0
       jsonwebtoken:
-        specifier: ^9.0.0
+        specifier: 'catalog:'
         version: 9.0.3
       react:
-        specifier: ^18.2.0
+        specifier: 'catalog:'
         version: 18.3.1
       react-dom:
-        specifier: ^18.2.0
+        specifier: 'catalog:'
         version: 18.3.1(react@18.3.1)
     devDependencies:
       '@types/aws-sdk':
-        specifier: ^2.7.0
+        specifier: 'catalog:'
         version: 2.7.4
       '@types/bcrypt':
         specifier: ^5.0.0
         version: 5.0.2
       '@types/jsonwebtoken':
-        specifier: ^9.0.0
+        specifier: 'catalog:'
         version: 9.0.10
       typescript:
-        specifier: ^5.3.0
+        specifier: 'catalog:'
         version: 5.9.3
 
   packages/charts:
@@ -444,6 +578,12 @@ importers:
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
+
+  packages/config:
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.4
 
   packages/constants: {}
 
@@ -762,6 +902,20 @@ packages:
   '@alloc/quick-lru@5.3.0':
     resolution: {integrity: sha512-U4+70Pc5ZS9osnCBCE5Jha/ciHM+Yp+CNMNC/7HvYbNRk1Ldd+f7qO65W5qfhu/TCv+/ozljlXXe9Nj8419DMA==}
     engines: {node: '>=10'}
+
+  '@auth/core@0.41.3':
+    resolution: {integrity: sha512-sJ3JMHHkXMD3aOjopv7mOBTO1Ocw4b0fAEXJBz6k7YHLpYQI6C40jCUPc5fNvUKxXRXNE1/sRISA15UrwWJBTw==}
+    peerDependencies:
+      '@simplewebauthn/browser': ^9.0.1
+      '@simplewebauthn/server': ^9.0.2
+      nodemailer: ^7.0.7 || ^8.0.5
+    peerDependenciesMeta:
+      '@simplewebauthn/browser':
+        optional: true
+      '@simplewebauthn/server':
+        optional: true
+      nodemailer:
+        optional: true
 
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
@@ -2233,6 +2387,9 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
+  '@panva/hkdf@1.2.1':
+    resolution: {integrity: sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw==}
+
   '@pkgjs/parseargs@0.11.0':
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
@@ -3055,6 +3212,9 @@ packages:
 
   '@types/node@20.19.43':
     resolution: {integrity: sha512-6oYBAi5ikg4Pl+kGsoYtawUMBT2zZMCvPNF7pVLnHZfd1zf38DRiWn/gT01RYCdUqkv7Fhr+C9ot4/tb+2sVvA==}
+
+  '@types/node@22.20.4':
+    resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
 
   '@types/node@26.6.2':
     resolution: {integrity: sha512-X1P21scMv4zGKLYqjdGjaKa7COa0RKVYYZZN/NfvLQ1JegxFhdhpZG/Lyn8AXx6CDUavKAd11v6BvfpkDByK8g==}
@@ -4706,6 +4866,9 @@ packages:
   jose@5.10.0:
     resolution: {integrity: sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg==}
 
+  jose@6.2.12:
+    resolution: {integrity: sha512-9NiFmJEex0sy2Dk58j2UGBSHgUs2ypF9eZSu4L6vjOX3Dp96Sw1F3uL+H+D1sx02jZZdzUT0HgvCy59CuvXcWw==}
+
   js-sha3@0.8.0:
     resolution: {integrity: sha512-gF1cRrHhIzNfToc802P800N8PpXS+evLLXfsVpowqmAFR9uwbi89WvXg2QspOmXL8QL86J4T1EpFu+yUkwJY3Q==}
 
@@ -5117,6 +5280,22 @@ packages:
     resolution: {integrity: sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==}
     engines: {node: '>=18'}
 
+  next-auth@5.0.0-beta.32:
+    resolution: {integrity: sha512-CGlChIEWZ6LltNVxrE5yiySMID+Idpmry47JYA5lLwgD8Sx02a8M65VL0TWVz9nbnOioS/tCW/rP/0+mE7Qp4Q==}
+    peerDependencies:
+      '@simplewebauthn/browser': ^9.0.1
+      '@simplewebauthn/server': ^9.0.2
+      next: ^14.0.0-0 || ^15.0.0 || ^16.0.0
+      nodemailer: ^7.0.7 || ^8.0.5
+      react: ^18.2.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@simplewebauthn/browser':
+        optional: true
+      '@simplewebauthn/server':
+        optional: true
+      nodemailer:
+        optional: true
+
   next-intl@0.1.1:
     resolution: {integrity: sha512-eLFuqc24hfTfYtue9Al2s40PdaUZzT4yoIpRARJXopkZPbqT8gv/gk5lWgSafrrEi4I8EAmLqXsPW0mbF2Ddrg==}
     engines: {node: '>=10'}
@@ -5194,6 +5373,9 @@ packages:
 
   nullthrows@1.1.1:
     resolution: {integrity: sha512-2vPPEi+Z7WqML2jZYddDIfy5Dqb0r2fze2zTxNNknZaFpVHU3mFB3R+DWeJWGVx0ecvttSGlJTI+WG+8Z4cDWw==}
+
+  oauth4webapi@3.8.8:
+    resolution: {integrity: sha512-8N28E+a/oxfXWBgOMt+ZP/JUf/XR+IFbvkAEPP3gznXOMv9BpAAwiIj0TFNz3tGTPc0ZQ8zmWBNgN1nAys0gng==}
 
   ob1@0.87.1:
     resolution: {integrity: sha512-i8iA8uij0g1YQzS8uOJPSRCgwDjO9warIHUAu1Fqj877Wc3wlfxDYBioYWgKTBF2+URVJttyDWSEpmd99nlvtQ==}
@@ -5402,6 +5584,14 @@ packages:
   postcss@8.5.28:
     resolution: {integrity: sha512-RRuzqDtt5Y9h3quz5hWhK+TPnsmVs6WwSU6LkJMeY4HstUEDuYTG8UJSdawMRzmzAtV+KEoG8N3Qg2qLy5vM/A==}
     engines: {node: ^10 || ^12 || >=14}
+
+  preact-render-to-string@6.5.11:
+    resolution: {integrity: sha512-ubnauqoGczeGISiOh6RjX0/cdaF8v/oDXIjO85XALCQjwQP+SB4RDXXtvZ6yTYSjG+PC1QRP2AhPgCEsM2EvUw==}
+    peerDependencies:
+      preact: '>=10'
+
+  preact@10.24.3:
+    resolution: {integrity: sha512-Z2dPnBnMUfyQfSQ+GBdsGa16hz35YmLmtTLhM169uW944hYL6xzTYkJjC07j+Wosz733pMWx0fgON3JNw1jJQA==}
 
   prelude-ls@1.2.1:
     resolution: {integrity: sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g==}
@@ -6399,6 +6589,14 @@ packages:
 snapshots:
 
   '@alloc/quick-lru@5.3.0': {}
+
+  '@auth/core@0.41.3':
+    dependencies:
+      '@panva/hkdf': 1.2.1
+      jose: 6.2.12
+      oauth4webapi: 3.8.8
+      preact: 10.24.3
+      preact-render-to-string: 6.5.11(preact@10.24.3)
 
   '@babel/code-frame@7.29.7':
     dependencies:
@@ -8591,6 +8789,8 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
+  '@panva/hkdf@1.2.1': {}
+
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
@@ -9500,6 +9700,10 @@ snapshots:
   '@types/ms@2.1.0': {}
 
   '@types/node@20.19.43':
+    dependencies:
+      undici-types: 6.21.0
+
+  '@types/node@22.20.4':
     dependencies:
       undici-types: 6.21.0
 
@@ -11413,6 +11617,8 @@ snapshots:
 
   jose@5.10.0: {}
 
+  jose@6.2.12: {}
+
   js-sha3@0.8.0: {}
 
   js-tokens@4.0.0: {}
@@ -11898,6 +12104,12 @@ snapshots:
     dependencies:
       content-type: 2.1.0
 
+  next-auth@5.0.0-beta.32(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1):
+    dependencies:
+      '@auth/core': 0.41.3
+      next: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react: 18.3.1
+
   next-intl@0.1.1(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       intl-messageformat: 9.13.0
@@ -11974,6 +12186,8 @@ snapshots:
       boolbase: 1.0.0
 
   nullthrows@1.1.1: {}
+
+  oauth4webapi@3.8.8: {}
 
   ob1@0.87.1:
     dependencies:
@@ -12170,6 +12384,12 @@ snapshots:
       nanoid: 3.3.19
       picocolors: 1.1.1
       source-map-js: 1.2.1
+
+  preact-render-to-string@6.5.11(preact@10.24.3):
+    dependencies:
+      preact: 10.24.3
+
+  preact@10.24.3: {}
 
   prelude-ls@1.2.1: {}
 

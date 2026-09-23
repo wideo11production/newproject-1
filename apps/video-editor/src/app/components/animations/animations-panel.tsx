@@ -1,3 +1,4 @@
+"use client";
 import { useState } from 'react';
 import { 
   Card, 
@@ -12,9 +13,7 @@ import {
   Separator 
 } from '@wideo11/ui/separator';
 import { 
-  ScrollArea, 
-  ScrollAreaScrollbar, 
-  ScrollAreaViewport 
+  ScrollArea
 } from '@wideo11/ui/scroll-area';
 import { 
   Type, 
@@ -23,7 +22,8 @@ import {
   RotateCcw,
   RefreshCw,
   TrendingUp,
-  Activity
+  Activity,
+  Play
 } from 'lucide-react';
 
 export function AnimationsPanel() {
@@ -206,7 +206,7 @@ export function AnimationsPanel() {
 
       {/* Animations Grid */}
       <ScrollArea className="h-[calc(100%-80px)]">
-        <ScrollAreaViewport className="grid grid-cols-2 gap-3 p-3">
+        <div className="grid grid-cols-2 gap-3 p-3">
           {animations.map((animation) => (
             <div 
               key={animation.id} 
@@ -235,8 +235,7 @@ export function AnimationsPanel() {
               No animations found
             </div>
           )}
-        </ScrollAreaViewport>
-        <ScrollAreaScrollbar className="w-2" />
+        </div>
       </ScrollArea>
     </div>
   );

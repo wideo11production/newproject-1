@@ -43,11 +43,6 @@ const LazyDashboardEditor = dynamic(
   }
 );
 
-export const metadata = {
-  title: 'Observability Dashboard - Wideo11',
-  description: 'Custom Grafana-like observability dashboard with drag-drop panels',
-};
-
 interface StatCardData {
   title: string;
   value: string;

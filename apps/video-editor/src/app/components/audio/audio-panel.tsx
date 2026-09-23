@@ -1,3 +1,4 @@
+"use client";
 import { useState } from 'react';
 import { 
   Card, 
@@ -53,7 +54,7 @@ export function AudioPanel() {
       id: 'mt2', 
       name: 'Happy Pop', 
       artist: 'PremiumBeat',
-      duration': '1:45',
+      duration: '1:45',
       thumbnail: '/placeholder-audio-track-2.jpg',
       genre: 'Pop',
       mood: 'Upbeat'

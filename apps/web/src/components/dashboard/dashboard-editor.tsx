@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button, buttonVariants } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
-import { Skeleton } from '@wideo11/ui/skeleton';
+import { Skeleton } from '@wideo11/ui';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@wideo11/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@wideo11/ui/dropdown-menu';
@@ -10,7 +10,7 @@ import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@wideo11/ui/select';
 import { Switch } from '@wideo11/ui/switch';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
+import { ScrollArea } from '@wideo11/ui';
 import { Separator } from '@wideo11/ui/separator';
 import { 
   BarChart3, 
@@ -24,6 +24,8 @@ import {
   Maximize2,
   Grid,
   LayoutGrid,
+  AlertCircle,
+  CheckCircle,
 } from 'lucide-react';
 
 interface DashboardEditorProps {

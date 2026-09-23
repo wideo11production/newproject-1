@@ -1,7 +1,5 @@
-import { useState } from 'react';
 import { 
-  Button, 
-  ButtonVariant 
+  Button
 } from '@wideo11/ui/button';
 import { 
   Separator 
@@ -9,19 +7,19 @@ import {
 import { 
   Play, 
   Pause, 
-  Stop, 
+  Square, 
   Undo, 
   Redo, 
   Copy, 
-  Paste, 
-  Save, 
-  Export, 
+  Download, 
   Settings, 
   Plus, 
   Scissors,
-  Razor,
+  Music,
+  Type,
   ZoomIn,
-  ZoomOut
+  ZoomOut,
+  Film
 } from 'lucide-react';
 import { 
   DropdownMenu, 
@@ -67,7 +65,7 @@ export function Toolbar({
       {/* Playback Controls */}
       <div className="mr-6 flex items-center space-x-2">
         <Button variant="ghost" size="icon" onClick={onStop}>
-          <Stop className="h-4 w-4" />
+          <Square className="h-4 w-4" />
         </Button>
         <Button variant="ghost" size="icon" onClick={onPlayPause}>
           {/* Would dynamically change based on playing state */}
@@ -101,11 +99,11 @@ export function Toolbar({
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onSplit}>
-              <Razor className="mr-2 h-4 w-4" /> Split Clip
+              <Scissors className="mr-2 h-4 w-4" /> Split Clip
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </Div>
+      </div>
       
       {/* Zoom Controls */}
       <div className="mr-6 flex items-center space-x-2">
@@ -129,7 +127,7 @@ export function Toolbar({
       
       {/* Export Button */}
       <Button variant="default" size="icon" onClick={onExport} className="mr-2">
-        <Export className="h-4 w-4" />
+        <Download className="h-4 w-4" />
       </Button>
       
       {/* Settings Button */}

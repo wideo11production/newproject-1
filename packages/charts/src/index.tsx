@@ -1,10 +1,11 @@
+"use client"
 import React, { useEffect, useRef } from 'react';
 import * as echarts from 'echarts/core';
-import type { EChartsType, EChartsOption } from 'echarts/core';
-import { use, useMemo } from 'react';
+import type { EChartsType, EChartsCoreOption } from 'echarts/core';
+import { useMemo } from 'react';
 
 export interface ChartProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'opt'> {
-  option: EChartsOption;
+  option: EChartsCoreOption;
   loading?: boolean;
   theme?: 'light' | 'dark';
   height?: string | number;
@@ -14,7 +15,7 @@ export interface ChartProps extends Omit<React.HTMLAttributes<HTMLDivElement>, '
   onChartReady?: (chart: echarts.EChartsType) => void;
 }
 
-export const useChart = (option: EChartsOption, theme: 'light' | 'dark' = 'dark') => {
+export const useChart = (option: EChartsCoreOption, theme: 'light' | 'dark' = 'dark') => {
   const chartRef = useRef<echarts.EChartsType | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -69,7 +70,7 @@ export const Chart: React.FC<ChartProps> = ({
 };
 
 export const TimeSeriesChart: React.FC<ChartProps> = ({ option, ...props }) => {
-  const defaultOption: EChartsOption = useMemo(() => ({
+  const defaultOption: EChartsCoreOption = useMemo(() => ({
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#1e1e1e',
@@ -112,7 +113,7 @@ export const TimeSeriesChart: React.FC<ChartProps> = ({ option, ...props }) => {
 };
 
 export const StatChart: React.FC<ChartProps> = ({ option, ...props }) => {
-  const defaultOption: EChartsOption = useMemo(() => ({
+  const defaultOption: EChartsCoreOption = useMemo(() => ({
     tooltip: {
       trigger: 'item',
       backgroundColor: '#1e1e1e',
@@ -155,7 +156,7 @@ export const TableChart: React.FC<ChartProps> = ({ option, ...props }) => {
 };
 
 export const BarChart: React.FC<ChartProps> = ({ option, ...props }) => {
-  const defaultOption: EChartsOption = useMemo(() => ({
+  const defaultOption: EChartsCoreOption = useMemo(() => ({
     tooltip: {
       trigger: 'axis',
       axisPointer: {
@@ -212,7 +213,7 @@ export const LogsChart: React.FC<ChartProps> = ({ option, ...props }) => {
 
 export {
   ECharts,
-  EChartsOption as ChartOption,
+  EChartsCoreOption as ChartOption,
 };
 
 export type { EChartsType as EChartsInstance };
