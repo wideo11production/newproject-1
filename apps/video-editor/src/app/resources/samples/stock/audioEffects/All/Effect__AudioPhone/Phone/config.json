@@ -1,0 +1,61 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioPhone",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Phone",
+					"groupId": "75ec87aa-b009-4e27-8b9a-716e5c8eca42",
+					"id": "75ec87aa-b009-4e27-8b9a-716e5c8eca42",
+					"intensity": 0.67,
+					"itemUniqueId": "d903b3bc-8e50-4324-bf7e-dbe71ef7cea6",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Phone"
+				}
+			},
+			"gainDown": 75,
+			"gainUp": 30,
+			"lBound": 200,
+			"rBound": 8000
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "d903b3bc-8e50-4324-bf7e-dbe71ef7cea6"
+	},
+	"version": "1.0"
+}

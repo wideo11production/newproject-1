@@ -1,0 +1,66 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::ManualEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "GoldenHour",
+					"groupId": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"id": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"intensity": 1.0,
+					"itemUniqueId": "5351fbf7-60fe-42ab-8e8e-6246362fb8b7",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "GoldenHour"
+				}
+			},
+			"brightness": -0.09,
+			"contrast": -0.08,
+			"gamma": 0.03,
+			"highlights": -0.3,
+			"hue": -0.02,
+			"saturation": 0.05,
+			"shadows": 0.59,
+			"temperature": 0.2,
+			"tint": -0.03
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "5351fbf7-60fe-42ab-8e8e-6246362fb8b7"
+	},
+	"version": "1.0"
+}

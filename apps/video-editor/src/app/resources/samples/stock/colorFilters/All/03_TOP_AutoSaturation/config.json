@@ -1,0 +1,57 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AutoSaturation",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "#TOP_ITEM#AutoSaturation",
+					"groupId": "96d1bead-399f-43a1-a448-b1e3ff7ddf80",
+					"id": "96d1bead-399f-43a1-a448-b1e3ff7ddf80",
+					"intensity": 1.0,
+					"itemUniqueId": "e1b6eb40-044a-42fc-8117-a4768395d592",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "#TOP_ITEM#AutoSaturation"
+				}
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "e1b6eb40-044a-42fc-8117-a4768395d592"
+	},
+	"version": "1.0"
+}

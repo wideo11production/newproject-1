@@ -1,0 +1,58 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::WhiteBalance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "#TOP_ITEM#AutoWhiteBalance",
+					"groupId": "4b7ee600-1cdf-4a97-9b06-f6c23f35fced",
+					"id": "4b7ee600-1cdf-4a97-9b06-f6c23f35fced",
+					"intensity": 1.0,
+					"itemUniqueId": "8aca1024-f16d-4885-95dc-0e217015fb21",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "#TOP_ITEM#AutoWhiteBalance"
+				}
+			},
+			"color": 4278190080
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "8aca1024-f16d-4885-95dc-0e217015fb21"
+	},
+	"version": "1.0"
+}

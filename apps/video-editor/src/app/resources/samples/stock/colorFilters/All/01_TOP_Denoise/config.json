@@ -1,0 +1,146 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::VideoDenoise",
+				"object_id": 1
+			},
+			"Effect::EffectsHolder": {
+				"@meta": {
+					"class_name": "Effect::EffectsHolder",
+					"object_id": 2
+				},
+				"Effect::EffectDescriptor": {
+					"@meta": {
+						"class_name": "Effect::EffectDescriptor",
+						"object_id": 3
+					},
+					"Effect::Object": {
+						"@meta": {
+							"class_name": "Effect::Object",
+							"object_id": 4
+						},
+						"auxResource": {
+							"element_0": "",
+							"element_1": 0
+						},
+						"bypass": false,
+						"description": "#TOP_ITEM#VideoDenoiseAI",
+						"groupId": "b117721e-3e3b-afc3-9634-4fce508a5b92",
+						"id": "b117721e-3e3b-afc3-9634-4fce508a5b92",
+						"intensity": 1.0,
+						"itemUniqueId": "f2d2b597-4bc4-c7ac-84c7-5059026281ce",
+						"processedRange": {
+							"@meta": {
+								"class_name": "Types::Range",
+								"object_id": 5
+							},
+							"from": 0,
+							"to": -1
+						},
+						"resourcePath": "",
+						"tag": "#TOP_ITEM#VideoDenoiseAI"
+					}
+				},
+				"effects": [
+					{
+						"@meta": {
+							"class_name": "Effect::VideoDenoise3D",
+							"object_id": 6
+						},
+						"Effect::VideoFilter": {
+							"@meta": {
+								"class_name": "Effect::VideoFilter",
+								"object_id": 7
+							},
+							"Effect::Object": {
+								"@meta": {
+									"class_name": "Effect::Object",
+									"object_id": 8
+								},
+								"auxResource": {
+									"element_0": "",
+									"element_1": 0
+								},
+								"bypass": false,
+								"description": "",
+								"groupId": "4c695d2d-d57e-4083-b32d-87e41322980c",
+								"id": "4c695d2d-d57e-4083-b32d-87e41322980c",
+								"intensity": 1.0,
+								"itemUniqueId": "",
+								"processedRange": {
+									"@meta": {
+										"class_name": "Types::Range",
+										"object_id": 9
+									},
+									"from": 0,
+									"to": -1
+								},
+								"resourcePath": "",
+								"tag": "effect_video_denoise3d"
+							}
+						},
+						"chromaSpatial": 14.0,
+						"chromaTemporal": 7.0,
+						"lumaSpatial": 14.0,
+						"lumaTemporal": 7.0
+					},
+					{
+						"@meta": {
+							"class_name": "Effect::AdaptiveSharpen",
+							"object_id": 10
+						},
+						"Effect::VideoEffect": {
+							"@meta": {
+								"class_name": "Effect::VideoEffect",
+								"object_id": 11
+							},
+							"Effect::Object": {
+								"@meta": {
+									"class_name": "Effect::Object",
+									"object_id": 12
+								},
+								"auxResource": {
+									"element_0": "",
+									"element_1": 0
+								},
+								"bypass": false,
+								"description": "",
+								"groupId": "98f24004-08ce-042b-3b51-2f10b9f64bcd",
+								"id": "98f24004-08ce-042b-3b51-2f10b9f64bcd",
+								"intensity": 1.0,
+								"itemUniqueId": "",
+								"processedRange": {
+									"@meta": {
+										"class_name": "Types::Range",
+										"object_id": 13
+									},
+									"from": 0,
+									"to": -1
+								},
+								"resourcePath": "",
+								"tag": "effect_adaptive_sharpen"
+							}
+						},
+						"sharpenStrength": 0.7
+					}
+				]
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "f2d2b597-4bc4-c7ac-84c7-5059026281ce"
+	},
+	"version": "1.0"
+}

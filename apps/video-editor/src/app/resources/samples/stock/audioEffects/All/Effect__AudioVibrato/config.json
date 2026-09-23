@@ -1,0 +1,58 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioVibrato",
+				"object_id": 1
+			},
+			"Effect::AudioEffect": {
+				"@meta": {
+					"class_name": "Effect::AudioEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Vibrato",
+					"groupId": "5hv7ahhu-kmfe-rbyp-5sy2-v6rvzgb6pvg8",
+					"id": "5hv7ahhu-kmfe-rbyp-5sy2-v6rvzgb6pvg8",
+					"intensity": 0.8,
+					"itemUniqueId": "d32c2a90-1038-41f9-ab9f-73a6eb9f6a4b",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Vibrato"
+				}
+			},
+			"frequencyHz": 15.0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "d32c2a90-1038-41f9-ab9f-73a6eb9f6a4b"
+	},
+	"version": "1.0"
+}

@@ -1,0 +1,58 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioPitch",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "PitchVeryLow",
+					"groupId": "6282435b-aef6-47fd-a234-9eb95a83ea58",
+					"id": "6282435b-aef6-47fd-a234-9eb95a83ea58",
+					"intensity": 1.0,
+					"itemUniqueId": "ed654ba2-146c-4185-940e-b7e7ab4ee728",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "PitchVeryLow"
+				}
+			},
+			"pitch": 1.5
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "ed654ba2-146c-4185-940e-b7e7ab4ee728"
+	},
+	"version": "1.0"
+}

@@ -1,0 +1,57 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::MagicEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "#TOP_ITEM#MagicEnhance",
+					"groupId": "2292fad1-77b2-4384-b9fe-c52358e19419",
+					"id": "2292fad1-77b2-4384-b9fe-c52358e19419",
+					"intensity": 1.0,
+					"itemUniqueId": "d9458359-301d-4e71-b83b-f358f766d859",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "#TOP_ITEM#MagicEnhance"
+				}
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "d9458359-301d-4e71-b83b-f358f766d859"
+	},
+	"version": "1.0"
+}

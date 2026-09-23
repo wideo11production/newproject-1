@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 // Next.js processes this global stylesheet, even when TypeScript cannot resolve its declaration.
-// @ts-expect-error -- global CSS is supported by the Next.js bundler.
 import './globals.css';
 import { ReactNode, Suspense } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

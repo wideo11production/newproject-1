@@ -1,0 +1,15 @@
+{
+	"themeName" : {
+		"en_US":"Dark",
+		"ru_RU":"Тёмная",
+		"de_DE":"Dunkel",
+		"es_ES":"Oscuro",
+		"fr_FR":"Foncé",
+		"it_IT":"Scuro",
+		"ja_JP":"濃い",
+		"nl_NL":"Donker",
+		"pl_PL":"Ciemny",
+		"pt_BR":"Escuro",
+		"tr_TR":"Koyu"
+	}
+}

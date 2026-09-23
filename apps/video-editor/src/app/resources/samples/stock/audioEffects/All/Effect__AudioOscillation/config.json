@@ -1,0 +1,64 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioFlanger",
+				"object_id": 1
+			},
+			"Effect::AudioEffect": {
+				"@meta": {
+					"class_name": "Effect::AudioEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Oscillation",
+					"groupId": "4xs5ynjf-bvz3-evjm-wqy4-rxzzjrxfgwzk",
+					"id": "4xs5ynjf-bvz3-evjm-wqy4-rxzzjrxfgwzk",
+					"intensity": 1.0,
+					"itemUniqueId": "5b4134df-cd30-4763-8d96-fc0ed5ed1245",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Oscillation"
+				}
+			},
+			"delay": 30,
+			"depth": 10,
+			"interpolation": 0,
+			"phase": 25.0,
+			"regen": 0.0,
+			"shape": 1,
+			"speed": 10.0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "5b4134df-cd30-4763-8d96-fc0ed5ed1245"
+	},
+	"version": "1.0"
+}

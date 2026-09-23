@@ -1,0 +1,66 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::ManualEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "BlueMoon",
+					"groupId": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"id": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"intensity": 1.0,
+					"itemUniqueId": "4a040d40-15b0-4879-b247-b738daab2072",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "BlueMoon"
+				}
+			},
+			"brightness": -0.66,
+			"contrast": 0.13,
+			"gamma": 0.1,
+			"highlights": -0.19,
+			"hue": -0.04,
+			"saturation": 0.16,
+			"shadows": -0.14,
+			"temperature": -0.56,
+			"tint": -0.07
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "4a040d40-15b0-4879-b247-b738daab2072"
+	},
+	"version": "1.0"
+}

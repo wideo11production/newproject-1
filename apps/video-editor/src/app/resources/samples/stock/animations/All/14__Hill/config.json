@@ -1,0 +1,274 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			"category_span"
+		],
+		"collectionId": "Animations",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Envelope::TransformationPreset",
+				"object_id": 1
+			},
+			"description": "",
+			"itemUniqueId": "ef600573-e746-4c80-ba7a-67697023321e",
+			"resourcePath": "",
+			"sourceDuration": 2000,
+			"tag": "hill",
+			"transformation": {
+				"@meta": {
+					"class_name": "TransformationEnvelope",
+					"object_id": 2
+				},
+				"defaultValue": {
+					"@meta": {
+						"class_name": "Transformation::Object",
+						"object_id": 3
+					},
+					"matrix": {
+						"m11": 1.0,
+						"m12": 0.0,
+						"m13": 0.0,
+						"m21": 0.0,
+						"m22": 1.0,
+						"m23": 0.0,
+						"m31": 0.0,
+						"m32": 0.0,
+						"m33": 1.0
+					},
+					"opacity": 100
+				},
+				"keyValues": [
+					{
+						"@meta": {
+							"class_name": "AnimationTransformationKeyValue",
+							"object_id": 4
+						},
+						"interpolationPreset": {
+							"@meta": {
+								"class_name": "Interpolation::BezierInterpolation",
+								"object_id": 6
+							},
+							"description": "Linear_Bezier",
+							"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+							"postTangent": {
+								"x": 1.0,
+								"y": 1.0
+							},
+							"preTangent": {
+								"x": 0.0,
+								"y": 0.0
+							},
+							"resourcePath": "",
+							"tag": "Linear"
+						},
+						"step": 0.0,
+						"value": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 5
+							},
+							"matrix": {
+								"m11": 0.9999604052664662,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 0.9999604052664675,
+								"m23": 0.0,
+								"m31": -1.0006051778865248,
+								"m32": 1.0010912697501964,
+								"m33": 1.0
+							},
+							"opacity": 100
+						}
+					},
+					{
+						"@meta": {
+							"class_name": "AnimationTransformationKeyValue",
+							"object_id": 7
+						},
+						"interpolationPreset": {
+							"@meta": {
+								"class_name": "Interpolation::BezierInterpolation",
+								"object_id": 9
+							},
+							"description": "Linear_Bezier",
+							"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+							"postTangent": {
+								"x": 1.0,
+								"y": 1.0
+							},
+							"preTangent": {
+								"x": 0.0,
+								"y": 0.0
+							},
+							"resourcePath": "",
+							"tag": "Linear"
+						},
+						"step": 0.25899999999999995,
+						"value": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 8
+							},
+							"matrix": {
+								"m11": 0.9980041148759142,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 0.9980041148759171,
+								"m23": 0.0,
+								"m31": -0.24368323885105073,
+								"m32": 0.12113397422241165,
+								"m33": 1.0
+							},
+							"opacity": 100
+						}
+					},
+					{
+						"@meta": {
+							"class_name": "AnimationTransformationKeyValue",
+							"object_id": 10
+						},
+						"interpolationPreset": {
+							"@meta": {
+								"class_name": "Interpolation::BezierInterpolation",
+								"object_id": 12
+							},
+							"description": "Linear_Bezier",
+							"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+							"postTangent": {
+								"x": 1.0,
+								"y": 1.0
+							},
+							"preTangent": {
+								"x": 0.0,
+								"y": 0.0
+							},
+							"resourcePath": "",
+							"tag": "Linear"
+						},
+						"step": 0.5125,
+						"value": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 11
+							},
+							"matrix": {
+								"m11": 0.996096452100661,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 0.9960964521006556,
+								"m23": 0.0,
+								"m31": 0.0008441804077819625,
+								"m32": 0.0008450001140986766,
+								"m33": 1.0
+							},
+							"opacity": 100
+						}
+					},
+					{
+						"@meta": {
+							"class_name": "AnimationTransformationKeyValue",
+							"object_id": 13
+						},
+						"interpolationPreset": {
+							"@meta": {
+								"class_name": "Interpolation::BezierInterpolation",
+								"object_id": 15
+							},
+							"description": "Linear_Bezier",
+							"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+							"postTangent": {
+								"x": 1.0,
+								"y": 1.0
+							},
+							"preTangent": {
+								"x": 0.0,
+								"y": 0.0
+							},
+							"resourcePath": "",
+							"tag": "Linear"
+						},
+						"step": 0.743,
+						"value": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 14
+							},
+							"matrix": {
+								"m11": 0.9967649752473933,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 0.9967649752473956,
+								"m23": 0.0,
+								"m31": 0.24083426420083667,
+								"m32": 0.14196240890807416,
+								"m33": 1.0
+							},
+							"opacity": 100
+						}
+					},
+					{
+						"@meta": {
+							"class_name": "AnimationTransformationKeyValue",
+							"object_id": 16
+						},
+						"interpolationPreset": {
+							"@meta": {
+								"class_name": "Interpolation::BezierInterpolation",
+								"object_id": 18
+							},
+							"description": "Linear_Bezier",
+							"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+							"postTangent": {
+								"x": 1.0,
+								"y": 1.0
+							},
+							"preTangent": {
+								"x": 0.0,
+								"y": 0.0
+							},
+							"resourcePath": "",
+							"tag": "Linear"
+						},
+						"step": 1.0,
+						"value": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 17
+							},
+							"matrix": {
+								"m11": 0.9975089768140601,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 0.9975089768140577,
+								"m23": 0.0,
+								"m31": 0.9993779315175388,
+								"m32": 0.9998628317146,
+								"m33": 1.0
+							},
+							"opacity": 100
+						}
+					}
+				]
+			},
+			"type": 0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "ef600573-e746-4c80-ba7a-67697023321e"
+	},
+	"version": "1.0"
+}

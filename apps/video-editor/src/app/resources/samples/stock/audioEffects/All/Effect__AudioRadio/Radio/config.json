@@ -1,0 +1,63 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioRadio",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Radio",
+					"groupId": "4c412762-56f7-4703-a840-ea2ccf5f7321",
+					"id": "4c412762-56f7-4703-a840-ea2ccf5f7321",
+					"intensity": 1.0,
+					"itemUniqueId": "f03b95f5-2ac4-43ef-a0fa-b7be8ca88dae",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Radio"
+				}
+			},
+			"crackleP": 8,
+			"gainDown": 50,
+			"gainUp": 20,
+			"lBound": 200,
+			"noise": 0.05,
+			"rBound": 8000
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "f03b95f5-2ac4-43ef-a0fa-b7be8ca88dae"
+	},
+	"version": "1.0"
+}

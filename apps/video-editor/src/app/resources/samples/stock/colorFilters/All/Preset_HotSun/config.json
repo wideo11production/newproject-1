@@ -1,0 +1,66 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::ManualEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "HotSun",
+					"groupId": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"id": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"intensity": 1.0,
+					"itemUniqueId": "c2bb4e8f-a4a6-42c7-a5fa-8b6d413d56c1",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "HotSun"
+				}
+			},
+			"brightness": -0.11,
+			"contrast": -0.35,
+			"gamma": 0.26,
+			"highlights": 0.22,
+			"hue": 0.03,
+			"saturation": 0.15,
+			"shadows": -0.26,
+			"temperature": 0.5,
+			"tint": -0.08
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "c2bb4e8f-a4a6-42c7-a5fa-8b6d413d56c1"
+	},
+	"version": "1.0"
+}

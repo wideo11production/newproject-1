@@ -1,0 +1,66 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::ManualEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "NaturalTone",
+					"groupId": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"id": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"intensity": 1.0,
+					"itemUniqueId": "768c6966-3e1b-447e-b5ef-eba77ac133bd",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "NaturalTone"
+				}
+			},
+			"brightness": 0.03,
+			"contrast": 0.13,
+			"gamma": 0.04,
+			"highlights": 0.09,
+			"hue": -0.02,
+			"saturation": 0.05,
+			"shadows": -0.14,
+			"temperature": -0.04,
+			"tint": 0.0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "768c6966-3e1b-447e-b5ef-eba77ac133bd"
+	},
+	"version": "1.0"
+}

@@ -1,0 +1,68 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "PipEffects",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::PictureInPicture",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "effect_picture_in_picture",
+					"groupId": "bf86d91d-8347-4030-9e6c-2872dfcf1628",
+					"id": "f60a32dd-2591-4cd3-859a-69f9c6a6838f",
+					"intensity": 1.0,
+					"itemUniqueId": "2d9a695c-fece-4b8e-99b5-b43aa873651e",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "effect_picture_in_picture"
+				}
+			},
+			"transform": {
+				"m11": 0.5,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 0.5,
+				"m23": 0.0,
+				"m31": 0.25,
+				"m32": 0.25,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "2d9a695c-fece-4b8e-99b5-b43aa873651e"
+	},
+	"version": "1.0"
+}

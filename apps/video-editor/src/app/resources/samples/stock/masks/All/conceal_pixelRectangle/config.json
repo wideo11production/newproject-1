@@ -1,0 +1,104 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "Masks",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::Mask",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "conceal_pixel_rectangle",
+					"groupId": "b1c2b46d-c898-4874-9619-a1c58992162c",
+					"id": "b1c2b46d-c898-4874-9619-a1c58992162c",
+					"intensity": 1.0,
+					"itemUniqueId": "960b35b1-e3b0-4776-b876-cd874f33772a",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "conceal_pixel_rectangle"
+				}
+			},
+			"backgroundFill": 0,
+			"backgroundOpacity": 0.5,
+			"backgroundSmoothness": 0.0,
+			"concealFrames": [
+				{
+					"@meta": {
+						"class_name": "Effect::FrameConceal",
+						"object_id": 5
+					},
+					"Effect::Frame": {
+						"@meta": {
+							"class_name": "Effect::Frame",
+							"object_id": 6
+						},
+						"outline": false,
+						"shape": 0,
+						"trackingId": "",
+						"trackingTransform": {
+							"m11": 1.0,
+							"m12": 0.0,
+							"m13": 0.0,
+							"m21": 0.0,
+							"m22": 1.0,
+							"m23": 0.0,
+							"m31": 0.0,
+							"m32": 0.0,
+							"m33": 1.0
+						},
+						"transform": {
+							"m11": 0.5,
+							"m12": 0.0,
+							"m13": 0.0,
+							"m21": 0.0,
+							"m22": 0.5,
+							"m23": 0.0,
+							"m31": 0.0,
+							"m32": 0.0,
+							"m33": 1.0
+						}
+					},
+					"method": 2,
+					"opacity": 1.0,
+					"pixelSize": 0.1,
+					"smoothness": 0.0
+				}
+			],
+			"highlightFrames": []
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "960b35b1-e3b0-4776-b876-cd874f33772a"
+	},
+	"version": "1.0"
+}

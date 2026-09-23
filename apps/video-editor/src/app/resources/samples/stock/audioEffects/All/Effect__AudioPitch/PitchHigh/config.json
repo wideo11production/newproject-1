@@ -1,0 +1,58 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioPitch",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "PitchHigh",
+					"groupId": "6282435b-aef6-47fd-a234-9eb95a83ea58",
+					"id": "6282435b-aef6-47fd-a234-9eb95a83ea58",
+					"intensity": 0.5,
+					"itemUniqueId": "e9247aa6-9b64-4a8b-89b0-8be0b3937f87",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "PitchHigh"
+				}
+			},
+			"pitch": 0.6
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "e9247aa6-9b64-4a8b-89b0-8be0b3937f87"
+	},
+	"version": "1.0"
+}

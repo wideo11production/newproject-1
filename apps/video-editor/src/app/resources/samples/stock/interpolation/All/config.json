@@ -1,0 +1,37 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "Interpolations",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Interpolation::BezierInterpolation",
+				"object_id": 1
+			},
+			"description": "Linear_Bezier",
+			"itemUniqueId": "25a4d849-341c-4977-9e33-e94c740f7812",
+			"postTangent": {
+				"x": 1.0,
+				"y": 1.0
+			},
+			"preTangent": {
+				"x": 0.0,
+				"y": 0.0
+			},
+			"resourcePath": "",
+			"tag": "Linear"
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 0,
+		"resourceUrl": "",
+		"uniqueId": "25a4d849-341c-4977-9e33-e94c740f7812"
+	},
+	"version": "1.0"
+}

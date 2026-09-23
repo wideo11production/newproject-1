@@ -1,0 +1,66 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::ManualEnhance",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "RubyRose",
+					"groupId": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"id": "7cbc055b-98bf-4fcc-be7d-f431a05e608a",
+					"intensity": 1.0,
+					"itemUniqueId": "d2ad54b9-3f7f-447b-af9b-21212c7c375b",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "RubyRose"
+				}
+			},
+			"brightness": -0.02,
+			"contrast": -0.32,
+			"gamma": 0.18,
+			"highlights": 0.25,
+			"hue": -0.05,
+			"saturation": 0.12,
+			"shadows": -0.14,
+			"temperature": 0.03,
+			"tint": -0.34
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "d2ad54b9-3f7f-447b-af9b-21212c7c375b"
+	},
+	"version": "1.0"
+}

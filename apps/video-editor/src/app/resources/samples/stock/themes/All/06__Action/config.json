@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_ENERGETIC",
+			"description": "For action videos Action music",
+			"itemUniqueId": "8db9732e-3cd2-4f8e-9a28-d639de3dab84",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/actiontheme3.mpack",
+			"tag": "Action3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 20299865,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Action_theme3.mpack",
+		"uniqueId": "8db9732e-3cd2-4f8e-9a28-d639de3dab84"
+	},
+	"version": "1.0"
+}

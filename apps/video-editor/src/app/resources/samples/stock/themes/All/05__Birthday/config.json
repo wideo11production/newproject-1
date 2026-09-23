@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_UPBEAT",
+			"description": "For birthday videos Birthday music",
+			"itemUniqueId": "84eb6104-6189-4789-ae4f-b37fab2adc8b",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/birthdaytheme3.mpack",
+			"tag": "Birthday3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 14599861,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Birthday_theme3.mpack",
+		"uniqueId": "84eb6104-6189-4789-ae4f-b37fab2adc8b"
+	},
+	"version": "1.0"
+}

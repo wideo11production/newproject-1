@@ -1,0 +1,135 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "Subtitle",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Overlay::Preset",
+				"object_id": 1
+			},
+			"description": "#TOP_ITEM# No preset",
+			"fontsDir": "",
+			"itemUniqueId": "6f8693a7-2999-43af-af8b-1f6e5437c9e1",
+			"items": [
+				{
+					"@meta": {
+						"class_name": "Overlay::Item",
+						"object_id": 2
+					},
+                    "activeWordStyle": {
+                        "@meta": {
+                            "class_name": "Overlay::ActiveWordStyle",
+                            "object_id": 7
+                        },
+                        "backgroundColor": 0,
+                        "bold": true,
+                        "enabled": false,
+                        "fontFamily": "Open Sans",
+                        "fontSize": 34,
+                        "italic": false,
+                        "outline": {
+                            "@meta": {
+                                "class_name": "Types::Pen",
+                                "object_id": 8
+                            },
+                            "color": 4278190080,
+                            "enabled": false,
+                            "width": 0
+                        },
+                        "textColor": 4294901760,
+                        "underline": false
+                    },
+					"arcRadius": 0.0,
+					"dropShadow": {
+						"@meta": {
+							"class_name": "Overlay::DropShadow",
+							"object_id": 6
+						},
+						"blurRadius": 1,
+						"color": 3024043839,
+						"enabled": false,
+						"offsetX": 4,
+						"offsetY": 4
+					},
+					"editTime": 1.0,
+					"editable": true,
+					"envelope": {
+						"@meta": {
+							"class_name": "TransformationEnvelope",
+							"object_id": 3
+						},
+						"defaultValue": {
+							"@meta": {
+								"class_name": "Transformation::Object",
+								"object_id": 4
+							},
+							"matrix": {
+								"m11": 1.0,
+								"m12": 0.0,
+								"m13": 0.0,
+								"m21": 0.0,
+								"m22": 1.0,
+								"m23": 0.0,
+								"m31": 0.0,
+								"m32": 0.0,
+								"m33": 1.0
+							},
+							"opacity": 100
+						},
+						"keyValues": []
+					},
+					"features": 4,
+					"from": 0.0,
+					"intro": 0.0,
+					"outline": {
+						"@meta": {
+							"class_name": "Types::Pen",
+							"object_id": 5
+						},
+						"color": 4278190080,
+						"enabled": false,
+						"width": 0
+					},
+					"outro": 0.0,
+					"resourcesInfo": [],
+					"scriptRole": "",
+					"text": "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0//EN\" \"http://www.w3.org/TR/REC-html40/strict.dtd\">\n<html><head><meta name=\"qrichtext\" content=\"1\" /><style type=\"text/css\">\np, li { white-space: pre-wrap; }\n</style></head><body style=\" font-family:'Open Sans'; font-size:34pt; font-weight:600; font-style:normal;\" bgcolor=\"transparent\">\n<p align=\"center\" style=\" margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;\"><span style=\" color:#ffffff;\">No preset</span></p></body></html><!-- background-enabled:1; background-color:4278190080; -->\n\n\n\n",
+					"textWidth": 1925.0,
+					"to": 1.0,
+					"transform": {
+						"m11": 0.625,
+						"m12": 0.0,
+						"m13": 0.0,
+						"m21": 0.0,
+						"m22": 0.625,
+						"m23": 0.0,
+						"m31": 38.43750000000009,
+						"m32": 639.0,
+						"m33": 1.0
+					},
+					"type": 64,
+					"verticalPositionHint": 1
+				}
+			],
+			"resourcePath": "",
+			"scriptId": "SubtitleActiveWord",
+			"scriptSpeed": 1.0,
+			"sourceDuration": 0,
+			"tag": "#TOP_ITEM# No preset",
+			"type": 4
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "6f8693a7-2999-43af-af8b-1f6e5437c9e1"
+	},
+	"version": "1.0"
+}

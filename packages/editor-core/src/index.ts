@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { useStore } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export interface Track {
@@ -70,7 +69,7 @@ export interface Marker {
   color: string;
 }
 
-export const useTimelineStore = useStore<TimelineStore>(
+export const useTimelineStore = create<TimelineStore>()(
   persist(
     (set, get) => ({
       tracks: [],
@@ -170,10 +169,10 @@ export const useTimelineStore = useStore<TimelineStore>(
 );
 
 export class TimelineEngine {
-  private store: TimelineStore;
+  private store: StoreApi<TimelineStore>;
   private animationFrameId: number | null = null;
 
-  constructor(store: TimelineStore) {
+  constructor(store: StoreApi<TimelineStore>) {
     this.store = store;
   }
 
@@ -402,7 +401,7 @@ export class AutosaveEngine {
   }
 
   private save() {
-    const state = this.store.getState();
+    const state = this.store;
     const snapshot = {
       tracks: state.tracks,
       currentTime: state.currentTime,
@@ -444,5 +443,3 @@ export class AutosaveEngine {
     return now - lastActiveTime > 30000;
   }
 }
-
-

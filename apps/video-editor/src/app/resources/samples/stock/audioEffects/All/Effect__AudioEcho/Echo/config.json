@@ -1,0 +1,77 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioEcho",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Echo",
+					"groupId": "2f95ac2d-7ee2-4f3e-8391-9a1ee8674521",
+					"id": "2f95ac2d-7ee2-4f3e-8391-9a1ee8674521",
+					"intensity": 1.0,
+					"itemUniqueId": "e99cca78-209d-42fa-bbe2-5391f63fb9f1",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Echo"
+				}
+			},
+			"echos": [
+				{
+					"@meta": {
+						"class_name": "Effect::AudioEcho::Echo",
+						"object_id": 5
+					},
+					"decay": 0.5,
+					"delay": 300
+				},
+				{
+					"@meta": {
+						"class_name": "Effect::AudioEcho::Echo",
+						"object_id": 6
+					},
+					"decay": 0.2,
+					"delay": 600
+				}
+			],
+			"gainIn": 1.0,
+			"gainOut": 1.0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "e99cca78-209d-42fa-bbe2-5391f63fb9f1"
+	},
+	"version": "1.0"
+}

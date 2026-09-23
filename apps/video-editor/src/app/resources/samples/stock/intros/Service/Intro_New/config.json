@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			"category_my_intros"
+		],
+		"collectionId": "Intro",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "category_my_intros",
+			"description": "#TOP_ITEM#New intro",
+			"itemUniqueId": "f8cc3c0d-5565-4a17-a8bc-47d7177e9b33",
+			"kind": 4,
+			"resourcePath": "resources/intro.bundle",
+			"tag": "#TOP_ITEM#New intro",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "f8cc3c0d-5565-4a17-a8bc-47d7177e9b33"
+	},
+	"version": "1.0"
+}

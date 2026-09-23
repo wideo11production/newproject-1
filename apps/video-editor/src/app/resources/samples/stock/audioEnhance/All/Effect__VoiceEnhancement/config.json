@@ -1,0 +1,233 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "AudioEnhance",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioEnhance",
+				"object_id": 1
+			},
+			"Effect::EffectsHolder": {
+				"@meta": {
+					"class_name": "Effect::EffectsHolder",
+					"object_id": 2
+				},
+				"Effect::EffectDescriptor": {
+					"@meta": {
+						"class_name": "Effect::EffectDescriptor",
+						"object_id": 3
+					},
+					"Effect::Object": {
+						"@meta": {
+							"class_name": "Effect::Object",
+							"object_id": 4
+						},
+						"auxResource": {
+							"element_0": "",
+							"element_1": 0
+						},
+						"bypass": false,
+						"description": "VoiceEnhancement",
+						"groupId": "ufcj22tb-5tjx-v4xm-gtd4-m6n53eceqxfu",
+						"id": "ufcj22tb-5tjx-v4xm-gtd4-m6n53eceqxfu",
+						"intensity": 1.0,
+						"itemUniqueId": "e95fd299-666c-4911-8829-2069e4d39ccb",
+						"processedRange": {
+							"@meta": {
+								"class_name": "Types::Range",
+								"object_id": 5
+							},
+							"from": 0,
+							"to": -1
+						},
+						"resourcePath": "",
+						"tag": "VoiceEnhancement"
+					}
+				},
+				"effects": [
+					{
+						"@meta": {
+							"class_name": "Effect::AudioNoiseSuppress",
+							"object_id": 6
+						},
+						"Effect::AudioFilter": {
+							"@meta": {
+								"class_name": "Effect::AudioFilter",
+								"object_id": 7
+							},
+							"Effect::Object": {
+								"@meta": {
+									"class_name": "Effect::Object",
+									"object_id": 8
+								},
+								"auxResource": {
+									"element_0": "",
+									"element_1": 0
+								},
+								"bypass": false,
+								"description": "effect_noisesuppress",
+								"groupId": "4b8b30d0-f345-48c1-b8d3-acca60bf2083",
+								"id": "08fa3c82-5bea-4629-b7d5-d62b5bc3f7e5",
+								"intensity": 1.0,
+								"itemUniqueId": "",
+								"processedRange": {
+									"@meta": {
+										"class_name": "Types::Range",
+										"object_id": 9
+									},
+									"from": 0,
+									"to": -1
+								},
+								"resourcePath": "",
+								"tag": "effect_noisesuppress"
+							}
+						},
+						"levelPercent": 50
+					},
+					{
+						"@meta": {
+							"class_name": "Effect::AudioEqualizer",
+							"object_id": 10
+						},
+						"Effect::AudioFilter": {
+							"@meta": {
+								"class_name": "Effect::AudioFilter",
+								"object_id": 11
+							},
+							"Effect::Object": {
+								"@meta": {
+									"class_name": "Effect::Object",
+									"object_id": 12
+								},
+								"auxResource": {
+									"element_0": "",
+									"element_1": 0
+								},
+								"bypass": false,
+								"description": "effect_audioequalizer",
+								"groupId": "edb66866-0bfe-40ad-9669-7152e1e31a1d",
+								"id": "edb66866-0bfe-40ad-9669-7152e1e31a1d",
+								"intensity": 1.0,
+								"itemUniqueId": "",
+								"processedRange": {
+									"@meta": {
+										"class_name": "Types::Range",
+										"object_id": 13
+									},
+									"from": 0,
+									"to": -1
+								},
+								"resourcePath": "",
+								"tag": "effect_audioequalizer"
+							}
+						},
+						"multiband": [
+							{
+								"@meta": {
+									"class_name": "Effect::AudioEqualizer::BandEq",
+									"object_id": 14
+								},
+								"centralFrequency": 31,
+								"gain": -20.0
+							},
+							{
+								"@meta": {
+									"class_name": "Effect::AudioEqualizer::BandEq",
+									"object_id": 15
+								},
+								"centralFrequency": 63,
+								"gain": -20.0
+							},
+							{
+								"@meta": {
+									"class_name": "Effect::AudioEqualizer::BandEq",
+									"object_id": 16
+								},
+								"centralFrequency": 125,
+								"gain": 4.0
+							},
+							{
+								"@meta": {
+									"class_name": "Effect::AudioEqualizer::BandEq",
+									"object_id": 17
+								},
+								"centralFrequency": 250,
+								"gain": -4.0
+							},
+							{
+								"@meta": {
+									"class_name": "Effect::AudioEqualizer::BandEq",
+									"object_id": 18
+								},
+								"centralFrequency": 2000,
+								"gain": 4.0
+							}
+						],
+						"preset": 1,
+						"presetName": ""
+					},
+					{
+						"@meta": {
+							"class_name": "Effect::AudioCompressor",
+							"object_id": 19
+						},
+						"Effect::AudioEffect": {
+							"@meta": {
+								"class_name": "Effect::AudioEffect",
+								"object_id": 20
+							},
+							"Effect::Object": {
+								"@meta": {
+									"class_name": "Effect::Object",
+									"object_id": 21
+								},
+								"auxResource": {
+									"element_0": "",
+									"element_1": 0
+								},
+								"bypass": false,
+								"description": "effect_audio_compressor",
+								"groupId": "hvd3pnmb-6mmg-j57r-z79r-hg8vym3kxezq",
+								"id": "hvd3pnmb-6mmg-j57r-z79r-hg8vym3kxezq",
+								"intensity": 0.65,
+								"itemUniqueId": "",
+								"processedRange": {
+									"@meta": {
+										"class_name": "Types::Range",
+										"object_id": 22
+									},
+									"from": 0,
+									"to": -1
+								},
+								"resourcePath": "",
+								"tag": "effect_audio_compressor"
+							}
+						},
+						"attack": 100,
+						"detection": 0,
+						"gainIn": 0.0,
+						"gainOut": 11.0,
+						"knee": 2.82843,
+						"link": 0,
+						"ratio": 5.0,
+						"release": 1000,
+						"threshold": -30.0
+					}
+				]
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "e95fd299-666c-4911-8829-2069e4d39ccb"
+	},
+	"version": "1.0"
+}

@@ -1,0 +1,57 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "ColorFilters",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AutoContrast",
+				"object_id": 1
+			},
+			"Effect::VideoEffect": {
+				"@meta": {
+					"class_name": "Effect::VideoEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "#TOP_ITEM#AutoContrast",
+					"groupId": "fe49dfef-2cc8-4a94-976e-6dce9a0d3e55",
+					"id": "fe49dfef-2cc8-4a94-976e-6dce9a0d3e55",
+					"intensity": 1.0,
+					"itemUniqueId": "1ecf4373-9aa7-4cf6-9ef1-59e2e27909f2",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "#TOP_ITEM#AutoContrast"
+				}
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "1ecf4373-9aa7-4cf6-9ef1-59e2e27909f2"
+	},
+	"version": "1.0"
+}

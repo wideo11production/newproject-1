@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			"backgrounds"
+		],
+		"collectionId": "WizardBackgrounds",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "backgrounds",
+			"description": "",
+			"itemUniqueId": "30666362-4a81-4835-9fd0-0ab15d1dc971",
+			"kind": 3,
+			"resourcePath": "#DOWNLOADABLE_PATH#/WizardBackgrounds/4.jpg",
+			"tag": "",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 108263,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/wizard_backgrounds/4.jpg",
+		"uniqueId": "30666362-4a81-4835-9fd0-0ab15d1dc971"
+	},
+	"version": "1.0"
+}

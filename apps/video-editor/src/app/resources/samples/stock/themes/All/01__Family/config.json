@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_CALM",
+			"description": "For calm family videos Upbeat music",
+			"itemUniqueId": "4e154700-3d06-4428-b37c-dfb37fc0df4e",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/familytheme3.mpack",
+			"tag": "Family3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 13927348,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Family_theme3.mpack",
+		"uniqueId": "4e154700-3d06-4428-b37c-dfb37fc0df4e"
+	},
+	"version": "1.0"
+}

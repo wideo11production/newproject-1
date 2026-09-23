@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_ENERGETIC",
+			"description": "For dynamic travel videos Uplifting music",
+			"itemUniqueId": "2c1955e5-9364-4d26-b54b-a3a34f175173",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/traveltheme3.mpack",
+			"tag": "Travel3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 33979868,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Travel_theme3.mpack",
+		"uniqueId": "2c1955e5-9364-4d26-b54b-a3a34f175173"
+	},
+	"version": "1.0"
+}

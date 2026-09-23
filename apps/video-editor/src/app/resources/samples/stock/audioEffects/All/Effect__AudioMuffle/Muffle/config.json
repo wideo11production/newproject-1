@@ -1,0 +1,61 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioMuffle",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Muffle",
+					"groupId": "4e96f14f-3abe-46e7-9600-6b7cba9702c2",
+					"id": "4e96f14f-3abe-46e7-9600-6b7cba9702c2",
+					"intensity": 1.0,
+					"itemUniqueId": "753625c3-c8fe-4d8c-b21d-5db929d8cb4a",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Muffle"
+				}
+			},
+			"dispersion": 3.0,
+			"gainDown": 50,
+			"gainUp": 10,
+			"mean": 500
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "753625c3-c8fe-4d8c-b21d-5db929d8cb4a"
+	},
+	"version": "1.0"
+}

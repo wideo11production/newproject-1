@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_UPBEAT",
+			"description": "For videos of precious moments in your kids’ lives Children music",
+			"itemUniqueId": "0c5e31be-d1fc-424c-b9b5-12096afc6883",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/childrentheme3.mpack",
+			"tag": "Children3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 24241907,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Children_theme3.mpack",
+		"uniqueId": "0c5e31be-d1fc-424c-b9b5-12096afc6883"
+	},
+	"version": "1.0"
+}

@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_CALM",
+			"description": "For videos of your breezy trips to the ocean Hawaiian music",
+			"itemUniqueId": "3a8e86f4-619e-46a4-ba9b-ce7650c4ca27",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/summertheme3.mpack",
+			"tag": "Summer3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 28819875,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Summer_theme3.mpack",
+		"uniqueId": "3a8e86f4-619e-46a4-ba9b-ce7650c4ca27"
+	},
+	"version": "1.0"
+}

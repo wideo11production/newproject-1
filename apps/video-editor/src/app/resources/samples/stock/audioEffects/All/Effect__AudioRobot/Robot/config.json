@@ -1,0 +1,59 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioRobot",
+				"object_id": 1
+			},
+			"Effect::AudioFilter": {
+				"@meta": {
+					"class_name": "Effect::AudioFilter",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Robot",
+					"groupId": "a10632bf-c9ad-4399-ab6b-cf2fd39b93f6",
+					"id": "a10632bf-c9ad-4399-ab6b-cf2fd39b93f6",
+					"intensity": 1.0,
+					"itemUniqueId": "9f0e6fc2-8f55-440d-b831-affa7ff8be13",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Robot"
+				}
+			},
+			"level": 1.0,
+			"pitch": 1.1
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "9f0e6fc2-8f55-440d-b831-affa7ff8be13"
+	},
+	"version": "1.0"
+}

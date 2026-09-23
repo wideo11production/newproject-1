@@ -1,2 +1,1 @@
-export { VideoEditor } from './components/video-editor';
-export type { VideoEditorProps } from './components/video-editor';
+export { VideoEditor } from './app/components/video-editor';

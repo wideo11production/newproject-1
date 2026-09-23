@@ -1,0 +1,45 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [
+			""
+		],
+		"collectionId": "Themes",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Import::Object",
+				"object_id": 1
+			},
+			"blendingMode": 5,
+			"category": "CATEGORY_UPBEAT",
+			"description": "For videos of your parties and holiday activities Holidays music",
+			"itemUniqueId": "86dad6f5-16b1-4520-96d8-61b6a5a7b3d1",
+			"kind": 5,
+			"resourcePath": "#DOWNLOADABLE_PATH#/Packages/holidaystheme3.mpack",
+			"tag": "Holidays3",
+			"transform": {
+				"m11": 1.0,
+				"m12": 0.0,
+				"m13": 0.0,
+				"m21": 0.0,
+				"m22": 1.0,
+				"m23": 0.0,
+				"m31": 0.0,
+				"m32": 0.0,
+				"m33": 1.0
+			}
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": 19755872,
+		"resourceUrl": "https://content.#BRAND_DOMAIN#/content/ve/stock/themes3/Holidays_theme3.mpack",
+		"uniqueId": "86dad6f5-16b1-4520-96d8-61b6a5a7b3d1"
+	},
+	"version": "1.0"
+}

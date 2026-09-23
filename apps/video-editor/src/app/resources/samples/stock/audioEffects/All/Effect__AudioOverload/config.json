@@ -1,0 +1,60 @@
+{
+	"data": {
+		"@meta": {
+			"class_name": "Collection::Item",
+			"object_id": 0
+		},
+		"categories": [],
+		"collectionId": "EffectsAudio",
+		"customStrings": [],
+		"payload": {
+			"@meta": {
+				"class_name": "Effect::AudioDistortion",
+				"object_id": 1
+			},
+			"Effect::AudioEffect": {
+				"@meta": {
+					"class_name": "Effect::AudioEffect",
+					"object_id": 2
+				},
+				"Effect::Object": {
+					"@meta": {
+						"class_name": "Effect::Object",
+						"object_id": 3
+					},
+					"auxResource": {
+						"element_0": "",
+						"element_1": 0
+					},
+					"bypass": false,
+					"description": "Overload",
+					"groupId": "ms35vb5f-8pyz-5wt4-3cdj-yvtuyyy29qdf",
+					"id": "ms35vb5f-8pyz-5wt4-3cdj-yvtuyyy29qdf",
+					"intensity": 0.7,
+					"itemUniqueId": "e20095e6-df68-478d-8428-63ed41a6a836",
+					"processedRange": {
+						"@meta": {
+							"class_name": "Types::Range",
+							"object_id": 4
+						},
+						"from": 0,
+						"to": -1
+					},
+					"resourcePath": "",
+					"tag": "Overload"
+				}
+			},
+			"boost": 0.1,
+			"tone": 0.5,
+			"type": 0
+		},
+		"preview": {
+			"ref": "images/preview.png"
+		},
+		"previewUrls": [],
+		"resourceRemoteSize": -1,
+		"resourceUrl": "",
+		"uniqueId": "e20095e6-df68-478d-8428-63ed41a6a836"
+	},
+	"version": "1.0"
+}
