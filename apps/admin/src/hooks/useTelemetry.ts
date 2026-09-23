@@ -23,7 +23,9 @@ export const useTelemetry = (userId: number): UseTelemetryReturn => {
   const eventsRef = useRef<TelemetryEvent[]>([]);
   const sendIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastWatchStartRef = useRef<number | null>(null); // timestamp when user started watching
-  const visibilityStateRef = useRef<VisibilityState>(document.visibilityState);
+  const visibilityStateRef = useRef<VisibilityState>(
+    typeof document !== 'undefined' ? document.visibilityState : 'visible'
+  );
 
   // Send events to backend
   const sendEvents = useCallback(async () => {
@@ -95,7 +97,8 @@ export const useTelemetry = (userId: number): UseTelemetryReturn => {
   const handleVisibilityChange = useCallback(() => {
     if (!isTracking) return;
     const now = Date.now();
-    const newState = document.visibilityState;
+    const newState =
+      typeof document !== 'undefined' ? document.visibilityState : 'visible';
     eventsRef.current.push({
       type: 'visibilitychange',
       visibilityState: newState,
@@ -127,31 +130,44 @@ export const useTelemetry = (userId: number): UseTelemetryReturn => {
     if (isTracking) return;
     setIsTracking(true);
     // Reset last watch start when becoming visible
-    if (document.visibilityState === 'visible') {
+    if (
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'visible'
+    ) {
       lastWatchStartRef.current = Date.now();
     } else {
       lastWatchStartRef.current = null;
     }
-    visibilityStateRef.current = document.visibilityState;
+    visibilityStateRef.current =
+      typeof document !== 'undefined' ? document.visibilityState : 'visible';
 
     // Add event listeners
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
 
     // Start sending interval
     startSending();
-  }, [isTracking, handleMouseMove, handleVisibilityChange, startSending]);
+  }, [
+    isTracking,
+    handleMouseMove,
+    handleVisibilityChange,
+    startSending,
+  ]);
 
   // Stop tracking
   const stop = useCallback(() => {
     if (!isTracking) return;
     setIsTracking(false);
     // Remove event listeners
-    document.removeEventListener('mousemove', handleMouseMove);
-    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
     // Stop sending interval and flush events
     stopSending();
-  }, [isTracking, handleMouseMove, handleVisibilityChange, stopSending]);
+  }, [isTracking, stopSending]);
 
   // Cleanup on unmount
   useEffect(() => {

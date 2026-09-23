@@ -25,7 +25,6 @@ import {
 } from '@wideo11/ui/label';
 import { 
   Type, 
-  FontSizes, 
   Bold, 
   Italic, 
   AlignLeft, 
@@ -47,69 +46,69 @@ export function TextPanel() {
   const [backgroundColor, setBackgroundColor] = useState('transparent');
 
   // Mock text styles/presets
-  const textStyles = [
-    { 
-      id: 'ts1', 
-      name: 'Default', 
-      thumbnail: '/placeholder-text-style-1.jpg',
-      fontSize: 24,
-      fontWeight: 'normal',
-      fontStyle: 'normal',
-      textAlign: 'left',
-      color: '#ffffff',
-      background: 'transparent'
-    },
-    { 
-      id: 'ts2', 
-      name: 'Title', 
-      thumbnail: '/placeholder-text-style-2.jpg',
-      fontSize: 48,
-      fontWeight: 'bold',
-      fontStyle: 'normal',
-      textAlign: 'center',
-      color: '#ffffff',
-      background: 'rgba(0,0,0,0.5)'
-    },
-    { 
-      id: 'ts3', 
-      name: 'Lower Third', 
-      thumbnail: '/placeholder-text-style-3.jpg',
-      fontSize: 20,
-      fontWeight: 'medium',
-      fontStyle: 'normal',
-      textAlign: 'left',
-      color: '#ffffff',
-      background: 'rgba(0,0,0,0.7)'
-    },
-    { 
-      id: 'ts4', 
-      name: 'Subtitle', 
-      thumbnail: '/placeholder-text-style-4.jpg',
-      fontSize: 18,
-      fontWeight: 'normal',
-      fontStyle: 'italic',
-      textAlign: 'center',
-      color: '#ffff00',
-      background: 'transparent'
-    },
-    { 
-      id: 'ts5', 
-      name: 'Callout', 
-      thumbnail: '/placeholder-text-style-5.jpg',
-      fontSize: 28,
-      fontWeight: 'bold',
-      fontStyle: 'normal',
-      textAlign: 'center',
-      color: '#ff0000',
-      background: 'rgba(255,255,255,0.8)'
-    }
-  ];
+const textStyles = [
+  { 
+    id: 'ts1', 
+    name: 'Default', 
+    thumbnail: '/placeholder-text-style-1.jpg',
+    fontSize: 24,
+    fontWeight: 'normal',
+    fontStyle: 'normal',
+    textAlign: 'left',
+    color: '#ffffff',
+    background: 'transparent'
+  },
+  { 
+    id: 'ts2', 
+    name: 'Title', 
+    thumbnail: '/placeholder-text-style-2.jpg',
+    fontSize: 48,
+    fontWeight: 'bold',
+    fontStyle: 'normal',
+    textAlign: 'center',
+    color: '#ffffff',
+    background: 'rgba(0,0,0,0.5)'
+  },
+  { 
+    id: 'ts3', 
+    name: 'Lower Third', 
+    thumbnail: '/placeholder-text-style-3.jpg',
+    fontSize: 20,
+    fontWeight: 'medium',
+    fontStyle: 'normal',
+    textAlign: 'left',
+    color: '#ffffff',
+    background: 'rgba(0,0,0,0.7)'
+  },
+  { 
+    id: 'ts4', 
+    name: 'Subtitle', 
+    thumbnail: '/placeholder-text-style-4.jpg',
+    fontSize: 18,
+    fontWeight: 'normal',
+    fontStyle: 'italic',
+    textAlign: 'center',
+    color: '#ffff00',
+    background: 'transparent'
+  },
+  { 
+    id: 'ts5', 
+    name: 'Callout', 
+    thumbnail: '/placeholder-text-style-5.jpg',
+    fontSize: 28,
+    fontWeight: 'bold',
+    fontStyle: 'normal',
+    textAlign: 'center',
+    color: '#ff0000',
+    background: 'rgba(255,255,255,0.8)'
+  }
+] as const;
 
   const applyTextStyle = (style: typeof textStyles[number]) => {
     setFontSize(style.fontSize);
-    setFontWeight(style.fontWeight);
-    setFontStyle(style.fontStyle);
-    setTextAlign(style.textAlign);
+setFontWeight(style.fontWeight);
+     setFontStyle(style.fontStyle);
+     setTextAlign(style.textAlign);
     setTextColor(style.color);
     setBackgroundColor(style.background);
   };
@@ -138,11 +137,11 @@ export function TextPanel() {
                         className="h-6 w-6 bg-[hsl(223_47%_11.2%)/50] border border-[hsl(217.2_32.6%_17.5%)] rounded flex items-center justify-center text-xs"
                         style={{
                           fontSize: `${style.fontSize}px`,
-                          fontWeight: style.fontWeight === 'bold' ? 'bold' : 'normal',
-                          fontStyle: style.fontStyle === 'italic' ? 'italic' : 'normal',
-                          textAlign: style.textAlign,
-                          color: style.color,
-                          backgroundColor: style.background
+fontWeight: style.fontWeight === 'bold' ? 'bold' : 'normal',
+                           fontStyle: style.fontStyle === 'italic' ? 'italic' : 'normal',
+                           textAlign: style.textAlign,
+                           color: style.color,
+                           backgroundColor: style.background
                         }}
                       >
                         Txt
@@ -219,16 +218,16 @@ export function TextPanel() {
             </div>
             
             <div className="flex items-center space-x-2">
-              <Label>Align</Label>
-              <select
-                value={textAlign}
-                onChange={(e) => setTextAlign(e.target.value as 'left' | 'center' | 'right')}
-                className="border rounded px-2 py-1 bg-gray-800 text-white"
-              >
-                <option value="left">Left</option>
-                <option value="center">Center</option>
-                <option value="right">Right</option>
-              </select>
+<Label>Align</Label>
+               <select
+                 value={textAlign}
+                 onChange={(e) => setTextAlign(e.target.value)}
+                 className="border rounded px-2 py-1 bg-gray-800 text-white"
+               >
+                 <option value="left">Left</option>
+                 <option value="center">Center</option>
+                 <option value="right">Right</option>
+               </select>
             </div>
             
             <div className="flex items-center space-x-2">

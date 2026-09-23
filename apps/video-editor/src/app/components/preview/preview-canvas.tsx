@@ -2,7 +2,8 @@ import { useRef, useEffect } from 'react';
 import { 
   Card, 
   CardHeader, 
-  CardTitle 
+  CardTitle,
+  CardContent
 } from '@wideo11/ui/card';
 import { 
   Button 
@@ -19,8 +20,7 @@ import {
   Maximize2, 
   SkipBack, 
   SkipForward,
-  Subtitles,
-  PiP
+  Subtitles
 } from 'lucide-react';
 
 interface PreviewCanvasProps {
@@ -142,30 +142,22 @@ export function PreviewCanvas({
         
         {/* Fullscreen and settings buttons */}
         <div className="absolute top-4 right-4 flex items-center space-x-2 z-10">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => {/* Open settings */}}
-            className="bg-black/50 rounded-full p-1"
-          >
-            <Settings className="h-3 w-3" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => {/* Toggle fullscreen */}}
-            className="bg-black/50 rounded-full p-1"
-          >
-            <Maximize2 className="h-3 w-3" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => {/* Toggle PiP */}}
-            className="bg-black/50 rounded-full p-1"
-          >
-            <PiP className="h-3 w-3" />
-          </Button>
+<Button 
+             variant="ghost" 
+             size="icon" 
+             onClick={() => {/* Open settings */}}
+             className="bg-black/50 rounded-full p-1"
+           >
+             <Settings className="h-3 w-3" />
+           </Button>
+           <Button 
+             variant="ghost" 
+             size="icon" 
+             onClick={() => {/* Toggle fullscreen */}}
+             className="bg-black/50 rounded-full p-1"
+           >
+             <Maximize2 className="h-3 w-3" />
+           </Button>
         </div>
       </CardContent>
     </Card>

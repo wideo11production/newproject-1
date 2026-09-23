@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useRef } from 'react';
 import { useKnowledgeBot } from '@/hooks/useKnowledgeBot';
 import { usePersonalizedFeed } from '@/hooks/usePersonalizedFeed';
 import { useTelemetry } from '@/hooks/useTelemetry';
@@ -6,6 +8,7 @@ export default function AdminDashboard() {
   const { start: startTelemetry } = useTelemetry(1); // Assuming userId 1 for demo
   const { chatId, messages, sendMessage, loading } = useKnowledgeBot(1);
   const { feed, loading: feedLoading } = usePersonalizedFeed(1);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Start telemetry when component mounts
   useEffect(() => {
@@ -29,6 +32,7 @@ export default function AdminDashboard() {
           </div>
           <div className="mt-2 flex">
             <input
+              ref={inputRef}
               type="text"
               className="flex-1 p-2 border rounded-l"
               placeholder="Type a message"
@@ -42,10 +46,9 @@ export default function AdminDashboard() {
             <button
               className="ml-2 px-4 py-2 bg-blue-500 text-white rounded-r"
               onClick={() => {
-                const input = document.querySelector('input') as HTMLInputElement;
-                if (input?.value.trim()) {
-                  sendMessage(input.value);
-                  input.value = '';
+                if (inputRef.current?.value.trim()) {
+                  sendMessage(inputRef.current.value);
+                  inputRef.current.value = '';
                 }
               }}
               disabled={loading}

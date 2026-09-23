@@ -24,7 +24,8 @@ import {
   Sun, 
   Droplet,
   Zap,
-  Airplay
+  Airplay,
+  Play
 } from 'lucide-react';
 
 export function FiltersPanel() {

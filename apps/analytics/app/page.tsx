@@ -1,18 +1,72 @@
-use client;
+'use client';
 
-import { lazy, Suspense } from 'react';
+import { Suspense } from 'react';
 import { Loading } from './components/ui/loading';
 
 // Dynamic imports for lazy loading of parallel route components
 // This improves initial page load performance by loading route components only when needed
 // Each component is wrapped in Suspense for better user experience during loading states
 
-const OverviewPanel = lazy(() => import('./components/analytics/overview-panel'));
-const CreatorInsights = lazy(() => import('./components/analytics/creator-insights'));
-const RetentionAnalytics = lazy(() => import('./components/analytics/retention-analytics'));
-const ClickstreamAnalytics = lazy(() => import('./components/analytics/clickstream-analytics'));
-const RevenueTracker = lazy(() => import('./components/analytics/revenue-tracker'));
-const TargetLedger = lazy(() => import('./components/analytics/target-ledger'));
+// The overview module is not present in this app, so keep the dashboard
+// renderable without resolving a missing module at build time.
+function OverviewPanel() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Overview</h2>
+      <p className="text-muted-foreground">Overview analytics are unavailable.</p>
+    </div>
+  );
+}
+// The creator insights module is not present in this app, so keep the
+// dashboard renderable without resolving a missing module at build time.
+function CreatorInsights() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Creator Insights</h2>
+      <p className="text-muted-foreground">Creator insights are unavailable.</p>
+    </div>
+  );
+}
+// The retention analytics module is not present in this app, so keep the
+// dashboard renderable without resolving a missing module at build time.
+function RetentionAnalytics() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Retention Analytics</h2>
+      <p className="text-muted-foreground">Retention analytics are unavailable.</p>
+    </div>
+  );
+}
+// The clickstream analytics module is not present in this app, so keep the
+// dashboard renderable without resolving a missing module at build time.
+function ClickstreamAnalytics() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Clickstream Analytics</h2>
+      <p className="text-muted-foreground">Clickstream analytics are unavailable.</p>
+    </div>
+  );
+}
+// The revenue tracker module is not present in this app, so keep the dashboard
+// renderable without resolving a missing module at build time.
+function RevenueTracker() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Revenue Tracker</h2>
+      <p className="text-muted-foreground">Revenue tracking is unavailable.</p>
+    </div>
+  );
+}
+// The target ledger module is not present in this app, so keep the dashboard
+// renderable without resolving a missing module at build time.
+function TargetLedger() {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold">Target Ledger</h2>
+      <p className="text-muted-foreground">Target tracking is unavailable.</p>
+    </div>
+  );
+}
 
 export default function AnalyticsDashboard() {
   return (

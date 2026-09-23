@@ -2,7 +2,7 @@
   "name": "wideo11-dnd-dashboard",
   "version": "1.0.0",
   "description": "Drag-and-drop dashboard grid system",
-  "main": "src/index.ts",
+  "main": "src/index.tsx",
   "scripts": {
     "build": "tsc",
     "test": "jest"

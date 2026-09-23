@@ -1,5 +1,8 @@
 import { useState, useCallback, useMemo, ReactNode } from 'react';
-import { useStore } from 'zustand';
+import { create } from 'zustand';
+import { Draggable } from 'react-beautiful-dnd';
+
+export { Draggable };
 
 export interface GridItem {
   i: string;
@@ -20,7 +23,8 @@ export interface GridItem {
   data?: any;
 }
 
-export interface GridLayoutProps extends React.HTMLAttributes<HTMLDivElement> {
+export interface GridLayoutProps
+  extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onDragStart'> {
   items: GridItem[];
   cols?: number;
   rowHeight?: number;
@@ -46,7 +50,7 @@ interface GridLayoutStore {
   setDraggedItem: (id: string | null) => void;
 }
 
-export const useGridLayoutStore = useStore<GridLayoutStore>(
+export const useGridLayoutStore = create<GridLayoutStore>(
   (set) => ({
     items: [],
     draggedItem: null,
@@ -62,7 +66,16 @@ export function GridLayout({
   gap = 10,
   isDraggable = true,
   isResizable = true,
+  verticalCompact: _verticalCompact,
+  preventCollision: _preventCollision,
+  compactType: _compactType,
+  allowOverlap: _allowOverlap,
+  autoSize: _autoSize,
   onLayoutChange,
+  onDragStart: _onDragStart,
+  onDragStop: _onDragStop,
+  onResizeStart: _onResizeStart,
+  onResizeStop: _onResizeStop,
   ...props
 }: GridLayoutProps) {
   const [layout, setLayout] = useState(items);
@@ -233,5 +246,4 @@ export class DragDropEngine {
   }
 }
 
-export type { GridItem };
 export default GridLayout;

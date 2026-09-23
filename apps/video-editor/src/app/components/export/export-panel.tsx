@@ -32,19 +32,18 @@ import {
   Save, 
   Clock, 
   Film, 
-  HardDrive,
-  Microsd
+  HardDrive
 } from 'lucide-react';
 
 export function ExportPanel() {
   const [filename, setFilename] = useState('my-video');
   const [format, setFormat] = useState('mp4');
   const [resolution, setResolution] = useState('1920x1080');
-  const [fps, setFps] = useState(30);
+  const [fps, setFps] = useState('30');
   const [quality, setQuality] = useState('high');
-  const [bitrate, setBitrate] = useState(12);
+  const [bitrate, setBitrate] = useState('12');
   const [audioCodec, setAudioCodec] = useState('aac');
-  const [audioBitrate, setAudioBitrate] = useState(320);
+  const [audioBitrate, setAudioBitrate] = useState('320');
   const [hardwareAcceleration, setHardwareAcceleration] = useState(true);
   const [usePreviews, setUsePreviews] = useState(false);
   const [maximumRenderQuality, setMaximumRenderQuality] = useState(true);
@@ -153,51 +152,51 @@ export function ExportPanel() {
               </div>
               
               <div>
-                <Label htmlFor="format">Format</Label>
-                <Select defaultValue={format} onValueChange={setFormat} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {formats.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="format">Format</Label>
+                 <Select defaultValue={format} onValueChange={setFormat}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {formats.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
               
               <div>
-                <Label htmlFor="resolution">Resolution</Label>
-                <Select defaultValue={resolution} onValueChange={setResolution} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {resolutions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="resolution">Resolution</Label>
+                 <Select defaultValue={resolution} onValueChange={setResolution}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {resolutions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
               
               <div>
-                <Label htmlFor="fps">Frame Rate</Label>
-                <Select defaultValue={fps} onValueChange={setFps} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {fpsOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="fps">Frame Rate</Label>
+                 <Select defaultValue={fps} onValueChange={setFps}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {fpsOptions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
             </div>
           </div>
@@ -213,67 +212,67 @@ export function ExportPanel() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label htmlFor="quality">Quality</Label>
-                <Select defaultValue={quality} onValueChange={setQuality} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {qualityOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="quality">Quality</Label>
+                 <Select defaultValue={quality} onValueChange={setQuality}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {qualityOptions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
               
               <div>
-                <Label htmlFor="bitrate">Video Bitrate</Label>
-                <Select defaultValue={bitrate} onValueChange={setBitrate} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {bitrateOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="bitrate">Video Bitrate</Label>
+                 <Select defaultValue={bitrate} onValueChange={setBitrate}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {bitrateOptions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
               
               <div>
-                <Label htmlFor="audioCodec">Audio Codec</Label>
-                <Select defaultValue={audioCodec} onValueChange={setAudioCodec} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {audioCodecOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="audioCodec">Audio Codec</Label>
+                 <Select defaultValue={audioCodec} onValueChange={setAudioCodec}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {audioCodecOptions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
               
               <div>
-                <Label htmlFor="audioBitrate">Audio Bitrate</Label>
-                <Select defaultValue={audioBitrate} onValueChange={setAudioBitrate} className="w-full">
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-full">
-                    {audioBitrateOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+<Label htmlFor="audioBitrate">Audio Bitrate</Label>
+                 <Select defaultValue={audioBitrate} onValueChange={setAudioBitrate}>
+                   <SelectTrigger className="w-full">
+                     <SelectValue />
+                   </SelectTrigger>
+                   <SelectContent className="w-full">
+                     {audioBitrateOptions.map((option) => (
+                       <SelectItem key={option.value} value={option.value}>
+                         {option.label}
+                       </SelectItem>
+                     ))}
+                   </SelectContent>
+                 </Select>
               </div>
             </div>
           </div>
@@ -288,11 +287,11 @@ export function ExportPanel() {
         <CardContent className="p-3">
           <div className="space-y-3">
             <div className="flex items-center space-x-3">
-              <Checkbox
-                checked={hardwareAcceleration}
-                onCheckedChange={setHardwareAcceleration}
-                className="h-3 w-3"
-              />
+<Checkbox
+                 checked={hardwareAcceleration}
+                 onCheckedChange={(checked) => setHardwareAcceleration(!!checked)}
+                 className="h-3 w-3"
+               />
               <Label>Hardware Acceleration</Label>
               <span className="ml-2 text-xs text-gray-400">
                 (Uses GPU for faster encoding)
@@ -300,11 +299,11 @@ export function ExportPanel() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <Checkbox
-                checked={usePreviews}
-                onCheckedChange={setUsePreviews}
-                className="h-3 w-3"
-              />
+<Checkbox
+                 checked={usePreviews}
+                 onCheckedChange={(checked) => setUsePreviews(!!checked)}
+                 className="h-3 w-3"
+               />
               <Label>Use Previews</Label>
               <span className="ml-2 text-xs text-gray-400">
                 (Renders with effects applied)
@@ -312,11 +311,11 @@ export function ExportPanel() {
             </div>
             
             <div className="flex items-center space-x-3">
-              <Checkbox
-                checked={maximumRenderQuality}
-                onCheckedChange={setMaximumRenderQuality}
-                className="h-3 w-3"
-              />
+<Checkbox
+                 checked={maximumRenderQuality}
+                 onCheckedChange={(checked) => setMaximumRenderQuality(!!checked)}
+                 className="h-3 w-3"
+               />
               <Label>Maximum Render Quality</Label>
               <span className="ml-2 text-xs text-gray-400">
                 (Higher quality, slower render)

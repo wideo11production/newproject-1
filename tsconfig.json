@@ -17,5 +17,7 @@
     { "path": "./packages/ui" },
     { "path": "./packages/auth" },
     { "path": "./packages/video-player" },
+    { "path": "./apps/monitor" },
+    { "path": "./apps/analytics" },
   ]
 }

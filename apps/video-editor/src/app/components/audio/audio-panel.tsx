@@ -30,7 +30,8 @@ import {
   Repeat, 
   SkipBack, 
   SkipForward,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Zap
 } from 'lucide-react';
 
 export function AudioPanel() {
@@ -141,14 +142,14 @@ export function AudioPanel() {
   };
 
   const audioList = getAudio();
-  const filteredAudio = audioList.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.artist && item.artist.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.genre && item.genre.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.mood && item.mood.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (item.language && item.language.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+const filteredAudio = audioList.filter(item => 
+  item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  ("artist" in item && item.artist && item.artist.toLowerCase().includes(searchTerm.toLowerCase())) ||
+  ("genre" in item && item.genre && item.genre.toLowerCase().includes(searchTerm.toLowerCase())) ||
+  ("mood" in item && item.mood && item.mood.toLowerCase().includes(searchTerm.toLowerCase())) ||
+  ("category" in item && item.category && item.category.toLowerCase().includes(searchTerm.toLowerCase())) ||
+  ("language" in item && item.language && item.language.toLowerCase().includes(searchTerm.toLowerCase()))
+);
 
   return (
     <div className="space-y-4">
@@ -210,26 +211,26 @@ export function AudioPanel() {
                   <h4 className="text-sm font-medium text-white">{audio.name}</h4>
                   <span className="text-xs text-gray-400">{audio.duration}</span>
                 </div>
-                <div className="text-xs text-gray-300 flex-wrap">
-                  {audio.artist && (
-                    <span className="mr-2">{audio.artist}</span>
-                  )}
-                  {audio.genre && (
-                    <span className="mr-2">#{audio.genre}</span>
-                  )}
-                  {audio.mood && (
-                    <span className="mr-2">#{audio.mood}</span>
-                  )}
-                  {audio.category && (
-                    <span className="mr-2">#{audio.category}</span>
-                  )}
-                  {audio.language && (
-                    <span className="mr-2">{audio.language}</span>
-                  )}
-                  {audio.gender && (
-                    <span className="mr-2">{audio.gender}</span>
-                  )}
-                </div>
+<div className="text-xs text-gray-300 flex-wrap">
+                   {("artist" in audio && audio.artist) && (
+                     <span className="mr-2">{audio.artist}</span>
+                   )}
+                   {("genre" in audio && audio.genre) && (
+                     <span className="mr-2">#{audio.genre}</span>
+                   )}
+                   {("mood" in audio && audio.mood) && (
+                     <span className="mr-2">#{audio.mood}</span>
+                   )}
+                   {("category" in audio && audio.category) && (
+                     <span className="mr-2">#{audio.category}</span>
+                   )}
+                   {("language" in audio && audio.language) && (
+                     <span className="mr-2">{audio.language}</span>
+                   )}
+                   {("gender" in audio && audio.gender) && (
+                     <span className="mr-2">{audio.gender}</span>
+                   )}
+                 </div>
               </div>
             </div>
           ))}
