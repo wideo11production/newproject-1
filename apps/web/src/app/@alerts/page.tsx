@@ -1,4 +1,7 @@
 "use client"
+
+export const dynamic = 'force-dynamic';
+
 import { Suspense, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { Bell, AlertCircle, CheckCircle2, Clock, Filter, Search } from 'lucide-react';

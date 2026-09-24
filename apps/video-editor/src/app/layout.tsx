@@ -3,13 +3,9 @@ import { Inter } from 'next/font/google';
 // Next.js processes this global stylesheet, even when TypeScript cannot resolve its declaration.
 import './globals.css';
 import { ReactNode, Suspense } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ToastProvider } from '@wideo11/ui/toast';
-import { TooltipProvider } from '@wideo11/ui/tooltip';
+import Providers from './providers';
 
 const inter = Inter({ subsets: ['latin'] });
-
-const queryClient = new QueryClient();
 
 function ThemeProvider({ children }: { children: ReactNode }) {
   return <>{children}</>;
@@ -28,19 +24,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressContentEditableWarning>
-        <QueryClientProvider client={queryClient}>
-          <ThemeProvider>
-            <ToastProvider>
-              <TooltipProvider>
-                <div className="flex h-screen flex-col bg-background">
-                  <Suspense fallback={<Loading />}>
-                    {children}
-                  </Suspense>
-                </div>
-              </TooltipProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </QueryClientProvider>
+        <ThemeProvider>
+          <Providers>
+            <div className="flex h-screen flex-col bg-background">
+              <Suspense fallback={<Loading />}>
+                {children}
+              </Suspense>
+            </div>
+          </Providers>
+        </ThemeProvider>
       </body>
     </html>
   );

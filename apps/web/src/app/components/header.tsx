@@ -1,3 +1,5 @@
+"use client";
+
 import { Moon, Sun, User, LogOut, Settings } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { useTheme } from 'next-themes';

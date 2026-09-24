@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useRef, useEffect, useCallback, createContext, useContext, useImperativeHandle, ReactNode } from 'react';
 import { Play, Pause, Volume2, VolumeX, Settings, Maximize, SkipBack, SkipForward, Subtitles, Download } from 'lucide-react';
 
 export type VideoSource = {
@@ -40,7 +40,7 @@ export interface VideoPlayerProps extends Omit<React.HTMLAttributes<HTMLVideoEle
   onError?: (error: string) => void;
 }
 
-interface VideoPlayerContextValue {
+export interface VideoPlayerContextValue {
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -87,25 +87,30 @@ export const VideoPlayerProvider: React.FC<{
   );
 };
 
-export const VideoPlayer: React.FC<VideoPlayerProps> = ({
-  sources,
-  subtitles = [],
-  qualities = [],
-  autoPlay = false,
-  muted = false,
-  controls = true,
-  poster,
-  loop = false,
-  playsInline = true,
-  crossOrigin = 'anonymous',
-  onPlay,
-  onPause,
-  onProgress,
-  onError,
-  className,
-  ...props
-}) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
+export const VideoPlayer = React.forwardRef<HTMLVideoElement, VideoPlayerProps>((props, ref) => {
+  const {
+    sources,
+    subtitles = [],
+    qualities = [],
+    autoPlay = false,
+    muted = false,
+    controls = true,
+    poster,
+    loop = false,
+    playsInline = true,
+    crossOrigin = 'anonymous',
+    onPlay,
+    onPause,
+    onProgress,
+    onError,
+    onBufferStart,
+    onBufferEnd,
+    className,
+    ...restProps
+  } = props;
+  const videoRef = useRef<HTMLVideoElement>(null!);
+
+  useImperativeHandle(ref, () => videoRef.current);
   const [state, setState] = useState({
     isPlaying: autoPlay,
     currentTime: 0,
@@ -274,7 +279,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           loop={loop}
           playsInline={playsInline}
           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-          {...props}
+          {...restProps}
         />
 
         {subtitles.length > 0 && (
@@ -312,7 +317,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
     </VideoPlayerProvider>
   );
-};
+});
 
 const setSourceForQuality = (quality: VideoQuality, videoRef: React.RefObject<HTMLVideoElement>) => {
   if (videoRef.current) {
@@ -435,8 +440,3 @@ const VideoControls: React.FC = () => {
     </div>
   );
 };
-
-export default VideoPlayer;
-
-// Import ReactNode at top
-import { ReactNode } from 'react';

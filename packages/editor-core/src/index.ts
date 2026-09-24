@@ -197,8 +197,20 @@ export class TimelineEngine {
 
   seek(time: number) {
     this.store.getState().setTime(Math.max(0, Math.min(time, this.store.getState().duration)));
+}
+  
+  getCurrentTime() {
+    return this.store.getState().currentTime;
   }
-
+  
+  getDuration() {
+    return this.store.getState().duration;
+  }
+  
+  getIsPlaying() {
+    return this.store.getState().isPlaying;
+  }
+  
   getTracksAtTime(time: number): Track[] {
     return this.store
       .getState()

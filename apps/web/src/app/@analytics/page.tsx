@@ -1,3 +1,7 @@
+"use client"
+
+export const dynamic = 'force-dynamic';
+
 import { Suspense } from 'react';
 import { BarChart3, Database, Users, Globe, Activity, TrendingUp, DollarSign, Clock, Play } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@wideo11/ui/card';

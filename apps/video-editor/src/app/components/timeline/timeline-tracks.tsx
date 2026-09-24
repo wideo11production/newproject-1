@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useRef, useEffect } from 'react';
 import { Draggable } from '@wideo11/dnd-dashboard';
 import { 
@@ -6,6 +7,7 @@ import {
    Music, 
    Type, 
    Image,
+   Trash2,
    Settings as SettingsIcon,
    VolumeX,
    Volume2,
@@ -36,11 +38,11 @@ interface TimelineClip {
 }
 
 interface TimelineTracksProps {
-   timelineEngine: any; // TimelineEngine from editor-core
-   videoRef: React.RefObject<HTMLVideoElement>;
+   seek: (time: number) => void;
+   getCurrentTime: () => number;
+   getDuration: () => number;
    isPlaying: boolean;
-   currentTime: number;
-   duration: number;
+   videoRef: React.RefObject<HTMLVideoElement>;
    onSeek: (time: number) => void;
    onSetTime: (time: number) => void;
    onAddClip: (trackId: string, clip: Omit<TimelineClip, 'id'>) => void;
@@ -49,24 +51,16 @@ interface TimelineTracksProps {
 }
 
 export function TimelineTracks({
-   timelineEngine,
-   videoRef,
+   seek,
+   getCurrentTime,
+   getDuration,
    isPlaying,
-   currentTime,
-   duration,
+   videoRef,
    onSeek,
    onSetTime,
    onAddClip,
    onRemoveClip,
    onUpdateClip
 }: TimelineTracksProps) {
-   // Use videoRef to demonstrate we're reading its value
-   useEffect(() => {
-      // Log the video element if it exists (for demonstration)
-      if (videoRef.current) {
-         console.log('Video element available:', videoRef.current);
-      }
-   }, [videoRef]);
-   
-   return <div>Hello World</div>;
+   return <div>Timeline Tracks</div>;
 }

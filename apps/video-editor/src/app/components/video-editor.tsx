@@ -1,19 +1,166 @@
 "use client"
-import { useState, useRef, useEffect } from 'react';
+
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardHeader, CardTitle } from '@wideo11/ui/card';
 import { Button } from '@wideo11/ui/button';
 import { Separator } from '@wideo11/ui/separator';
 import { TimelineEngine } from '@wideo11/editor-core';
-import { VideoPlayer, useVideoPlayer } from '@wideo11/video-player';
+import { VideoPlayerProvider, useVideoPlayer, type VideoPlayerContextValue } from '@wideo11/video-player';
 import { TimelineRuler } from './timeline/timeline-ruler';
 import { TimelineTracks } from './timeline/timeline-tracks';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { Toolbar } from './toolbar/toolbar';
 import { Sidebar } from './sidebar/sidebar';
 
+// --- Serialization-safe interfaces ---
+// Ye interfaces plain objects ke liye hain jo server-client boundary cross kar sakte hain
+interface TimelineEngineApi {
+  seek: (time: number) => void;
+  getCurrentTime: () => number;
+  getDuration: () => number;
+  isPlaying: boolean;
+}
+
+// --- Custom Video Player Context Provider ---
+// Ye provider VideoPlayerContextValue deta hai jo plain objects hi use karta hai
+function VideoPlayerContextProvider({ 
+  children, 
+  videoRef: externalVideoRef 
+}: { 
+  children: React.ReactNode; 
+  videoRef?: React.RefObject<HTMLVideoElement>; 
+}) {
+  const videoRef = externalVideoRef || useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolumeState] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [playbackRate, setPlaybackRateState] = useState(1);
+
+  // Plain functions jo class instance capture nahi karte
+  const togglePlay = useCallback(() => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
+    }
+  }, []);
+
+  const seek = useCallback((time: number) => {
+    if (videoRef.current) {
+      videoRef.current.currentTime = time;
+    }
+  }, []);
+
+  const setVolume = useCallback((vol: number) => {
+    if (videoRef.current) {
+      videoRef.current.volume = vol;
+      setVolumeState(vol);
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setMuted(prev => !prev);
+    }
+  }, []);
+
+  const setPlaybackRate = useCallback((rate: number) => {
+    if (videoRef.current) {
+      videoRef.current.playbackRate = rate;
+      setPlaybackRateState(rate);
+    }
+  }, []);
+
+  // Attach event listeners to video element
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleTimeUpdate = () => setCurrentTime(video.currentTime);
+    const handleDurationChange = () => setDuration(video.duration);
+    const handlePlay = () => setIsPlaying(true);
+    const handlePause = () => setIsPlaying(false);
+    const handleVolumeChange = () => {
+      setVolumeState(video.volume);
+      setMuted(video.muted);
+    };
+    const handleRateChange = () => setPlaybackRateState(video.playbackRate);
+
+    video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('durationchange', handleDurationChange);
+    video.addEventListener('play', handlePlay);
+    video.addEventListener('pause', handlePause);
+    video.addEventListener('volumechange', handleVolumeChange);
+    video.addEventListener('ratechange', handleRateChange);
+
+    return () => {
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('durationchange', handleDurationChange);
+      video.removeEventListener('play', handlePlay);
+      video.removeEventListener('pause', handlePause);
+      video.removeEventListener('volumechange', handleVolumeChange);
+      video.removeEventListener('ratechange', handleRateChange);
+    };
+  }, []);
+
+  // Context value mein sirf plain objects aur plain functions hain
+  const contextValue: VideoPlayerContextValue = {
+    isPlaying,
+    currentTime,
+    duration,
+    buffered: videoRef.current?.buffered || null,
+    volume,
+    muted,
+    playbackRate,
+    quality: null,
+    isFullscreen: false,
+    isPictureInPicture: false,
+    isBuffering: false,
+    error: null,
+    togglePlay,
+    seek,
+    setVolume,
+    toggleMute,
+    setPlaybackRate,
+    setQuality: () => {},
+    toggleFullscreen: () => {},
+    togglePictureInPicture: () => {},
+    toggleCaptions: () => {},
+    enableCaptions: () => {},
+    disableCaptions: () => {},
+  };
+
+  return (
+    <VideoPlayerProvider value={contextValue}>
+      <video ref={videoRef} style={{ display: 'none' }} muted />
+      {children}
+    </VideoPlayerProvider>
+  );
+}
+
 export function VideoEditor() {
+  // useRef use karo TimelineEngine instance store karne ke liye
+  // ye React state mein nahi jata, isliye serialization issue nahi hoga
+  const timelineEngineRef = useRef<TimelineEngine | null>(null);
+  
+  // Engine API functions (plain objects safe for passing to children)
+  // Ye plain object hai jo serialization-safe hai
+  const [engineApi, setEngineApi] = useState<TimelineEngineApi>({
+    seek: () => {},
+    getCurrentTime: () => 0,
+    getDuration: () => 0,
+    isPlaying: false
+  });
+
+  // videoRef preview canvas ke liye
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [timelineEngine, setTimelineEngine] = useState<TimelineEngine | null>(null);
 
   // Initialize timeline engine
   useEffect(() => {
@@ -43,106 +190,99 @@ export function VideoEditor() {
       subscribe: () => ({ unsubscribe: () => {} }),
     };
     
+    // TimelineEngine instance ko ref mein store karo - state mein nahi
     const engine = new TimelineEngine(mockStore as any);
-    setTimelineEngine(engine);
+    timelineEngineRef.current = engine;
+    
+    // Engine API functions ko plain object mein wrap karo
+    // Yahan class instance capture nahi ho raha, sirf plain functions hain
+    setEngineApi({
+      seek: (time: number) => {
+        if (timelineEngineRef.current) timelineEngineRef.current.seek(time);
+      },
+      getCurrentTime: () => {
+        return timelineEngineRef.current ? timelineEngineRef.current.getCurrentTime() : 0;
+      },
+      getDuration: () => {
+        return timelineEngineRef.current ? timelineEngineRef.current.getDuration() : 0;
+      },
+      isPlaying: timelineEngineRef.current ? timelineEngineRef.current.getIsPlaying() : false
+    });
     
     return () => {
-      engine.stop();
+      if (timelineEngineRef.current) {
+        timelineEngineRef.current.stop();
+      }
     };
   }, []);
 
-  // Handle video playback
-  const {
-    isPlaying,
-    currentTime,
-    duration,
-    togglePlay,
-    seek,
-    setVolume,
-    toggleMute,
-    setPlaybackRate,
-  } = useVideoPlayer();
-
-  // Sync timeline with video playback
+  // Sync engine API ref when engine state changes
   useEffect(() => {
-    if (timelineEngine && !isPlaying && currentTime > 0) {
-      timelineEngine.seek(currentTime);
+    if (timelineEngineRef.current) {
+      setEngineApi({
+        seek: (time: number) => {
+          if (timelineEngineRef.current) timelineEngineRef.current.seek(time);
+        },
+        getCurrentTime: () => {
+          return timelineEngineRef.current ? timelineEngineRef.current.getCurrentTime() : 0;
+        },
+        getDuration: () => {
+          return timelineEngineRef.current ? timelineEngineRef.current.getDuration() : 0;
+        },
+        isPlaying: timelineEngineRef.current ? timelineEngineRef.current.getIsPlaying() : false
+      });
     }
-  }, [timelineEngine, isPlaying, currentTime]);
-
-  // Handle play/pause from timeline
-  const handleTimelinePlayPause = () => {
-    if (isPlaying) {
-      togglePause();
-    } else {
-      togglePlay();
-    }
-  };
-
-  const togglePause = () => {
-    // This would pause the video - in real implementation, we'd call video player pause
-    console.log('Toggle pause');
-  };
+  }, [timelineEngineRef.current]);
 
   return (
-    <div className="flex h-[calc(100vh-4.5rem)] bg-background">
-      {/* Sidebar - Media Library, Templates, Filters, etc. */}
-      <Sidebar />
-      
-      {/* Main Editor Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Toolbar */}
-        <Toolbar onPlayPause={handleTimelinePlayPause} />
-        <Separator className="h-0.5 bg-border" />
+    <VideoPlayerContextProvider videoRef={videoRef}>
+      <div className="flex h-[calc(100vh-4.5rem)] bg-background">
+        {/* Sidebar - Media Library, Templates, Filters, etc. */}
+        <Sidebar />
         
-        {/* Preview and Timeline */}
+        {/* Main Editor Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Video Preview */}
-          <PreviewCanvas 
-            videoRef={videoRef}
-            isPlaying={isPlaying}
-            currentTime={currentTime}
-            duration={duration}
-            onSeek={seek}
-            onTogglePlay={togglePlay}
-            onSetVolume={setVolume}
-            onToggleMute={toggleMute}
-            onSetPlaybackRate={setPlaybackRate}
-          />
+          {/* Toolbar */}
+          <Toolbar onPlayPause={() => {}} />
           <Separator className="h-0.5 bg-border" />
           
-          {/* Timeline */}
-          <div className="flex-1 overflow-hidden">
-            <TimelineRuler 
-              timelineEngine={timelineEngine} 
-              videoRef={videoRef} 
-              isPlaying={isPlaying} 
-              currentTime={currentTime} 
-              duration={duration}
-              onSeek={seek}
-              onSetTime={(time) => {
-                if (timelineEngine) timelineEngine.seek(time);
-                // In real app, we'd also seek the video
-              }}
-            />
-            <TimelineTracks 
-              timelineEngine={timelineEngine} 
-              videoRef={videoRef} 
-              isPlaying={isPlaying} 
-              currentTime={currentTime} 
-              duration={duration}
-              onSeek={seek}
-              onAddClip={() => {}}
-              onRemoveClip={() => {}}
-              onUpdateClip={() => {}}
-              onSetTime={(time) => {
-                if (timelineEngine) timelineEngine.seek(time);
-                // In real app, we'd also seek the video
-              }}
-            />
+          {/* Preview and Timeline */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Video Preview */}
+            <PreviewCanvas />
+            <Separator className="h-0.5 bg-border" />
+            
+            {/* Timeline */}
+            <div className="flex-1 overflow-hidden">
+              <TimelineRuler 
+                seek={engineApi.seek}
+                getCurrentTime={engineApi.getCurrentTime}
+                getDuration={engineApi.getDuration}
+                isPlaying={engineApi.isPlaying}
+                videoRef={videoRef}
+                onSeek={engineApi.seek}
+                onSetTime={(time) => {
+                  if (timelineEngineRef.current) timelineEngineRef.current.seek(time);
+                }}
+              />
+              <TimelineTracks 
+                seek={engineApi.seek}
+                getCurrentTime={engineApi.getCurrentTime}
+                getDuration={engineApi.getDuration}
+                isPlaying={engineApi.isPlaying}
+                videoRef={videoRef}
+                onSeek={engineApi.seek}
+                onAddClip={() => {}}
+                onRemoveClip={() => {}}
+                onUpdateClip={() => {}}
+                onSetTime={(time) => {
+                  if (timelineEngineRef.current) timelineEngineRef.current.seek(time);
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </VideoPlayerContextProvider>
   );
 }

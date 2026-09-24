@@ -1,0 +1,11 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/@alerts/page": "app/@alerts/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/dashboards/page": "app/dashboards/page.js",
+  "/@dashboard/page": "app/@dashboard/page.js",
+  "/settings/page": "app/settings/page.js",
+  "/explore/page": "app/explore/page.js",
+  "/@analytics/page": "app/@analytics/page.js",
+  "/page": "app/page.js"
+}

@@ -1,31 +1,23 @@
+"use client";
+
 import './globals.css';
-import type { Metadata } from 'next';
 import { config } from '@wideo11/config';
+import { AdminClient } from './admin-client';
 
-export const metadata: Metadata = {
-  title: 'Admin Dashboard',
-  description: 'Admin panel for Wideo11',
-};
+export default function Layout({ children }: { children: React.ReactNode }) {
+  console.log("Config loaded:", { 
+    appUrl: config.NEXT_PUBLIC_APP_URL, 
+    buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, 
+    sisterShare: config.SISTER_SHARE_PERCENTAGE 
+  });
 
-export default function Layout({ children, slot }: { children: React.ReactNode; slot: string }) {
-  // Log config for verification (server side)
-  console.log("Config loaded:", { appUrl: config.NEXT_PUBLIC_APP_URL, buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: config.SISTER_SHARE_PERCENTAGE });
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100">
-      {/* Sidebar */}
-      <aside className="w-64 bg-gray-800 border-r border-gray-700 p-4">
-        <h2 className="text-xl font-bold mb-4 text-blue-400">Wideo11 Admin</h2>
-        <nav className="space-y-2">
-          <a href="#" className="px-3 py-2 rounded text-sm font-medium hover:bg-gray-700">Metrics</a>
-          <a href="#" className="px-3 py-2 rounded text-sm font-medium hover:bg-gray-700">Telemetry</a>
-          <a href="#" className="px-3 py-2 rounded text-sm font-medium hover:bg-gray-700">Controllers</a>
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-6 overflow-auto">
-        {children}
-      </main>
-    </div>
+    <html lang="en" className="h-full">
+      <body className="h-full bg-slate-950 text-slate-100 antialiased overflow-hidden">
+        <AdminClient>
+          {children}
+        </AdminClient>
+      </body>
+    </html>
   );
 }

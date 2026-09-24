@@ -1,0 +1,1 @@
+"use strict";exports.id=410,exports.ids=[410],exports.modules={9410:(r,t,e)=>{e.r(t),e.d(t,{default:()=>o});let o=(0,e(893).createProxy)(String.raw`D:\newproject\apps\monitor\src\components\dashboard\dashboard-editor.tsx#default`)}};
