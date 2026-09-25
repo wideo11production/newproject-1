@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -21,9 +21,9 @@ WORKDIR /app
 
 COPY --from=builder /app/webhook-receiver .
 
-EXPOSE 8081
+EXPOSE 8088
 
-ENV PORT=8081
+ENV PORT=8088
 ENV ENVIRONMENT=production
 
-ENTRYPOINT ["./webhook-receiver"]
+ENTRYPOINT ["/webhook-receiver"]

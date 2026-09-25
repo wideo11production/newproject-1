@@ -31,7 +31,7 @@ if (-not $Region) {
 }
 
 # ============================================================================
-# HELPER FUNCTIONS (Same as local script but with production adjustments)
+# HELPER FUNCTIONS
 # ============================================================================
 
 function Write-Hinglish {
@@ -91,40 +91,36 @@ function Parse-JetStreamConfig {
     # Read the configuration file
     $content = Get-Content -Path $ConfigFilePath -Raw
     
-    # We'll extract stream and consumer definitions using regex
-    # This is a simplified parser for our specific format
     $streams = @()
     $consumers = @()
     
-    # Extract stream definitions (lines like: STREAM_NAME={ ... })
+    # Extract stream definitions
     $streamPattern = 'STREAM_(\w+)\s*=\s*\{([^}]+)\}'
-    $matches = [regex]::Matches($content, $streamPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
-    foreach ($match in $matches) {
+    $streamMatches = [regex]::Matches($content, $streamPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
+    foreach ($match in $streamMatches) {
         $streamName = "W11_$($match.Groups[1].Value)"  # Prefix with W11_
         $streamBody = $match.Groups[2].Value
         
-        # Parse key-value pairs from the stream body
         $stream = @{ name = $streamName }
         $lines = $streamBody -split "`n"
         foreach ($line in $lines) {
             $line = $line.Trim()
             if ($line -match '^(\w+)\s*:\s*(.+)$') {
-                $key = $matches[0].Groups[1].Value.Trim()
-                $value = $matches[0].Groups[2].Value.Trim()
+                $key = $Matches[1].Trim()
+                $value = $Matches[2].Trim()
                 
-                # Clean up value: remove trailing commas, handle quotes, numbers, arrays
-                if ($value -like '","*') {
-                    $value = $value.Trim('",')
+                # Clean up value
+                $value = $value.TrimEnd(',')
+                if ($value -match '^"(.*)"$') {
+                    $value = $Matches[1]
                 }
-                if ($value -like '"*"') {
-                    $value = $value.Trim('"')
+                elseif ($value -match '^\[(.*)\]$') {
+                    $arrayContent = $Matches[1]
+                    $items = $arrayContent -split ',' | ForEach-Object { $_.Trim().Trim('"').Trim("'") } | Where-Object { $_ }
+                    $value = $items
                 }
                 elseif ($value -match '^\d+_?\d*$') {
                     $value = [int]($value -replace '_', '')
-                }
-                elseif ($value -match '^\[.*\]$') {
-                    # Simple array handling - assume it's already in a usable format
-                    # We'll leave it as string for now and handle in Apply-JetStream
                 }
                 $stream[$key] = $value
             }
@@ -132,101 +128,91 @@ function Parse-JetStreamConfig {
         $streams += $stream
     }
     
-    # Extract consumer definitions (similar pattern)
+    # Extract consumer definitions
     $consumerPattern = 'CONSUMER_(\w+)\s*=\s*\{([^}]+)\}'
-    $matches = [regex]::Matches($content, $consumerPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
-    foreach ($match in $matches) {
+    $consumerMatches = [regex]::Matches($content, $consumerPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
+    foreach ($match in $consumerMatches) {
         $consumerName = $match.Groups[1].Value
         $consumerBody = $match.Groups[2].Value
         
         $consumer = @{ name = $consumerName }
         $lines = $consumerBody -split "`n"
-        foreach ($line in $lines) {
-            $line = $line.Trim()
+        foreach ($line in$lines) {
+            $line =$line.Trim()
             if ($line -match '^(\w+)\s*:\s*(.+)$') {
-                $key = $matches[0].Groups[1].Value.Trim()
-                $value = $matches[0].Groups[2].Value.Trim()
+                $key =$Matches[1].Trim()
+                $value =$Matches[2].Trim()
                 
                 # Clean up value
-                if ($value -like '","*') {
-                    $value = $value.Trim('",')
+                $value =$value.TrimEnd(',')
+                if ($value -match '^"(.*)"$') {
+                    $value =$Matches[1]
                 }
-                if ($value -like '"*"') {
-                    $value = $value.Trim('"')
+                elseif ($value -match '^\[(.*)\]$') {
+                    $arrayContent =$Matches[1]
+                    $items =$arrayContent -split ',' | ForEach-Object { $_.Trim().Trim('"').Trim("'") } \vert{} Where-Object { $_ }
+                    $value =$items
                 }
                 elseif ($value -match '^\d+_?\d*$') {
                     $value = [int]($value -replace '_', '')
                 }
-                $consumer[$key] = $value
+                $consumer[$key] =$value
             }
         }
-        $consumers += $consumer
+        $consumers +=$consumer
     }
     
     Write-Hinglish "Parsed $($streams.Count) stream(s) and $($consumers.Count) consumer(s) from configuration."
-    return @{ streams = $streams; consumers = $consumers }
+    return @{ streams = $streams; consumers =$consumers }
 }
 
 function Apply-JetStreamConfig {
-    param([hashrate]$Config)
+    param([hashtable]$Config)
     Write-Hinglish "Applying NATS JetStream configuration..."
     
     # Apply streams
-    foreach ($stream in $config.streams) {
-        $streamName = $stream.name
-        $subjects = $stream.subjects -join ","
-        $retention = $stream.retention
-        $maxMsgs = $stream.max_msgs
-        $maxBytes = $stream.max_bytes
-        $maxAge = $stream.max_age
-        $discard = $stream.discard
-        $storage = $stream.storage
-        $replicas = $stream.num_replicas
+    foreach ($stream in$Config.streams) {
+        $streamName =$stream.name
+        $subjects = if ($stream.subjects -is [array]) { $stream.subjects -join "," } else { $stream.subjects }
+        $retention =$stream.retention
+        $maxMsgs =$stream.max_msgs
+        $maxBytes =$stream.max_bytes
+        $maxAge =$stream.max_age
+        $discard =$stream.discard
+        $storage =$stream.storage
+        $replicas = $stream.num_replicas$cliArgs = @("stream", "add", $streamName, "--subjects", $subjects)
+        if ($retention) { $cliArgs += @("--retention", $retention) }
+        if ($maxMsgs) { $cliArgs += @("--max-msgs", $maxMsgs) }
+        if ($maxBytes) { $cliArgs += @("--max-bytes", $maxBytes) }
+        if ($maxAge) { $cliArgs += @("--max-age", $maxAge) }
+        if ($discard) { $cliArgs += @("--discard", $discard) }
+        if ($storage) { $cliArgs += @("--storage", $storage) }
+        if ($replicas) { $cliArgs += @("--num-replicas", $replicas) }
+        if ($stream.'allow_rollup_hard') {$cliArgs += "--allow-rollup-hard" }
+        if ($stream.description) { $cliArgs += @("--description", $stream.description) }
         
-        $cmd = "nats stream add $streamName --subjects $subjects"
-        if ($retention) { $cmd += " --retention $retention" }
-        if ($maxMsgs) { $cmd += " --max-msgs $maxMsgs" }
-        if ($maxBytes) { $cmd += " --max-bytes $maxBytes" }
-        if ($maxAge) { $cmd += " --max-age $maxAge" }
-        if ($discard) { $cmd += " --discard $discard" }
-        if ($storage) { $cmd += " --storage $storage" }
-        if ($replicas) { $cmd += " --num-replicas $replicas" }
-        if ($stream.'allow_rollup_hard') { $cmd += " --allow-rollup-hard" }
-        if ($stream.description) { $cmd += " --description `"$($stream.description)`"" }
-        
-        Write-Hinglish "Executing: $cmd"
-        & nats @($cmd.Split(' ')) | Out-Null
+        Write-Hinglish "Executing: nats $($cliArgs -join ' ')"
+        & nats @cliArgs | Out-Null
         Write-Hinglish "Stream '$streamName' created/updated."
     }
     
     # Apply consumers
-    foreach ($consumer in $config.consumers) {
-        $consumerName = $consumer.name
-        $streamName = $consumer.stream_name
-        $durable = $consumer.durable_name
-        $filter = $consumer.filter_subject
-        $ackPolicy = $consumer.ack_policy
-        $ackWait = $consumer.ack_wait
-        $maxDeliver = $consumer.max_deliver
-        $backOff = $consumer.back_off -join ','  # Assuming it's an array
-        $maxAckPending = $consumer.max_ack_pending
-        $replayPolicy = $consumer.replay_policy
-        $startSeq = $consumer.start_seq
+    foreach ($consumer in$Config.consumers) {
+        $consumerName =$consumer.name
+        $streamName = $consumer.stream_name$durable = $consumer.durable_name$filter = $consumer.filter_subject$ackPolicy = $consumer.ack_policy$ackWait = $consumer.ack_wait$maxDeliver = $consumer.max_deliver$backOff = if ($consumer.back_off -is [array]) {$consumer.back_off -join ',' } else { $consumer.back_off }$maxAckPending = $consumer.max_ack_pending$replayPolicy = $consumer.replay_policy$startSeq = $consumer.start_seq$cliArgs = @("consumer", "add", $streamName,$consumerName)
+        if ($durable) { $cliArgs += @("--durable-name", $durable) }
+        if ($filter) { $cliArgs += @("--filter-subject", $filter) }
+        if ($ackPolicy) { $cliArgs += @("--ack-policy", $ackPolicy) }
+        if ($ackWait) { $cliArgs += @("--ack-wait", $ackWait) }
+        if ($maxDeliver) { $cliArgs += @("--max-deliver", $maxDeliver) }
+        if ($backOff) { $cliArgs += @("--back-off", $backOff) }
+        if ($maxAckPending) { $cliArgs += @("--max-ack-pending", $maxAckPending) }
+        if ($replayPolicy) { $cliArgs += @("--replay-policy", $replayPolicy) }
+        if ($startSeq) { $cliArgs += @("--start-sequence", $startSeq) }
+        if ($consumer.description) { $cliArgs += @("--description", $consumer.description) }
         
-        $cmd = "nats consumer add $streamName $consumerName"
-        if ($durable) { $cmd += " --durable-name $durable" }
-        if ($filter) { $cmd += " --filter-subject $filter" }
-        if ($ackPolicy) { $cmd += " --ack-policy $ackPolicy" }
-        if ($ackWait) { $cmd += " --ack-wait $ackWait" }
-        if ($maxDeliver) { $cmd += " --max-deliver $maxDeliver" }
-        if ($backOff) { $cmd += " --back-off $backOff" }
-        if ($maxAckPending) { $cmd += " --max-ack-pending $maxAckPending" }
-        if ($replayPolicy) { $cmd += " --replay-policy $replayPolicy" }
-        if ($startSeq) { $cmd += " --start-sequence $startSeq" }
-        if ($consumer.description) { $cmd += " --description `"$($consumer.description)`"" }
-        
-        Write-Hinglish "Executing: $cmd"
-        & nats @($cmd.Split(' ')) | Out-Null
+        Write-Hinglish "Executing: nats $($cliArgs -join ' ')"
+        & nats @cliArgs | Out-Null
         Write-Hinglish "Consumer '$consumerName' created/updated on stream '$streamName'."
     }
     
@@ -237,21 +223,19 @@ function Apply-DatabaseMigrations {
     param([string]$Namespace = "wideo11-production")
     Write-Hinglish "Applying database schema migrations via temporary Kubernetes Jobs..."
     
-    # Create a temporary directory for the job manifests
     $tempDir = Join-Path $env:TEMP "wideo11-migrations-$(Get-Random)"
     try {
         New-Item -ItemType Directory -Path $tempDir | Out-Null
         
-        # For each service, for each migration SQL file, create a Kubernetes Job manifest that runs the SQL
         Get-ChildItem -Path $ServicesDir -Directory | ForEach-Object {
-            $serviceName = $_.Name
-            $serviceMigrationDir = Join-Path $_.FullName "migrations"
+            $serviceName =$_.Name
+            $serviceMigrationDir = Join-Path$_.FullName "migrations"
             if (Test-Path $serviceMigrationDir) {
                 Get-ChildItem -Path $serviceMigrationDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
-                    $sqlFile = $_.FullName
+                    $sqlFile =$_.FullName
                     $jobName = "$($serviceName)-$($_.BaseName)"
-                    # Read the SQL content
-                    $sqlContent = Get-Content -Path $sqlFile -Raw
+                    $sqlContent = Get-Content -Path$sqlFile -Raw
+                    $indentedSql = ($sqlContent -split "`r?\n" | ForEach-Object { "    $_" }) -join "`n"
                     
                     $jobManifest = @"
 apiVersion: batch/v1
@@ -266,7 +250,7 @@ spec:
       - name: migrator
         image: postgres:15
         command: ["sh", "-c"]
-        args: ["until pg_isready -h \$(DB_HOST) -U \$(DB_USER); do sleep 1; done; PGPASSWORD=\$(DB_PASSWORD) psql -h \$(DB_HOST) -U \$(DB_USER) -d \$(DB_NAME) -f /migrations/$(($_.Name))"]
+        args: ["until pg_isready -h `$DB_HOST -U `$DB_USER; do sleep 1; done; PGPASSWORD=`$DB_PASSWORD psql -h `$DB_HOST -U `$DB_USER -d `$DB_NAME -f /migrations/$($_.Name)"]
         env:
         - name: DB_HOST
           valueFrom:
@@ -284,7 +268,7 @@ spec:
               name: db-credentials
               key: password
         - name: DB_NAME
-          value: $serviceName  # Assuming database name matches service name
+          value: $serviceName
         volumeMounts:
         - name: migration-volume
           mountPath: /migrations
@@ -301,46 +285,40 @@ metadata:
   name: $jobName-configmap
   namespace: $Namespace
 data:
-  $($_.Name): | 
-                $sqlContent
+  $($_.Name): \vert{}$indentedSql
 "@
                     $jobManifestPath = Join-Path $tempDir "$jobName.yaml"
-                    $jobManifest | Out-File -FilePath $jobManifestPath -Encoding utf8
+                    $jobManifest \vert{} Out-File -FilePath$jobManifestPath -Encoding utf8
                     Write-Hinglish "Generated migration job manifest: $jobName"
                 }
             }
         }
 
-        # Apply all the generated job manifests
         Write-Hinglish "Applying migration job manifests..."
         kubectl apply -f $tempDir | Out-Null
         
-        # Wait for the migration jobs to complete
         Write-Hinglish "Waiting for migration jobs to complete..."
-        $maxAttempts = 60  # Increased timeout for production
-        $attempt = 0
-        while ($attempt -lt $maxAttempts) {
-            $incompleteJobs = kubectl get jobs -n $Namespace -o jsonpath='{.items[?(@.status.succeeded<@.spec.completions)].metadata.name}' 2>$null
+        $maxAttempts = 60$attempt = 0
+        while ($attempt -lt$maxAttempts) {
+            $incompleteJobsRaw = kubectl get jobs -n$Namespace -o jsonpath='{.items[?(@.status.succeeded<@.spec.completions)].metadata.name}' 2>$null$incompleteJobs = ($incompleteJobsRaw -split '\s+') \vert{} Where-Object {$_ }
             if (-not $incompleteJobs) {
                 Write-Hinglish "All migration jobs have completed."
                 break
             }
-            Write-Hinglish "Waiting for $($incompleteJobs.Length) migration job(s) to complete... (Attempt $($attempt+1)/$maxAttempts)"
+            Write-Hinglish "Waiting for $($incompleteJobs.Count) migration job(s) to complete... (Attempt$($attempt+1)/$maxAttempts)"
             Start-Sleep -Seconds 10
             $attempt++
         }
         
-        if ($attempt -eq $maxAttempts) {
+        if ($attempt -eq$maxAttempts) {
             Write-Warning "Timeout waiting for migration jobs to complete. Some migrations may still be running."
         }
         else {
-            # Clean up completed jobs to keep the namespace tidy
             kubectl delete jobs --all -n $Namespace | Out-Null
             Write-Hinglish "Cleaned up completed migration jobs."
         }
     }
     finally {
-        # Clean up the temporary directory
         if (Test-Path $tempDir) {
             Remove-Item -Path $tempDir -Recurse -Force
         }
@@ -351,26 +329,31 @@ function Validate-BusinessRules {
     param([string]$Namespace = "wideo11-production")
     Write-Hinglish "Validating core business rules (2000 INR maintenance buffer & 5% sister allocation)..."
     
-    # Check ConfigMap for config-service (assuming it holds SSOT values)
     try {
-        $configMap = kubectl get configmap config-service-config -n $Namespace -o json
-        $data = $configMap.data
-        
-        $maintenanceBuffer = $data["MAINTENANCE_BUFFER_INR"]
-        $sisterAllocation = $data["SISTER_ALLOCATION_PERCENT"]
-        
-        if ($maintenanceBuffer -eq "2000") {
-            Write-Hinglish "✓ Maintenance buffer validation passed: $maintenanceBuffer INR"
+        $configMapJson = kubectl get configmap config-service-config -n $Namespace -o json 2>$null
+        if ($configMapJson) {
+            $configMap =$configMapJson | ConvertFrom-Json
+            $data =$configMap.data
+            
+            $maintenanceBuffer =$data.MAINTENANCE_BUFFER_INR
+            $sisterAllocation =$data.SISTER_ALLOCATION_PERCENT
+            
+            if ($maintenanceBuffer -eq "2000") {
+                Write-Hinglish "✓ Maintenance buffer validation passed: $maintenanceBuffer INR"
+            }
+            else {
+                Write-Warning "✗ Maintenance buffer validation failed: expected '2000', got '$maintenanceBuffer'"
+            }
+            
+            if ($sisterAllocation -eq "5") {
+                Write-Hinglish "✓ Sister allocation validation passed: $sisterAllocation%"
+            }
+            else {
+                Write-Warning "✗ Sister allocation validation failed: expected '5', got '$sisterAllocation'"
+            }
         }
         else {
-            Write-Warning "✗ Maintenance buffer validation failed: expected '2000', got '$maintenanceBuffer'"
-        }
-        
-        if ($sisterAllocation -eq "5") {
-            Write-Hinglish "✓ Sister allocation validation passed: $sisterAllocation%"
-        }
-        else {
-            Write-Warning "✗ Sister allocation validation failed: expected '5', got '$sisterAllocation'"
+            Write-Warning "ConfigMap 'config-service-config' not found in namespace '$Namespace'."
         }
     }
     catch {
@@ -390,16 +373,14 @@ try {
     
     # 2. Build and push all Go service images to GCR
     Write-Hinglish "Building and pushing Go service images to GCR..."
+    $pushedImages = @{}
     Get-ChildItem -Path $ServicesDir -Directory | ForEach-Object {
-        $serviceName = $_.Name
-        $servicePath = $_.FullName
-        $imageName = BuildAndPushGoServiceImage -ServiceName $serviceName -ServicePath $servicePath
-        # Store the image name for later use (we'll use a global variable or just rely on the function returning it)
-        # We'll set it in the next step
-        Set-ServiceImage -ServiceName $serviceName -ImageName $imageName
+        $serviceName =$_.Name
+        $servicePath =$_.FullName
+        $imageName = BuildAndPushGoServiceImage -ServiceName$serviceName -ServicePath $servicePath$pushedImages[$serviceName] =$imageName
     }
     
-    # 3. Apply Kubernetes manifests (assuming they exist in k8s directory)
+    # 3. Apply Kubernetes manifests
     if (Test-Path $K8sDir) {
         Apply-K8sManifests -ManifestPath $K8sDir
     }
@@ -407,15 +388,18 @@ try {
         Write-Warning "Kubernetes manifests directory not found at: $K8sDir. Skipping manifest application."
     }
     
-    # 4. Apply database schema migrations via Jobs (using our new function)
+    # 4. Apply database schema migrations via Jobs
     Apply-DatabaseMigrations -Namespace $Namespace
     
-    # 5. Update deployments to use the newly pushed images (already done in step 2 via Set-ServiceImage)
-    Write-Hinglish "All service images have been updated to the latest production versions."
+    # 5. Update deployments to use newly pushed images
+    Write-Hinglish "Updating deployments to use newly pushed images..."
+    foreach ($serviceName in$pushedImages.Keys) {
+        Set-ServiceImage -ServiceName $serviceName -ImageName $pushedImages[$serviceName]
+    }
     
     # 6. Apply NATS JetStream configuration from jetstream-config.md
     if (Test-Path $JetStreamConfigFile) {
-        $jetStreamConfig = Parse-JetStreamConfig -ConfigFilePath $JetStreamConfigFile
+        $jetStreamConfig = Parse-JetStreamConfig -ConfigFilePath$JetStreamConfigFile
         Apply-JetStreamConfig -Config $jetStreamConfig
     }
     else {

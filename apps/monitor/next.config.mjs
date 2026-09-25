@@ -10,9 +10,6 @@ const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
   distDir: '.next-monitor',
-  experimental: {
-    monorepo: false,
-  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.unsplash.com' },

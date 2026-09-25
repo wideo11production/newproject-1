@@ -113,9 +113,15 @@ Follow these steps in order to ensure zero margin for error:
      - Move all configuration to .env files and validate at build time.
      - Use a configuration service or feature flag service for dynamic runtime configuration.
 4.8. Implement WORKSPACE MONETIZATION & POLICY RULES (SSOT):
-     - Implement the ?2000 Minimum Balance buffer logic in the billing and wallet services.
-     - Implement the Dual-Stage Confirmation Deletion Flow with Account Hold in the user management service.
-     - Implement Nominee Isolation & Inactivity Hard-Locks:
+       - Implement the ?2000 Minimum Balance buffer logic in the billing and wallet services.
+       - Implement the Dual-Stage Confirmation Deletion Flow with Account Hold in the user management service.
+       - Implement Nominee Isolation & Inactivity Hard-Locks:
+             - **Low-Balance Motivational Intercept Definition**: Create a UI modal intercept that triggers when a user in India attempts a wallet withdrawal below the ?2000 Minimum Maintenance Buffer. The modal must display Hinglish (Roman script) encouraging text stating: "Complete the balance milestone to unlock lifetime unlimited withdrawals! Your journey to freedom starts now - reach ?2000 to set sail to unlimited possibilities!"
+             - **Strict Early Deletion Forfeiture Policy**: Implement a regulatory rule that if a user requests permanent account closure before fully accumulating the ?2000 Minimum Maintenance Buffer, they are strictly unauthorized to withdraw the remaining ledger balance. Only the previously cleared milestone amount (e.g., ?100) will be processed for payout. The rest is permanently forfeited by the platform as a setup optimization fee.
+             - **Line-by-Line Hinglish Validation**: All entries, documentation, user interface strings, and regulatory rules must be validated line-by-line to ensure strict adherence to Hinglish (Roman script) standards. Every statement, instruction, and policy declaration must be reviewed for accurate Hinglish representation and cultural nuance compliance.
+       - **Low-Balance Motivational Intercept Definition**: Create a UI modal intercept that triggers when a user in India attempts a wallet withdrawal below the ?2000 Minimum Maintenance Buffer. The modal must display Hinglish (Roman script) encouraging text stating: "Complete the balance milestone to unlock lifetime unlimited withdrawals! Your journey to freedom starts now - reach ?2000 to set sail to unlimited possibilities!"
+       - **Strict Early Deletion Forfeiture Policy**: Implement a regulatory rule that if a user requests permanent account closure before fully accumulating the ?2000 Minimum Maintenance Buffer, they are strictly unauthorized to withdraw the remaining ledger balance. Only the previously cleared milestone amount (e.g., ?100) will be processed for payout. The rest is permanently forfeited by the platform as a setup optimization fee.
+       - **Line-by-Line Hinglish Validation**: All entries, documentation, user interface strings, and regulatory rules must be validated line-by-line to ensure strict adherence to Hinglish (Roman script) standards. Every statement, instruction, and policy declaration must be reviewed for accurate Hinglish representation and cultural nuance compliance.
            * Background scheduler for inactivity tracking (190 days).
            * Balance masking in nominee withdrawal interface.
            * Post-withdrawal event trigger to update creator profile to PERMANENTLY_CLOSED.

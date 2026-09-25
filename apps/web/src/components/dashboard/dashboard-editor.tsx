@@ -1,3 +1,4 @@
+"use client";
 import { useState, useRef, useCallback } from 'react';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wideo11/ui/card';
 import { Button, buttonVariants } from '@wideo11/ui/button';
