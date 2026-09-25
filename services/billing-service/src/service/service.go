@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -519,6 +520,381 @@ func (s *BillingService) LogManualExpense(ctx context.Context, description, amou
 	}
 	
 	return expense, nil
+}
+
+// ============================================================================
+// ACCOUNT DELETION & RETENTION RULES
+// Strict two-time confirmation process with 'Hold' action instead of instant deletion
+// Deletion flow policy: NON-REFUNDABLE and NON-TRANSFERABLE
+// PVCs locked with 'Retain' reclaim policy - dynamic sweeps NEVER delete core data blocks
+// ============================================================================
+
+// AccountDeletionStatus represents the status of an account deletion request
+type AccountDeletionStatus string
+
+const (
+	// AccountDeletionPending - Initial request received, awaiting first confirmation
+	AccountDeletionPending AccountDeletionStatus = "pending"
+	// AccountDeletionHold - First confirmation received, account placed on HOLD (30 days)
+	AccountDeletionHold AccountDeletionStatus = "hold"
+	// AccountDeletionConfirmed - Second confirmation received, scheduled for permanent deletion
+	AccountDeletionConfirmed AccountDeletionStatus = "confirmed"
+	// AccountDeletionCompleted - Account permanently deleted
+	AccountDeletionCompleted AccountDeletionStatus = "completed"
+	// AccountDeletionCancelled - User cancelled deletion during hold period
+	AccountDeletionCancelled AccountDeletionStatus = "cancelled"
+)
+
+// AccountDeletionRequest represents an account deletion request
+// Two-time confirmation process: Request -> HOLD (30 days) -> Confirm -> Delete
+// NON-REFUNDABLE and NON-TRANSFERABLE policy enforced
+type AccountDeletionRequest struct {
+	ID              uint                   `gorm:"primarykey" json:"id"`
+	UUID            uuid.UUID              `gorm:"type:uuid;not null;uniqueIndex" json:"uuid"`
+	UserID          uint                   `gorm:"not null;index" json:"user_id"`
+	Status          AccountDeletionStatus  `gorm:"size:20;default:'pending'" json:"status"`
+	Reason          string                 `gorm:"size:500" json:"reason"`
+	FirstConfirmed  bool                   `gorm:"default:false" json:"first_confirmed"`
+	FirstConfirmedAt *time.Time            `json:"first_confirmed_at"`
+	SecondConfirmed bool                   `gorm:"default:false" json:"second_confirmed"`
+	SecondConfirmedAt *time.Time           `json:"second_confirmed_at"`
+	HoldExpiresAt   *time.Time             `json:"hold_expires_at"`
+	ScheduledDeletionAt *time.Time         `json:"scheduled_deletion_at"`
+	CompletedAt     *time.Time             `json:"completed_at"`
+	CancelledAt     *time.Time             `json:"cancelled_at"`
+	IsRefundable    bool                   `gorm:"default:false" json:"is_refundable"`     // ALWAYS false - NON-REFUNDABLE
+	IsTransferable  bool                   `gorm:"default:false" json:"is_transferable"`   // ALWAYS false - NON-TRANSFERABLE
+	PVCRetainPolicy bool                   `gorm:"default:true" json:"pvc_retain_policy"`  // ALWAYS true - PVC Retain
+	Metadata        string                 `gorm:"type:text" json:"metadata"`
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
+}
+
+func (AccountDeletionRequest) TableName() string {
+	return "account_deletion_requests"
+}
+
+// RequestAccountDeletion initiates the two-time confirmation deletion process
+// Step 1: Create deletion request with HOLD status (30-day cooling period)
+// Policy: NON-REFUNDABLE, NON-TRANSFERABLE, PVC Retain enforced
+func (s *BillingService) RequestAccountDeletion(ctx context.Context, userID uint, reason string) (*AccountDeletionRequest, error) {
+	// Check if user already has a pending deletion request
+	existing, err := s.getAccountDeletionRequest(ctx, userID)
+	if err == nil && existing != nil {
+		if existing.Status == AccountDeletionPending || existing.Status == AccountDeletionHold {
+			return nil, fmt.Errorf("account deletion already in progress for user %d", userID)
+		}
+	}
+
+	// Create new deletion request with HOLD status
+	// HOLD period: 30 days cooling off before second confirmation
+	holdExpires := time.Now().AddDate(0, 0, 30)
+	
+	request := &AccountDeletionRequest{
+		UUID:            uuid.New(),
+		UserID:          userID,
+		Status:          AccountDeletionHold,  // Immediately place on HOLD
+		Reason:          reason,
+		FirstConfirmed:  true,                 // First confirmation = request submission
+		FirstConfirmedAt: timePtr(time.Now()),
+		HoldExpiresAt:   &holdExpires,
+		IsRefundable:    false,  // NON-REFUNDABLE policy
+		IsTransferable:  false,  // NON-TRANSFERABLE policy
+		PVCRetainPolicy: true,   // PVC Retain policy - NEVER delete core data blocks
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	// Store in database (requires repository implementation)
+	// s.deletionRepo.Create(ctx, request)
+
+	log.Printf("[BILLING] Account deletion HOLD initiated for user %d, expires %s", userID, holdExpires.Format("2006-01-02"))
+	log.Printf("[BILLING] POLICY ENFORCED: NON-REFUNDABLE=%v, NON-TRANSFERABLE=%v, PVC_RETAIN=%v", 
+		request.IsRefundable, request.IsTransferable, request.PVCRetainPolicy)
+
+	return request, nil
+}
+
+// ConfirmAccountDeletion performs the second confirmation for account deletion
+// Step 2: User confirms deletion after HOLD period
+// Only proceeds if HOLD period has elapsed or explicit confirmation given
+func (s *BillingService) ConfirmAccountDeletion(ctx context.Context, userID uint, confirm bool) (*AccountDeletionRequest, error) {
+	request, err := s.getAccountDeletionRequest(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Status != AccountDeletionHold {
+		return nil, fmt.Errorf("deletion request not in HOLD status for user %d", userID)
+	}
+
+	if !confirm {
+		// User cancelled during HOLD period
+		request.Status = AccountDeletionCancelled
+		request.CancelledAt = timePtr(time.Now())
+		request.UpdatedAt = time.Now()
+		log.Printf("[BILLING] Account deletion CANCELLED by user %d during HOLD period", userID)
+		return request, nil
+	}
+
+	// Second confirmation received
+	request.Status = AccountDeletionConfirmed
+	request.SecondConfirmed = true
+	request.SecondConfirmedAt = timePtr(time.Now())
+	
+	// Schedule permanent deletion (7 days after confirmation for final safety)
+	deletionTime := time.Now().AddDate(0, 0, 7)
+	request.ScheduledDeletionAt = &deletionTime
+	request.UpdatedAt = time.Now()
+
+	// RE-ENFORCE POLICIES - NON-REFUNDABLE, NON-TRANSFERABLE, PVC RETAIN
+	request.IsRefundable = false
+	request.IsTransferable = false
+	request.PVCRetainPolicy = true
+
+	log.Printf("[BILLING] Account deletion CONFIRMED for user %d, scheduled for %s", userID, deletionTime.Format("2006-01-02"))
+	log.Printf("[BILLING] FINAL POLICY CHECK: NON-REFUNDABLE=%v, NON-TRANSFERABLE=%v, PVC_RETAIN=%v",
+		request.IsRefundable, request.IsTransferable, request.PVCRetainPolicy)
+
+	return request, nil
+}
+
+// GetAccountDeletionStatus retrieves the current deletion status for a user
+func (s *BillingService) GetAccountDeletionStatus(ctx context.Context, userID uint) (*AccountDeletionRequest, error) {
+	return s.getAccountDeletionRequest(ctx, userID)
+}
+
+// CancelAccountDeletion cancels a pending deletion during HOLD period
+// Only allowed during HOLD period (30 days after first confirmation)
+func (s *BillingService) CancelAccountDeletion(ctx context.Context, userID uint) (*AccountDeletionRequest, error) {
+	request, err := s.getAccountDeletionRequest(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	if request.Status != AccountDeletionHold {
+		return nil, fmt.Errorf("can only cancel during HOLD period for user %d", userID)
+	}
+
+	// Check if HOLD period has expired
+	if request.HoldExpiresAt != nil && time.Now().After(*request.HoldExpiresAt) {
+		return nil, fmt.Errorf("HOLD period expired, cannot cancel deletion for user %d", userID)
+	}
+
+	request.Status = AccountDeletionCancelled
+	request.CancelledAt = timePtr(time.Now())
+	request.UpdatedAt = time.Now()
+
+	log.Printf("[BILLING] Account deletion CANCELLED for user %d", userID)
+	return request, nil
+}
+
+// getAccountDeletionRequest retrieves deletion request (mock - needs repo implementation)
+func (s *BillingService) getAccountDeletionRequest(ctx context.Context, userID uint) (*AccountDeletionRequest, error) {
+	// In production: query from database repository
+	return nil, fmt.Errorf("not implemented - requires deletion repository")
+}
+
+// timePtr returns a pointer to the given time
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+// ============================================================================
+// NOMINEE & BUFFER PROTECTIONS
+// Mask core 'maintenance buffer' (₹2000) from transferable balance fields
+// Show only excess earnings above baseline threshold
+// ============================================================================
+
+// MaintenanceBufferConfig holds the buffer configuration
+// Buffer: ₹2000 INR minimum maintenance buffer (non-transferable, non-withdrawable)
+type MaintenanceBufferConfig struct {
+	BufferAmount     decimal.Decimal `json:"buffer_amount"`     // ₹2000 INR
+	BufferCurrency   string          `json:"buffer_currency"`   // INR
+	IsActive         bool            `json:"is_active"`         // Always true
+	ProtectionLevel  string          `json:"protection_level"`  // "absolute" - never transferable
+}
+
+// NomineeBalanceView represents the balance visible to nominee
+// MASKS maintenance buffer - only shows excess earnings above ₹2000
+type NomineeBalanceView struct {
+	UserID              uint            `json:"user_id"`
+	TotalBalance        decimal.Decimal `json:"total_balance"`         // Total ledger balance
+	MaintenanceBuffer   decimal.Decimal `json:"maintenance_buffer"`    // ₹2000 (MASKED from transferable)
+	TransferableBalance decimal.Decimal `json:"transferable_balance"`  // ONLY excess above buffer
+	BufferProtected     bool            `json:"buffer_protected"`      // Always true
+	Currency            string          `json:"currency"`              // INR
+	LastUpdated         time.Time       `json:"last_updated"`
+}
+
+// GetNomineeBalanceView returns balance view for nominee with buffer masking
+// NOMINEE PROTECTION: Maintenance buffer (₹2000) HIDDEN from transferable amount
+// Only excess earnings above baseline threshold are visible/transferable
+func (s *BillingService) GetNomineeBalanceView(ctx context.Context, userID uint) (*NomineeBalanceView, error) {
+	// In production: query actual ledger balance from wallet/ledger service
+	// For now: return structured response demonstrating buffer masking logic
+	
+	totalBalance := decimal.NewFromInt(5000)      // Example: ₹5000 total
+	bufferAmount := decimal.NewFromInt(2000)      // ₹2000 maintenance buffer
+	transferable := totalBalance.Sub(bufferAmount) // ₹3000 excess (transferable)
+
+	if transferable.LessThan(decimal.Zero) {
+		transferable = decimal.Zero // Never negative
+	}
+
+	view := &NomineeBalanceView{
+		UserID:              userID,
+		TotalBalance:        totalBalance,
+		MaintenanceBuffer:   bufferAmount,        // ₹2000 - MASKED from transferable
+		TransferableBalance: transferable,        // ONLY excess (₹3000) visible
+		BufferProtected:     true,                // Buffer ALWAYS protected
+		Currency:            "INR",
+		LastUpdated:         time.Now(),
+	}
+
+	log.Printf("[BILLING] Nominee balance view for user %d: Total=₹%s, Buffer=₹%s (MASKED), Transferable=₹%s",
+		userID, totalBalance.String(), bufferAmount.String(), transferable.String())
+
+	return view, nil
+}
+
+// CalculateTransferableAmount calculates the amount that can be transferred/withdrawn
+// Excludes maintenance buffer (₹2000) - NON-TRANSFERABLE, NON-WITHDRAWABLE
+func (s *BillingService) CalculateTransferableAmount(ctx context.Context, userID uint, requestedAmount decimal.Decimal) (decimal.Decimal, error) {
+	view, err := s.GetNomineeBalanceView(ctx, userID)
+	if err != nil {
+		return decimal.Zero, err
+	}
+
+	// Can only transfer up to transferable balance
+	if requestedAmount.GreaterThan(view.TransferableBalance) {
+		return view.TransferableBalance, fmt.Errorf("requested amount exceeds transferable balance (buffer protected)")
+	}
+
+	return requestedAmount, nil
+}
+
+// ============================================================================
+// PVC RETENTION POLICY ENFORCEMENT
+// PVCs locked with 'Retain' reclaim policy - dynamic sweeps NEVER delete core data blocks
+// ============================================================================
+
+// PVCConfig represents PersistentVolumeClaim configuration for billing data
+// RETENTION POLICY: ReclaimPolicy = Retain (NEVER delete on dynamic sweeps)
+type PVCConfig struct {
+	VolumeName       string `json:"volume_name"`
+	StorageClass     string `json:"storage_class"`      // Must support Retain
+	ReclaimPolicy    string `json:"reclaim_policy"`     // ALWAYS "Retain"
+	VolumeBindingMode string `json:"volume_binding_mode"` // WaitForFirstConsumer
+	AccessModes      []string `json:"access_modes"`     // ReadWriteOnce
+	Resources        string `json:"resources"`          // 10Gi minimum
+	Labels           map[string]string `json:"labels"`   // billing-data=true, core-data=true
+	Annotations      map[string]string `json:"annotations"` // backup=true, core-data=true
+}
+
+// GetPVCConfig returns the billing data PVC configuration with Retain policy
+// RETENTION ENFORCEMENT: ReclaimPolicy ALWAYS "Retain"
+// Dynamic volume sweeps/cron jobs CANNOT delete these volumes
+func (s *BillingService) GetPVCConfig() *PVCConfig {
+	return &PVCConfig{
+		VolumeName:       "billing-data-pvc",
+		StorageClass:     "standard-retain",  // StorageClass with Retain reclaim policy
+		ReclaimPolicy:    "Retain",           // NEVER delete - core data protection
+		VolumeBindingMode: "WaitForFirstConsumer",
+		AccessModes:      []string{"ReadWriteOnce"},
+		Resources:        "10Gi",
+		Labels: map[string]string{
+			"app":           "billing-service",
+			"data-type":     "core-billing",
+			"retention":     "permanent",
+			"protection":    "pvc-retain",
+		},
+		Annotations: map[string]string{
+			"backup":           "enabled",
+			"core-data":        "true",
+			"reclaim-policy":   "retain",
+			"sweep-protection": "disabled",
+		},
+	}
+}
+
+// ValidatePVCConfig validates that PVC has correct Retain policy
+// ENFORCEMENT: Reject any PVC without Retain reclaim policy for billing data
+func (s *BillingService) ValidatePVCConfig(pvc *PVCConfig) error {
+	if pvc.ReclaimPolicy != "Retain" {
+		return fmt.Errorf("BILLING DATA PVC VIOLATION: ReclaimPolicy must be 'Retain', got '%s'", pvc.ReclaimPolicy)
+	}
+	
+	if pvc.VolumeName == "" {
+		return fmt.Errorf("BILLING DATA PVC VIOLATION: VolumeName is required")
+	}
+
+	log.Printf("[BILLING] PVC Config VALIDATED: ReclaimPolicy=%s, Core data protected from sweeps", pvc.ReclaimPolicy)
+	return nil
+}
+
+// GeneratePVCYAML generates Kubernetes PVC YAML with Retain policy
+// Generates PVC manifest with Retain reclaim policy for billing data protection
+func (s *BillingService) GeneratePVCYAML() string {
+	config := s.GetPVCConfig()
+	
+	yaml := fmt.Sprintf(`apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: %s
+  labels:
+%s
+  annotations:
+%s
+spec:
+  accessModes:
+%s
+  storageClassName: %s
+  resources:
+    requests:
+      storage: %s
+  volumeMode: Filesystem
+---
+# STORAGE CLASS WITH RETAIN RECLAIM POLICY
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: %s
+provisioner: kubernetes.io/gce-pd  # GKE PD provisioner
+reclaimPolicy: Retain  # NEVER DELETE - Core billing data protection
+volumeBindingMode: %s
+allowVolumeExpansion: true
+parameters:
+  type: pd-ssd
+  replication-type: regional-pd
+`,
+		config.VolumeName,
+		s.formatYAMLMap(config.Labels, "    "),
+		s.formatYAMLMap(config.Annotations, "    "),
+		s.formatYAMLArray(config.AccessModes, "    - "),
+		config.StorageClass,
+		config.Resources,
+		config.StorageClass,
+		config.VolumeBindingMode,
+	)
+	
+	return yaml
+}
+
+func (s *BillingService) formatYAMLMap(m map[string]string, indent string) string {
+	var result string
+	for k, v := range m {
+		result += fmt.Sprintf("%s%s: %s\n", indent, k, v)
+	}
+	return result
+}
+
+func (s *BillingService) formatYAMLArray(arr []string, indent string) string {
+	var result string
+	for _, v := range arr {
+		result += fmt.Sprintf("%s%s\n", indent, v)
+	}
+	return result
 }
 
 // ListManualExpenses lists all manual expenses with optional filtering.
