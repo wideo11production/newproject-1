@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-state-pvc
+  namespace: production
+  labels:
+    app: billing-service
+    storage-engine: local-auto-rotation
+    reclaim-policy: retain
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "local-ssd-retain"
+    volume.binding.mode: "WaitForFirstConsumer"
+    pvc.auto-rotation.enabled: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-ssd-retain
+  resources:
+    requests:
+      storage: 50Gi
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-streams-pvc
+  namespace: production
+  labels:
+    app: billing-service
+    storage-engine: local-auto-rotation
+    reclaim-policy: retain
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "local-ssd-retain"
+    volume.binding.mode: "WaitForFirstConsumer"
+    pvc.auto-rotation.enabled: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-ssd-retain
+  resources:
+    requests:
+      storage: 20Gi
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: background-queues-pvc
+  namespace: production
+  labels:
+    app: billing-service
+    storage-engine: local-auto-rotation
+    reclaim-policy: retain
+  annotations:
+    volume.beta.kubernetes.io/storage-class: "local-ssd-retain"
+    volume.binding.mode: "WaitForFirstConsumer"
+    pvc.auto-rotation.enabled: "true"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-ssd-retain
+  resources:
+    requests:
+      storage: 30Gi
+  volumeMode: Filesystem

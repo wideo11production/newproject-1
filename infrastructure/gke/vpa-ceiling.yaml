@@ -1,0 +1,33 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: backend-services-vpa
+  namespace: production
+  labels:
+    app: backend-services
+    ceiling-enforcement: "76-percent"
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: backend-services
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: backend
+        maxAllowed:
+          cpu: "2000m"
+          memory: "4Gi"
+        minAllowed:
+          cpu: "500m"
+          memory: "1Gi"
+        controlledResources: ["cpu", "memory"]
+      - containerName: sidecar-metrics
+        maxAllowed:
+          cpu: "100m"
+          memory: "128Mi"
+        minAllowed:
+          cpu: "10m"
+          memory: "32Mi"
+        controlledResources: ["cpu", "memory"]

@@ -1,0 +1,23 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-ssd-retain
+  labels:
+    app: local-storage-engine
+    reclaim-policy: retain
+    binding-mode: waitforfirstconsumer
+    engine: pvc-auto-rotation
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+allowVolumeExpansion: false
+parameters:
+  type: local-ssd
+  fsType: ext4
+  # PVC Auto-Rotation Engine parameters
+  autoRotation.enabled: "true"
+  autoRotation.tempTTLHours: "24"
+  autoRotation.sweepIntervalHours: "6"
+  autoRotation.diskCapacityFreezeGB: "100"
+  autoRotation.secureOverwritePasses: "3"
+  autoRotation.externalDrivesBypassed: "true"

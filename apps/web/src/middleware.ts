@@ -1,12 +1,21 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { getToken } from 'next-auth/jwt';
+import { authRateLimitMiddleware } from '@/lib/rate-limiter';
 
 // Ye middleware sabhi routes ko protect karta hai, sirf public routes whitelist ki gayi hain.
 // Agar user unauthenticated hai aur usne protected route ki request ki, to usko /signup par redirect kardiya jata hai.
 // Hinglish comments: har line ka arth samjhne ke liye.
 
 export async function middleware(request: NextRequest) {
+  // PHASE 1: Rate Limiting for Auth Routes
+  // Rigid per-IP limit: 1 request per minute for registration/login
+  // Second request within 60s = 429 drop + IP flag
+  const rateLimitResponse = authRateLimitMiddleware(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse; // Return 429 immediately
+  }
+
   // Public routes jo bina authentication ke access kiye ja sakte hain
   const publicPaths = ['/', '/login', '/signup', '/api/auth']; // /api/auth ko bhi whitelist kiya hai kyunki Next-Auth ke routes yahan se guzarte hain
 
