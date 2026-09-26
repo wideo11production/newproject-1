@@ -13,3 +13,6 @@ CREATE DATABASE billing_service;
 
 -- Auth service database (users, sessions, devices, PINs, refresh tokens)
 CREATE DATABASE auth_service;
+
+-- Currency service database (exchange_rates = SSOT for all currency rates)
+CREATE DATABASE currency_service;

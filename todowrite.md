@@ -290,17 +290,86 @@ jab zaroorat ho tab banayein.
 
 ---
 
-## PART 7 — Action items ABHI (is turn me)
+## PART 7 — Is turn me kya COMPLETE hua (evidence-based)
 
-| # | Kaam | Status |
-|---|------|--------|
-| 1 | `billing-service` broken package fix (`unix` import) | ✅ **DONE** — build clean |
-| 2 | Poora project audit (41 services, 7 broken, 0 tests) | ✅ **DONE** — PART 1 |
-| 3 | `todowrite.md` ye report | ✅ **DONE** |
-| 4 | Multi-currency service banana | ⏳ Next (spec ready — PART 4) |
-| 5 | MinIO deploy karna | ⏳ Next |
-| 6 | Tests likhna (Phase A) | ⏳ Recommended next |
-| 7 | Junk files delete | ⏸️ **Aapka confirm chahiye** |
+Ye sab VERIFIED hai - live commands se check kiya, guess nahi.
+
+### 7.1 Cleanup (DONE)
+| Item | Status |
+|------|--------|
+| `test_import.go`, `audit.txt`, `migration_report.txt`, `yaml_updates.txt`, `TODO.md.bak` | ✅ Deleted |
+| `gateway`, `nats-client`, `normalnotification`, `bot-service`, `targeting-service` | ✅ Deleted (5 broken, 0 deployed) |
+| `transcoding-service/src/` legacy duplicate | ✅ Deleted (galat import paths) |
+| `billing-service` broken package | ✅ Fixed (build-tagged diskusage split) |
+| Services count | 41 → **36** |
+
+### 7.2 MinIO DEPLOYED (DONE) ✅
+- **Registry trap avoid kiya**: `minio/minio` Docker Hub par BLOCKED tha
+  ("pull access denied"), quay.io bhi (401 UNAUTHORIZED). **Source se build kiya**
+  - Go binary compile karke minimal Alpine image. Zero registry dependency.
+- Buckets: `video` + `thumbnails` ✅
+- Verified: object write + read (16B) ✅
+- Console: http://localhost:9001
+- `mc` (client) bhi source se build kiya kyunki `minio/mc` bhi blocked tha
+
+### 7.3 TESTS — 17 PASSING (pehle ZERO the) ✅
+| Suite | Tests | Covers |
+|-------|-------|--------|
+| `auth-service/internal/password` | **8 PASS** | bcrypt cost 12, no plaintext, salt, 72-byte limit, SHA-256 token hashing |
+| `billing-service/src/service` | **9 PASS** | 5% sister share, INR 2000 buffer mask, transfer limits, law independence |
+
+Ye tests **deliberately FAIL** karenge agar koi future change 5% share ya INR 2000
+mask tod de. Ye pehle ZERO safety net thi.
+
+### 7.4 MULTI-CURRENCY SERVICE (DONE) ✅
+- `services/currency-service/` port **8086**, healthy
+- Tables: `exchange_rates` (SSOT) + `conversion_history` (audit)
+- 12 currencies seeded, verified conversion: 1000 INR → 12 USD ✅
+- **Inverse pairs work** (USD→INR auto-inverts) ✅
+- **24h FIXED interval** (cron nahi - drift nahi hoga)
+- **Default source = `manual`** = koi network call NAHI = **zero-cost guarantee**
+- Paid sources (Open Exchange/Fixer/CurrencyLayer) jaan-boojh kar nahi diye
+
+### 7.5 REAL PROMETHEUS (DONE) ✅
+- `generateMockMetrics()` **DELETED** (fake `Math.random()` data)
+- Real metrics flowing: `cpuCores=1.51`, `memoryGB=3.42`, `networkRxGB=12.64`, `containersUp=4`
+- **cAdvisor ADDED** (bina iske container metrics exist hi nahi karti thi)
+- Prometheus config bug fix: duplicate `cadvisor` job (container crash kar raha tha)
+- `dataEgress` honestly **"SEEDED"** marked - fake ko real jaisa NAHI dikhaya
+
+### 7.6 FONT STACK (DONE) ✅
+- `next/font/google` se Inter **hataya** 4 apps se (build crash karta tha)
+- Grafana system stack, 7 apps me, shared constant se
+- `monitor` ka missing `<html>`/`<body>` bhi fix kiya
+
+---
+
+## PART 7B — Ab bhi BAQI hai (honest list)
+
+Ye maine is turn me NAHI kiya, aur wajah saaf hai:
+
+| Item | Kyu nahi hua | Kya chahiye |
+|------|---------------|-------------|
+| **36 me se 32 services deploy nahi** | Wo roadmap ke future phases hain, broken bhi nahi | Phase-wise deploy |
+| **transcoding-service deploy nahi** | Rebuild karna hai MinIO se wire karke | MinIO ab ready hai |
+| **Data egress REAL nahi** | MinIO Prometheus export nahi karta | MinIO exporter ya custom collector |
+| **CI/CD nahi** | Time nahi mila | GitHub Actions |
+| **Ingress/TLS nahi** | GKE infra chahiye | Let's Encrypt (free) |
+| **Currency frontend app nahi** | Backend ready hai, `apps/currency` banana bacha | 1-2 ghante |
+| **Auth integration tests nahi** | Sirf password unit tests hue | DB-backed integration tests |
+
+**Recommended next step:** transcoding-service ko MinIO se wire karke deploy
+karna - kyunki ab storage ready hai aur HLS pipeline ka foundation pura hai.
+
+---
+
+## PART 8 — FINAL STACK (20 containers, sab healthy)
+
+| Layer | Services |
+|-------|----------|
+| **Frontend (7)** | web:3000, monitor:3001, video-editor:3002, billing:3003, admin:3004, analytics:3005, editor:3006 |
+| **Backend (5)** | dashboard:8080, webhook:8081, billing:8082, auth:8085, **currency:8086** (NEW) |
+| **Infra (8)** | postgres, redis, nats, **minio** (NEW), mail, prometheus, alertmanager, **cadvisor** (NEW) |
 
 ---
 

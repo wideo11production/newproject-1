@@ -18,6 +18,14 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
+  # cAdvisor - container CPU/memory/network REAL metrics
+  # Ye job ke bina dashboard pe "no data" aata tha kyunki container metrics
+  # sirf cAdvisor se aati hain (node-exporter se nahi).
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: '/metrics'
+
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['host.docker.internal:9100']
@@ -36,7 +44,3 @@ scrape_configs:
     static_configs:
       - targets: ['nats:8222']
     metrics_path: '/metrics'
-
-  - job_name: 'cadvisor'
-    static_configs:
-      - targets: ['host.docker.internal:8080']

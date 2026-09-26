@@ -187,25 +187,30 @@ services:
       MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
     volumes:
       # Named volume = data container recreate par bhi safe rehta hai
-      minio_data:/data
+      - minio_data:/data
     command: server /data --console-address ":9001"
     restart: unless-stopped
     healthcheck:
-      # MinIO ka /minio/health/live endpoint check karte hain
-      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      # MinIO ka live endpoint check karte hain. NOTE: pehle yahan "mc ready local"
+      # tha, lekin ye image sirf minio server binary rakhti hai (mc nahi) -
+      # isliye healthcheck fail ho raha tha: "/bin/sh: mc: not found".
+      # Dockerfile me curl install hai, isliye ussi se check karte hain.
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
       interval: 15s
       timeout: 10s
-      retries: 10
-      start_period: 30s
+      retries: 5
+      start_period: 20s
 
   # Bucket auto-provisioning - ek chhuta sa init container jo
   # 'video' aur 'thumbnails' buckets banata hai + lifecycle rules lagata hai
   minio-init:
-    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    build:
+      context: ./infrastructure/storage
+      dockerfile: mc.Dockerfile
     container_name: wideo11-minio-init
     depends_on:
       minio:
-        condition: service_started
+        condition: service_healthy
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
@@ -219,8 +224,8 @@ services:
       mc alias set local $$MINIO_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
       mc mb --ignore-existing local/$$MINIO_VIDEO_BUCKET &&
       mc mb --ignore-existing local/$$MINIO_THUMBNAIL_BUCKET &&
-      mc anonymous set download local/$$MINIO_VIDEO_BUCKET &&
-      echo 'Buckets created' &&
+      echo 'Buckets provisioned successfully' &&
+      mc ls local &&
       exit 0
       "
     restart: "no"
@@ -293,6 +298,69 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Currency Service - Multi-currency microservice (SSOT for exchange rates)
+  # exchange_rates table yahi service banati hai; baaki services yahin se padhte hain.
+  # DEFAULT source "manual" hai = koi network call NAHI = zero cost guarantee.
+  currency-service:
+    build:
+      context: ./services/currency-service
+      dockerfile: Dockerfile
+    container_name: wideo11-currency-service
+    ports:
+      - "8086:8086"
+    environment:
+      # Sab values .env se (SSOT) - code me kuch hardcoded nahi
+      CURRENCY_SERVICE_PORT: 8086
+      CURRENCY_DB_HOST: postgres
+      CURRENCY_DB_PORT: 5432
+      CURRENCY_DB_USER: postgres
+      CURRENCY_DB_PASSWORD: postgres
+      CURRENCY_DB_NAME: currency_service
+      CURRENCY_DB_SSLMODE: disable
+      # 24 ghante ka fixed interval update
+      CURRENCY_RATE_UPDATE_INTERVAL_HOURS: ${CURRENCY_RATE_UPDATE_INTERVAL_HOURS:-24}
+      CURRENCY_RATE_FETCH_TIMEOUT_SECONDS: ${CURRENCY_RATE_FETCH_TIMEOUT_SECONDS:-30}
+      # "manual" = offline seed data (recommended, zero cost)
+      # "frankfurter" = free, no API key
+      CURRENCY_RATE_SOURCE: ${CURRENCY_RATE_SOURCE:-manual}
+      CURRENCY_BASE_CURRENCY: ${CURRENCY_BASE_CURRENCY:-INR}
+      GIN_MODE: release
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # cAdvisor - container resource metrics for Prometheus
+  # KYUN ZAROORI: bina iske Prometheus ko sirf "up" milta hai - container CPU
+  # aur memory ke liye cAdvisor chahiye hota hai. Iske bina dashboard pe
+  # "no data" aata tha.
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: wideo11-cadvisor
+    # NOTE: koi host port expose NAHI kiya. Prometheus scrape internal docker
+    # network se karta hai (cadvisor:8080), isliye host port ki zarurat nahi.
+    # Pehle yahan "8080:8080" likha tha jo dashboard-service se conflict karta
+    # tha (wo bhi 8080 use karta hai) - isliye hata diya.
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    command:
+      - --housekeeping_interval=10s
+      - --docker_only=true
+      - --store_container_labels=false
+    restart: always
 
   # Webhook Receiver
   webhook-receiver:
