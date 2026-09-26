@@ -7,12 +7,53 @@ import { Button, buttonVariants } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
 import { Separator } from '@wideo11/ui/separator';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
-import dynamic from 'next/dynamic';
 
-const LazyDashboardEditor = dynamic(() => import('@/components/dashboard/dashboard-editor'), {
-  loading: () => <DashboardEditorSkeleton />,
-  ssr: false
-});
+interface DashboardEditorProps {
+  dashboard: Dashboard;
+  onUpdate: (dashboard: Dashboard) => void;
+}
+
+function DashboardEditor({ dashboard, onUpdate }: DashboardEditorProps) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {dashboard.panels.map((panel) => (
+          <Card key={panel.id} className="bg-[hsl(223_47%_11.2%)] border-[hsl(217.2_32.6%_17.5%)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-white">{panel.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-gray-300">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Type</span>
+                <Badge variant="secondary" className="bg-gray-800 text-gray-300">
+                  {panel.type}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Size</span>
+                <span>{panel.gridPos.w}x{panel.gridPos.h}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400">Targets</span>
+                <span>{panel.targets.length}</span>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onUpdate({ ...dashboard, title: `${dashboard.title} (Updated)` })}
+          className="border-gray-700 text-gray-200 hover:bg-gray-800"
+        >
+          Save changes
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -67,7 +108,7 @@ export default function DashboardPage() {
       <main className="flex-1 overflow-auto p-4">
         <Suspense fallback={<DashboardEditorSkeleton />}>
           {dashboard ? (
-            <LazyDashboardEditor dashboard={dashboard} onUpdate={setDashboard} />
+            <DashboardEditor dashboard={dashboard} onUpdate={setDashboard} />
           ) : (
             <DashboardEditorSkeleton />
           )}

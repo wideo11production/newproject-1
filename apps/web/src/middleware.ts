@@ -17,7 +17,16 @@ export async function middleware(request: NextRequest) {
   }
 
   // Public routes jo bina authentication ke access kiye ja sakte hain
-  const publicPaths = ['/', '/login', '/signup', '/api/auth']; // /api/auth ko bhi whitelist kiya hai kyunki Next-Auth ke routes yahan se guzarte hain
+  // '/auth' add kiya gaya hai taaki /auth/register aur /auth/login pages reachable hon.
+  // Pehle ye public nahi the, isliye middleware unauthenticated user ko /signup par redirect
+  // kar deta tha - aur /signup exist nahi karta, to 404 loop ban jata tha.
+  const publicPaths = [
+    '/',
+    '/auth',
+    '/login',
+    '/signup',
+    '/api/auth',
+  ]; // /api/auth bhi whitelist hai kyunki auth API routes yahan se aati hain
 
   // Check karta hai ki request ka path public path mein se koi hai ya nahi
   const isPublicPath = publicPaths.some((path) =>
@@ -32,10 +41,10 @@ export async function middleware(request: NextRequest) {
 
   const isAuthenticated = !!token;
 
-  // Agar path public nahi hai aur user authenticate nahi hai, to /signup par redirect kardo
+  // Agar path public nahi hai aur user authenticate nahi hai, to register page par redirect kardo
   if (!isPublicPath && !isAuthenticated) {
-    // Hard redirect to signup page
-    return NextResponse.redirect(new URL('/signup', request.url));
+    // Hard redirect to register page (jo ab exist karta hai - /signup nahi)
+    return NextResponse.redirect(new URL('/auth/register', request.url));
   }
 
   // Agar sab kuch theek hai, to age badhao
@@ -47,12 +56,18 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except for the ones starting with:
-     * - api/auth (Next-Auth)
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico (favicon)
      * - public folder
+     *
+     * IMPORTANT: 'api/auth' pehle is exclusion list me tha, jisse middleware
+     * /api/auth/* par chala hi nahi - aur rate limiter wahan dead code ban gaya tha.
+     * Ab api/auth exclude NAHI hota, taaki registration/login API requests bhi
+     * 1-request-per-IP-per-minute defense barrier ke through jaayein.
+     * Ye auth API routes publicPaths me hain, isliye auth redirect nahi hoga -
+     * sirf rate limiter active rahega. (Rate limiter lib khud intact hai, koi badlav nahi.)
      */
-    '/((?!api/auth|_next/static|_next/image|favicon.ico|public).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
