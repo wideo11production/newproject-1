@@ -1,4 +1,4 @@
-﻿# ====================================================================
+# ====================================================================
 # MONITOR MULTI-STAGE DOCKERFILE (MONOREPO PNPM OPTIMIZED)
 # ====================================================================
 # Base: node:20-alpine - minimal footprint, pnpm package manager
@@ -123,7 +123,7 @@ WORKDIR /app
 # Standalone output apne aap me required node_modules include karta hai, isliye
 # runner stage me poora node_modules copy karne ki zaroorat nahi - image chhoti rehti hai
 COPY --from=builder --chown=nextjs:nodejs /app/apps/monitor/.next-monitor/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/monitor/.next-monitor/static ./.next-monitor/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/monitor/.next-monitor/static ./apps/monitor/.next-monitor/static
 
 # Switch to non-root user
 USER nextjs

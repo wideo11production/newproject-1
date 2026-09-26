@@ -299,6 +299,53 @@ services:
       timeout: 5s
       retries: 5
 
+  # Transcoding Service - REAL FFmpeg HLS pipeline + MinIO upload
+  # Pehle ye service deploy nahi thi (orphan thi). Ab deploy hai aur:
+  #   - FFmpeg actually CHALA jata hai (.m3u8 + .ts chunks generate)
+  #   - Chunks MinIO 'video' bucket me upload hote hain
+  #   - Playback seedha MinIO se hoti hai (GKE compute bypass)
+  # Hinglish: video transcode + MinIO upload dono real
+  transcoding-service:
+    build:
+      context: ./services/transcoding-service
+      dockerfile: Dockerfile
+    container_name: wideo11-transcoding
+    ports:
+      - "8083:8083"
+    environment:
+      TRANSCODING_SERVICE_PORT: 8083
+      # MinIO connection (self-hosted, SSOT se)
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
+      # Public host jo playlist URL me use hoga (client ko yahi dikhta hai)
+      MINIO_PUBLIC_HOST: ${MINIO_PUBLIC_HOST:-localhost:9000}
+      # HLS segment duration - 2 ya 4 seconds (SSOT)
+      HLS_SEGMENT_SECONDS: ${HLS_SEGMENT_SECONDS:-4}
+      HLS_LIST_SIZE: ${HLS_LIST_SIZE:-0}
+      # Kitne transcode parallel chal sakte hain
+      TRANSCODING_MAX_WORKERS: ${TRANSCODING_MAX_WORKERS:-2}
+      TRANSCODING_TEMP_DIR: /tmp/transcoding
+      GIN_MODE: release
+    depends_on:
+      minio:
+        condition: service_healthy
+    # Hinglish: transcoding heavy CPU kaam hai - isliye resource limits
+    # zaroori hain taaki doosre services starve na hon
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
   # Currency Service - Multi-currency microservice (SSOT for exchange rates)
   # exchange_rates table yahi service banati hai; baaki services yahin se padhte hain.
   # DEFAULT source "manual" hai = koi network call NAHI = zero cost guarantee.
@@ -321,10 +368,15 @@ services:
       # 24 ghante ka fixed interval update
       CURRENCY_RATE_UPDATE_INTERVAL_HOURS: ${CURRENCY_RATE_UPDATE_INTERVAL_HOURS:-24}
       CURRENCY_RATE_FETCH_TIMEOUT_SECONDS: ${CURRENCY_RATE_FETCH_TIMEOUT_SECONDS:-30}
-      # "manual" = offline seed data (recommended, zero cost)
-      # "frankfurter" = free, no API key
-      CURRENCY_RATE_SOURCE: ${CURRENCY_RATE_SOURCE:-manual}
+      # "manual" = offline seed data (zero cost)
+      # "frankfurter" = LIVE + failover (primary Frankfurter, secondary exchangerate-api)
+      CURRENCY_RATE_SOURCE: ${CURRENCY_RATE_SOURCE:-frankfurter}
       CURRENCY_BASE_CURRENCY: ${CURRENCY_BASE_CURRENCY:-INR}
+      # ExchangeRate-API key - SECONDARY (failover) source ke liye
+      # SSOT se aati hai; code me kabhi hardcoded nahi
+      EXCHANGERATE_API_KEY: ${EXCHANGERATE_API_KEY:-}
+      # Currency rounding - 2 decimal places (paise ka standard)
+      CURRENCY_ROUNDING_PLACES: ${CURRENCY_ROUNDING_PLACES:-2}
       GIN_MODE: release
     depends_on:
       postgres:
@@ -361,6 +413,29 @@ services:
       - --docker_only=true
       - --store_container_labels=false
     restart: always
+
+  # Currency Dashboard (Next.js) - Port 3007
+  # Live exchange rates table + converter. Data currency-service se aata hai.
+  currency-app:
+    build:
+      context: .
+      dockerfile: apps/currency/Dockerfile
+    container_name: wideo11-currency-app
+    ports:
+      - "3007:3007"
+    environment:
+      # Browser se hit hone wala URL (container name nahi, localhost chahiye
+      # kyunki ye browser me khulta hai - internal DNS browser ko nahi dikhta)
+      NEXT_PUBLIC_CURRENCY_API: ${CURRENCY_PUBLIC_API:-http://localhost:8086}
+    depends_on:
+      currency-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3007/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # Webhook Receiver
   webhook-receiver:

@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -79,9 +80,15 @@ type AppConfig struct {
 	// Rate update interval - 24 ghante
 	RateUpdateInterval time.Duration
 	RateFetchTimeout   time.Duration
-	// Default source: "manual" (no network) ya "frankfurter" (free, no key)
+	// Default source: "manual" (no network) ya "frankfurter"/"exchangerate-api"
 	RateSource         string
+	// ExchangeRateAPI key - SECONDARY source ke liye. SSOT (.env) se aata hai.
+	// NOTE: ye kabhi code me hardcoded nahi hoga - sirf env se.
+	ExchangeRateAPIKey string
 	BaseCurrency       string
+	// Rounding: currency amounts 2 decimal places par round hoti hain.
+	// Aapne ye rule confirm kiya tha - "2 points par round off".
+	RoundingPlaces int
 }
 
 var cfg AppConfig
@@ -105,6 +112,28 @@ func loadConfig() {
 	// DEFAULT = "manual" -> koi network call NAHI -> zero cost guarantee
 	cfg.RateSource = envStr("CURRENCY_RATE_SOURCE", "manual")
 	cfg.BaseCurrency = envStr("CURRENCY_BASE_CURRENCY", "INR")
+
+	// ExchangeRate API key - SECONDARY (failover) source ke liye
+	// SSOT se aata hai, kabhi hardcoded nahi
+	cfg.ExchangeRateAPIKey = envStr("EXCHANGERATE_API_KEY", "")
+
+	// Rounding places - 2 decimal (currency standard, aapne confirm kiya)
+	cfg.RoundingPlaces = envInt("CURRENCY_ROUNDING_PLACES", 2)
+}
+
+// roundCurrency currency amount ko configured decimal places tak round karta hai
+//
+// RULE: 2 decimal places (paise me). Ye ROUND half-up hai:
+//   16.6665 -> 16.67
+//   4.9995  -> 5.00
+//   12.34   -> 12.34 (already 2dp)
+//
+// KYUN ZAROORI: bina rounding ke floating point arithmetic drift karta hai -
+// jaise 0.1 + 0.2 = 0.30000000000000004. Paise me ye kabhi nahi hona chahiye.
+// Hinglish: paise ko 2 decimal tak round karte hain - half-up rule
+func roundCurrency(amount float64, places int) float64 {
+	shift := math.Pow(10, float64(places))
+	return math.Round(amount*shift) / shift
 }
 
 func envStr(key, def string) string {
@@ -148,17 +177,71 @@ var seedRates = map[string]float64{
 	"CHF": 0.0118,      // 1 CHF ~ 84.7 INR
 }
 
-// refreshRates seed rates ko DB me upsert karta hai
-func refreshRates(db *gorm.DB, source string) (int, error) {
-	count := 0
-	now := time.Now()
+// supportedCurrencies wo list hai jo hum store karte hain
+var supportedCurrencies = []string{
+	"USD", "EUR", "GBP", "JPY", "AUD", "CAD", "SGD", "AED", "CNY", "NZD", "CHF",
+}
 
-	for quote, rate := range seedRates {
+// refreshRates rates ko DB me upsert karta hai
+//
+// 3 MODES (CURRENCY_RATE_SOURCE se, SSOT):
+//   manual           = OFFLINE seed data. Koi network call NAHI. Zero cost.
+//   frankfurter      = LIVE + failover. Primary Frankfurter, secondary
+//                      exchangerate-api. Free dono.
+//   exchangerate-api = LIVE, sirf secondary source use karo (testing)
+//
+// FAILOVER: "frankfurter" mode me agar Frankfurter fail hua to
+// exchangerate-api automatically pick hoga (fetcher.go me implemented).
+func refreshRates(db *gorm.DB, source string) (int, string, error) {
+	var rates map[string]float64
+	var usedSource string
+
+	switch source {
+	case "frankfurter", "exchangerate-api":
+		// LIVE mode - dual source with failover
+		fetcher := NewRateFetcher(
+			cfg.BaseCurrency,
+			supportedCurrencies,
+			cfg.RateFetchTimeout,
+			cfg.ExchangeRateAPIKey,
+		)
+
+		ctx, cancel := context.WithTimeout(context.Background(), cfg.RateFetchTimeout)
+		defer cancel()
+
+		result, err := fetcher.FetchAll(ctx)
+		if err != nil {
+			// Dono source fail. Rates UNCHANGED rehne do (stale ho jayenge
+			// par system BREAK nahi hoga) - ye resilience hai.
+			log.Printf("[CURRENCY] BOTH SOURCES FAILED: %v - keeping old rates", err)
+			return 0, "", err
+		}
+		rates = result.Rates
+		usedSource = result.SourceUsed
+
+	default:
+		// manual (default) - OFFLINE, koi network call nahi
+		rates = make(map[string]float64, len(seedRates))
+		for code, rate := range seedRates {
+			rates[code] = rate
+		}
+		usedSource = "manual"
+	}
+
+	// DB me upsert karo
+	now := time.Now()
+	count := 0
+
+	for quote, rate := range rates {
+		if rate <= 0 {
+			continue
+		}
+
 		record := ExchangeRate{
 			BaseCurrency:  cfg.BaseCurrency,
 			QuoteCurrency: quote,
 			Rate:          rate,
-			Source:        source,
+			Source:        usedSource,
 			FetchedAt:     now,
 		}
 
@@ -167,18 +250,18 @@ func refreshRates(db *gorm.DB, source string) (int, error) {
 			cfg.BaseCurrency, quote).
 			Assign(map[string]interface{}{
 				"rate":       rate,
-				"source":     source,
+				"source":     usedSource,
 				"fetched_at": now,
 			}).
 			FirstOrCreate(&record).Error
 
 		if err != nil {
-			return count, err
+			return count, usedSource, err
 		}
 		count++
 	}
 
-	return count, nil
+	return count, usedSource, nil
 }
 
 // getRate conversion ke liye rate laata hai
@@ -218,13 +301,20 @@ func getRate(db *gorm.DB, from, to string) (*ExchangeRate, error) {
 }
 
 // convert amount ko ek currency se doosri me badalta hai
+//
+// ROUNDING: converted amount ko 2 decimal places tak round kiya jaata hai
+// (cfg.RoundingPlaces, SSOT se). Bina rounding floating point drift karta hai
+// jo paise me kabhi accept nahi hona chahiye.
 func convert(db *gorm.DB, amount float64, from, to string) (float64, float64, int64, error) {
 	rate, err := getRate(db, from, to)
 	if err != nil {
 		return 0, 0, 0, err
 	}
 
-	converted := amount * rate.Rate
+	// Round karo - yahi rule DB me bhi jaata hai
+	rawConverted := amount * rate.Rate
+	converted := roundCurrency(rawConverted, cfg.RoundingPlaces)
+
 	ageSeconds := int64(time.Since(rate.FetchedAt).Seconds())
 
 	return converted, rate.Rate, ageSeconds, nil
@@ -239,11 +329,10 @@ func startScheduler(ctx context.Context, db *gorm.DB) {
 	defer ticker.Stop()
 
 	// Startup par ek immediate refresh (taaki table kabhi khali na rahe)
-	if n, err := refreshRates(db, cfg.RateSource); err != nil {
+	if n, src, err := refreshRates(db, cfg.RateSource); err != nil {
 		log.Printf("[CURRENCY] Initial rate refresh FAILED: %v", err)
 	} else {
-		log.Printf("[CURRENCY] Initial rate refresh done: %d rates (source=%s)",
-			n, cfg.RateSource)
+		log.Printf("[CURRENCY] Initial rate refresh done: %d rates (source=%s)", n, src)
 	}
 
 	for {
@@ -253,14 +342,13 @@ func startScheduler(ctx context.Context, db *gorm.DB) {
 			return
 		case t := <-ticker.C:
 			start := time.Now()
-			n, err := refreshRates(db, cfg.RateSource)
+			n, src, err := refreshRates(db, cfg.RateSource)
 			if err != nil {
 				log.Printf("[CURRENCY] Rate refresh FAILED at %s: %v",
 					t.Format(time.RFC3339), err)
 				continue
 			}
-			log.Printf("[CURRENCY] Rate refresh done: %d rates in %v (next in %v)",
-				n, time.Since(start), cfg.RateUpdateInterval)
+			log.Printf("[CURRENCY] Rate refresh done: %d rates in %v from %s (next in %v)", n, time.Since(start), src, cfg.RateUpdateInterval)
 		}
 	}
 }
@@ -399,15 +487,19 @@ func main() {
 
 	// Manual rate refresh (admin use) - koi network nahi
 	r.POST("/api/v1/rates/refresh", func(c *gin.Context) {
-		n, err := refreshRates(db, cfg.RateSource)
+		n, src, err := refreshRates(db, cfg.RateSource)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"message":       "rates refreshed",
-			"count":         n,
-			"source":        cfg.RateSource,
+			"message": "rates refreshed",
+			"count":   n,
+			// NOTE: "source" ab actual fetched source dikhata hai (failover ho
+			// sakta hai), configured source nahi. Ye zaroori hai taaki pata chale
+			// ki data primary se aaya ya secondary se.
+			"source":          src,
+			"configured_mode": cfg.RateSource,
 		})
 	})
 

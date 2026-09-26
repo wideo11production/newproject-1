@@ -1,4 +1,4 @@
-﻿# ====================================================================
+# ====================================================================
 # BILLING MULTI-STAGE DOCKERFILE (MONOREPO PNPM OPTIMIZED)
 # ====================================================================
 # Base: node:20-alpine - minimal footprint, pnpm package manager
@@ -123,7 +123,7 @@ WORKDIR /app
 # Standalone output apne aap me required node_modules include karta hai, isliye
 # runner stage me poora node_modules copy karne ki zaroorat nahi - image chhoti rehti hai
 COPY --from=builder --chown=nextjs:nodejs /app/apps/billing/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/billing/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/billing/.next/static ./apps/billing/.next/static
 
 # Switch to non-root user
 USER nextjs

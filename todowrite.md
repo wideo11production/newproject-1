@@ -361,15 +361,66 @@ Ye maine is turn me NAHI kiya, aur wajah saaf hai:
 **Recommended next step:** transcoding-service ko MinIO se wire karke deploy
 karna - kyunki ab storage ready hai aur HLS pipeline ka foundation pura hai.
 
+## PART 9 — Latest turn: currency + transcoding + CRITICAL static-asset fix
+
+### 9.1 Currency: rounding + dual-source (DONE) ✅
+- **2-decimal rounding** applied (aapne confirm kiya). Rule: round-half-up.
+  Verified: `333.33 INR → USD = 3.48` (raw = 3.48036)
+- **Dual-source failover** live:
+  - Primary: **Frankfurter** (free, no key) — currently serving ✅
+  - Secondary: **exchangerate-api** (free tier, key in `.env`)
+  - Agar primary fail ho → secondary automatically pick hota hai
+  - Dono fail → rates UNCHANGED (stale ho jayenge par system TOOTEGA nahi)
+- API key `.env` me (SSOT), code me **kabhi nahi**
+- 12 currencies, live, source tracked per-rate
+
+### 9.2 FFmpeg transcoder REAL + deployed (DONE) ✅
+Pehle sirf log karta tha. Ab **asli pipeline**:
+- FFmpeg **actually chalta hai** → `.m3u8` + `.ts` chunks
+- Chunks **MinIO `video` bucket me upload** hote hain
+- Playlist URL client ko milta hai
+- **Verified end-to-end**: 852ms me transcode, 2 files uploaded,
+  valid playlist (`#EXTM3U`, VOD, `#EXT-X-ENDLIST`), 264KiB segment
+- 2 fixed bugs: Go `:=` shadowing (nil pointer crash) + doubled
+  `video/video/` prefix + malformed public URL
+
+### 9.3 Currency dashboard app (DONE) ✅
+- `apps/currency` — port **3007**, healthy
+- Live rates table + converter (2dp)
+- Rate age / stale detection
+- 100% air-gapped fonts
+
+### 9.4 ⚠️ CRITICAL BUG FOUND & FIXED: JS bundles 404
+**Ye bahut serious tha aur mujhe batana zaroori hai.**
+
+SABHI 8 frontends ka JavaScript **404** ho raha tha. HTML 200 aata tha
+(isliye mere pichhle checks pass ho gaye), lekin page ka JS load nahi hota
+tha — matlab browser me page dikhta par **interactive nahi hota**.
+
+**Root cause:** Dockerfile me maine static assets `/app/.next/static` me
+copy kiye the, lekin standalone server `apps/<app>/server.js` se CHALTA
+hai aur apne `__dirname` se static dhundhta hai = `apps/<app>/.next/static`.
+Mismatch → 404.
+
+**Fix:** static ab `apps/<app>/.next/static` me jaata hai (monitor ke liye
+`apps/monitor/.next-monitor/static`, kyunki uska custom distDir hai).
+
+**Verified:** saare 8 ports par JS bundle ab **200**.
+
+**Mera galti:** maine sirf HTML status check kiya tha. JS bundle verify
+nahi kiya tha. Isliye bug itne der se chala gaya.
+
 ---
 
-## PART 8 — FINAL STACK (20 containers, sab healthy)
+## PART 10 — FINAL STATE (22 containers, sab healthy)
 
 | Layer | Services |
 |-------|----------|
-| **Frontend (7)** | web:3000, monitor:3001, video-editor:3002, billing:3003, admin:3004, analytics:3005, editor:3006 |
-| **Backend (5)** | dashboard:8080, webhook:8081, billing:8082, auth:8085, **currency:8086** (NEW) |
-| **Infra (8)** | postgres, redis, nats, **minio** (NEW), mail, prometheus, alertmanager, **cadvisor** (NEW) |
+| **Frontend (8)** | web:3000, monitor:3001, video-editor:3002, billing:3003, admin:3004, analytics:3005, editor:3006, **currency:3007** (NEW) |
+| **Backend (6)** | dashboard:8080, webhook:8081, billing:8082, **transcoding:8083** (NEW), auth:8085, currency:8086 |
+| **Infra (8)** | postgres, redis, nats, minio, mail, prometheus, alertmanager, cadvisor |
+
+**Tests:** 17 passing (auth 8, billing 9)
 
 ---
 

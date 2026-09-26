@@ -1,4 +1,4 @@
-﻿# ====================================================================
+# ====================================================================
 # ANALYTICS MULTI-STAGE DOCKERFILE (MONOREPO PNPM OPTIMIZED)
 # ====================================================================
 # Base: node:20-alpine - minimal footprint, pnpm package manager
@@ -123,7 +123,7 @@ WORKDIR /app
 # Standalone output apne aap me required node_modules include karta hai, isliye
 # runner stage me poora node_modules copy karne ki zaroorat nahi - image chhoti rehti hai
 COPY --from=builder --chown=nextjs:nodejs /app/apps/analytics/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/analytics/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/analytics/.next/static ./apps/analytics/.next/static
 
 # Switch to non-root user
 USER nextjs
