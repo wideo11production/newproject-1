@@ -1,12 +1,16 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+// Google font REMOVED - air-gapped Grafana font stack use ho raha hai.
+// Kyun: "next/font/google" build time par network se Inter fetch karta tha aur
+// network fail hone se build crash ho jati thi ("Failed to fetch Inter" / ECONNRESET).
+// Ye ek baar actually is project me build fail kar chuki hai.
+// Ab koi external font fetch nahi - system fonts native hain, zero latency.
+// Hinglish: Google font hata diya, ab system font stack hai - kabhi fail nahi hoga
+import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
 import './globals.css';
 import { config } from '@wideo11/config';
 import { ReactNode, Suspense } from 'react';
 import { ThemeToggle, UserMenu, Loading } from './components/header';
 import Providers from './providers';
-
-const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Wideo11 - Video Platform',
@@ -28,7 +32,7 @@ export default function RootLayout({
   console.log("Config loaded:", { appUrl: config.NEXT_PUBLIC_APP_URL, buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: config.SISTER_SHARE_PERCENTAGE });
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className} suppressContentEditableWarning>
+      <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }} suppressContentEditableWarning>
         <Providers>
           <div className="flex h-screen flex-col bg-gray-950">
             <header className="border-b border-gray-800 bg-gray-900/50">

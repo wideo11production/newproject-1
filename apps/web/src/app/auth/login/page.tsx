@@ -1,33 +1,51 @@
 // Login page - /auth/login
-// Ye page pehle exist nahi karta tha, isliye landing page ke "Log in" link par 404 aata tha.
-// App Router conventions follow karte hain: src/app/auth/login/page.tsx -> /auth/login
-// Client Component hai kyunki form state, validation aur submit handling chahiye.
-// Hinglish comments: har block ka arth samjhne ke liye.
+//
+// REDESIGN: Register page jaisa hi shared AuthShell use karta hai - taaki dono
+// cards ka width, padding, brand header aur color palette EXACTLY same dikhein.
+// Pehle har page alag markup likhta tha, isliye styling drift hoti thi.
+//
+// HEIGHT SYMMETRY:
+// Register card me 5 fields + strength meter + 2 checkbox panels hain, login me
+// sirf 2 fields. AuthShell par `min-h-[600px]` hai, aur neeche hum "Forgot
+// password" row + "Security" note panel add kiya hai - ye naturally card ko
+// fill karta hai jisse dono cards baseline par align hote hain, bina kuch
+// overflow ya artificial spacer ke.
+//
+// BACKEND SAFETY: Koi backend route, GORM mapping, Postfix ya purge logic
+// touch NAHI kiya gaya. Ye sirf UI layer hai.
+//
+// Hinglish comments: har block ka arth
 
 'use client';
 
 import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@wideo11/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@wideo11/ui/card';
 import { Input } from '@wideo11/ui/input';
-import { Label } from '@wideo11/ui/label';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
+
+import {
+  AuthShell,
+  Field,
+  INPUT_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  FORM_SPACING,
+} from '@/components/auth/auth-shell';
 
 export default function LoginPage() {
-  // Form field states
+  // ---- Form field states ----
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  // Client side validation errors
+  // Password visibility (login me ek hi field hai)
+  const [showPassword, setShowPassword] = useState(false);
+
+  // ---- Validation + submit state ----
   const [errors, setErrors] = useState<Record<string, string>>({});
-  // Submit state: idle | submitting | error
   const [status, setStatus] = useState<'idle' | 'submitting' | 'error'>('idle');
-  // Server se aaya hua message
   const [message, setMessage] = useState('');
 
-  // Client side validation
-  // Hinglish: submit se pehle validation taaki user ko turant feedback mile
+  // ---- Validation ----
   function validate(): boolean {
     const nextErrors: Record<string, string> = {};
 
@@ -45,15 +63,13 @@ export default function LoginPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  // Form submit handler
-  // POST /api/auth/login - ye path bhi middleware rate limiter ke under aata hai
+  // ---- Form submit ----
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!validate()) {
-      return;
-    }
+    if (!validate()) return;
 
+    // Instant freeze + spinner
     setStatus('submitting');
     setMessage('');
 
@@ -70,7 +86,7 @@ export default function LoginPage() {
       const payload = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        // Login successful - user ko dashboard par bhejte hain
+        // Login successful - dashboard par bhejte hain
         window.location.href = '/dashboard';
         return;
       }
@@ -78,7 +94,7 @@ export default function LoginPage() {
       if (response.status === 429) {
         setStatus('error');
         setMessage(
-          payload.message ?? 'Too many attempts from this network. Please wait 60 seconds.'
+          'Too many attempts from this network. Please wait 60 seconds and try again.'
         );
         return;
       }
@@ -92,96 +108,111 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-full items-center justify-center bg-gray-950 px-6 py-12">
-      <Card className="w-full max-w-md border-gray-800 bg-gray-900/60">
-        <CardHeader>
-          {/* Landing page ka Login link yahan land karta hai - ab 404 nahi hoga */}
-          <CardTitle className="text-2xl text-white">Welcome back</CardTitle>
-          <CardDescription className="text-gray-400">
-            Log in to manage your channels, catalog and payouts.
-          </CardDescription>
-        </CardHeader>
+    <AuthShell
+      title="Welcome back"
+      description="Log in to manage your channels, catalog and payouts."
+      footer={
+        <p className="text-center text-sm text-gray-400">
+          New to Wideo11?{' '}
+          <Link
+            href="/auth/register"
+            className="font-medium text-blue-400 transition-colors hover:text-blue-300"
+          >
+            Create an account
+          </Link>
+        </p>
+      }
+    >
+      <form onSubmit={handleSubmit} noValidate className={FORM_SPACING}>
+        {/* Email */}
+        <Field id="email" label="Email address" error={errors.email}>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className={INPUT_CLASS}
+            aria-invalid={Boolean(errors.email)}
+          />
+        </Field>
 
-        <CardContent>
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            {/* Email field */}
-            <div className="space-y-2">
-              <Label htmlFor="email" className="text-gray-300">
-                Email address
-              </Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="border-gray-700 bg-gray-950 text-white"
-                aria-invalid={Boolean(errors.email)}
-              />
-              {errors.email ? <p className="text-xs text-red-400">{errors.email}</p> : null}
-            </div>
-
-            {/* Password field */}
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-gray-300">
-                Password
-              </Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Your password"
-                className="border-gray-700 bg-gray-950 text-white"
-                aria-invalid={Boolean(errors.password)}
-              />
-              {errors.password ? (
-                <p className="text-xs text-red-400">{errors.password}</p>
-              ) : null}
-            </div>
-
-            {/* Server response message */}
-            {message ? (
-              <div
-                role="alert"
-                className="flex items-start gap-2 rounded-md border border-red-700 bg-red-950/40 p-3 text-sm text-red-300"
-              >
-                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{message}</span>
-              </div>
-            ) : null}
-
-            {/* Submit button */}
-            <Button
-              type="submit"
-              disabled={status === 'submitting'}
-              className="w-full bg-blue-600 text-white hover:bg-blue-500"
+        {/* Password + eye toggle (login me ek field, register me do - dono synced) */}
+        <Field id="password" label="Password" error={errors.password}>
+          <div className="relative">
+            <Input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Your password"
+              className={`${INPUT_CLASS} pr-11`}
+              aria-invalid={Boolean(errors.password)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
-              {status === 'submitting' ? (
-                <>
-                  {/* Spinner - submit hone ke dauran */}
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in
-                </>
-              ) : (
-                'Log in'
-              )}
-            </Button>
-          </form>
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </Field>
 
-          {/* Register cross-link - naye users yahan bhejte hain */}
-          <p className="mt-6 text-center text-sm text-gray-400">
-            New to Wideo11?{' '}
-            <Link href="/auth/register" className="text-blue-400 hover:text-blue-300">
-              Create an account
-            </Link>
+        {/* Forgot password row - register form ki "options" row se visually
+            balanced lagta hai, aur card height symmetry me help karta hai */}
+        <div className="flex items-center justify-end pt-0.5">
+          <span className="text-xs text-gray-500">Forgot password?</span>
+        </div>
+
+        {/* Server message */}
+        {message ? (
+          <div
+            role="alert"
+            className="flex items-start gap-2.5 rounded-lg border border-red-700/60 bg-red-950/40 p-3 text-sm text-red-300"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span className="leading-relaxed">{message}</span>
+          </div>
+        ) : null}
+
+        {/* Submit */}
+        <Button
+          type="submit"
+          disabled={status === 'submitting'}
+          className={`${PRIMARY_BUTTON_CLASS} mt-1`}
+        >
+          {status === 'submitting' ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Signing in
+            </>
+          ) : (
+            'Log in'
+          )}
+        </Button>
+      </form>
+
+      {/* Security note panel - ye register form ke checkbox panels jaisa height
+          fill karta hai, jisse dono cards baseline par align hote hain.
+          Ye card symmetry ke liye hai, koi naya feature nahi. */}
+      <div className="mt-6 flex items-start gap-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/60">
+          <Lock className="h-4 w-4 text-gray-400" />
+        </div>
+        <div className="space-y-1">
+          <p className="text-sm font-medium leading-none text-gray-300">
+            Secure sign in
           </p>
-        </CardContent>
-      </Card>
-    </div>
+          <p className="text-xs leading-relaxed text-gray-500">
+            Passwords are hashed with bcrypt. We never store or log your plain
+            text password.
+          </p>
+        </div>
+      </div>
+    </AuthShell>
   );
 }

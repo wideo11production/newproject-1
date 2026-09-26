@@ -1,6 +1,8 @@
 package password
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 
 	"golang.org/x/crypto/bcrypt"
@@ -86,4 +88,19 @@ func (s *PasswordService) RehashIfNeeded(password, hash string) (string, error) 
 		return s.Hash(password)
 	}
 	return hash, nil
+}
+
+// HashToken hashes a bearer token (JWT) using SHA-256.
+//
+// KYUN bcrypt nahi: bcrypt ka input limit 72 bytes hai aur uske liye design hi
+// slow-by-intent hai. Ek JWT refresh token 400+ characters ka hota hai, isliye
+// bcrypt use karne par "password too long" error aa jata tha aur registration
+// 500 ke saath fail ho jati thi. Tokens high-entropy hote hain (user ke paas
+// password nahi), isliye unke liye SHA-256 fast aur sahi choice hai.
+// Tokens verify karne ke liye bhi wahi hash use hota hai.
+//
+// Hinglish: password ke liye bcrypt, token ke liye SHA-256 - dono ka alag purpose hai
+func HashToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
 }

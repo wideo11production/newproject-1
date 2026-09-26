@@ -1,8 +1,9 @@
-package service
+﻿package service
 
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,7 +21,37 @@ var (
 	ErrPINLocked          = errors.New("PIN is locked")
 	ErrInvalidPIN         = errors.New("invalid PIN")
 	ErrTooManyAttempts    = errors.New("too many PIN attempts")
+
+	// ErrUserExists repository layer ka error hai, par handler use service package
+	// se reference karta hai. Ye alias dono layers ko ek jaisa rakhta hai
+	// taaki handler ko repository import karne ki zaroorat na pade.
+	// Hinglish: error alias - duplicate email ka signal
+	ErrUserExists = repository.ErrUserExists
 )
+
+// GetUserByID returns the user record for a given ID.
+// Ye accessor isliye hai kyunki handler package, service ke unexported fields
+// (userRepo) ko directly access nahi kar sakta - Go encapsulation allow nahi karta.
+// Field export karne ke bajaye proper accessor method diya gaya hai.
+// Hinglish: encapsulation bani rehti hai, handler ko sirf ye method chahiye
+func (s *AuthService) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	return s.userRepo.GetByID(ctx, id)
+}
+
+// GetSessionByAccessToken returns the session linked to an access token.
+// Access token valid hone ke baad bhi session revoke ho sakta hai,
+// isliye middleware me dono check kiye jaate hain.
+// Hinglish: token valid hone ke baad bhi revoked session check zaroori hai
+func (s *AuthService) GetSessionByAccessToken(ctx context.Context, accessToken string) (*model.Session, error) {
+	return s.sessionRepo.GetByAccessToken(ctx, accessToken)
+}
+
+// ValidateAccessToken validates a JWT access token and returns its claims.
+// Wrapper taaki handler ko token package import karne ki zaroorat na pade.
+// Hinglish: token validation ka simple wrapper
+func (s *AuthService) ValidateAccessToken(accessToken string) (*token.Claims, error) {
+	return s.tokenService.ValidateAccessToken(accessToken)
+}
 
 type AuthService struct {
 	cfg           *config.Config
@@ -31,6 +62,10 @@ type AuthService struct {
 	tokenRepo     repository.RefreshTokenRepository
 	tokenService  *token.TokenService
 	passwordSvc   *password.PasswordService
+	// verifRepo verification tokens manage karta hai (30-min purge lifecycle)
+	verifRepo     repository.VerificationTokenRepository
+	// emailer verification email bhejne ke liye (interface type - circular dep se bachne ke liye)
+	emailer       emailDispatcher
 }
 
 func NewAuthService(cfg *config.Config, userRepo repository.UserRepository, sessionRepo repository.SessionRepository,
@@ -38,24 +73,32 @@ func NewAuthService(cfg *config.Config, userRepo repository.UserRepository, sess
 	tokenRepo repository.RefreshTokenRepository, tokenService *token.TokenService,
 	passwordSvc *password.PasswordService) *AuthService {
 	return &AuthService{
-		cfg:           cfg,
-		userRepo:      userRepo,
-		sessionRepo:   sessionRepo,
-		deviceRepo:    deviceRepo,
-		pinRepo:       pinRepo,
-		tokenRepo:     tokenRepo,
-		tokenService:  tokenService,
-		passwordSvc:   passwordSvc,
+		cfg:          cfg,
+		userRepo:     userRepo,
+		sessionRepo:  sessionRepo,
+		deviceRepo:   deviceRepo,
+		pinRepo:      pinRepo,
+		tokenRepo:    tokenRepo,
+		tokenService: tokenService,
+		passwordSvc:  passwordSvc,
 	}
+}
+
+// SetVerificationRepo verification token repository inject karta hai
+// Isse constructor signature nahi badla, aur tests me fake repo daal sakte hain
+// Hinglish: dependency injection - constructor ko chhua bina
+func (s *AuthService) SetVerificationRepo(r repository.VerificationTokenRepository) {
+	s.verifRepo = r
 }
 
 func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, deviceInfo model.DeviceInfo) (*model.User, *model.TokenPair, error) {
 	// Check if user already exists
-	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
-	if err == nil {
+	// Postgres se duplicate email check - user ko variable me store karne ki zaroorat
+	// nahi, sirf "exist karta hai ya nahi" ye jaanna hai. Isliye _ use kiya gaya hai.
+	// Hinglish: duplicate email check taaki same email se dobara account na ban sake
+	if _, err := s.userRepo.GetByEmail(ctx, req.Email); err == nil {
 		return nil, nil, repository.ErrUserExists
-	}
-	if !errors.Is(err, repository.ErrUserNotFound) {
+	} else if !errors.Is(err, repository.ErrUserNotFound) {
 		return nil, nil, err
 	}
 
@@ -76,27 +119,60 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		return nil, nil, err
 	}
 
-	// Create device
-	device := &model.Device{
-		UserID:      user.ID,
-		DeviceName:  deviceInfo.DeviceName,
-		DeviceType:  deviceInfo.DeviceType,
-		Platform:    deviceInfo.Platform,
-		Browser:     deviceInfo.Browser,
-		Fingerprint: deviceInfo.Fingerprint,
-		TrustScore:  50,
+	// Verification token issue karo aur email bhejo
+	// User IsVerified=false ke saath banta hai (model default), aur 30 minute
+	// me link click nahi hua to purge worker user ko permanently delete kar dega.
+	// Ye step fail ho jaye to bhi account ban jata hai - sirf email dobara bhejne
+	// ke liye resend endpoint use ho sakta hai. Isliye error swallow karte hain.
+	// Hinglish: token issue karte hain, email bhejte hain - fail hone par account valid rehta hai
+	if s.verifRepo != nil {
+		if plainToken, err := s.IssueVerificationToken(ctx, user.ID, user.Email); err != nil {
+			log.Printf("[VERIFY] Failed to issue verification token for %s: %v", user.Email, err)
+		} else if err := s.SendVerificationEmail(ctx, user, plainToken); err != nil {
+			log.Printf("[VERIFY] Failed to send verification email to %s: %v", user.Email, err)
+		}
 	}
 
-	if err := s.deviceRepo.Create(ctx, device); err != nil {
-		// Continue even if device creation fails - user is still created
+	// Create device - SIRF tab jab client ne asli fingerprint bheja ho.
+	//
+	// KYUN: devices table me "fingerprint" column par UNIQUE index hai. Jab client
+	// fingerprint nahi bhejta to hum "" (empty string) insert karte the, aur doosre
+	// registration par ye duplicate ho jata tha ->
+	// "duplicate key value violates unique constraint idx_devices_fingerprint",
+	// jisse poora signup 500 ke saath fail ho jata tha.
+	//
+	// Ab empty fingerprint par device row banayi hi nahi jati, aur session ka
+	// DeviceID nil reh jata hai (ye optional field hai).
+	// Hinglish: bina fingerprint ke device record nahi banate, warna unique index tootega
+	var device *model.Device
+	if deviceInfo.Fingerprint != "" {
+		device = &model.Device{
+			UserID:      user.ID,
+			DeviceName:  deviceInfo.DeviceName,
+			DeviceType:  deviceInfo.DeviceType,
+			Platform:    deviceInfo.Platform,
+			Browser:     deviceInfo.Browser,
+			Fingerprint: deviceInfo.Fingerprint,
+			TrustScore:  50,
+		}
+
+		if err := s.deviceRepo.Create(ctx, device); err != nil {
+			// Device ban gaya ya nahi, user ka account phir bhi valid hai -
+			// isliye error swallow karte hain aur aage badh jate hain
+			device = nil
+		}
 	}
 
 	// Create session and tokens
 	session := &model.Session{
 		UserID:    user.ID,
-		DeviceID:  &device.ID,
 		IPAddress: "", // Would be extracted from request in handler
 		UserAgent: "", // Would be extracted from request in handler
+	}
+
+	// DeviceID sirf tab set karte hain jab device actually persist hua ho
+	if device != nil {
+		session.DeviceID = &device.ID
 	}
 
 	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email)
@@ -118,10 +194,7 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 	}
 
 	// Store refresh token hash
-	hashedRefreshToken, err := s.passwordSvc.Hash(refreshToken)
-	if err != nil {
-		return nil, nil, err
-	}
+	hashedRefreshToken := password.HashToken(refreshToken)
 
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
@@ -153,20 +226,20 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	user, err := s.userRepo.GetByEmail(ctx, req.Email)
 	if err != nil {
 		if errors.Is(err, repository.ErrUserNotFound) {
-			return nil, nil, repository.ErrInvalidCredentials
+			return nil, nil, ErrInvalidCredentials
 		}
 		return nil, nil, err
 	}
 
 	// Check if user is active
 	if !user.IsActive {
-		return nil, nil, repository.ErrUserInactive
+		return nil, nil, ErrUserInactive
 	}
 
 	// Verify password
 	if err := s.passwordSvc.Verify(req.Password, user.PasswordHash); err != nil {
 		if errors.Is(err, password.ErrMismatch) {
-			return nil, nil, repository.ErrInvalidCredentials
+			return nil, nil, ErrInvalidCredentials
 		}
 		return nil, nil, err
 	}
@@ -193,27 +266,24 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 				return nil, nil, err
 			}
 		}
-	} else {
-		// Create new device without fingerprint
-		device = &model.Device{
-			UserID:      user.ID,
-			DeviceName:  deviceInfo.DeviceName,
-			DeviceType:  deviceInfo.DeviceType,
-			Platform:    deviceInfo.Platform,
-			Browser:     deviceInfo.Browser,
-			TrustScore:  50,
-		}
-		if err := s.deviceRepo.Create(ctx, device); err != nil {
-			return nil, nil, err
-		}
 	}
+	// NOTE: is "else" ka koi device-create branch nahi hai.
+	// Jab client fingerprint nahi bhejta, hum koi device row insert nahi karte.
+	// Pehle yahan khaali fingerprint ("") insert hota tha, jo UNIQUE index
+	// "idx_devices_fingerprint" ko toot deta tha aur doosre login par signup fail
+	// ho jati thi. Device optional hai, isliye device nil rehne dena sahi hai.
+	// Hinglish: fingerprint nahi hai to device record banate hi nahi
 
 	// Create session and tokens
 	session := &model.Session{
 		UserID:    user.ID,
-		DeviceID:  &device.ID,
 		IPAddress: "", // Would be extracted from request in handler
 		UserAgent: "", // Would be extracted from request in handler
+	}
+
+	// DeviceID sirf tab set karte hain jab device actually persist hua ho
+	if device != nil {
+		session.DeviceID = &device.ID
 	}
 
 	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email)
@@ -235,10 +305,7 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	}
 
 	// Store refresh token hash
-	hashedRefreshToken, err := s.passwordSvc.Hash(refreshToken)
-	if err != nil {
-		return nil, nil, err
-	}
+	hashedRefreshToken := password.HashToken(refreshToken)
 
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
@@ -272,7 +339,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 		if errors.Is(err, token.ErrExpiredToken) {
 			return nil, errors.New("refresh token expired")
 		}
-		return nil, repository.ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	// Get session from refresh token
@@ -286,7 +353,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 
 	// Check if session belongs to the user in token
 	if session.UserID != refreshClaims.UserID {
-		return nil, repository.ErrInvalidCredentials
+		return nil, ErrInvalidCredentials
 	}
 
 	// Get user
@@ -296,7 +363,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 	}
 
 	if !user.IsActive {
-		return nil, repository.ErrUserInactive
+		return nil, ErrUserInactive
 	}
 
 	// Revoke old session and refresh token
@@ -318,12 +385,12 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 
 	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, newSession.ID, user.Email)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	newRefreshToken, err := s.tokenService.GenerateRefreshToken(user.ID, newSession.ID)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	newSession.AccessToken = accessToken
@@ -331,14 +398,11 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 	newSession.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
 	if err := s.sessionRepo.Create(ctx, newSession); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Store new refresh token hash
-	hashedRefreshToken, err := s.passwordSvc.Hash(newRefreshToken)
-	if err != nil {
-		return nil, nil, err
-	}
+	hashedRefreshToken := password.HashToken(newRefreshToken)
 
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
@@ -347,7 +411,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 	}
 
 	if err := s.tokenRepo.Create(ctx, refreshTokenModel); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	tokenPair := &model.TokenPair{
@@ -382,11 +446,11 @@ func (s *AuthService) Logout(ctx context.Context, accessToken string) error {
 
 func (s *AuthService) SetupPIN(ctx context.Context, userID uuid.UUID, req *model.PINSetupRequest) error {
 	// Check if PIN already exists
-	existingPIN, err := s.pinRepo.GetByUserID(ctx, userID)
-	if err == nil {
+	// Sirf "exist karta hai ya nahi" jaanna hai, isliye result discard kar dete hain
+	// Hinglish: duplicate PIN setup rokne ke liye check
+	if _, err := s.pinRepo.GetByUserID(ctx, userID); err == nil {
 		return errors.New("PIN already setup")
-	}
-	if !errors.Is(err, repository.ErrPINNotFound) {
+	} else if !errors.Is(err, repository.ErrPINNotFound) {
 		return err
 	}
 
@@ -416,7 +480,7 @@ func (s *AuthService) VerifyPIN(ctx context.Context, userID uuid.UUID, req *mode
 
 	// Check if PIN is locked
 	if pin.LockedAt != nil {
-		return repository.ErrPINLocked
+		return ErrPINLocked
 	}
 
 	// Verify PIN
@@ -432,9 +496,9 @@ func (s *AuthService) VerifyPIN(ctx context.Context, userID uuid.UUID, req *mode
 				if err := s.pinRepo.Lock(ctx, userID); err != nil {
 					return err
 				}
-				return repository.ErrTooManyAttempts
+				return ErrTooManyAttempts
 			}
-			return repository.ErrInvalidPIN
+			return ErrInvalidPIN
 		}
 		return err
 	}

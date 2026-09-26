@@ -244,15 +244,19 @@ func (e *AutoRotationEngine) secureOverwrite(path string) error {
 // verifyCapacityFreeze verifies disk capacity is frozen
 // Ensures no automatic node storage expansion triggers
 func (e *AutoRotationEngine) verifyCapacityFreeze() {
-	// Check disk usage
-	var stat unix.Statfs_t
-	if err := unix.Statfs(e.statePath, &stat); err != nil {
-		log.Printf("[PVC-ROTATION] Warning: Could not verify disk capacity: %v", err)
+	// Disk usage check - ye OS-specific hai, isliye alag file me hai
+	// (diskusage_linux.go aur diskusage_other.go). Isse package Windows/macOS
+	// pe bhi compile hota hai, sirf Linux pe actual statfs call hoti hai.
+	// Hinglish: disk check OS-specific hai isliye build-tag wali alag file me hai
+	totalGB, usedGB, ok := diskUsage(e.statePath)
+	if !ok {
+		log.Printf("[PVC-ROTATION] Warning: Could not verify disk capacity on this platform")
 		return
 	}
 
-	totalGB := int64(stat.Blocks * uint64(stat.Bsize) / (1024 * 1024 * 1024))
-	usedGB := int64((stat.Blocks - stat.Bfree) * uint64(stat.Bsize) / (1024 * 1024 * 1024))
+	if totalGB <= 0 {
+		return
+	}
 
 	// Verify capacity is frozen at configured limit
 	if totalGB > e.diskCapacityGB {

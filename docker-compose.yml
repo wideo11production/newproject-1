@@ -123,6 +123,108 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==================================================================
+  # POSTFIX - Self-hosted SMTP relay (NO third-party mail provider)
+  # ==================================================================
+  # Ye apna khud ka mail server hai. SendGrid / Mailgun / SES kuch nahi -
+  # isliye kisi teesre party ko ek bhi penny nahi jaati.
+  #
+  # Auth-service iske through SMTP bhejta hai (SMTP_HOST=mail, port 25).
+  # Verify karne ke liye: docker compose exec mail cat /var/log/mail.log
+  mail:
+    build:
+      context: ./infrastructure/mail
+      dockerfile: Dockerfile
+      args:
+        # SSOT: .env se aati hain, hardcoded nahi
+        POSTFIX_HOSTNAME: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
+        POSTFIX_DOMAIN: ${POSTFIX_DOMAIN:-wideo11.local}
+        # true  = local capture (log me email dikhta hai, internet nahi)
+        # false = direct delivery (production ke liye, MX record zaroori)
+        POSTFIX_CAPTURE_ONLY: ${POSTFIX_CAPTURE_ONLY:-true}
+    container_name: wideo11-mail
+    hostname: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
+    ports:
+      - "2525:25"
+    environment:
+      POSTFIX_HOSTNAME: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
+      POSTFIX_DOMAIN: ${POSTFIX_DOMAIN:-wideo11.local}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 25 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Auth Service (Go) - users, sessions, bcrypt password hashing, JWT
+  # Pehle ye service repo me maujood thi par kabhi compile nahi hui (module path
+  # mismatch + khali go.sum) isliye deploy nahi thi. Ab compile karke deploy kiya gaya hai.
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: wideo11-auth-service
+    ports:
+      - "8085:8085"
+    environment:
+      # auth-service viper use karta hai - keys ko DATABASE_HOST / JWT_SECRET_KEY
+      # format me padhta hai (dot ko underscore me convert karta hai).
+      # Isliye yahan DB_* env names kaam nahi karte, DATABASE_* use kiya gaya hai.
+      SERVER_PORT: 8085
+      SERVER_MODE: release
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_DBNAME: auth_service
+      DATABASE_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      # SSOT: ye sab values .env se aati hain, code me hardcoded kuch nahi
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL_MIN:-15}
+      JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL_DAYS:-7}
+      JWT_ISSUER: wideo11-auth
+      JWT_AUDIENCE: wideo11-api
+      SERVER_BCRYPT_COST: ${BCRYPT_COST:-12}
+      # Verification lifecycle - 30 min TTL + purge worker
+      VERIFICATION_TTL_MINUTES: ${VERIFICATION_TTL_MINUTES:-30}
+      VERIFICATION_BASE_URL: ${VERIFICATION_BASE_URL:-http://localhost:3000}
+      VERIFICATION_PURGE_ENABLED: ${VERIFICATION_PURGE_ENABLED:-true}
+      PURGE_ENABLED: ${PURGE_ENABLED:-true}
+      PURGE_INTERVAL_SECONDS: ${PURGE_INTERVAL_SECONDS:-60}
+      PURGE_BATCH_SIZE: ${PURGE_BATCH_SIZE:-100}
+      # SMTP ab apne khud ke Postfix par jata hai (koi paid provider nahi).
+      # SMTP_HOST khaali karne par console transport par wapas aa jayega.
+      EMAIL_HOST: ${SMTP_HOST:-mail}
+      EMAIL_PORT: ${SMTP_PORT:-25}
+      EMAIL_USER: ${SMTP_USER:-}
+      EMAIL_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${SMTP_FROM:-no-reply@wideo11.com}
+      EMAIL_FROM_NAME: ${SMTP_FROM_NAME:-Wideo11 Security}
+      EMAIL_USE_TLS: ${SMTP_USE_TLS:-false}
+      # WebAuthn / biometric - RP ID aur origin browser se match karne zaroori hain
+      WEBAUTHN_RPID: ${WEBAUTHN_RPID:-localhost}
+      WEBAUTHN_RP_DISPLAY_NAME: ${WEBAUTHN_RP_DISPLAY_NAME:-Wideo11}
+      WEBAUTHN_RP_ORIGINS: ${WEBAUTHN_RP_ORIGINS:-http://localhost:3000}
+      WEBAUTHN_SESSION_TIMEOUT_MINUTES: ${WEBAUTHN_SESSION_TIMEOUT_MINUTES:-5}
+      LOG_LEVEL: debug
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Postfix ke upar depend karte hain taaki mail service ready ho
+      mail:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Webhook Receiver
   webhook-receiver:
     build:

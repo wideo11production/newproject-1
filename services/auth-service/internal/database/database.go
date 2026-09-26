@@ -1,4 +1,4 @@
-package database
+﻿package database
 
 import (
 	"fmt"
@@ -41,5 +41,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Device{},
 		&model.PIN{},
 		&model.RefreshToken{},
+		&model.VerificationToken{},
+		&model.WebAuthnCredential{},
+		&model.WebAuthnSession{},
 	)
 }

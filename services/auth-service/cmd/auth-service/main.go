@@ -13,8 +13,10 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/database"
+	"github.com/wideo11/auth-service/internal/email"
 	"github.com/wideo11/auth-service/internal/handler"
 	"github.com/wideo11/auth-service/internal/middleware"
+	"github.com/wideo11/auth-service/internal/purge"
 	"github.com/wideo11/auth-service/internal/repository"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
@@ -53,11 +55,42 @@ func main() {
 	deviceRepo := repository.NewDeviceRepository(db)
 	pinRepo := repository.NewPINRepository(db)
 	tokenRepo := repository.NewRefreshTokenRepository(db)
+	// Verification token repository - 30 minute purge lifecycle ke liye
+	verifRepo := repository.NewVerificationTokenRepository(db)
+	// Purge repository - unverified accounts permanently delete karne ke liye
+	purgeRepo := repository.NewPurgeRepository(db)
 
 	// Initialize services
 	passwordService := password.NewPasswordService(cfg.Server.BcryptCost)
 	tokenService := token.NewTokenService(&cfg.JWT)
 	authService := service.NewAuthService(cfg, userRepo, sessionRepo, deviceRepo, pinRepo, tokenRepo, tokenService, passwordService)
+
+	// Verification repositories inject karo (dependency injection - constructor nahi badla)
+	authService.SetVerificationRepo(verifRepo)
+
+	// Email dispatcher - SMTP config set ho to real email, warna console log
+	// Koi paid provider nahi: local dev me console, production me apna SMTP
+	emailDispatcher := email.NewDispatcher(&cfg.Email)
+	authService.SetEmailer(emailDispatcher)
+
+	// 30-minute purge worker start karo (background Go worker, koi paid cron nahi)
+	// Hinglish: unverified accounts 30 minute baad permanently purge honge
+	purgeWorker := purge.NewWorker(cfg, purgeRepo, verifRepo, emailDispatcher)
+	workerCtx, cancelWorker := context.WithCancel(context.Background())
+	defer cancelWorker()
+	purgeWorker.Start(workerCtx)
+
+	// WebAuthn (biometric/passkey) service initialize karo
+	// RP ID aur origins .env se aati hain - browser se match karne ke liye zaroori
+	webAuthnSvc, err := service.NewWebAuthnService(db, cfg)
+	if err != nil {
+		// WebAuthn fail ho jaye to service crash nahi hoga - sirf biometrics
+		// available nahi hongi. Password login chalta rahega.
+		log.Printf("Warning: WebAuthn disabled (%v)", err)
+	} else {
+		log.Printf("[WEBAUTHN] Enabled | RPID=%s | Origins=%s",
+			cfg.WebAuthn.RPID, cfg.WebAuthn.RPOrigins)
+	}
 
 	// Initialize handler
 	authHandler := handler.NewAuthHandler(authService)
@@ -84,9 +117,11 @@ func main() {
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
+		// Verification link click handler - GET se call hota hai
+		auth.GET("/verify", authHandler.VerifyEmail)
 		auth.POST("/refresh", authHandler.RefreshToken)
 		auth.POST("/logout", authHandler.AuthMiddleware(), authHandler.Logout)
-		
+
 		// Protected routes
 		protected := auth.Group("")
 		protected.Use(authHandler.AuthMiddleware())
@@ -97,8 +132,32 @@ func main() {
 		}
 	}
 
+	// WebAuthn (biometric/passkey) routes
+	// Sirf tab register karte hain jab WebAuthn service successfully init hua ho
+	if webAuthnSvc != nil {
+		waHandler := handler.NewWebAuthnHandler(webAuthnSvc)
+
+		// Registration flow (device enroll) - authenticated user hi kar sakta hai
+		waProtected := auth.Group("/webauthn")
+		waProtected.Use(authHandler.AuthMiddleware())
+		{
+			waProtected.POST("/register/begin", waHandler.BeginRegistration)
+			waProtected.POST("/register/finish", waHandler.FinishRegistration)
+			waProtected.GET("/credentials", waHandler.ListCredentials)
+			waProtected.DELETE("/credentials/:id", waHandler.DeleteCredential)
+		}
+
+		// Authentication flow (login with fingerprint/face)
+		// Ye UNAUTHENTICATED hota hai - kyunki yahi to prove karta hai ki user kaun hai
+		waPublic := auth.Group("/webauthn")
+		{
+			waPublic.POST("/login/begin", waHandler.BeginAuthentication)
+			waPublic.POST("/login/finish", waHandler.FinishAuthentication)
+		}
+	}
+
 	// Start server
-	srv := &http := &http.Server{
+	srv := &http.Server{
 		Addr:           ":" + cfg.Server.Port,
 		Handler:        r,
 		ReadTimeout:    time.Duration(cfg.Server.ReadTimeout) * time.Second,

@@ -1,9 +1,8 @@
-package handler
+﻿package handler
 
 import (
-	"context"
+	"errors"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -234,7 +233,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		return
 	}
 
-	user, err := h.authService.userRepo.GetByID(c.Request.Context(), userID)
+	user, err := h.authService.GetUserByID(c.Request.Context(), userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch profile"})
 		return
@@ -248,6 +247,37 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		"is_verified": user.IsVerified,
 		"last_login_at": user.LastLoginAt,
 		"created_at":  user.CreatedAt,
+	})
+}
+
+// VerifyEmail handles GET /api/auth/verify?token=...
+//
+// Ye endpoint verification link click hone par call hota hai. Token valid hua
+// to user is_verified=true ho jata hai, warna 400/404 return hota hai.
+//
+// Hinglish: link click handler - token verify karta hai
+func (h *AuthHandler) VerifyEmail(c *gin.Context) {
+	plainToken := c.Query("token")
+	if plainToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing token"})
+		return
+	}
+
+	user, err := h.authService.VerifyEmail(c.Request.Context(), plainToken)
+	if err != nil {
+		// Expired ya invalid token - user ko saaf message
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid or expired verification token",
+			"verified": false,
+		})
+		return
+	}
+
+	// Success - plain English message (user-facing content, no Hinglish)
+	c.JSON(http.StatusOK, gin.H{
+		"verified": true,
+		"email":    user.Email,
+		"message":  "Your email address has been verified successfully.",
 	})
 }
 
@@ -265,7 +295,7 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 			accessToken = accessToken[7:]
 		}
 
-		claims, err := h.authService.tokenService.ValidateAccessToken(accessToken)
+		claims, err := h.authService.ValidateAccessToken(accessToken)
 		if err != nil {
 			switch err {
 			case token.ErrExpiredToken:
@@ -277,14 +307,16 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 		}
 
 		// Check if session is still valid
-		session, err := h.authService.sessionRepo.GetByAccessToken(c.Request.Context(), accessToken)
-		if err != nil {
+		// Session ka data yahan use nahi ho raha, sirf existence check karna hai -
+		// isliye result discard kar dete hain. Revoked session ho to 401 dete hain.
+		// Hinglish: token valid hone ke baad bhi revoked session reject hota hai
+		if _, err := h.authService.GetSessionByAccessToken(c.Request.Context(), accessToken); err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session not found or revoked"})
 			return
 		}
 
 		// Check if user is still active
-		user, err := h.authService.userRepo.GetByID(c.Request.Context(), claims.UserID)
+		user, err := h.authService.GetUserByID(c.Request.Context(), claims.UserID)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 			return

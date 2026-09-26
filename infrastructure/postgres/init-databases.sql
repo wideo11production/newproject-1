@@ -10,3 +10,6 @@ CREATE DATABASE webhook_receiver;
 
 -- Billing service database (ledger, wallet, invoices)
 CREATE DATABASE billing_service;
+
+-- Auth service database (users, sessions, devices, PINs, refresh tokens)
+CREATE DATABASE auth_service;

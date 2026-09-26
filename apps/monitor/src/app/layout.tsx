@@ -1,6 +1,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { config } from "@wideo11/config";
+// Global font stack - Grafana-style system fonts (air-gapped, no network fetch)
+import { FONT_SANS_CLASS, FONT_SANS_STACK } from "@wideo11/ui/font";
 import React from "react";
 
 export const metadata: Metadata = {
@@ -53,6 +55,16 @@ export default function Layout({
   const stringifiedMonitorData = JSON.stringify(rawMonitorData);
 
   return (
+    // Root layout me <html> aur <body> zaroori hain - Next.js App Router isse
+    // expect karta hai. Pehle yahan seedha <div> return hota tha, jisse global
+    // font stack apply hi nahi ho sakta tha (koi <body> hi nahi tha).
+    // Hinglish: html/body tags add kiye taaki font stack lag sake
+    <html lang="en" suppressHydrationWarning>
+      <body
+        className={FONT_SANS_CLASS}
+        style={{ fontFamily: FONT_SANS_STACK }}
+        suppressContentEditableWarning
+      >
     <div className="flex h-screen bg-gray-900 text-gray-100">
       {/* Main dashboard area: @metrics parallel slot */}
       <main className="flex-1 overflow-auto">{metrics}</main>
@@ -70,5 +82,7 @@ export default function Layout({
         }}
       />
     </div>
+      </body>
+    </html>
   );
 }
