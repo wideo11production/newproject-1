@@ -16,7 +16,6 @@ import (
 	"github.com/wideo11/webhook-receiver/internal/config"
 	"github.com/wideo11/webhook-receiver/internal/database"
 	"github.com/wideo11/webhook-receiver/internal/handler"
-	"github.com/wideo11/webhook-receiver/internal/model"
 )
 
 func main() {

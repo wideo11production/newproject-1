@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  // Standalone output: minimal server bundle for Docker runner stage
+  // Standalone output se Docker runner stage ko minimal server bundle milta hai
+  output: 'standalone',
   
   images: {
     // FIX: Saare allowed domains ko ek hi arrays layout block mein cleanly merge kar diya hai

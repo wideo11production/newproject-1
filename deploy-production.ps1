@@ -1,20 +1,12 @@
-# deploy-production.ps1
-# Google Cloud GKE Live Production Engine for Wideo11 Monorepo
-# This script builds Go services, pushes to GCR, applies database schemas via Jobs, configures NATS JetStream, and deploys to GKE.
-
-# ============================================================================
-# CONFIGURATION
-# ============================================================================
 $ErrorActionPreference = "Stop"
-$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$ServicesDir = Join-Path $ScriptRoot "services"
-$K8sDir = Join-Path $ScriptRoot "k8s"
-$JetStreamConfigFile = Join-Path $ScriptRoot "infrastructure\nats\jetstream-config.md"
+$ServicesDir = Join-Path $PSScriptRoot "services"
+$K8sDir = Join-Path $PSScriptRoot "k8s"
+$JetStreamConfigFile = Join-Path $PSScriptRoot "infrastructure\nats\jetstream-config.md"
 $Tag = (Get-Date -Format "yyyyMMdd-HHmmss")  # Unique tag for production images
-$ProjectId = $env:GOOGLE_CLOUD_PROJECT  # Expect this to be set
-$ClusterName = $env:GKE_CLUSTER_NAME    # Expect this to be set
-$Region = $env:GKE_COMPUTE_REGION       # Expect this to be set
-$Namespace = "wideo11-production"       # Production namespace
+$ProjectId = $env:GOOGLE_CLOUD_PROJECT       # Expect this to be set
+$ClusterName = $env:GKE_CLUSTER_NAME         # Expect this to be set
+$Region = $env:GKE_COMPUTE_REGION            # Expect this to be set
+$Namespace = "wideo11-production"            # Production namespace
 
 # Validate required environment variables
 if (-not $ProjectId) {
@@ -30,13 +22,9 @@ if (-not $Region) {
     exit 1
 }
 
-# ============================================================================
-# HELPER FUNCTIONS
-# ============================================================================
-
 function Write-Hinglish {
     param([string]$Message)
-    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Message"
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')]$Message"
 }
 
 function Set-GkeContext {
@@ -44,8 +32,10 @@ function Set-GkeContext {
     try {
         # Get credentials for the GKE cluster
         gcloud container clusters get-credentials $ClusterName --region $Region --project $ProjectId | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "gcloud failed to fetch cluster credentials" }
         # Set the namespace for subsequent kubectl commands
         kubectl config set-context --current --namespace $Namespace | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "kubectl failed to set namespace context" }
         Write-Hinglish "GKE context set successfully. Namespace: '$Namespace'"
     }
     catch {
@@ -55,14 +45,32 @@ function Set-GkeContext {
 }
 
 function BuildAndPushGoServiceImage {
-    param([string]$ServiceName, [string]$ServicePath)
-    Write-Hinglish "Building and pushing Docker image for service: $ServiceName"
+    param(
+        [string]$ServiceName,
+        [string]$ServicePath
+    )
+
     Push-Location $ServicePath
+
     try {
-        $imageName = "gcr.io/$ProjectId/$ServiceName:$Tag"
-        docker build -t $imageName . | Out-Null
-        docker push $imageName | Out-Null
-        Write-Hinglish "Successfully built and pushed image: $imageName"
+        $imageName = "$Region-docker.pkg.dev/$ProjectId/wideo11/${ServiceName}:$Tag"
+
+        Write-Hinglish "Building image for $ServiceName"
+
+        docker build --pull --no-cache -t $imageName .
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker build failed for $ServiceName"
+        }
+
+        docker push $imageName
+
+        if ($LASTEXITCODE -ne 0) {
+            throw "Docker push failed for $ServiceName"
+        }
+
+        Write-Hinglish "Pushed: $imageName"
+
         return $imageName
     }
     finally {
@@ -70,21 +78,23 @@ function BuildAndPushGoServiceImage {
     }
 }
 
-function Apply-K8sManifests {
+function Invoke-K8sManifests {
     param([string]$ManifestPath)
     Write-Hinglish "Applying Kubernetes manifests from: $ManifestPath"
     kubectl apply -f $ManifestPath | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "kubectl apply failed for $ManifestPath" }
     Write-Hinglish "Manifests applied successfully."
 }
 
 function Set-ServiceImage {
     param([string]$ServiceName, [string]$ImageName)
     Write-Hinglish "Setting image for deployment '$ServiceName' to '$ImageName'"
-    kubectl set image deployment/$ServiceName $ServiceName=$ImageName --record | Out-Null
+    kubectl set image deployment/$ServiceName $ServiceName=$ImageName | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to update image for deployment $ServiceName" }
     Write-Hinglish "Image updated for deployment '$ServiceName'."
 }
 
-function Parse-JetStreamConfig {
+function Convert-JetStreamConfig {
     param([string]$ConfigFilePath)
     Write-Hinglish "Parsing NATS JetStream configuration from: $ConfigFilePath"
     
@@ -97,12 +107,12 @@ function Parse-JetStreamConfig {
     # Extract stream definitions
     $streamPattern = 'STREAM_(\w+)\s*=\s*\{([^}]+)\}'
     $streamMatches = [regex]::Matches($content, $streamPattern, [System.Text.RegularExpressions.RegexOptions]::Multiline)
-    foreach ($match in $streamMatches) {
-        $streamName = "W11_$($match.Groups[1].Value)"  # Prefix with W11_
+    foreach ($match in $streamMatches) {$streamName = "W11_$($match.Groups[1].Value)"  # Prefix with W11_
         $streamBody = $match.Groups[2].Value
         
         $stream = @{ name = $streamName }
-        $lines = $streamBody -split "`n"
+        $lines = $streamBody -split "
+"
         foreach ($line in $lines) {
             $line = $line.Trim()
             if ($line -match '^(\w+)\s*:\s*(.+)$') {
@@ -136,51 +146,53 @@ function Parse-JetStreamConfig {
         $consumerBody = $match.Groups[2].Value
         
         $consumer = @{ name = $consumerName }
-        $lines = $consumerBody -split "`n"
-        foreach ($line in$lines) {
-            $line =$line.Trim()
+        $lines = $consumerBody -split "
+"
+            foreach ($line in $lines) {
+            $line = $line.Trim()
             if ($line -match '^(\w+)\s*:\s*(.+)$') {
-                $key =$Matches[1].Trim()
-                $value =$Matches[2].Trim()
+                $key = $Matches[1].Trim()
+                $value = $Matches[2].Trim()
                 
                 # Clean up value
-                $value =$value.TrimEnd(',')
+                $value = $value.TrimEnd(',')
                 if ($value -match '^"(.*)"$') {
                     $value =$Matches[1]
                 }
                 elseif ($value -match '^\[(.*)\]$') {
-                    $arrayContent =$Matches[1]
-                    $items =$arrayContent -split ',' | ForEach-Object { $_.Trim().Trim('"').Trim("'") } \vert{} Where-Object { $_ }
-                    $value =$items
+                    $arrayContent = $Matches[1]
+                    $items =$arrayContent -split ',' | ForEach-Object { $_.Trim().Trim('"').Trim("'") } | Where-Object { $_ }
+                    $value = $items
                 }
                 elseif ($value -match '^\d+_?\d*$') {
                     $value = [int]($value -replace '_', '')
                 }
-                $consumer[$key] =$value
+                $consumer[$key] = $value
             }
         }
-        $consumers +=$consumer
+        $consumers += $consumer
     }
     
     Write-Hinglish "Parsed $($streams.Count) stream(s) and $($consumers.Count) consumer(s) from configuration."
     return @{ streams = $streams; consumers =$consumers }
 }
 
-function Apply-JetStreamConfig {
+function Set-JetStreamConfig {
     param([hashtable]$Config)
     Write-Hinglish "Applying NATS JetStream configuration..."
     
     # Apply streams
-    foreach ($stream in$Config.streams) {
-        $streamName =$stream.name
+    foreach ($stream in $Config.streams) {
+        $streamName = $stream.name
         $subjects = if ($stream.subjects -is [array]) { $stream.subjects -join "," } else { $stream.subjects }
-        $retention =$stream.retention
-        $maxMsgs =$stream.max_msgs
-        $maxBytes =$stream.max_bytes
-        $maxAge =$stream.max_age
-        $discard =$stream.discard
-        $storage =$stream.storage
-        $replicas = $stream.num_replicas$cliArgs = @("stream", "add", $streamName, "--subjects", $subjects)
+        $retention = $stream.retention
+        $maxMsgs = $stream.max_msgs
+        $maxBytes = $stream.max_bytes
+        $maxAge = $stream.max_age
+        $discard = $stream.discard
+        $storage = $stream.storage
+        $replicas = $stream.num_replicas
+        $cliArgs = @("stream", "add", $streamName, "--subjects", $subjects)
         if ($retention) { $cliArgs += @("--retention", $retention) }
         if ($maxMsgs) { $cliArgs += @("--max-msgs", $maxMsgs) }
         if ($maxBytes) { $cliArgs += @("--max-bytes", $maxBytes) }
@@ -193,13 +205,24 @@ function Apply-JetStreamConfig {
         
         Write-Hinglish "Executing: nats $($cliArgs -join ' ')"
         & nats @cliArgs | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "NATS failed to configure stream $streamName" }
         Write-Hinglish "Stream '$streamName' created/updated."
     }
     
     # Apply consumers
-    foreach ($consumer in$Config.consumers) {
+    foreach ($consumer in $Config.consumers) {
         $consumerName =$consumer.name
-        $streamName = $consumer.stream_name$durable = $consumer.durable_name$filter = $consumer.filter_subject$ackPolicy = $consumer.ack_policy$ackWait = $consumer.ack_wait$maxDeliver = $consumer.max_deliver$backOff = if ($consumer.back_off -is [array]) {$consumer.back_off -join ',' } else { $consumer.back_off }$maxAckPending = $consumer.max_ack_pending$replayPolicy = $consumer.replay_policy$startSeq = $consumer.start_seq$cliArgs = @("consumer", "add", $streamName,$consumerName)
+        $streamName = $consumer.stream_name
+        $durable = $consumer.durable_name
+        $filter = $consumer.filter_subject
+        $ackPolicy = $consumer.ack_policy
+        $ackWait = $consumer.ack_wait
+        $maxDeliver = $consumer.max_deliver
+        $backOff = if ($consumer.back_off -is [array]) { $consumer.back_off -join ',' } else { $consumer.back_off }
+        $maxAckPending = $consumer.max_ack_pending
+        $replayPolicy = $consumer.replay_policy
+        $startSeq = $consumer.start_seq
+        $cliArgs = @("consumer", "add", $streamName, $consumerName)
         if ($durable) { $cliArgs += @("--durable-name", $durable) }
         if ($filter) { $cliArgs += @("--filter-subject", $filter) }
         if ($ackPolicy) { $cliArgs += @("--ack-policy", $ackPolicy) }
@@ -213,13 +236,14 @@ function Apply-JetStreamConfig {
         
         Write-Hinglish "Executing: nats $($cliArgs -join ' ')"
         & nats @cliArgs | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "NATS failed to configure consumer $consumerName" }
         Write-Hinglish "Consumer '$consumerName' created/updated on stream '$streamName'."
     }
     
     Write-Hinglish "NATS JetStream configuration applied successfully."
 }
 
-function Apply-DatabaseMigrations {
+function Invoke-DatabaseMigrations {
     param([string]$Namespace = "wideo11-production")
     Write-Hinglish "Applying database schema migrations via temporary Kubernetes Jobs..."
     
@@ -228,13 +252,13 @@ function Apply-DatabaseMigrations {
         New-Item -ItemType Directory -Path $tempDir | Out-Null
         
         Get-ChildItem -Path $ServicesDir -Directory | ForEach-Object {
-            $serviceName =$_.Name
-            $serviceMigrationDir = Join-Path$_.FullName "migrations"
+            $serviceName = $_.Name
+            $serviceMigrationDir = Join-Path $_.FullName "migrations"
+            
             if (Test-Path $serviceMigrationDir) {
                 Get-ChildItem -Path $serviceMigrationDir -Filter "*.sql" | Sort-Object Name | ForEach-Object {
-                    $sqlFile =$_.FullName
                     $jobName = "$($serviceName)-$($_.BaseName)"
-                    $sqlContent = Get-Content -Path$sqlFile -Raw
+                    $sqlContent = Get-Content -Path $_.FullName -Raw
                     $indentedSql = ($sqlContent -split "`r?\n" | ForEach-Object { "    $_" }) -join "`n"
                     
                     $jobManifest = @"
@@ -285,10 +309,12 @@ metadata:
   name: $jobName-configmap
   namespace: $Namespace
 data:
-  $($_.Name): \vert{}$indentedSql
+  $($_.Name): |
+$indentedSql
+
 "@
                     $jobManifestPath = Join-Path $tempDir "$jobName.yaml"
-                    $jobManifest \vert{} Out-File -FilePath$jobManifestPath -Encoding utf8
+                    $jobManifest | Out-File -FilePath $jobManifestPath -Encoding utf8
                     Write-Hinglish "Generated migration job manifest: $jobName"
                 }
             }
@@ -298,19 +324,22 @@ data:
         kubectl apply -f $tempDir | Out-Null
         
         Write-Hinglish "Waiting for migration jobs to complete..."
-        $maxAttempts = 60$attempt = 0
-        while ($attempt -lt$maxAttempts) {
-            $incompleteJobsRaw = kubectl get jobs -n$Namespace -o jsonpath='{.items[?(@.status.succeeded<@.spec.completions)].metadata.name}' 2>$null$incompleteJobs = ($incompleteJobsRaw -split '\s+') \vert{} Where-Object {$_ }
+        $maxAttempts = 60; $attempt = 0
+        
+        while ($attempt -lt $maxAttempts) {
+            $incompleteJobsRaw = kubectl get jobs -n $Namespace -o jsonpath='{.items[?(@.status.succeeded<@.spec.completions)].metadata.name}' 2>$null
+            $incompleteJobs = ($incompleteJobsRaw -split '\s+') | Where-Object { $_ }
+            
             if (-not $incompleteJobs) {
                 Write-Hinglish "All migration jobs have completed."
                 break
             }
-            Write-Hinglish "Waiting for $($incompleteJobs.Count) migration job(s) to complete... (Attempt$($attempt+1)/$maxAttempts)"
+            Write-Hinglish "Waiting for $($incompleteJobs.Count) migration job(s) to complete... (Attempt$($attempt + 1)/$maxAttempts)"
             Start-Sleep -Seconds 10
             $attempt++
         }
         
-        if ($attempt -eq$maxAttempts) {
+        if ($attempt -eq $maxAttempts) {
             Write-Warning "Timeout waiting for migration jobs to complete. Some migrations may still be running."
         }
         else {
@@ -325,18 +354,18 @@ data:
     }
 }
 
-function Validate-BusinessRules {
+function Confirm-BusinessRules {
     param([string]$Namespace = "wideo11-production")
     Write-Hinglish "Validating core business rules (2000 INR maintenance buffer & 5% sister allocation)..."
     
     try {
         $configMapJson = kubectl get configmap config-service-config -n $Namespace -o json 2>$null
         if ($configMapJson) {
-            $configMap =$configMapJson | ConvertFrom-Json
-            $data =$configMap.data
+            $configMap = $configMapJson | ConvertFrom-Json
+            $data = $configMap.data
             
-            $maintenanceBuffer =$data.MAINTENANCE_BUFFER_INR
-            $sisterAllocation =$data.SISTER_ALLOCATION_PERCENT
+            $maintenanceBuffer = $data.MAINTENANCE_BUFFER_INR
+            $sisterAllocation = $data.SISTER_ALLOCATION_PERCENT
             
             if ($maintenanceBuffer -eq "2000") {
                 Write-Hinglish "✓ Maintenance buffer validation passed: $maintenanceBuffer INR"
@@ -361,10 +390,6 @@ function Validate-BusinessRules {
     }
 }
 
-# ============================================================================
-# MAIN EXECUTION
-# ============================================================================
-
 try {
     Write-Hinglish "=== Starting Google Cloud GKE Live Production Engine ==="
     
@@ -375,39 +400,39 @@ try {
     Write-Hinglish "Building and pushing Go service images to GCR..."
     $pushedImages = @{}
     Get-ChildItem -Path $ServicesDir -Directory | ForEach-Object {
-        $serviceName =$_.Name
-        $servicePath =$_.FullName
-        $imageName = BuildAndPushGoServiceImage -ServiceName$serviceName -ServicePath $servicePath$pushedImages[$serviceName] =$imageName
+        $serviceName = $_.Name
+        $servicePath = $_.FullName
+        $imageName = BuildAndPushGoServiceImage -ServiceName $serviceName -ServicePath $servicePath; $pushedImages[$serviceName] = $imageName
     }
     
     # 3. Apply Kubernetes manifests
     if (Test-Path $K8sDir) {
-        Apply-K8sManifests -ManifestPath $K8sDir
+        Invoke-K8sManifests -ManifestPath $K8sDir
     }
     else {
         Write-Warning "Kubernetes manifests directory not found at: $K8sDir. Skipping manifest application."
     }
     
     # 4. Apply database schema migrations via Jobs
-    Apply-DatabaseMigrations -Namespace $Namespace
+    Invoke-DatabaseMigrations -Namespace $Namespace
     
     # 5. Update deployments to use newly pushed images
     Write-Hinglish "Updating deployments to use newly pushed images..."
-    foreach ($serviceName in$pushedImages.Keys) {
+    foreach ($serviceName in $pushedImages.Keys) {
         Set-ServiceImage -ServiceName $serviceName -ImageName $pushedImages[$serviceName]
     }
     
     # 6. Apply NATS JetStream configuration from jetstream-config.md
     if (Test-Path $JetStreamConfigFile) {
-        $jetStreamConfig = Parse-JetStreamConfig -ConfigFilePath$JetStreamConfigFile
-        Apply-JetStreamConfig -Config $jetStreamConfig
+        $jetStreamConfig = Convert-JetStreamConfig -ConfigFilePath $JetStreamConfigFile
+        Set-JetStreamConfig -Config $jetStreamConfig
     }
     else {
         Write-Warning "JetStream configuration file not found at: $JetStreamConfigFile. Skipping JetStream setup."
     }
     
     # 7. Validate core business rules
-    Validate-BusinessRules -Namespace $Namespace
+    Confirm-BusinessRules -Namespace $Namespace
     
     Write-Hinglish "=== Google Cloud GKE Live Production Engine completed successfully ==="
     Write-Hinglish "Your application is now deployed to GKE in the '$Namespace' namespace."

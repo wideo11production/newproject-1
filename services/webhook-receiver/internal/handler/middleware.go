@@ -58,8 +58,9 @@ func ErrorMiddleware() gin.HandlerFunc {
 		c.Next()
 
 		if len(c.Errors) > 0 {
-			for _, err := range c.Errors {
-				// Log errors
+			for _, e := range c.Errors {
+				// Log errors - e is the error, intentionally not logged here to avoid spam
+				_ = e
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 		}

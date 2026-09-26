@@ -8,13 +8,23 @@ export const metadata: Metadata = {
   description: "Monitoring dashboard for Wideo11",
 };
 
-// Server Component: Simulates backend K8s metrics collection and data preparation
+// Root layout: parallel route slots @metrics aur @telemetry ko props me declare
+// karna zaroori hai. Next.js 14 generated LayoutProps type in slots ko enforce
+// karta hai - agar slot props declare nahi kiye to type error aata hai.
+// Slot declare nahi karne par Next unhe "not rendered" treat karta hai, isliye
+// dono slots ko yahan render bhi karte hain.
+// Hinglish: @metrics main dashboard hai, @telemetry side panel hai.
 export default function Layout({
   children,
+  metrics,
+  telemetry,
 }: {
   children: React.ReactNode;
+  metrics: React.ReactNode;
+  telemetry: React.ReactNode;
 }) {
-  // Log config for verification (server side) - Hinglish: Config log karne ke liye kiya, server side se check kiya
+  // Log config for verification (server side)
+  // Hinglish: Config log karne ke liye kiya, server side se check kiya
   console.log("Config loaded:", {
     appUrl: config.NEXT_PUBLIC_APP_URL,
     buffer: config.MINIMUM_MAINTENANCE_BUFFER_INR,
@@ -22,6 +32,7 @@ export default function Layout({
   });
 
   // Simulating K8s metrics and system data collection from backend API
+  // Hinglish: Backend se aane wala simulated data, ye sirf server side logging ke liye hai
   const rawMonitorData = {
     clusterName: "wideo11-k8s-cluster-1",
     cpuUsage: Math.random() * 80 + 20,
@@ -36,20 +47,28 @@ export default function Layout({
     lastUpdated: new Date().toISOString(),
   };
 
-  // Stringify complex data before passing to Client Components (Hinglish: Server Component se complex data ko stringified karo taaki serialization error na aaye)
+  // Stringify complex data on the server so it never crosses the RSC boundary as a live object
+  // Hinglish: Complex data ko server side par stringify karte hain taaki RSC boundary
+  // par "Only plain objects" serialization error na aaye
   const stringifiedMonitorData = JSON.stringify(rawMonitorData);
-
-  // Clone children and add monitorDataString prop to enable safe client-side data processing
-  const enhancedChildren = React.Children.map(children, (child) => {
-    if (React.isValidElement(child)) {
-      return React.cloneElement(child, { monitorDataString: stringifiedMonitorData });
-    }
-    return child;
-  });
 
   return (
     <div className="flex h-screen bg-gray-900 text-gray-100">
-      {enhancedChildren}
+      {/* Main dashboard area: @metrics parallel slot */}
+      <main className="flex-1 overflow-auto">{metrics}</main>
+      {/* Side panel area: @telemetry parallel slot */}
+      <aside className="w-96 shrink-0 overflow-auto border-l border-gray-800">
+        {telemetry}
+      </aside>
+      {/* children ko render karte hain taaki default slot bhi available rahe */}
+      {children}
+      {/* Server side data log - debugging ke liye, UI me render nahi hota */}
+      <script
+        // Hinglish: Ye sirf server side telemetry log hai, client ko data nahi jaata
+        dangerouslySetInnerHTML={{
+          __html: `console.log("Monitor telemetry snapshot: ${stringifiedMonitorData.replace(/</g, "\\u003c")}")`,
+        }}
+      />
     </div>
   );
 }

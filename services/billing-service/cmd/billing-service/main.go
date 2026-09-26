@@ -51,6 +51,18 @@ func main() {
 	r.Use(gin.Recovery())
 	h.RegisterRoutes(r)
 
+	// Health check route: Kubernetes/Docker healthcheck is endpoint par depend karta hai.
+	// Pehle ye route register nahi thi, isliye /health par 404 aata tha aur container
+	// unhealthy mark ho jata tha. Ab service ready hone par 200 return karta hai.
+	// Hinglish: health route add kiya taaki container healthcheck pass ho sake
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"status":  "healthy",
+			"service": "billing-service",
+			"port":    cfg.Server.Port,
+		})
+	})
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Server.Port,
 		Handler:           r,

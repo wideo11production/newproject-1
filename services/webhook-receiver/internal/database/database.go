@@ -7,7 +7,6 @@ import (
 
 	"github.com/wideo11/webhook-receiver/internal/config"
 	"github.com/wideo11/webhook-receiver/internal/model"
-	"go.uber.org/zap"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"

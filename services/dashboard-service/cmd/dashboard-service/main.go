@@ -16,7 +16,6 @@ import (
 	"github.com/wideo11/dashboard-service/internal/config"
 	"github.com/wideo11/dashboard-service/internal/database"
 	"github.com/wideo11/dashboard-service/internal/handler"
-	"github.com/wideo11/dashboard-service/internal/model"
 )
 
 func main() {

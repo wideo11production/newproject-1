@@ -5,7 +5,10 @@ WORKDIR /app
 
 RUN apk add --no-cache git
 
-COPY go.mod go.sum ./
+# Copy go.mod first, then go.sum if exists, then download deps
+# This handles missing go.sum gracefully during build
+COPY go.mod ./
+COPY go.sum* ./
 RUN go mod download
 
 COPY . .
@@ -26,4 +29,6 @@ EXPOSE 8088
 ENV PORT=8088
 ENV ENVIRONMENT=production
 
-ENTRYPOINT ["/webhook-receiver"]
+# Binary WORKDIR /app ke andar hai, isliye relative path use karte hain
+# Absolute "/webhook-receiver" root path dhundhta hai aur binary /app me hone se fail hota tha
+ENTRYPOINT ["./webhook-receiver"]

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
@@ -13,6 +11,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Alag-alag service databases pehli baar create ho jaati hain
+      # Ye script empty data directory par hi chalti hai (pehli baar)
+      - ./infrastructure/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -44,7 +45,9 @@ services:
     volumes:
       - nats_data:/data
     healthcheck:
-      test: ["CMD", "nats", "server", "check", "streaming"]
+      # nats CLI binary alpine image me installed nahi hai, isliye monitoring
+      # port ka /healthz endpoint use karte hain - busybox wget already available hai
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8222/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -150,14 +153,14 @@ services:
       timeout: 5s
       retries: 5
 
-  # Monitor Frontend (Next.js)
+  # Monitor Frontend (Next.js) - Port 3001
   monitor:
     build:
-      context: ./apps/monitor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/monitor/Dockerfile
     container_name: wideo11-monitor
     ports:
-      - "3001:3000"
+      - "3001:3001"
     environment:
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
@@ -165,25 +168,25 @@ services:
       dashboard-service:
         condition: service_healthy
 
-  # Web Frontend (Next.js)
+  # Web Frontend (Next.js) - Port 3000
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: wideo11-web
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
 
-  # Video Editor Frontend (Next.js)
+  # Video Editor Frontend (Next.js) - Port 3002
   video-editor:
     build:
-      context: ./apps/video-editor
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/video-editor/Dockerfile
     container_name: wideo11-video-editor
     ports:
-      - "3002:3000"
+      - "3002:3002"
     environment:
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
@@ -200,15 +203,22 @@ services:
     ports:
       - "8082:8082"
     environment:
+      # billing-service viper use karta hai, jo keys ko DATABASE_HOST / DATABASE_DBNAME
+      # format me padhta hai (dot ko underscore me convert karta hai). Isliye yahan
+      # DB_* env names kaam nahi karte aur service default localhost par chali jaati thi.
+      # Saare env names viper ke expected format me diye gaye hain.
+      SERVER_PORT: 8082
+      SERVER_MODE: release
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_DBNAME: billing_service
+      DATABASE_SSLMODE: disable
+      DATABASE_TIMEZONE: UTC
       PORT: 8082
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      DB_NAME: billing_service
-      DB_SSL_MODE: disable
-      LOG_LEVEL: debug
       ENVIRONMENT: development
+      LOG_LEVEL: debug
     depends_on:
       postgres:
         condition: service_healthy
@@ -218,18 +228,60 @@ services:
       timeout: 5s
       retries: 5
 
-  # Billing Frontend (Next.js)
+  # Billing Frontend (Next.js) - Port 3003
   billing:
     build:
-      context: ./apps/billing
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/billing/Dockerfile
     container_name: wideo11-billing
     ports:
-      - "3003:3000"
+      - "3003:3003"
     environment:
       NEXT_PUBLIC_API_URL: http://billing-service:8082
     depends_on:
       billing-service:
+        condition: service_healthy
+
+  # Admin Frontend (Next.js) - Port 3004
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    container_name: wideo11-admin
+    ports:
+      - "3004:3004"
+    environment:
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+    depends_on:
+      dashboard-service:
+        condition: service_healthy
+
+  # Analytics Frontend (Next.js) - Port 3005
+  analytics:
+    build:
+      context: .
+      dockerfile: apps/analytics/Dockerfile
+    container_name: wideo11-analytics
+    ports:
+      - "3005:3005"
+    environment:
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+    depends_on:
+      dashboard-service:
+        condition: service_healthy
+
+  # Editor Frontend (Next.js) - Port 3006
+  editor:
+    build:
+      context: .
+      dockerfile: apps/editor/Dockerfile
+    container_name: wideo11-editor
+    ports:
+      - "3006:3006"
+    environment:
+      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+    depends_on:
+      dashboard-service:
         condition: service_healthy
 
 volumes:

@@ -1,0 +1,46 @@
+# Root .dockerignore - build context ko slim rakhta hai
+# Ye host ke node_modules aur build artifacts ko image me copy hone se rokta hai
+# Isse build context 300MB se gir kar kuch MB ho jata hai aur symlink issues khatam hote hain
+
+# Dependencies - container ke andar install hongi
+**/node_modules
+node_modules
+
+# Next.js build output - container ke andar build hoga
+**/.next
+**/.next-monitor
+**/out
+**/build
+**/dist
+
+# Turborepo cache
+**/.turbo
+
+# Go build binaries
+**/*.exe
+
+# Version control aur CI
+.git
+.gitignore
+.github
+
+# Env files - secrets image me na jaayein
+**/.env
+**/.env.*
+!.env.example
+
+# Logs aur temp
+**/*.log
+**/tmp
+**/coverage
+
+# Docs aur editor files
+*.md
+!README.md
+.vscode
+.idea
+
+# Docker files themselves
+**/Dockerfile
+**/Dockerfile.*
+docker-compose*.yml

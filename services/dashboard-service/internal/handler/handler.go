@@ -2,18 +2,14 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/gorilla/websocket"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
-	"github.com/prometheus/common/model"
 	"go.uber.org/zap"
 	"gorm.io/gorm"
 
@@ -362,7 +358,7 @@ func (h *DashboardHandler) ExportDashboard(c *gin.Context) {
 }
 
 func (h *DashboardHandler) QueryPanelData(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	_, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dashboard ID"})
 		return
@@ -407,7 +403,7 @@ func (h *DashboardHandler) QueryPanelData(c *gin.Context) {
 }
 
 func (h *DashboardHandler) QueryRange(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
+	_, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dashboard ID"})
 		return

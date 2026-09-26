@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -36,6 +37,14 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath("/etc/billing-service")
 
 	viper.AutomaticEnv()
+
+	// Env key replacer: viper AutomaticEnv me dots ko underscores me convert nahi karta.
+	// Bina iske viper "DATABASE.HOST" jaisa env name dhundhta hai jo practically exist
+	// nahi karta, aur service default (localhost) par chali jaati thi.
+	// Ye replacer DATABASE_HOST / DATABASE_DBNAME jaise standard env names ko bind karta hai.
+	// Hinglish: bina is replacer ke container env vars ignore ho jaate the
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+
 	setDefaults()
 
 	if err := viper.ReadInConfig(); err != nil {

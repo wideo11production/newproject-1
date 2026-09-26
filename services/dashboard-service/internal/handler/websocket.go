@@ -1,9 +1,7 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -29,7 +27,7 @@ type WebSocketHandler struct {
 	
 	// Connection management
 	clients    map[string]*Client
-	broadcast  chan WebSocketMessage
+	broadcast  chan model.WebSocketMessage
 	register   chan *Client
 	unregister chan *Client
 	mu         sync.RWMutex
@@ -38,7 +36,7 @@ type WebSocketHandler struct {
 type Client struct {
 	id       string
 	conn     *websocket.Conn
-	send     chan WebSocketMessage
+	send     chan model.WebSocketMessage
 	dashboardID uuid.UUID
 }
 
@@ -47,7 +45,7 @@ func NewWebSocketHandler(db *gorm.DB, logger *zap.Logger) *WebSocketHandler {
 		db:         db,
 		logger:     logger,
 		clients:    make(map[string]*Client),
-		broadcast:  make(chan WebSocketMessage, 256),
+		broadcast:  make(chan model.WebSocketMessage, 256),
 		register:   make(chan *Client),
 		unregister: make(chan *Client),
 	}
@@ -110,7 +108,7 @@ func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
 	client := &Client{
 		id:       uuid.New().String(),
 		conn:     conn,
-		send:     make(chan WebSocketMessage, 256),
+		send:     make(chan model.WebSocketMessage, 256),
 		dashboardID: dashboardID,
 	}
 
@@ -130,14 +128,14 @@ func (c *Client) writePump(h *WebSocketHandler) {
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case msg, ok := <-c.send:
 			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
-			if err := c.conn.WriteJSON(message); err != nil {
+			if err := c.conn.WriteJSON(msg); err != nil {
 				h.logger.Error("Failed to write WebSocket message", zap.Error(err))
 				return
 			}
@@ -173,7 +171,7 @@ func (c *Client) readPump(h *WebSocketHandler) {
 			break
 		}
 
-		var msg WebSocketMessage
+		var msg model.WebSocketMessage
 		if err := json.Unmarshal(messageData, &msg); err != nil {
 			continue
 		}
@@ -188,12 +186,12 @@ func (c *Client) readPump(h *WebSocketHandler) {
 	}
 }
 
-func (h *WebSocketHandler) handleDashboardSync(c *Client, msg WebSocketMessage) {
+func (h *WebSocketHandler) handleDashboardSync(c *Client, msg model.WebSocketMessage) {
 	// Send current dashboard state to client
 	var dashboard model.Dashboard
 	if c.dashboardID != uuid.Nil {
 		if err := h.db.First(&dashboard, "id = ?", c.dashboardID).Error; err == nil {
-			h.sendToClient(c, WebSocketMessage{
+			h.sendToClient(c, model.WebSocketMessage{
 				Type: model.WSMsgTypeDashboardSync,
 				Data: dashboard,
 			})
@@ -201,7 +199,7 @@ func (h *WebSocketHandler) handleDashboardSync(c *Client, msg WebSocketMessage) 
 	}
 }
 
-func (h *WebSocketHandler) sendToClient(c *Client, msg WebSocketMessage) {
+func (h *WebSocketHandler) sendToClient(c *Client, msg model.WebSocketMessage) {
 	select {
 	case c.send <- msg:
 	default:
@@ -211,7 +209,7 @@ func (h *WebSocketHandler) sendToClient(c *Client, msg WebSocketMessage) {
 
 // BroadcastPanelUpdate sends a panel update to all clients watching a dashboard
 func (h *WebSocketHandler) BroadcastPanelUpdate(dashboardID uuid.UUID, panelID string, data interface{}) {
-	msg := WebSocketMessage{
+	msg := model.WebSocketMessage{
 		Type: model.WSMsgTypePanelUpdate,
 		Data: map[string]interface{}{
 			"dashboardId": dashboardID,
@@ -224,14 +222,14 @@ func (h *WebSocketHandler) BroadcastPanelUpdate(dashboardID uuid.UUID, panelID s
 
 // BroadcastAlertUpdate sends an alert update to all clients
 func (h *WebSocketHandler) BroadcastAlertUpdate(alert *model.Alert) {
-	msg := WebSocketMessage{
+	msg := model.WebSocketMessage{
 		Type: model.WSMsgTypeAlertUpdate,
 		Data: alert,
 	}
 	h.broadcast <- msg
 }
 
-func (h *WebSocketHandler) broadcastToDashboard(dashboardID uuid.UUID, msg WebSocketMessage) {
+func (h *WebSocketHandler) broadcastToDashboard(dashboardID uuid.UUID, msg model.WebSocketMessage) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
