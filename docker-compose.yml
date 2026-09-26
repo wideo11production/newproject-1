@@ -156,6 +156,75 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==================================================================
+  # MINIO - Self-hosted S3-compatible object storage (NO paid provider)
+  # ==================================================================
+  # Apna khud ka storage hai. AWS S3 / GCS / Bunny CDN kuch nahi - kisi
+  # teesre party ko ek bhi penny nahi jaati.
+  #
+  # Iska use: transcoding-service HLS chunks yaha 'video' bucket me
+  # daalta hai, aur streaming seedha yahin se hoti hai (GKE compute bypass).
+  #
+  # SSOT: credentials .env se aati hain, code me hardcoded kuch nahi.
+  minio:
+    build:
+      context: ./infrastructure/storage
+      dockerfile: Dockerfile
+      args:
+        # Ye values build ke time chahiye (ENV me use hoti hain)
+        MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
+        MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
+    container_name: wideo11-minio
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    environment:
+      # Runtime credentials (bhi SSOT se)
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
+      # Bucket name SSOT se - transcoding service isi name ko use karta hai
+      MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
+      MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
+    volumes:
+      # Named volume = data container recreate par bhi safe rehta hai
+      minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      # MinIO ka /minio/health/live endpoint check karte hain
+      test: ["CMD-SHELL", "mc ready local || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # Bucket auto-provisioning - ek chhuta sa init container jo
+  # 'video' aur 'thumbnails' buckets banata hai + lifecycle rules lagata hai
+  minio-init:
+    image: minio/mc:RELEASE.2024-01-16T16-06-34Z
+    container_name: wideo11-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
+      MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
+      # HLS chunk lifecycle (days) - SSOT se
+      MINIO_HLS_RETENTION_DAYS: ${MINIO_HLS_RETENTION_DAYS:-30}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local $$MINIO_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/$$MINIO_VIDEO_BUCKET &&
+      mc mb --ignore-existing local/$$MINIO_THUMBNAIL_BUCKET &&
+      mc anonymous set download local/$$MINIO_VIDEO_BUCKET &&
+      echo 'Buckets created' &&
+      exit 0
+      "
+    restart: "no"
+
   # Auth Service (Go) - users, sessions, bcrypt password hashing, JWT
   # Pehle ye service repo me maujood thi par kabhi compile nahi hui (module path
   # mismatch + khali go.sum) isliye deploy nahi thi. Ab compile karke deploy kiya gaya hai.
