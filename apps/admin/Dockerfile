@@ -30,6 +30,18 @@ COPY pnpm-workspace.yaml ./
 COPY package.json ./
 COPY pnpm-lock.yaml ./
 
+# Native build toolchain + config (node-gyp ke liye).
+#
+# bcrypt/sharp jaise native modules C++ compile karte hain. node:20-alpine me
+# python3/make/g++ default NAHI hote, aur node-pre-gyp GitHub se prebuilt
+# binary download karne ki koshish karta hai jo build env me BLOCKED hai.
+#
+# Teeno zaroori hain: toolchain compile ke liye, PYTHON node-gyp ko dikhane
+# ke liye, aur build_from_source download skip karne ke liye.
+# Ye INLINE set hain (ENV se nahi) kyunki pnpm install scripts child process
+# me chalti hain jahan ENV block propagate nahi hota.
+RUN apk add --no-cache python3 make g++ libc6-compat
+
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/analytics/package.json ./apps/analytics/package.json
 COPY apps/billing/package.json ./apps/billing/package.json
@@ -65,7 +77,9 @@ COPY packages/video-player ./packages/video-player
 # multi-stage boundary par module resolution na toote
 # --frozen-lockfile: lockfile ke exact versions use hote hain (EUSAGE protection)
 # --prefer-offline: pnpm store cache use karta hai, network calls kam
-RUN pnpm config set shamefully-hoist true && pnpm install --frozen-lockfile --prefer-offline
+RUN PYTHON=/usr/bin/python3 npm_config_build_from_source=true \
+    pnpm config set shamefully-hoist true && \
+    pnpm install --frozen-lockfile --prefer-offline
 
 # ------------------------------------------------------------
 # STAGE 3: BUILDER - Compile Next.js application with optimization

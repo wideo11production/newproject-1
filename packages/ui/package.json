@@ -7,6 +7,10 @@
   "exports": {
     ".": "./src/index.ts",
     
+    
+    
+    "./design-system": "./src/design-system.ts",
+    "./activity-tracker": "./src/activity-tracker.tsx",
     "./font": "./src/font.ts",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",

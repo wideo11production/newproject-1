@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -185,8 +185,10 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		return nil, nil, err
 	}
 
-	session.AccessToken = accessToken
-	session.RefreshToken = refreshToken
+	session.AccessToken = password.HashToken(accessToken)
+	// SECURITY: raw JWT DB me store karna unsafe hai (DB leak = session hijack) + column size overflow.
+// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
+	session.RefreshToken = password.HashToken(refreshToken)
 	session.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
 	if err := s.sessionRepo.Create(ctx, session); err != nil {
@@ -296,8 +298,10 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 		return nil, nil, err
 	}
 
-	session.AccessToken = accessToken
-	session.RefreshToken = refreshToken
+	session.AccessToken = password.HashToken(accessToken)
+	// SECURITY: raw JWT DB me store karna unsafe hai (DB leak = session hijack) + column size overflow.
+// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
+	session.RefreshToken = password.HashToken(refreshToken)
 	session.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
 	if err := s.sessionRepo.Create(ctx, session); err != nil {
@@ -393,8 +397,10 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 		return nil, err
 	}
 
-	newSession.AccessToken = accessToken
-	newSession.RefreshToken = newRefreshToken
+	// SECURITY: raw JWTs DB me store nahi hote - sirf SHA-256 hashes
+	// (DB leak se session hijack possible nahi hota)
+	newSession.AccessToken = password.HashToken(accessToken)
+	newSession.RefreshToken = password.HashToken(newRefreshToken)
 	newSession.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
 	if err := s.sessionRepo.Create(ctx, newSession); err != nil {

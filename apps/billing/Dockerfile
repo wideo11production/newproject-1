@@ -24,6 +24,40 @@ WORKDIR /app
 # ------------------------------------------------------------
 FROM base AS deps
 
+# Build toolchain install karo - NATIVE MODULES ke liye zaroori hai.
+#
+# KYUN: kuch transitive dependencies (bcrypt, sharp, canvas wagairah) native
+# C++ code compile karte hain jise node-gyp chala kar python3 + make + g++
+# chahta hai. node:20-alpine me ye tools DEFAULT NAHI hote.
+#
+# NOTE: Ye problem pehle DIKHAAI nahi de rahi thi karke Docker layer CACHE
+# purane build ko reuse kar raha tha. Jaise hi packages/ui change hua, cache
+# invalid hua aur pnpm install dobara chala - tab ye error aaya.
+#
+# Alpine me sirf build stage me install karte hain - final image me nahi jayega
+# (runtime image chhoti rahegi).
+RUN apk add --no-cache python3 make g++ libc6-compat
+
+# node-gyp ko python3 DIKHANA padta hai.
+#
+# Alpine me python binary ka naam "python3" hota hai, jabki node-gyp by default
+# "python" dhoondta hai aur fail hota hai:
+#   "gyp ERR! find Python Python is not set from command line or npm"
+#
+# Isliye PYTHON explicitly point karte hain. Iske bina python3 installed hone
+# ke bawajood node-gyp use nahi dhoond paata.
+ENV PYTHON=/usr/bin/python3
+
+# Native modules ko PREBUILT binary download karne se rok do.
+#
+# node-pre-gyp defaultedly GitHub releases se compiled .node binary try karta
+# hai. Build environment me wo network BLOCKED hai, to install fail hota tha:
+#   "node-pre-gyp ERR! install request to
+#    https://release-assets.githubusercontent.com/... ERR!"
+#
+# build_from_source=true se wo download skip karke LOCAL se compile karta hai.
+ENV npm_config_build_from_source=true
+
 # Copy root workspace configuration files first
 # Ye files pnpm workspace structure aur lockfile define karte hain
 COPY pnpm-workspace.yaml ./
@@ -65,7 +99,13 @@ COPY packages/video-player ./packages/video-player
 # multi-stage boundary par module resolution na toote
 # --frozen-lockfile: lockfile ke exact versions use hote hain (EUSAGE protection)
 # --prefer-offline: pnpm store cache use karta hai, network calls kam
-RUN pnpm config set shamefully-hoist true && pnpm install --frozen-lockfile --prefer-offline
+#
+# NOTE: PYTHON aur build_from_source YAHIN inline set kiye gaye hain (ENV se nahi).
+# Kyunki pnpm install scripts ko child process me chalata hai aur ENV block
+# un scripts tak sahi se propagate nahi hota tha - node-gyp ko python nahi mil raha tha.
+RUN PYTHON=/usr/bin/python3 npm_config_build_from_source=true \
+    pnpm config set shamefully-hoist true && \
+    pnpm install --frozen-lockfile --prefer-offline
 
 # ------------------------------------------------------------
 # STAGE 3: BUILDER - Compile Next.js application with optimization

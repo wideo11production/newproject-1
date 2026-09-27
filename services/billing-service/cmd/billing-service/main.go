@@ -12,6 +12,7 @@ import (
 	"newproject/services/billing-service/src/config"
 	"newproject/services/billing-service/src/database"
 	"newproject/services/billing-service/src/handler"
+	"newproject/services/billing-service/src/middleware"
 	"newproject/services/billing-service/src/repository"
 	"newproject/services/billing-service/src/service"
 )
@@ -55,6 +56,40 @@ func main() {
 	// Pehle ye route register nahi thi, isliye /health par 404 aata tha aur container
 	// unhealthy mark ho jata tha. Ab service ready hone par 200 return karta hai.
 	// Hinglish: health route add kiya taaki container healthcheck pass ho sake
+	// ---- Payout identity routes (dedup protection) ----
+	//
+	// Ye endpoints UPI/bank/wire add karne dete hain. Core protection:
+	// ek payout identity sirf EK account se link ho sakti hai (unique index).
+	//
+	// SECURITY: SAARE payout routes ab JWT protected hain. User ID URL se nahi,
+	// TOKEN se aati hai - isliye koi unauthenticated user dusre account ki
+	// payout dekh ya modify nahi kar sakta.
+	// KYC engine: automated bank validation (pluggable provider).
+	// KYC_PROVIDER env se select hota hai. Default "local" = deterministic
+	// validation, ZERO cost, offline (bank API ki zarurat nahi).
+	// NOTE: "local" provider format/structure verify karta hai (IFSC checksum,
+	// VPA shape, account digits) - ye REAL typo detection hai. Lekin bank se
+	// account-EXISTENCE confirm nahi karta (uske liye paid provider chahiye).
+	kycEngine := service.NewKycEngine(db, os.Getenv("KYC_PROVIDER"))
+	log.Printf("[KYC] Automated bank validation engine active (provider=%s)", kycEngine.ProviderName())
+
+	payoutSvc := service.NewPayoutIdentityService(db, kycEngine)
+	payoutHandler := handler.NewPayoutHandler(payoutSvc)
+
+	// Public: payout types (UI ke liye, koi sensitive data nahi)
+	r.GET("/payout/types", payoutHandler.Types)
+
+	// Protected: sab payout operations
+	payoutProtected := r.Group("/")
+	payoutProtected.Use(middleware.AuthRequired())
+	{
+		payoutProtected.POST("/payouts", payoutHandler.AddPayout)
+		payoutProtected.GET("/payouts", payoutHandler.ListPayouts)
+		payoutProtected.DELETE("/payouts/:payoutId", payoutHandler.DeletePayout)
+		// Verify payout = admin action
+		payoutProtected.POST("/payouts/:payoutId/verify", middleware.RequireAdmin(), payoutHandler.VerifyPayout)
+	}
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"status":  "healthy",

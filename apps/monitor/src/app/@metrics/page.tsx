@@ -33,13 +33,28 @@ interface RealMetrics {
   networkRxGB: number | null;
   networkRxError?: string;
   dataEgress: {
-    rateMBps: number;
+    // Total storage used (bytes) - REAL from MinIO exporter
+    totalBytes: number | null;
+    objectCount: number | null;
+    videoBucketBytes: number | null;
     bucket: string;
-    source: 'seeded';
-    note: string;
+    source: 'live';
+    scrapeError: number | null;
+    scrapeErrorDetail?: string;
   };
   prometheusUrl: string;
   fetchedAt: string;
+}
+
+/**
+ * formatBytes - bytes ko human-readable me convert karta hai
+ * (B / KB / MB / GB)
+ */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
 }
 
 export default function MetricsPage() {
@@ -182,20 +197,68 @@ export default function MetricsPage() {
         />
       </div>
 
-      {/* ---- Data egress (SEEDED - clearly marked) ---- */}
+      {/* ---- Data egress / storage (REAL - MinIO exporter se) ---- */}
       <div className="mt-6">
-        <div className="rounded-xl border border-amber-700/50 bg-amber-950/20 p-5">
+        <div
+          className={`rounded-xl border p-5 ${
+            metrics.dataEgress.scrapeError
+              ? 'border-amber-700/50 bg-amber-950/20'
+              : 'border-green-700/40 bg-green-900/30'
+          }`}
+        >
           <div className="mb-3 flex items-center gap-2">
-            <Database className="h-5 w-5 text-amber-400" />
-            <h2 className="font-semibold text-white">Data Egress</h2>
-            {/* SEEDED badge - user ko clearly dikhta hai ki ye REAL nahi hai */}
-            <span className="rounded-full border border-amber-600/50 bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-              SEEDED (not live)
-            </span>
+            <Database className="h-5 w-5 text-green-400" />
+            <h2 className="font-semibold text-white">Storage &amp; Data Egress</h2>
+            {/* REAL badge - custom MinIO exporter se live data */}
+            {metrics.dataEgress.scrapeError ? (
+              <span className="rounded-full border border-amber-600/50 bg-amber-900/40 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                SCRAPE ERROR
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[10px] font-semibold text-green-400">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-green-500" />
+                </span>
+                LIVE
+              </span>
+            )}
           </div>
-          <p className="text-sm text-amber-200/80">{metrics.dataEgress.note}</p>
-          <p className="mt-2 text-xs text-gray-400">
-            Bucket: <span className="font-mono">{metrics.dataEgress.bucket}</span>
+
+          {/* Real numbers - MinIO exporter se */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+              <p className="text-xs text-gray-400">Total stored</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-green-400">
+                {metrics.dataEgress.totalBytes !== null
+                  ? formatBytes(metrics.dataEgress.totalBytes)
+                  : '--'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Video bucket</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-blue-400">
+                {metrics.dataEgress.videoBucketBytes !== null
+                  ? formatBytes(metrics.dataEgress.videoBucketBytes)
+                  : '--'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400">Objects</p>
+              <p className="mt-1 font-mono text-2xl font-bold text-white">
+                {metrics.dataEgress.objectCount !== null
+                  ? metrics.dataEgress.objectCount.toLocaleString()
+                  : '--'}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-3 text-xs text-gray-500">
+            Bucket: <span className="font-mono">{metrics.dataEgress.bucket}</span> •
+            Source: custom MinIO exporter (real Admin API stats)
+            {metrics.dataEgress.scrapeErrorDetail
+              ? ` • ${metrics.dataEgress.scrapeErrorDetail}`
+              : ''}
           </p>
         </div>
       </div>

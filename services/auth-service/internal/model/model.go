@@ -32,8 +32,12 @@ type Session struct {
 	ID           uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	UserID       uuid.UUID      `gorm:"type:uuid;not null;index" json:"user_id"`
 	DeviceID     *uuid.UUID     `gorm:"type:uuid;index" json:"device_id"`
-	AccessToken  string         `gorm:"size:512;not null" json:"-"`
-	RefreshToken string         `gorm:"size:512;not null" json:"-"`
+	// SECURITY FIX: raw JWT store karna DB leak me session hijack deta hai.
+	// Ab sirf SHA-256 hash (64 hex chars) store hota hai - size bhi safe.
+	// Hinglish: raw token DB me nahi, sirf hash
+	AccessToken  string         `gorm:"size:64;not null" json:"-"`
+	// SECURITY FIX: same - raw refresh JWT nahi, sirf hash store hota hai
+	RefreshToken string         `gorm:"size:64;not null" json:"-"`
 	IPAddress    string         `gorm:"size:45" json:"ip_address"`
 	UserAgent    string         `gorm:"size:512" json:"user_agent"`
 	ExpiresAt    time.Time      `gorm:"not null;index" json:"expires_at"`

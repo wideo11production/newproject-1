@@ -108,6 +108,8 @@ services:
       DB_SSL_MODE: disable
       PROMETHEUS_URL: http://prometheus:9090
       NATS_URL: nats://nats:4222
+      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:
@@ -185,6 +187,12 @@ services:
       # Bucket name SSOT se - transcoding service isi name ko use karta hai
       MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
       MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
+      # MinIO ka NATIVE Prometheus metrics expose karta hai is env se.
+      # Bina iske /minio/v2/metrics/cluster pe console ka HTML aa jata hai,
+      # aur humein data-egress ke REAL metrics nahi milte.
+      # NOTE: ye sirf METRICS expose karta hai (data nahi) - safe hai.
+      # Production me network policies se restrict kar lena chahiye.
+      MINIO_PROMETHEUS_AUTH_TYPE: ${MINIO_PROMETHEUS_AUTH_TYPE:-public}
     volumes:
       # Named volume = data container recreate par bhi safe rehta hai
       - minio_data:/data
@@ -258,6 +266,14 @@ services:
       REDIS_DB: 0
       # SSOT: ye sab values .env se aati hain, code me hardcoded kuch nahi
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+      # Superadmin recovery accounts (2) - main superadmin fail ho to backup access
+      SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-advchashampalup@gmail.com}
+      SUPERADMIN_RECOVERY_1_EMAIL: ${SUPERADMIN_RECOVERY_1_EMAIL:-}
+      SUPERADMIN_RECOVERY_1_PASSWORD: ${SUPERADMIN_RECOVERY_1_PASSWORD:-}
+      SUPERADMIN_RECOVERY_2_EMAIL: ${SUPERADMIN_RECOVERY_2_EMAIL:-}
+      SUPERADMIN_RECOVERY_2_PASSWORD: ${SUPERADMIN_RECOVERY_2_PASSWORD:-}
+      # Device lock (retina lock) - SSOT se on/off
+      SUPERADMIN_DEVICE_LOCK_ENABLED: ${SUPERADMIN_DEVICE_LOCK_ENABLED:-false}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL_MIN:-15}
       JWT_REFRESH_TOKEN_TTL: ${JWT_REFRESH_TOKEN_TTL_DAYS:-7}
       JWT_ISSUER: wideo11-auth
@@ -414,6 +430,37 @@ services:
       - --store_container_labels=false
     restart: always
 
+  # MinIO Exporter - REAL bucket/object metrics for Prometheus
+  # Official MinIO image blocked hone se us build ka metrics path HTML deta hai,
+  # isliye ye chhota exporter MinIO Admin API se REAL stats (size, object count)
+  # padhkar Prometheus text format me expose karta hai.
+  # Dashboard ka data-egress panel AB REAL values dikhata hai (koi SEEDED nahi).
+  minio-exporter:
+    build:
+      context: ./services/minio-exporter
+      dockerfile: Dockerfile
+    container_name: wideo11-minio-exporter
+    ports:
+      - "9100:9100"
+    environment:
+      MINIO_EXPORTER_PORT: 9100
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
+      MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
+      MINIO_EXPORTER_REFRESH_SECONDS: ${MINIO_EXPORTER_REFRESH_SECONDS:-30}
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9100/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
   # Currency Dashboard (Next.js) - Port 3007
   # Live exchange rates table + converter. Data currency-service se aata hai.
   currency-app:
@@ -437,6 +484,32 @@ services:
       retries: 3
       start_period: 15s
 
+  # Superadmin App (Next.js) - Port 3008
+  # DEDICATED master control panel (separate entity from user apps).
+  # Click history, security events, user activity, test-account cleanup.
+  # NOTE: ye app sirf superadmin/recovery accounts ke liye hai - backend
+  # role check karta hai, ye sirf UI hai.
+  superadmin-app:
+    build:
+      context: .
+      dockerfile: apps/superadmin/Dockerfile
+    container_name: wideo11-superadmin
+    ports:
+      - "3008:3008"
+    environment:
+      # Auth service ka internal URL - same-origin proxy routes isko use karte hain
+      AUTH_INTERNAL_URL: http://auth-service:8085
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3008/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
   # Webhook Receiver
   webhook-receiver:
     build:
@@ -454,6 +527,7 @@ services:
       DB_NAME: webhook_receiver
       DB_SSL_MODE: disable
       DASHBOARD_SERVICE_URL: http://dashboard-service:8080
+      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:
@@ -476,6 +550,8 @@ services:
     ports:
       - "3001:3001"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
@@ -492,6 +568,11 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      # Auth service ka internal URL - same-origin proxy routes isko use karte hain
+      AUTH_INTERNAL_URL: http://auth-service:8085
+      # NEXTAUTH_SECRET: web app ka middleware next-auth getToken() use karta hai.
+      # Bina iske middleware "MissingSecret" throw karta tha - isliye zaroori hai.
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
 
   # Video Editor Frontend (Next.js) - Port 3002
   video-editor:
@@ -502,6 +583,8 @@ services:
     ports:
       - "3002:3002"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
@@ -523,6 +606,11 @@ services:
       # Saare env names viper ke expected format me diye gaye hain.
       SERVER_PORT: 8082
       SERVER_MODE: release
+      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se).
+      # Payout routes JWT protected hain - ye var na ho to woh 500 de sakte hain.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      # KYC provider: local = zero-cost deterministic bank validation
+      KYC_PROVIDER: ${KYC_PROVIDER:-local}
       DATABASE_HOST: postgres
       DATABASE_PORT: 5432
       DATABASE_USER: postgres
@@ -532,6 +620,7 @@ services:
       DATABASE_TIMEZONE: UTC
       PORT: 8082
       ENVIRONMENT: development
+      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
       LOG_LEVEL: debug
     depends_on:
       postgres:
@@ -551,6 +640,8 @@ services:
     ports:
       - "3003:3003"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://billing-service:8082
     depends_on:
       billing-service:
@@ -565,6 +656,8 @@ services:
     ports:
       - "3004:3004"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -579,6 +672,8 @@ services:
     ports:
       - "3005:3005"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -593,6 +688,8 @@ services:
     ports:
       - "3006:3006"
     environment:
+      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
+      AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
     depends_on:
       dashboard-service:

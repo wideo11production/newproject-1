@@ -1,3 +1,4 @@
+import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
 import type { Metadata } from 'next';
 // Google font REMOVED - air-gapped Grafana font stack use ho raha hai.
 // Kyun: "next/font/google" build time par network se Inter fetch karta tha aur
@@ -28,6 +29,8 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }} suppressContentEditableWarning>
+        {/* Global activity capture (Awareness grid ka data source) */}
+        <GlobalActivityTracker />
         <ThemeProvider>
           <Providers>
             <div className="flex h-screen flex-col bg-background">

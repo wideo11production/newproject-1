@@ -26,6 +26,15 @@ scrape_configs:
       - targets: ['cadvisor:8080']
     metrics_path: '/metrics'
 
+  # MinIO exporter - REAL bucket size + object count.
+  # NOTE: ye apna khud ka exporter hai (services/minio-exporter) kyunki official
+  # MinIO image blocked hone se uska native metrics path HTML return karta hai.
+  # Ye MinIO Admin API se real stats padhta hai - koi placeholder value nahi.
+  - job_name: 'minio'
+    static_configs:
+      - targets: ['minio-exporter:9100']
+    metrics_path: '/metrics'
+
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['host.docker.internal:9100']

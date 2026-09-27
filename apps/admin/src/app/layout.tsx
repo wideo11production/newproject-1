@@ -1,5 +1,7 @@
 "use client";
 
+import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+
 import './globals.css';
 // Global font stack - Grafana-style system fonts (air-gapped, no network fetch)
 import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
@@ -16,6 +18,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="h-full">
       <body className={`${FONT_SANS_CLASS} h-full bg-slate-950 text-slate-100 antialiased overflow-hidden`} style={{ fontFamily: FONT_SANS_STACK }}>
+        {/* Global activity capture (Awareness grid ka data source) */}
+        <GlobalActivityTracker />
         <AdminClient>
           {children}
         </AdminClient>

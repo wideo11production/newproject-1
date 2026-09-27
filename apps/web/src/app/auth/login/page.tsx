@@ -18,11 +18,14 @@
 
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import Link from 'next/link';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { AlertCircle, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
+
+import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+import SecuritySetupGate from '@/components/security/security-setup-gate';
 
 import {
   AuthShell,
@@ -33,6 +36,10 @@ import {
 } from '@/components/auth/auth-shell';
 
 export default function LoginPage() {
+  // Click tracking start - har click capture hota hai
+  // Hinglish: is page ke clicks bhi track hote hain
+  useClickTracking('auth/login');
+
   // ---- Form field states ----
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,6 +70,37 @@ export default function LoginPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
+  // ---- Store access token in state for the security gate ----
+  // Login successful hone par token yahan set hota hai aur security gate
+  // render hota hai (agar setup complete nahi hai).
+  // Hinglish: token store karte hain taaki security gate use kar sake
+  const [accessToken, setAccessToken] = useState('');
+  const [securityRequired, setSecurityRequired] = useState(false);
+
+  // ---- Lockout / blocked state (Chakravyuh defense) ----
+  // 3 galat password -> pin_required; galat PIN -> 3 min countdown
+  const [pinRequired, setPinRequired] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [pinInput, setPinInput] = useState('');
+
+  // Countdown timer - 3 minute ka active countdown
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) {
+          // Time khatam - unblock
+          setBlocked(false);
+          setMessage('Lockout expired. Please try again.');
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [countdown]);
+
   // ---- Form submit ----
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,8 +124,41 @@ export default function LoginPage() {
       const payload = await response.json().catch(() => ({}));
 
       if (response.ok) {
-        // Login successful - dashboard par bhejte hain
+        // Login successful
+        const payload = await response.json().catch(() => ({}));
+
+        // CHAKRAVYUH: mandatory security setup gate check
+        // Agar setup complete nahi hai to token save karke gate render karo -
+        // dashboard jaane se PEHLE. Gate structurally block karta hai.
+        // Hinglish: setup incomplete hai to gate dikhao, dashboard block
+        if (payload.security_setup_required) {
+          setAccessToken(payload.tokens?.access_token ?? '');
+          setSecurityRequired(true);
+          return;
+        }
+
         window.location.href = '/dashboard';
+        return;
+      }
+
+      // 423 Locked - ya to PIN required hai ya 3-minute block chal raha hai
+      if (response.status === 423) {
+        const lockout = await response.json().catch(() => ({}));
+
+        if (lockout.blocked) {
+          // 3-minute countdown active
+          setBlocked(true);
+          setCountdown(lockout.seconds_remaining ?? 180);
+          setMessage(lockout.message ?? 'Account blocked.');
+        } else if (lockout.pin_required) {
+          // 3 galat password -> PIN puchhao
+          setPinRequired(true);
+          setMessage(lockout.message ?? 'Verify your security PIN.');
+        } else {
+          // PIN nahi hai - recovery hint do
+          setStatus('error');
+          setMessage(lockout.message ?? 'Too many failed attempts.');
+        }
         return;
       }
 
@@ -96,7 +167,24 @@ export default function LoginPage() {
         setMessage(
           'Too many attempts from this network. Please wait 60 seconds and try again.'
         );
+        // STAFF TRAP: rate limit breach = possible automation/bypass attempt.
+        // Ye report master dashboard ke "Awareness Reports" me RED alert banata hai.
+        // Hinglish: rate limit toota to security violation report karte hain
+        reportSecurityViolation(
+          'RATE_LIMIT_BYPASS_ATTEMPT',
+          `Login rate limit breached from ${navigator.userAgent.slice(0, 80)}`
+        );
         return;
+      }
+
+      // 401 = wrong credentials. Ye bhi report karte hain kyunki repeated
+      // failures credential attack ka signal ho sakte hain.
+      // Hinglish: galat password = violation report
+      if (response.status === 401) {
+        reportSecurityViolation(
+          'AUTH_FAILURE_SPIKE',
+          `Invalid credentials for ${email || 'unknown-email'} from ${navigator.userAgent.slice(0, 60)}`
+        );
       }
 
       setStatus('error');
@@ -105,6 +193,143 @@ export default function LoginPage() {
       setStatus('error');
       setMessage('Network error. Please check your connection and try again.');
     }
+  }
+
+  // ---- Lockout: 3 failed password -> PIN verification ----
+  if (pinRequired) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-10">
+        <AuthShell
+          title="Security verification required"
+          description="Too many failed attempts. Enter your 6-digit security PIN to continue."
+          footer={
+            <button
+              onClick={() => {
+                setPinRequired(false);
+                setStatus('idle');
+                setMessage('');
+              }}
+              className="block w-full text-center text-sm text-blue-400 transition-colors hover:text-blue-300"
+            >
+              Back to sign in
+            </button>
+          }
+        >
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setStatus('submitting');
+              try {
+                const res = await fetch('/api/auth/security/pin/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, pin: pinInput }),
+                });
+                if (res.ok) {
+                  setPinRequired(false);
+                  setPinInput('');
+                  setStatus('idle');
+                  setMessage('PIN verified. Please sign in with your password.');
+                } else {
+                  const err = await res.json().catch(() => ({}));
+                  if (err.blocked) {
+                    setBlocked(true);
+                    setCountdown(err.seconds_remaining ?? 180);
+                    setPinRequired(false);
+                  }
+                  setStatus('error');
+                  setMessage(err.message ?? 'Invalid PIN.');
+                }
+              } catch {
+                setStatus('error');
+                setMessage('Network error. Please try again.');
+              }
+            }}
+            className="space-y-4"
+          >
+            <Field id="pin" label="6-digit security PIN">
+              <Input
+                id="pin"
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+                placeholder="******"
+                className={`${INPUT_CLASS} tracking-widest`}
+              />
+            </Field>
+            <Button
+              type="submit"
+              disabled={status === 'submitting' || pinInput.length !== 6}
+              className={PRIMARY_BUTTON_CLASS}
+            >
+              {status === 'submitting' ? (
+                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+              ) : (
+                'Verify PIN'
+              )}
+            </Button>
+          </form>
+        </AuthShell>
+      </div>
+    );
+  }
+
+  // ---- 3-minute blocked countdown card ----
+  if (blocked) {
+    const mins = Math.floor(countdown / 60);
+    const secs = countdown % 60;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-10">
+        <AuthShell
+          title="Account temporarily blocked"
+          description="Too many failed security PIN attempts."
+          footer={
+            <button
+              onClick={() => {
+                setBlocked(false);
+                setCountdown(0);
+                setStatus('idle');
+                setMessage('');
+              }}
+              className="block w-full text-center text-sm text-blue-400 transition-colors hover:text-blue-300"
+            >
+              Back to sign in
+            </button>
+          }
+        >
+          <div className="space-y-4 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-600/50 bg-red-950/40">
+              <span className="font-mono text-xl font-bold text-red-400">
+                {mins}:{secs.toString().padStart(2, '0')}
+              </span>
+            </div>
+            <p className="animate-pulse text-sm font-semibold text-red-400">
+              Warning: Account will be blocked if biometric credentials are not verified
+              within 3 minutes.
+            </p>
+            <p className="text-xs leading-relaxed text-gray-500">
+              An incorrect security PIN was entered. The countdown resets once it
+              reaches zero.
+            </p>
+          </div>
+        </AuthShell>
+      </div>
+    );
+  }
+
+  // ---- Mandatory security setup gate (dashboard structurally blocked) ----
+  if (securityRequired && accessToken) {
+    return (
+      <SecuritySetupGate
+        accessToken={accessToken}
+        onComplete={() => {
+          setSecurityRequired(false);
+          window.location.href = '/dashboard';
+        }}
+      />
+    );
   }
 
   return (

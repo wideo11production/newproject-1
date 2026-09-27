@@ -1,3 +1,4 @@
+import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
 import "./globals.css";
 import type { Metadata } from "next";
 import { config } from "@wideo11/config";
@@ -58,13 +59,15 @@ export default function Layout({
     // Root layout me <html> aur <body> zaroori hain - Next.js App Router isse
     // expect karta hai. Pehle yahan seedha <div> return hota tha, jisse global
     // font stack apply hi nahi ho sakta tha (koi <body> hi nahi tha).
-    // Hinglish: html/body tags add kiye taaki font stack lag sake
+    // Hinglish: html/body tags add kiye taaki font stack + activity tracking lag sake
     <html lang="en" suppressHydrationWarning>
       <body
         className={FONT_SANS_CLASS}
         style={{ fontFamily: FONT_SANS_STACK }}
         suppressContentEditableWarning
       >
+        {/* Global activity capture (Awareness grid ka data source) */}
+        <GlobalActivityTracker />
     <div className="flex h-screen bg-gray-900 text-gray-100">
       {/* Main dashboard area: @metrics parallel slot */}
       <main className="flex-1 overflow-auto">{metrics}</main>

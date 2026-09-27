@@ -8,8 +8,11 @@
 //
 // Hinglish: route file me sirf GET allowed hai, helpers alag file me
 
-// Prometheus URL - SSOT (.env se, hardcoded nahi)
-const PROMETHEUS_URL = process.env.PROMETHEUS_URL ?? 'http://prometheus:9090';
+export const PROMETHEUS_URL =
+  process.env.PROMETHEUS_URL ?? 'http://prometheus:9090';
+
+// MinIO bucket ka naam (SSOT se) - exporter isko label me use karta hai
+const MINIO_VIDEO_BUCKET = process.env.MINIO_VIDEO_BUCKET ?? 'video';
 
 /**
  * promQuery - Prometheus se ek query chalata hai
@@ -86,8 +89,17 @@ export async function getPrometheusMetrics() {
   // real value aa rahi hai.
   const netRxBytes = await promQuery('sum(container_network_receive_bytes_total)');
 
-  // ---- Data egress (SEEDED, clearly marked) ----
-  const MINIO_VIDEO_BUCKET = process.env.MINIO_VIDEO_BUCKET ?? 'video';
+  // ---- MinIO storage (REAL - custom exporter se) ----
+  //
+  // NOTE: ye pehle "seeded" (placeholder) tha. Ab REAL hai kyunki humne
+  // services/minio-exporter banaya jo MinIO Admin API se actual bucket
+  // size aur object count padhta hai aur Prometheus expose karta hai.
+  // Official MinIO image blocked hone ki wajah se native metrics path kaam
+  // nahi kar raha tha, isliye custom exporter zaroori thi.
+  const bucketSize = await promQuery('sum(minio_bucket_size_bytes)');
+  const bucketObjects = await promQuery('sum(minio_bucket_objects_total)');
+  const videoBucketSize = await promQuery('minio_bucket_size_bytes{bucket="video"}');
+  const scrapeError = await promQuery('max(minio_exporter_scrape_error)');
 
   return {
     containersUp: upResult.value,
@@ -103,12 +115,21 @@ export async function getPrometheusMetrics() {
     networkRxGB: netRxBytes.value !== null ? netRxBytes.value / (1024 ** 3) : null,
     networkRxError: netRxBytes.error,
 
-    // Data egress - abhi bhi seeded (MinIO ne export nahi kiya)
+    // ---- Data egress / storage (REAL - MinIO exporter) ----
     dataEgress: {
-      rateMBps: 0,
+      // Total storage used (bytes) - REAL
+      totalBytes: bucketSize.value,
+      // Object count - REAL
+      objectCount: bucketObjects.value,
+      // Video bucket specifically (HLS chunks yahan hote hain)
+      videoBucketBytes: videoBucketSize.value,
+      // Bucket name
       bucket: MINIO_VIDEO_BUCKET,
-      source: 'seeded' as const,
-      note: 'MinIO does not export Prometheus metrics yet - value is a placeholder, not real',
+      // Source ab "live" hai - custom exporter se real data
+      source: 'live' as const,
+      // 1 = last scrape failed, 0 = ok
+      scrapeError: scrapeError.value,
+      scrapeErrorDetail: scrapeError.error,
     },
 
     prometheusUrl: PROMETHEUS_URL,

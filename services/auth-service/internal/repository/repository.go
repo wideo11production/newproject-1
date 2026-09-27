@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wideo11/auth-service/internal/model"
+	"github.com/wideo11/auth-service/internal/password"
 	"gorm.io/gorm"
 )
 
@@ -135,7 +136,11 @@ func (r *sessionRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.S
 
 func (r *sessionRepository) GetByAccessToken(ctx context.Context, token string) (*model.Session, error) {
 	var session model.Session
-	err := r.db.WithContext(ctx).Where("access_token = ? AND revoked_at IS NULL AND expires_at > ?", token, time.Now()).First(&session).Error
+	// SECURITY: raw JWT store nahi hota - hash compare hota hai
+	hashed := password.HashToken(token)
+	err := r.db.WithContext(ctx).
+		Where("access_token = ? AND revoked_at IS NULL AND expires_at > ?", hashed, time.Now()).
+		First(&session).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrSessionNotFound
@@ -145,9 +150,20 @@ func (r *sessionRepository) GetByAccessToken(ctx context.Context, token string) 
 	return &session, nil
 }
 
+// GetByRefreshToken raw token se session dhoondta hai.
+//
+// SECURITY FIX: ab ye SHA-256 hash compute karke compare karta hai, raw token se nahi.
+// Pehle ye RAW JWT ko sessions.refresh_token column se compare karta tha, jisse:
+//   1. DB leak = attacker ko usable session token mil jata tha (session hijack)
+//   2. JWT length badhne par varchar(512) overflow ho jata tha (500 error)
+// Hinglish: raw token DB me store karna unsafe tha - ab hash store hota hai
 func (r *sessionRepository) GetByRefreshToken(ctx context.Context, token string) (*model.Session, error) {
 	var session model.Session
-	err := r.db.WithContext(ctx).Where("refresh_token = ? AND revoked_at IS NULL AND expires_at > ?", token, time.Now()).First(&session).Error
+	// SECURITY FIX: hash karo phir compare karo (raw token kabhi DB me store nahi hota)
+	hashed := password.HashToken(token)
+	err := r.db.WithContext(ctx).
+		Where("refresh_token = ? AND revoked_at IS NULL AND expires_at > ?", hashed, time.Now()).
+		First(&session).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrSessionNotFound

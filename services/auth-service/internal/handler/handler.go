@@ -1,6 +1,7 @@
-﻿package handler
+package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 
@@ -13,6 +14,15 @@ import (
 
 type AuthHandler struct {
 	authService *service.AuthService
+	// securitySvc lockout/PIN/device-limit enforce karta hai.
+	// Login me inject hota hai. Nil ho to security features gracefully skip hoti hain.
+	securitySvc *service.SecurityService
+}
+
+// SetSecurityService security service inject karta hai (circular dep se bachne ke liye
+// constructor ke bajaye setter use hota hai)
+func (h *AuthHandler) SetSecurityService(svc *service.SecurityService) {
+	h.securitySvc = svc
 }
 
 func NewAuthHandler(authService *service.AuthService) *AuthHandler {
@@ -28,10 +38,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// Extract device info from headers (would normally come from request body in real app)
 	deviceInfo := model.DeviceInfo{
-		DeviceName: c.GetHeader("X-Device-Name"),
-		DeviceType: c.GetHeader("X-Device-Type"),
-		Platform:   c.GetHeader("X-Platform"),
-		Browser:    c.GetHeader("X-Browser"),
+		DeviceName:  c.GetHeader("X-Device-Name"),
+		DeviceType:  c.GetHeader("X-Device-Type"),
+		Platform:    c.GetHeader("X-Platform"),
+		Browser:     c.GetHeader("X-Browser"),
 		Fingerprint: c.GetHeader("X-Fingerprint"),
 	}
 
@@ -68,18 +78,119 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	// Extract device info from headers
 	deviceInfo := model.DeviceInfo{
-		DeviceName: c.GetHeader("X-Device-Name"),
-		DeviceType: c.GetHeader("X-Device-Type"),
-		Platform:   c.GetHeader("X-Platform"),
-		Browser:    c.GetHeader("X-Browser"),
+		DeviceName:  c.GetHeader("X-Device-Name"),
+		DeviceType:  c.GetHeader("X-Device-Type"),
+		Platform:    c.GetHeader("X-Platform"),
+		Browser:     c.GetHeader("X-Browser"),
 		Fingerprint: c.GetHeader("X-Fingerprint"),
 	}
 
-	user, tokenPair, err := h.authService.Login(c.Request.Context(), &req, deviceInfo)
+	ctx := c.Request.Context()
+	ip := clientIP(c.Request)
+	ua := c.Request.UserAgent()
+
+	// ---- CHAKRAVYUH DEFENSE: lockout intercept ----
+	// Login se PEHLE check karo ki account lockout me hai ya nahi.
+	// Agar 3 galat passwords ho chuke hain to password login BLOCKED hai
+	// aur user ko 6-digit PIN verify karna padega.
+	// Hinglish: login se pehle lockout check - 3 galat password = PIN required
+	if h.securitySvc != nil {
+		if existing, uErr := h.authService.GetUserByEmailForSecurity(ctx, req.Email); uErr == nil && existing != nil {
+			state, remaining, sErr := h.securitySvc.GetLockoutStatus(ctx, existing.ID)
+			if sErr == nil {
+				switch state {
+				case model.LockoutStatePINRequired:
+					// IMPORTANT: agar user ne PIN SET nahi kiya hai to
+					// PIN demand karna UNFAIR hoga - wo kabhi recover
+					// nahi kar paayega. Isliye hum pehle check karte
+					// hain ki PIN exist karta hai ya nahi.
+					hasPIN, _ := h.securitySvc.HasPIN(ctx, existing.ID)
+
+					if !hasPIN {
+						// No PIN -> password retry allowed after expiry
+						c.JSON(http.StatusLocked, gin.H{
+							"error":             "password_lockout_no_pin",
+							"message":           "Too many failed attempts. No security PIN is configured for this account.",
+							"lockout_state":     model.LockoutStatePINRequired,
+							"pin_required":      false,
+							"recovery_hint":     "Wait for the lockout window to expire, or use the account recovery flow.",
+							"seconds_remaining": 0,
+						})
+						return
+					}
+
+					// 423 Locked - PIN mangwao
+					c.JSON(http.StatusLocked, gin.H{
+						"error":             "password_lockout",
+						"message":           "Too many failed attempts. Verify your 6-digit security PIN to continue.",
+						"lockout_state":     model.LockoutStatePINRequired,
+						"pin_required":      true,
+						"seconds_remaining": remaining,
+					})
+					return
+				case model.LockoutStateBlocked:
+					// 423 Locked - 3 minute countdown
+					c.JSON(http.StatusLocked, gin.H{
+						"error":             "account_blocked",
+						"message":           "Warning: Account will be blocked if biometric credentials are not verified within 3 minutes.",
+						"lockout_state":     model.LockoutStateBlocked,
+						"blocked":           true,
+						"seconds_remaining": remaining,
+					})
+					return
+				}
+			}
+		}
+	}
+
+	// ---- DEVICE LIMIT: max 3 accounts per device ----
+	// 4th account banane ki koshish yahin block hoti hai.
+	// Hinglish: ek device pe max 3 accounts - 4th pe reject
+	if h.securitySvc != nil && deviceInfo.Fingerprint != "" {
+		if regErr := h.securitySvc.RegisterDeviceAccount(
+			ctx, deviceInfo.Fingerprint, userIDFromEmailOrNil(h, ctx, req.Email), req.Email, ip, ua,
+		); regErr == service.ErrDeviceLimitExceeded {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error":   "device_limit_exceeded",
+				"message": "This device has reached the maximum number of accounts (3).",
+				"limit":   model.MaxAccountsPerDevice,
+			})
+			return
+		}
+	}
+
+	user, tokenPair, err := h.authService.Login(ctx, &req, deviceInfo)
 	if err != nil {
 		switch err {
 		case service.ErrInvalidCredentials:
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
+			// ---- Record failed attempt (3 pe lockout) ----
+			attemptsLeft := model.MaxFailedPasswords
+			lockoutTriggered := false
+			if h.securitySvc != nil {
+				if existing, uErr := h.authService.GetUserByEmailForSecurity(ctx, req.Email); uErr == nil && existing != nil {
+					count, triggered, rErr := h.securitySvc.RecordFailedPassword(ctx, existing.ID, req.Email, ip, ua)
+					if rErr == nil {
+						attemptsLeft = model.MaxFailedPasswords - count
+						lockoutTriggered = triggered
+					}
+				}
+			}
+
+			if lockoutTriggered {
+				// Lockout trigger - ab PIN chahiye
+				c.JSON(http.StatusLocked, gin.H{
+					"error":         "password_lockout",
+					"message":       "Too many failed attempts. Verify your 6-digit security PIN to continue.",
+					"lockout_state": model.LockoutStatePINRequired,
+					"pin_required":  true,
+				})
+				return
+			}
+
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":              "invalid email or password",
+				"attempts_remaining": attemptsLeft,
+			})
 		case service.ErrUserInactive:
 			c.JSON(http.StatusForbidden, gin.H{"error": "user account is inactive"})
 		case service.ErrUserNotVerified:
@@ -90,17 +201,56 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// ---- SUCCESS: counters clear + setup gate check ----
+	// Sahi password -> failed attempts reset
+	if h.securitySvc != nil {
+		h.securitySvc.ClearFailedPasswords(ctx, user.ID)
+		h.securitySvc.LogSecurityEvent(ctx, &user.ID, user.Email,
+			model.EventLoginSuccess, "Login successful", ip, ua)
+	}
+
+	// ---- MANDATORY SECURITY SETUP GATE ----
+	// Spec ke mutabiq dashboard entry BLOCKED hai jab tak PIN + biometric
+	// + 3 security questions teeno complete na ho.
+	// Hinglish: teeno security cheezein chahiye warna dashboard block
+	setupRequired := true
+	var setupStatus gin.H
+	if h.securitySvc != nil {
+		profile, _ := h.securitySvc.GetSetupStatus(ctx, user.ID)
+		setupRequired = !profile.SecuritySetupComplete
+		setupStatus = gin.H{
+			"pin_configured":                profile.PINConfigured,
+			"biometric_registered":          profile.BiometricRegistered,
+			"security_questions_configured": profile.SecurityQuestionsConfigured,
+			"setup_complete":                profile.SecuritySetupComplete,
+		}
+	} else {
+		setupRequired = false
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
-			"id":          user.ID,
-			"email":       user.Email,
-			"full_name":   user.FullName,
-			"is_active":   user.IsActive,
-			"is_verified": user.IsVerified,
+			"id":            user.ID,
+			"email":         user.Email,
+			"full_name":     user.FullName,
+			"is_active":     user.IsActive,
+			"is_verified":   user.IsVerified,
 			"last_login_at": user.LastLoginAt,
 		},
 		"tokens": tokenPair,
+		// Frontend isse padhke gate dikhata hai
+		"security_setup_required": setupRequired,
+		"security_setup":          setupStatus,
 	})
+}
+
+// userIDFromEmailOrNil - device limit ke liye user ID nikalta hai
+// (agar user nahi mila to nil - enforcement skip ho jati hai)
+func userIDFromEmailOrNil(h *AuthHandler, ctx context.Context, email string) uuid.UUID {
+	if user, err := h.authService.GetUserByEmailForSecurity(ctx, email); err == nil && user != nil {
+		return user.ID
+	}
+	return uuid.Nil
 }
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
@@ -240,13 +390,13 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":          user.ID,
-		"email":       user.Email,
-		"full_name":   user.FullName,
-		"is_active":   user.IsActive,
-		"is_verified": user.IsVerified,
+		"id":            user.ID,
+		"email":         user.Email,
+		"full_name":     user.FullName,
+		"is_active":     user.IsActive,
+		"is_verified":   user.IsVerified,
 		"last_login_at": user.LastLoginAt,
-		"created_at":  user.CreatedAt,
+		"created_at":    user.CreatedAt,
 	})
 }
 
@@ -267,7 +417,7 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	if err != nil {
 		// Expired ya invalid token - user ko saaf message
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "invalid or expired verification token",
+			"error":    "invalid or expired verification token",
 			"verified": false,
 		})
 		return

@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Minimal globals for the superadmin app.
+ *
+ * NOTE: web app ka globals.css copy nahi kiya gaya kyunki usme shadcn ke
+ * CSS variables (--border, --background etc.) reference thay jo is app me
+ * define nahi hain - build fail ho jata tha ("border-border class does not exist").
+ * Ye app raw Tailwind classes use karti hai, isliye simple base styles kaafi hain.
+ *
+ * Hinglish: simple CSS - shadcn variables ki zarurat nahi is app ko
+ */
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #030712; /* gray-950 */
+  color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling - dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}

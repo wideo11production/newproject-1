@@ -1,3 +1,4 @@
+import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
 import './globals.css';
 // Global font stack - Grafana-style system fonts (air-gapped, no network fetch)
 import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
@@ -19,6 +20,8 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${FONT_SANS_CLASS} flex flex-col h-screen bg-gray-900 text-gray-100`} style={{ fontFamily: FONT_SANS_STACK }}>
+        {/* Global activity capture (Awareness grid ka data source) */}
+        <GlobalActivityTracker />
         {children}
       </body>
     </html>

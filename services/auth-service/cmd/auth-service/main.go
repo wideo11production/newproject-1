@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	"github.com/wideo11/auth-service/internal/bootstrap"
 	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/database"
 	"github.com/wideo11/auth-service/internal/email"
@@ -47,6 +48,34 @@ func main() {
 	// Auto migrate database schema
 	if err := database.AutoMigrate(db); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	// Master root (superadmin) account ensure karo
+	// Password bcrypt HASH ke roop me hai (plaintext nahi) + env override
+	// supported. Har startup par account ka existence aur hash integrity check
+	// hota hai - koi staff manually change kare to SECURITY NOTICE log hota hai.
+	// Hinglish: superadmin account hamesha active rehta hai, tampering detect hota hai
+	if bootResult, bootErr := bootstrap.EnsureSuperadmin(context.Background(), db); bootErr != nil {
+		log.Printf("[SUPERADMIN] bootstrap warning: %v", bootErr)
+	} else {
+		if bootResult.Created {
+			log.Println("[SUPERADMIN] Master root account created successfully")
+		}
+		if bootResult.Warning != "" {
+			log.Printf("[SUPERADMIN] %s", bootResult.Warning)
+		}
+
+		// ---- Master root ko superadmin_accounts me register karo ----
+		//
+		// CRITICAL FIX: ye step pehle MISSING tha. `users` table me row to banti thi,
+		// lekin `superadmin_accounts` me nahi - jisse RequireSuperadminMiddleware()
+		// main superadmin ko 403 deny kar raha tha (sirf recovery accounts pass hote the).
+		// Ab master root bhi role gate se pass hota hai.
+		if err := bootstrap.RegisterMasterSuperadminRole(context.Background(), db); err != nil {
+			log.Printf("[SUPERADMIN] Failed to register master root role: %v", err)
+		} else {
+			log.Println("[SUPERADMIN] Master root registered with superadmin role")
+		}
 	}
 
 	// Initialize repositories
@@ -92,8 +121,28 @@ func main() {
 			cfg.WebAuthn.RPID, cfg.WebAuthn.RPOrigins)
 	}
 
+	// Security service - lockout engine, PIN, questions, device limits
+	securitySvc := service.NewSecurityService(db)
+	securityHandler := handler.NewSecurityHandler(securitySvc, authService)
+
+	// Superadmin service - recovery accounts, device lock, session tracking
+	superadminSvc := service.NewSuperadminService(db)
+	superadminHandler := handler.NewSuperadminHandler(superadminSvc, authService)
+
+	// 2 RECOVERY accounts ensure karo (agar .env me configured hain)
+	// Taaki main superadmin fail hone par bhi access mil sake
+	if err := superadminSvc.EnsureRecoveryAccounts(context.Background()); err != nil {
+		log.Printf("[RECOVERY] bootstrap warning: %v", err)
+	} else {
+		log.Println("[RECOVERY] Recovery accounts ready")
+	}
+
 	// Initialize handler
 	authHandler := handler.NewAuthHandler(authService)
+	// AuthHandler ko security service inject karo
+	// (login me 3-failed-password lockout enforce karne ke liye zaroori hai)
+	// NOTE: ye authHandler BANNE KE BAAD hona chahiye - pehle undefined error aata tha
+	authHandler.SetSecurityService(securitySvc)
 
 	// Set up router
 	r := gin.New()
@@ -131,6 +180,45 @@ func main() {
 			protected.POST("/pin/verify", authHandler.VerifyPIN)
 		}
 	}
+
+	// Security routes - PIN, questions, biometric, audit
+	// NOTE: security/status authenticated ho sakta hai (login ke baad hi
+	// pata chalta hai), baaki endpoints protected hain.
+	secGroup := auth.Group("/security")
+	{
+		// Public: lockout status check (login screen ke liye)
+		secGroup.GET("/lockout-status", securityHandler.LockoutStatus)
+		// Public: PIN verify (lockout recovery - login ke andar)
+		secGroup.POST("/pin/verify", securityHandler.VerifyPIN)
+		// Public: available questions catalogue
+		secGroup.GET("/questions/available", securityHandler.AvailableQuestions)
+	}
+
+	// Protected security endpoints - token chahiye
+	secProtected := auth.Group("/security")
+	secProtected.Use(authHandler.AuthMiddleware())
+	{
+		secProtected.GET("/setup-status", securityHandler.SetupStatus)
+		secProtected.POST("/pin", securityHandler.SetPIN)
+		secProtected.PUT("/pin", securityHandler.ChangePIN)
+		secProtected.PUT("/questions", securityHandler.SetSecurityQuestions)
+		secProtected.POST("/biometric/complete", securityHandler.MarkBiometric)
+		secProtected.GET("/events", securityHandler.SecurityEvents)
+	}
+
+	// Superadmin routes - awareness, sessions, device lock, test cleanup
+	// NOTE: superadminHandler ke apne requireSuperadmin middleware hai jo
+	// har endpoint pe role check karta hai (superadmin ya recovery)
+	superadminHandler.RegisterRoutes(auth, authHandler.AuthMiddleware())
+
+	// Click tracking service - persistent history + 30-day retention
+	clickSvc := service.NewClickService(db)
+	clickHandler := handler.NewClickHandler(clickSvc)
+	// Recording public hai, list/stats/purge superadmin-only
+	clickHandler.RegisterRoutes(auth, authHandler.AuthMiddleware(), superadminHandler.RequireSuperadminMiddleware())
+
+	// 30-day retention worker - background me chalta hai
+	clickSvc.StartClickRetentionWorker(context.Background())
 
 	// WebAuthn (biometric/passkey) routes
 	// Sirf tab register karte hain jab WebAuthn service successfully init hua ho

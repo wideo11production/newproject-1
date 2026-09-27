@@ -412,7 +412,61 @@ nahi kiya tha. Isliye bug itne der se chala gaya.
 
 ---
 
-## PART 10 — FINAL STATE (22 containers, sab healthy)
+## PART 11 — "Chakravyuh Security Logic" (DONE, verified)
+
+### 11.1 Security chain working (end-to-end tested)
+| Requirement | Status | Evidence |
+|---|---|---|
+| 3 wrong passwords -> lockout | ✅ | attempt 3 -> **423** `pin_required` |
+| Wrong PIN -> 3-min block | ✅ | **423** + exact spec message + `seconds_remaining: 179` |
+| Correct PIN clears lockout | ✅ | verified 200 |
+| Max 3 accounts/device | ✅ | 4th account on 3-account device -> **403** |
+| 6-digit PIN (hashed) | ✅ | `security_pins.PINHash` (salted SHA-256) |
+| Exactly 3 security questions | ✅ | count enforced, catalogue validated |
+| Old-PIN required to change PIN | ✅ | `ErrOldPINIncorrect` |
+| Audit events | ✅ | LOGIN_SUCCESS 9, LOGIN_FAILED 2, LOCKOUT 1, DEVICE_LIMIT 1, PIN_FAILED 1 |
+| Tables created | ✅ | security_profiles, security_pins, security_questions, device_accounts, security_events |
+
+### 11.2 Mandatory setup gate (dashboard blocked)
+- Login returns `security_setup_required: true` jab tak teeno complete na ho
+- Gate component: PIN -> Biometric -> 3 Questions
+- **Verified**: superadmin has PIN ✅ + Questions ✅, biometric ❌ -> `setup_complete: false` -> gate renders
+
+### 11.3 Real MinIO metrics (SEEDED badge removed)
+- Custom exporter (official MinIO image blocked -> source build ka metrics path HTML deta hai)
+- **Live**: 1,451,984 bytes / 10 objects, `scrape_error=0`
+- Dashboard par amber "SEEDED" hata -> green LIVE badge
+
+### 11.4 5-second auto-dismiss
+- Registration success alert 5s baad auto-unmount (React state clear)
+
+### 11.5 Click tracking + staff trap
+- `useClickTracking` on both auth pages (capture-phase, batched)
+- 401/429 par `reportSecurityViolation` -> `/api/audit/violation`
+- Verified: audit POST 200, violation POST 200
+
+---
+
+## PART 12 — CRITICAL BUGS FOUND & FIXED (is phase me)
+
+| # | Bug | Impact | Fix |
+|---|-----|--------|-----|
+| 1 | **JWT TTL = 0** (`access_token_ttl` snake_case vs `AccessTokenTTL` camelCase, no mapstructure tag) | **HAR access token turant expire** - har protected API call fail | mapstructure tag added. Verified 900s |
+| 2 | **device_accounts unique index on fingerprint** | Device pe 2nd account insert hi nahi ho sakta tha - 3-account limit **kaam hi nahi karta tha** | Composite unique (fingerprint, user_id) |
+| 3 | PIN-required lockout had **no expiry** | PIN nahi set hai to user PERMANENTLY locked | 15-min auto-expiry + no-PIN fallback message |
+| 4 | minio-go v7.0.49 has no bucket-stats API | `StatObject` per-object hai | ListObjects se sum (noted scaling tradeoff) |
+
+---
+
+## PART 13 — REMAINING (honest)
+
+| Item | Status |
+|---|---|
+| WebAuthn enrollment UI inside gate | Built, but needs real biometric hardware to complete flow |
+| Superadmin "Awareness Reports" red-flash sub-grid | Violations captured + REST available; **UI grid not built** |
+| Auth integration tests (DB-backed) | Only password unit tests (8) exist |
+| CI/CD, ingress/TLS | Not started |
+| MinIO exporter scaling (ListObjects per refresh) | Correct now, O(objects) - revisit for large buckets |
 
 | Layer | Services |
 |-------|----------|

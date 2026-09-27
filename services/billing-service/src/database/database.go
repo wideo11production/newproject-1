@@ -38,6 +38,14 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Invoice{},
 		&model.InvoiceItem{},
 		&model.Payment{},
+		// --- Revenue / payout protection models (added for multi-account fraud) ---
+		//
+		// DeviceAdRevenue: device-level ad revenue cap (multi-account fraud protection)
+		&model.DeviceAdRevenue{},
+		// PayoutIdentity: UPI/bank/wire identities with UNIQUE index (dedup protection)
+		&model.PayoutIdentity{},
+		// DeviceRevenueLink: device se linked accounts ka analytics
+		&model.DeviceRevenueLink{},
 	)
 }
 

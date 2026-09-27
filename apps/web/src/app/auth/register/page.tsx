@@ -12,7 +12,7 @@
 //   - Submit click par instant freeze + spinner
 //   - Brand logo via next/image from /brand.svg
 //
-// NEW: Biometric checkbox ab KABHI hide nahi hota. Agar device support nahi
+// NEW (SPEC): Biometric checkbox sirf tab dikhta hai jab device me ASSLI sensor ho.
 // karta to disabled state me render hota hai + "Unavailable" badge, jisse card
 // height symmetry bani rahegi.
 //
@@ -36,11 +36,17 @@ import {
   PRIMARY_BUTTON_CLASS,
   FORM_SPACING,
 } from '@/components/auth/auth-shell';
+// Click tracking + security audit (staff trap)
+import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
 
 // Strength levels: 0 = empty, 4 = strong (green)
 type Strength = 0 | 1 | 2 | 3 | 4;
 
 export default function RegisterPage() {
+  // ---- Click tracking start (har click capture hota hai) ----
+  // Hinglish: ye hook lagate hi is page ke saare clicks track hone lagte hain
+  useClickTracking('auth/register');
+
   // ---- Form field states ----
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -65,11 +71,54 @@ export default function RegisterPage() {
   const [biometricEnrolling, setBiometricEnrolling] = useState(false);
   const [biometricMessage, setBiometricMessage] = useState('');
 
+  // ---- Success alert auto-dismiss ----
+  // SPEC: "account created" alert 5 second baad AUTOMATICALLY vanish (unmount)
+  // ho jana chahiye. Isliye jab success aata hai hum 5 second ka timer
+  // lagate hain aur uske baad message ko null kar dete hain - jisse React
+  // us block ko UNMOUNT kar deta hai.
+  // Hinglish: success alert 5 second baad apne aap hat jata hai
+  useEffect(() => {
+    if (status !== 'success' || !message) return;
+
+    const timer = setTimeout(() => {
+      setMessage('');
+      setStatus('idle');
+    }, 5000); // 5 second
+
+    // Timer unmount ho to clear karo (memory leak nahi)
+    return () => clearTimeout(timer);
+  }, [status, message]);
+
   useEffect(() => {
     // window sirf client side pe exist karta hai, isliye useEffect + state
     // use kiya hai (SSR hydration mismatch nahi hoga)
-    const supported = typeof window !== 'undefined' && !!window.PublicKeyCredential;
-    setBiometricSupported(supported);
+    //
+    // REGISTRATION-TIME CAPABILITY CHECK (SPEC):
+    // Sirf `!!window.PublicKeyCredential` se pata nahi chalta ki device me
+    // ASSLI fingerprint/face sensor hai ya nahi - kai browsers me API hoti
+    // hai par hardware nahi hota.
+    // Isliye hum `isUserVerifyingPlatformAuthenticatorAvailable()` use karte
+    // hain jo ACTUAL hardware presence check karta hai.
+    //
+    // SPEC: agar device me biometric NAHI hai to checkbox BHI DISPLAY NAHI hoga
+    // (disabled placeholder nahi) - checkbox jo kabhi kaam nahi kar sakta wo
+    // user ko sirf confuse karta hai.
+    // Hinglish: asli sensor check karo, nahi hai to checkbox chhupa do
+    const checkBiometric = async () => {
+      if (typeof window === 'undefined' || !window.PublicKeyCredential) {
+        setBiometricSupported(false);
+        return;
+      }
+      try {
+        const available =
+          await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        setBiometricSupported(available);
+      } catch {
+        setBiometricSupported(false);
+      }
+    };
+
+    checkBiometric();
   }, []);
 
   // ---- Password strength (4 checks) ----
@@ -174,6 +223,13 @@ export default function RegisterPage() {
         setStatus('error');
         setMessage(
           'Too many attempts from this network. Please wait 60 seconds and try again.'
+        );
+        // STAFF TRAP: rate limit breach = possible automation/bypass attempt.
+        // Ye report master dashboard ke "Awareness Reports" me RED alert banata hai.
+        // Hinglish: rate limit toota to security violation report karte hain
+        reportSecurityViolation(
+          'RATE_LIMIT_BYPASS_ATTEMPT',
+          `Registration rate limit breached from ${navigator.userAgent.slice(0, 80)}`
         );
         return;
       }
@@ -348,14 +404,17 @@ export default function RegisterPage() {
           </label>
         </div>
 
-        {/* Biometric - HAMESHA render hota hai (symmetry ke liye).
-            Unsupported device par disabled + "Unavailable" badge. */}
+        {/* Biometric checkbox - SIRF tab jab device me ASSLI sensor ho.
+            SPEC: capability nahi hai to ye checkbox POORI TARAH render nahi hota.
+            (disabled placeholder nahi - jo kabhi kaam nahi kar sakta wo confuse karta hai)
+            Hinglish: sensor nahi hai to checkbox chhup jayega */}
+        {biometricSupported && (
         <div className="flex items-start gap-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
           <Checkbox
             id="biometric"
             checked={enableBiometric}
-            // Unsupported device par disabled - field dikhta rehta hai, sirf interact nahi kar sakte
-            disabled={!biometricSupported || biometricEnrolling}
+            // Unsupported device par field render hi nahi hota
+            disabled={biometricEnrolling}
             onCheckedChange={async (v) => {
               if (v !== true) {
                 setEnableBiometric(false);
@@ -387,39 +446,23 @@ export default function RegisterPage() {
             className="mt-0.5 border-gray-600 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
           />
           <div className="flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <label
-                htmlFor="biometric"
-                className="cursor-pointer select-none text-sm leading-relaxed text-gray-400"
-              >
-                Enable biometric login
-              </label>
-              {/* Device support na ho to ye badge user ko batata hai */}
-              {!biometricSupported ? (
-                <Badge
-                  variant="secondary"
-                  className="h-5 rounded-full border-gray-700 bg-gray-800/60 px-2 text-[10px] font-medium text-gray-400"
-                >
-                  Unavailable
-                </Badge>
-              ) : null}
-            </div>
+            <label
+              htmlFor="biometric"
+              className="cursor-pointer select-none text-sm leading-relaxed text-gray-400"
+            >
+              Enable biometric login
+            </label>
             <p className="text-xs leading-relaxed text-gray-500">
               {biometricEnrolling
                 ? 'Touch your fingerprint or face to enroll this device...'
                 : biometricMessage ||
-                  (biometricSupported
-                    ? 'Use your device fingerprint or face instead of a password.'
-                    : 'This device has no fingerprint or face hardware detected.')}
+                  'Use your device fingerprint or face instead of a password.'}
             </p>
           </div>
           {/* Fingerprint icon - visual cue */}
-          <Fingerprint
-            className={`mt-0.5 h-4 w-4 shrink-0 ${
-              biometricSupported ? 'text-blue-400' : 'text-gray-600'
-            }`}
-          />
+          <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" />
         </div>
+        )}
 
         {/* Server message - success ya error */}
         {message ? (

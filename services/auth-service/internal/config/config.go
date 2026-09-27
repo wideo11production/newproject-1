@@ -113,9 +113,25 @@ type RedisConfig struct {
 }
 
 type JWTConfig struct {
-	SecretKey       string
-	AccessTokenTTL  int // minutes
-	RefreshTokenTTL int // days
+	// SecretKey: JWT signing key
+	//
+	// CRITICAL SECURITY BUG FIX: mapstructure tag ZAROORI tha. Bina iske viper ka
+	// key "jwt.secret_key" is field se match nahi hota (snake_case vs camelCase),
+	// jisse value EMPTY reh jati thi - aur service EMPTY SECRET se tokens sign
+	// kar rahi thi. Empty-key HMAC tokens ATTACKER forge kar sakta hai.
+	// Ye bug TTL wale bug ka bhai hai (dono snake_case mapping theek nahi hui thi).
+	// Ab tag laga hai to .env ka JWT_SECRET_KEY properly bind hota hai.
+	SecretKey string `mapstructure:"secret_key"`
+	// AccessTokenTTL: minutes me token validity
+	//
+	// CRITICAL BUG FIX: mapstructure tag ZAROORI hai. Bina iske viper ka key
+	// "jwt.access_token_ttl" is field se match nahi hota (snake_case vs camelCase),
+	// value 0 reh jati thi. Phir token ka exp == iat ho jata tha - yaani token
+	// TURANT expire ho jata tha aur har protected API call "token expired"
+	// fail ho jati thi login ke turant baad.
+	// Hinglish: mapstructure tag ke bina token 0-minute ka tha - turant expire
+	AccessTokenTTL  int `mapstructure:"access_token_ttl"` // minutes
+	RefreshTokenTTL int `mapstructure:"refresh_token_ttl"` // days
 	Issuer          string
 	Audience        string
 }
