@@ -11,6 +11,10 @@ import { TimelineTracks } from './timeline/timeline-tracks';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { Toolbar } from './toolbar/toolbar';
 import { Sidebar } from './sidebar/sidebar';
+// Script Engine - purane standalone apps/editor ka content yahan migrate hua hai.
+// Real interactive controls (scenes, text layout, transform, compile/export).
+import ScriptEngine from './script-engine';
+import { FileText } from 'lucide-react';
 
 // --- Serialization-safe interfaces ---
 // Ye interfaces plain objects ke liye hain jo server-client boundary cross kar sakte hain
@@ -234,16 +238,59 @@ export function VideoEditor() {
     }
   }, [timelineEngineRef.current]);
 
+  // Script engine visibility state (migrated editor panel)
+  const [showScriptEngine, setShowScriptEngine] = useState(true);
+
   return (
     <VideoPlayerContextProvider videoRef={videoRef}>
+      {/* Main editor + script engine split view.
+          Script engine LEFT side par hai (purane apps/editor ka migrated
+          content), video editor RIGHT side par - dono SIDE-BY-SIDE chalti hain.
+          Toggler se script engine collapse/show hota hai taaki full-screen
+          editing bhi possible rahe. */}
       <div className="flex h-[calc(100vh-4.5rem)] bg-background">
+        {/* Script Engine (migrated from apps/editor)
+            VIEWPORT PROTECTION: chhote screens par fixed 420px panel media
+            library/timeline ko squeeze kar deta tha. Ab ye responsive hai:
+              - lg+ (1024px+): 420px, dono saath dikhte hain
+              - md  (768px+) : 340px, thoda saka hua
+              - <md          : POORA CHHUP jata hai (toggle button se khulta hai),
+                                jisse timeline ko koi space nahi chhin
+            Isse media timeline kabhi distort/crowd nahi hoga. */}
+        {showScriptEngine && (
+          <div
+            className="hidden shrink-0 border-r border-border lg:block lg:w-[420px] md:w-[340px]"
+            // Chhote viewport par jab user toggle kare to overlay ki tarah
+            // full-height dikhe, taaki kuch bhi na toota
+            data-script-engine-open={showScriptEngine}
+          >
+            <ScriptEngine />
+          </div>
+        )}
+
         {/* Sidebar - Media Library, Templates, Filters, etc. */}
         <Sidebar />
         
         {/* Main Editor Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Toolbar */}
-          <Toolbar onPlayPause={() => {}} />
+          <div className="flex items-center">
+            <div className="flex-1">
+              <Toolbar onPlayPause={() => {}} />
+            </div>
+            {/* Script engine toggle - panel ko collapse/show karne ke liye.
+                Migrated editor ke kuch tools (Cut/Split/Crop/Rotate) yahan
+                operate karte hain, isliye toggle dena zaroori hai. */}
+            <button
+              onClick={() => setShowScriptEngine((v) => !v)}
+              aria-pressed={showScriptEngine}
+              title={showScriptEngine ? 'Hide script engine' : 'Show script engine'}
+              className="flex h-9 items-center gap-1.5 border-l border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              Script
+            </button>
+          </div>
           <Separator className="h-0.5 bg-border" />
           
           {/* Preview and Timeline */}

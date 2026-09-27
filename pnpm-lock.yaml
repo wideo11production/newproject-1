@@ -364,58 +364,6 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
-  apps/editor:
-    dependencies:
-      '@tanstack/react-query':
-        specifier: ^5.28.0
-        version: 5.103.1(react@18.3.1)
-      '@wideo11/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@wideo11/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-      lucide-react:
-        specifier: ^0.321.0
-        version: 0.321.0(react@18.3.1)
-      next:
-        specifier: ^14.2.0
-        version: 14.2.35(@babel/core@7.29.7)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      next-auth:
-        specifier: ^5.0.0-beta.15
-        version: 5.0.0-beta.32(next@14.2.35(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)
-      next-themes:
-        specifier: ^0.3.0
-        version: 0.3.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
-      react-dom:
-        specifier: ^18.2.0
-        version: 18.3.1(react@18.3.1)
-    devDependencies:
-      '@types/react':
-        specifier: ^18.2.0
-        version: 18.3.31
-      '@types/react-dom':
-        specifier: ^18.2.0
-        version: 18.3.7(@types/react@18.3.31)
-      autoprefixer:
-        specifier: ^10.0.0
-        version: 10.6.1(postcss@8.5.28)
-      eslint:
-        specifier: ^8.0.0
-        version: 8.57.1
-      postcss:
-        specifier: ^8.0.0
-        version: 8.5.28
-      tailwindcss:
-        specifier: ^3.3.0
-        version: 3.4.19(tsx@4.23.15)(yaml@2.9.1)
-      typescript:
-        specifier: ^5.0.0
-        version: 5.9.3
-
   apps/monitor:
     dependencies:
       '@radix-ui/react-slot':

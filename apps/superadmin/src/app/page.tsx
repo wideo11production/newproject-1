@@ -64,8 +64,29 @@ interface SecurityEvent {
   indicator: string;
 }
 
+/** Per-device ad revenue - billing DB se (cross-DB merge proxy se) */
+interface DeviceRevenue {
+  device_id: string;
+  period: string;
+  total_revenue: number;
+  ad_impressions: number;
+  linked_accounts: number;
+  /** Cap usage percent (5000 INR cap ke against) */
+  cap_usage_pct: number;
+  requires_review: boolean;
+  cap_exceeded: boolean;
+  revenue_held: boolean;
+  flagged_reason: string;
+}
+
 interface UserActivity {
   email: string;
+  // NEW: registration date (auth DB se)
+  registered_at: string | null;
+  // NEW: role flags - staff vs regular user
+  is_superadmin?: boolean;
+  is_recovery?: boolean;
+  is_active?: boolean;
   total_sessions: number;
   total_seconds_online: number;
   is_online: boolean;
@@ -81,6 +102,12 @@ export default function SuperadminDashboard() {
   const [clickTotal, setClickTotal] = useState(0);
   const [security, setSecurity] = useState<SecurityEvent[]>([]);
   const [activity, setActivity] = useState<UserActivity[]>([]);
+  // Unified ledger: auth (user data) + billing (device revenue) merged
+  const [ledger, setLedger] = useState<{
+    devices: DeviceRevenue[];
+    cap_inr: string | null;
+    review_at_inr: string | null;
+  }>({ devices: [], cap_inr: null, review_at_inr: null });
   const [loading, setLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [purging, setPurging] = useState(false);
@@ -95,11 +122,14 @@ export default function SuperadminDashboard() {
 
     try {
       // Parallel fetch - sab ek saath
-      const [statsRes, clicksRes, secRes, actRes] = await Promise.all([
+      const [statsRes, clicksRes, secRes, actRes, ledgerRes] = await Promise.all([
         fetch('/api/stats', { headers: h, cache: 'no-store' }),
         fetch('/api/clicks?limit=100', { headers: h, cache: 'no-store' }),
         fetch('/api/security', { headers: h, cache: 'no-store' }),
         fetch('/api/activity', { headers: h, cache: 'no-store' }),
+        // Ledger = cross-DB merge (auth users + billing device revenue)
+        fetch('/api/ledger', { headers: h, cache: 'no-store' }),
+        fetch('/api/ledger', { headers: h, cache: 'no-store' }),
       ]);
 
       if (statsRes.status === 401 || statsRes.status === 403) {
@@ -123,6 +153,16 @@ export default function SuperadminDashboard() {
       if (actRes.ok) {
         const d = await actRes.json();
         setActivity(d.activities ?? []);
+      }
+
+      // Unified ledger (cross-DB merge) - device revenue + cap policy
+      if (ledgerRes.ok) {
+        const l = await ledgerRes.json();
+        setLedger({
+          devices: l.devices ?? [],
+          cap_inr: l.cap_inr ?? null,
+          review_at_inr: l.review_at_inr ?? null,
+        });
       }
     } catch {
       setAuthError('Network error');
@@ -459,6 +499,160 @@ export default function SuperadminDashboard() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+        {/* ---- UNIFIED LEDGER (auth + billing cross-DB merge) ---- */}
+        <Panel
+          title="User Ledger"
+          subtitle="Registration date + per-device earnings"
+          icon={<Database className="h-5 w-5" />}
+        >
+          {activity.length === 0 ? (
+            <Empty icon={<Users className="h-8 w-8" />} text="No user activity recorded" />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                    <th className="px-3 py-2">User</th>
+                    {/* NEW COLUMN: registration date (auth DB) */}
+                    <th className="px-3 py-2">Registered</th>
+                    <th className="px-3 py-2">Sessions</th>
+                    <th className="px-3 py-2">Online</th>
+                    <th className="px-3 py-2">Devices</th>
+                    {/* NEW: staff / role flag */}
+                    <th className="px-3 py-2">Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity.map((a) => {
+                    const reg = a.registered_at ? new Date(a.registered_at) : null;
+                    return (
+                      <tr key={a.email} className="border-b border-gray-800/50">
+                        <td className="px-3 py-2 font-mono text-xs text-gray-300">
+                          {a.email}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-400">
+                          {reg ? reg.toLocaleDateString() : '—'}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">
+                          {a.total_sessions}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">
+                          {Math.round((a.total_seconds_online ?? 0) / 60)}m
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">
+                          {a.distinct_devices}
+                        </td>
+                        <td className="px-3 py-2">
+                          {a.is_superadmin ? (
+                            <span className="rounded-full bg-red-900/50 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+                              SUPERADMIN
+                            </span>
+                          ) : a.is_recovery ? (
+                            <span className="rounded-full bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                              RECOVERY
+                            </span>
+                          ) : a.is_superadmin === false || a.is_recovery === false ? (
+                            <span className="rounded-full bg-gray-800 px-2 py-0.5 text-[10px] text-gray-400">
+                              USER
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
+
+        {/* ---- PER-DEVICE AD EARNINGS (billing DB) ---- */}
+        <Panel
+          title="Per-Device Ad Earnings"
+          subtitle={
+            ledger?.cap_inr
+              ? `cap ₹${ledger.cap_inr} · review at ₹${ledger.review_at_inr}`
+              : 'device-level revenue ledger'
+          }
+          icon={<Database className="h-5 w-5" />}
+        >
+          {ledger.devices.length === 0 ? (
+            <Empty
+              icon={<Database className="h-8 w-8" />}
+              text="No device revenue recorded yet — populate via the payout / ad-revenue flow"
+            />
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                    <th className="px-3 py-2">Device</th>
+                    <th className="px-3 py-2">Revenue</th>
+                    <th className="px-3 py-2">Impressions</th>
+                    <th className="px-3 py-2">Accounts</th>
+                    <th className="px-3 py-2">Cap usage</th>
+                    <th className="px-3 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledger.devices.map((d) => {
+                    // NOTE: ledger.devices Record<string, unknown>[] hai, isliye unknown values
+    // ko number me cast karna padta hai - warna TS comparison error deta hai.
+    const over = d.cap_usage_pct > 100;
+                    return (
+                      <tr key={String(d.device_id)} className="border-b border-gray-800/50">
+                        <td className="px-3 py-2 font-mono text-xs text-gray-300">
+                          {d.device_id}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-green-400">
+                          ₹{d.total_revenue.toFixed(2)}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">
+                          {d.ad_impressions}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-400">
+                          {d.linked_accounts}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-gray-800">
+                              <div
+                                className={`h-full rounded-full ${
+                                  over ? 'bg-red-500' : 'bg-blue-500'
+                                }`}
+                                style={{ width: `${Math.min(100, d.cap_usage_pct)}%` }}
+                              />
+                            </div>
+                            <span className="font-mono text-[10px] text-gray-500">
+                              {Math.round(d.cap_usage_pct)}%
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          {d.cap_exceeded ? (
+                            <span className="rounded-full bg-red-900/50 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+                              CAP EXCEEDED
+                            </span>
+                          ) : d.requires_review ? (
+                            <span className="rounded-full bg-amber-900/50 px-2 py-0.5 text-[10px] font-semibold text-amber-400">
+                              REVIEW
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-green-900/50 px-2 py-0.5 text-[10px] text-green-400">
+                              OK
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

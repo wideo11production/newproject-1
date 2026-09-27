@@ -680,21 +680,6 @@ services:
         condition: service_healthy
 
   # Editor Frontend (Next.js) - Port 3006
-  editor:
-    build:
-      context: .
-      dockerfile: apps/editor/Dockerfile
-    container_name: wideo11-editor
-    ports:
-      - "3006:3006"
-    environment:
-      # Audit proxy ke liye auth-service ka internal URL (activity tracking)
-      AUTH_INTERNAL_URL: http://auth-service:8085
-      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
-    depends_on:
-      dashboard-service:
-        condition: service_healthy
-
 volumes:
   minio_data:
   postgres_data:

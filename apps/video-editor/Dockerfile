@@ -4,7 +4,6 @@
 # Base: node:20-alpine - minimal footprint, pnpm package manager
 # Multi-stage: base -> deps -> builder -> runner for production
 # Memory: NODE_OPTIONS 1GB heap - 76% resource ceiling ke andar rehta hai
-# Port: 3002 (video-editor frontend runtime)
 # Hinglish comments: har line ka arth samjhne ke liye
 
 # ------------------------------------------------------------
@@ -45,7 +44,6 @@ RUN apk add --no-cache python3 make g++ libc6-compat
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/analytics/package.json ./apps/analytics/package.json
 COPY apps/billing/package.json ./apps/billing/package.json
-COPY apps/editor/package.json ./apps/editor/package.json
 COPY apps/monitor/package.json ./apps/monitor/package.json
 COPY apps/video-editor/package.json ./apps/video-editor/package.json
 COPY apps/web/package.json ./apps/web/package.json
@@ -99,10 +97,8 @@ COPY pnpm-workspace.yaml ./
 COPY package.json ./
 COPY pnpm-lock.yaml ./
 
-# Copy video-editor source code
 COPY apps/video-editor ./apps/video-editor
 
-# Set working directory to the video-editor app
 WORKDIR /app/apps/video-editor
 
 # Build Next.js application with production optimization
@@ -143,7 +139,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/video-editor/.next/static ./
 # Switch to non-root user
 USER nextjs
 
-# Expose video-editor frontend port
 EXPOSE 3002
 
 # Health check for Kubernetes liveness/readiness probes
@@ -158,7 +153,6 @@ CMD ["node", "apps/video-editor/server.js"]
 # ====================================================================
 # BUILD NOTES:
 # Build from monorepo root: D:\newproject
-# docker build -f apps/video-editor/Dockerfile -t  .
 # Layer routing: deps (pnpm install) -> builder (next build) -> runner (standalone)
 # Heavy node_modules layer sirf builder me rehta hai, runner image minimal rehti hai
 # ====================================================================

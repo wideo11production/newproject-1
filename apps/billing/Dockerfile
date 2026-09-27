@@ -67,7 +67,6 @@ COPY pnpm-lock.yaml ./
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY apps/analytics/package.json ./apps/analytics/package.json
 COPY apps/billing/package.json ./apps/billing/package.json
-COPY apps/editor/package.json ./apps/editor/package.json
 COPY apps/monitor/package.json ./apps/monitor/package.json
 COPY apps/video-editor/package.json ./apps/video-editor/package.json
 COPY apps/web/package.json ./apps/web/package.json

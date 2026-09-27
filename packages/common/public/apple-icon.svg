@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180" role="img" aria-label="Wideo11">
+  <defs>
+    <linearGradient id="wg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="100%" stop-color="#7b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="180" height="180" rx="40" fill="url(#wg2)"/>
+  <path d="M36 59 L62 121 L85 82 L105 121 L131 59"
+        fill="none" stroke="#ffffff" stroke-width="15.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

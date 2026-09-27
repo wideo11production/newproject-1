@@ -313,20 +313,52 @@ func (s *SuperadminService) HeartbeatSession(ctx context.Context, sessionID uuid
 }
 
 // GetUserActivity user ka activity summary deta hai
-// (awareness page ke liye: kitne time online, kitni sessions)
+// (awareness page ke liye: kitne time online, kab aaya, kab gaya)
 type UserActivity struct {
-	Email              string  `json:"email"`
-	TotalSessions      int64   `json:"total_sessions"`
-	TotalSecondsOnline int64   `json:"total_seconds_online"`
-	CurrentSessionMin  float64 `json:"current_session_minutes"`
-	IsOnline           bool    `json:"is_online"`
+	Email string `json:"email"`
+	// RegisteredAt: user kab bana tha (users.created_at se)
+	//
+	// NOTE: ye column pehle MISSING tha - awareness page par "Registration Date"
+	// dikha hi nahi sakta tha. Ab directly users table se aata hai.
+	RegisteredAt *time.Time `json:"registered_at"`
+	TotalSessions int64     `json:"total_sessions"`
+	TotalSecondsOnline int64 `json:"total_seconds_online"`
+	IsOnline           bool  `json:"is_online"`
+	DistinctDevices    int64 `json:"distinct_devices"`
 	FirstSeen          *time.Time `json:"first_seen"`
 	LastSeen           *time.Time `json:"last_seen"`
-	DistinctDevices    int64   `json:"distinct_devices"`
+	// IsSuperadmin/IsRecovery: role flags - superadmin panel filters me use hote hain
+	IsSuperadmin bool `json:"is_superadmin"`
+	IsRecovery   bool `json:"is_recovery"`
+	// IsActive: account active hai ya deactivated
+	IsActive bool `json:"is_active"`
 }
 
 func (s *SuperadminService) GetUserActivity(ctx context.Context, email string) (*UserActivity, error) {
 	activity := &UserActivity{Email: email}
+
+	// ---- Registration date ----
+	// NOTE: ye pehle MISSING tha. users.created_at se directly aata hai,
+	// isliye awareness page par "Registration Date" column populate hota hai.
+	var user struct {
+		CreatedAt time.Time
+		IsActive  bool
+	}
+	if err := s.db.WithContext(ctx).Model(&model.User{}).
+		Select("created_at, is_active").
+		Where("email = ?", email).First(&user).Error; err == nil {
+		activity.RegisteredAt = &user.CreatedAt
+		activity.IsActive = user.IsActive
+	}
+
+	// ---- Superadmin / recovery role flags ----
+	// Ye flags "staff vs regular user" ka answer dete hain - jo pehle
+	// awareness page par MISSING tha.
+	var account model.SuperadminAccount
+	if err := s.db.WithContext(ctx).Where("email = ?", email).First(&account).Error; err == nil {
+		activity.IsSuperadmin = account.Role == model.RoleSuperadmin
+		activity.IsRecovery = account.Role == model.RoleSuperadminRecovery
+	}
 
 	type agg struct {
 		TotalSessions int64
@@ -368,24 +400,56 @@ func (s *SuperadminService) GetUserActivity(ctx context.Context, email string) (
 		Count(&deviceCount)
 	activity.DistinctDevices = deviceCount
 
-	// Current session minutes
-	if activity.TotalSecondsOnline > 0 {
-		activity.CurrentSessionMin = float64(activity.TotalSecondsOnline) / 60
-	}
-
 	return activity, nil
 }
 
 // ListAllActivity saare users ka activity deta hai (awareness page)
+// ListAllActivity SAARE users ka activity deta hai (awareness page ke liye)
+//
+// IMPORTANT FIX: pehle ye sirf `user_sessions` se email enumerate karta tha.
+// Isliye jis user ne abhi tak login NAHI kiya tha, wo LIST ME HI NAHI AATA tha -
+// matlab uska registration date bhi invisible rehta tha.
+// Ab base `users` table hai, isliye har user dikhta hai aur registration date
+// ALWAYS populate hoti hai (session data uske upar layer hota hai).
 func (s *SuperadminService) ListAllActivity(ctx context.Context, limit int) ([]UserActivity, error) {
+	// ---- Base: saare users (auth DB) ----
 	var emails []string
-	s.db.WithContext(ctx).Model(&model.UserSession{}).
-		Distinct("email").Pluck("email", &emails)
+	if err := s.db.WithContext(ctx).Model(&model.User{}).
+		Order("created_at DESC").
+		Limit(limit).
+		Pluck("email", &emails).Error; err != nil {
+		return nil, err
+	}
 
+	// ---- Extra emails jo sirf sessions me hain (bina user record ke) ----
+	var sessionEmails []string
+	s.db.WithContext(ctx).Model(&model.UserSession{}).
+		Distinct("email").
+		Where("email != ?", "").
+		Pluck("email", &sessionEmails)
+
+	for _, e := range sessionEmails {
+		if e == "" {
+			continue
+		}
+		found := false
+		for _, existing := range emails {
+			if existing == e {
+				found = true
+				break
+			}
+		}
+		if !found {
+			emails = append(emails, e)
+		}
+	}
+
+	// ---- Har user ka detailed activity nikalo ----
 	results := make([]UserActivity, 0, len(emails))
 	for _, email := range emails {
 		activity, err := s.GetUserActivity(ctx, email)
 		if err != nil {
+			// Ek user fail ho to baaki ka data nahi dub jana chahiye
 			continue
 		}
 		results = append(results, *activity)

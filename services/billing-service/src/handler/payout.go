@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 	"github.com/google/uuid"
 
 	"newproject/services/billing-service/src/model"
@@ -20,11 +21,14 @@ import (
 // PayoutHandler payout identity endpoints handle karta hai
 type PayoutHandler struct {
 	svc *service.PayoutIdentityService
+	// db: device-revenue ledger read karne ke liye (cross-DB join possible nahi
+	// isliye billing-service khud apna data deta hai)
+	db *gorm.DB
 }
 
 // NewPayoutHandler naya handler banata hai
-func NewPayoutHandler(svc *service.PayoutIdentityService) *PayoutHandler {
-	return &PayoutHandler{svc: svc}
+func NewPayoutHandler(svc *service.PayoutIdentityService, db *gorm.DB) *PayoutHandler {
+	return &PayoutHandler{svc: svc, db: db}
 }
 
 // AddPayout naya payout identity add karta hai

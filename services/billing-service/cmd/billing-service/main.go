@@ -74,7 +74,7 @@ func main() {
 	log.Printf("[KYC] Automated bank validation engine active (provider=%s)", kycEngine.ProviderName())
 
 	payoutSvc := service.NewPayoutIdentityService(db, kycEngine)
-	payoutHandler := handler.NewPayoutHandler(payoutSvc)
+	payoutHandler := handler.NewPayoutHandler(payoutSvc, db)
 
 	// Public: payout types (UI ke liye, koi sensitive data nahi)
 	r.GET("/payout/types", payoutHandler.Types)
@@ -87,7 +87,9 @@ func main() {
 		payoutProtected.GET("/payouts", payoutHandler.ListPayouts)
 		payoutProtected.DELETE("/payouts/:payoutId", payoutHandler.DeletePayout)
 		// Verify payout = admin action
-		payoutProtected.POST("/payouts/:payoutId/verify", middleware.RequireAdmin(), payoutHandler.VerifyPayout)
+		
+		// Device ad revenue - superadmin ledger ke liye (cross-DB data source)
+		payoutProtected.GET("/admin/device-revenue", payoutHandler.GetDeviceRevenues)
 	}
 
 	r.GET("/health", func(c *gin.Context) {
