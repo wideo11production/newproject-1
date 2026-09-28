@@ -144,6 +144,11 @@ services:
         # true  = local capture (log me email dikhta hai, internet nahi)
         # false = direct delivery (production ke liye, MX record zaroori)
         POSTFIX_CAPTURE_ONLY: ${POSTFIX_CAPTURE_ONLY:-true}
+        # RELAYHOST: jis host tak Postfix mail bhejega. Syntax [smtp.host]:587
+        # Ye isliye zaroori hai kyunki is host par OUTBOUND PORT 25 BLOCKED hai
+        # (587/465 open hai). Khaali chhodne par Postfix seedha MX dhoondhega
+        # aur port 25 pe atak jayega - email deliver nahi hoga.
+        POSTFIX_RELAYHOST: ${POSTFIX_RELAYHOST:-}
     container_name: wideo11-mail
     hostname: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
     ports:
@@ -151,6 +156,7 @@ services:
     environment:
       POSTFIX_HOSTNAME: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
       POSTFIX_DOMAIN: ${POSTFIX_DOMAIN:-wideo11.local}
+      POSTFIX_RELAYHOST: ${POSTFIX_RELAYHOST:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z 127.0.0.1 25 || exit 1"]
@@ -558,21 +564,41 @@ services:
       dashboard-service:
         condition: service_healthy
 
-  # Web Frontend (Next.js) - Port 3000
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    container_name: wideo11-web
-    ports:
-      - "3000:3000"
-    environment:
-      NEXT_PUBLIC_API_URL: http://dashboard-service:8080
-      # Auth service ka internal URL - same-origin proxy routes isko use karte hain
-      AUTH_INTERNAL_URL: http://auth-service:8085
-      # NEXTAUTH_SECRET: web app ka middleware next-auth getToken() use karta hai.
-      # Bina iske middleware "MissingSecret" throw karta tha - isliye zaroori hai.
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
+  # ==========================================================================
+  # web (Next.js Frontend) - REMOVED FROM COMPOSE ON PURPOSE
+  # ==========================================================================
+  # Ye service ab DELIBERATELY yahan nahi hai. Frontend ab host machine pe
+  # `pnpm dev` se chalta hai, container me nahi.
+  #
+  # KYUN (rationale):
+  #   - Layout/styling iteration ke liye har baar `docker compose build web`
+  #     + `--force-recreate` karna 60-80 second leta hai (poora image layer
+  #     rebuild + Next.js production build). Sirf ek className change karne
+  #     ke liye itna lagna wasteful hai.
+  #   - `next dev` native Hot Module Replacement deta hai - file save karte
+  #     hi browser me turant reflect hota hai, bina bundle rebuild ya image
+  #     purge ke.
+  #   - Container rebuild karte waqt port 3000 briefly DOWN rehta tha, to
+  #     har iteration me app unavailable ho jati thi.
+  #
+  # HOST DEV KE LIYE BACKEND WIRING (`apps/web/.env.local`):
+  #   Container me service names DNS se resolve hote the (e.g.
+  #   `http://auth-service:8085`). Host pe wo NAHI hote - Docker ka internal
+  #   network host se invisible hai. Isliye host mode me `localhost` URLs
+  #   zaroori hain:
+  #     AUTH_SERVICE_URL         -> http://localhost:8085  (auth-service)
+  #     BOT_SERVICE_URL          -> http://localhost:8080  (dashboard-service)
+  #     RECOMMENDATION_SERVICE_URL -> http://localhost:8082 (recommendation)
+  #     NEXT_PUBLIC_API_URL      -> http://localhost:8080
+  #     NEXT_PUBLIC_AUTH_API     -> http://localhost:8085
+  #   Ye ports host pe already published hain (docker-compose `ports:` maps).
+  #
+  # RE-ENABLE karna ho to: purana `web:` block yahan wapas paste karo
+  # (`apps/web/Dockerfile` file chahiye rehke, wo aise hi hai).
+  # Hinglish: frontend ab container me nahi, host pe `pnpm dev` se - fast
+  #   HMR ke liye. Backend abhi bhi containers me hai (unka `depends_on`
+  #   chain nahi badla hai).
+  # ==========================================================================
 
   # Video Editor Frontend (Next.js) - Port 3002
   video-editor:

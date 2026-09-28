@@ -86,7 +86,7 @@ const MetricCard = ({ title, value, change, icon: Icon }: MetricCardProps) => (
       <Icon className="h-4 w-4 text-gray-400" />
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold text-white">{value}</div>
+      <div className="text-2xl font-bold text-ink">{value}</div>
       <p className={`text-xs ${change > 0 ? 'text-green-400' : change < 0 ? 'text-red-400' : 'text-gray-400'}`}>
         {change > 0 ? '+' : ''}{change}% from last period
       </p>
@@ -141,7 +141,7 @@ const StatPanel = ({
   
   return (
     <div className="h-full flex flex-col items-center justify-center text-center">
-      <div className="text-4xl font-bold text-white">{data.value}</div>
+      <div className="text-4xl font-bold text-ink">{data.value}</div>
       <p className="text-sm text-gray-400 mt-2">{data.label}</p>
       <Badge variant={data.change > 0 ? 'default' : 'secondary'} className="mt-2">
         {data.change > 0 ? '++' : data.change < 0 ? '--' : '='} {Math.abs(data.change)}%
@@ -236,7 +236,7 @@ const AlertListPanel = ({
               {alert.state === 'firing' ? <AlertCircle className="h-5 w-5 text-red-400" /> : <CheckCircle className="h-5 w-5 text-green-400" />}
             </div>
             <div className="flex-1">
-              <div className="font-medium text-white">{alert.labels?.alertname || alert.labels?.alertName || 'Alert'}</div>
+              <div className="font-medium text-ink">{alert.labels?.alertname || alert.labels?.alertName || 'Alert'}</div>
               <div className="text-sm text-gray-300 mt-1">{alert.annotations?.summary || alert.annotations?.message || ''}</div>
               <div className="flex items-center mt-2 space-x-4 text-xs text-gray-400">
                 <span>Status: {alert.state}</span>
@@ -337,7 +337,7 @@ const DraggablePanel = ({ panel, onRemove, onEdit, style }: {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-gray-400 hover:text-white"
+            className="h-6 px-2 text-xs text-gray-400 hover:text-ink"
             onClick={() => onEdit(panel)}
             onPointerDown={(e) => e.stopPropagation()}
           >
@@ -428,7 +428,7 @@ const DashboardEditor = ({ dashboard, onSave, onUpdate }: {
             <h2 className="text-lg font-semibold mb-2 text-gray-200">Dashboard</h2>
             <Button 
               variant="outline"
-              className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
+              className="w-full border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-ink"
               onClick={handleSave}
             >
               <Save className="h-4 w-4 mr-2" /> Save
@@ -548,20 +548,20 @@ const DashboardHeader = ({ dashboard, onSave, onShare, onDelete }: {
       <div className="flex items-center space-x-4">
         <input 
           defaultValue={dashboard?.title || 'Untitled Dashboard'} 
-          className="text-xl font-bold bg-transparent border-none focus:ring-0 text-white placeholder-gray-500"
+          className="text-xl font-bold bg-transparent border-none focus:ring-0 text-ink placeholder-gray-500"
         />
         <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30">
           {dashboard?.panels?.length || 0} panels
         </Badge>
       </div>
       <div className="flex items-center space-x-2">
-        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
           <RefreshCw className="h-4 w-4 mr-1" /> Auto-refresh
         </Button>
-        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
           <Share2 className="h-4 w-4 mr-1" /> Share
         </Button>
-        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
           <Settings className="h-4 w-4" />
         </Button>
       </div>

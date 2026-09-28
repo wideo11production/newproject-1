@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="User avatar placeholder">
+  <!-- Colors app ke CSS variables ko mirror karti hain, isliye light/dark dono
+       me sahi dikhegi. Variables RGB CHANNELS format me hain (jaise `31 41 55`),
+       isliye `rgb(var(--token))` wrapper zaroori hai. -->
+  <rect width="64" height="64" fill="rgb(var(--app-surface-raised))"/>
+  <circle cx="32" cy="25" r="11" fill="rgb(var(--app-border-strong))"/>
+  <path d="M32 40c-10 0-18 6-18 13v11h36V53c0-7-8-13-18-13z" fill="rgb(var(--app-border-strong))"/>
+</svg>

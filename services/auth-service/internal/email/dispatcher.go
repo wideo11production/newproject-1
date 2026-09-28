@@ -3,8 +3,10 @@ package email
 import (
 	"fmt"
 	"log"
+	"mime"
 	"net/smtp"
 	"strings"
+	"time"
 
 	"github.com/wideo11/auth-service/internal/config"
 )
@@ -18,8 +20,22 @@ import (
 const PurgeMessage = "For security reasons, your unverified registration has been securely removed. You can now re-register a new account using this same email address as the prior records are completely purged from our systems."
 
 // Transport abstraction - isse test me fake transport daala ja sakta hai
+//
+// CHANGED (HTML support): pehle sirf `Send(to, subject, body)` tha jo
+// `text/plain` bhejta tha. Ab dono parts jaate hain:
+//
+//	Send(to, subject, htmlBody, textBody string)
+//
+// KYUN dono chahiye:
+//   - `htmlBody` : rich, responsive, branded design
+//   - `textBody` : fallback. Gmail ka plain-text viewer, text-only clients,
+//     aur kuch corporate mail gateways HTML render hi nahi karte. Text part
+//     hone se email KABHI unreadable nahi hoti.
+//
+// Ye `multipart/alternative` MIME structure banata hai - mail client khud
+// decide karta hai kaunsa part dikhana hai (best practice).
 type Transport interface {
-	Send(to, subject, body string) error
+	Send(to, subject, htmlBody, textBody string) error
 }
 
 // consoleTransport email ko logger me print karta hai (no cost, local dev)
@@ -30,15 +46,20 @@ type consoleTransport struct {
 
 // Send email ka poora content console me print karta hai
 // Hinglish: local dev me email yahan dikhta hai, koi paisa nahi lagta
-func (c *consoleTransport) Send(to, subject, body string) error {
+//
+// CHANGED: ab HTML aur TEXT dono print karta hai, taaki dev me dekh sakte ho
+// ki HTML part kaisa ban raha hai (browser me preview karne ke liye).
+func (c *consoleTransport) Send(to, subject, htmlBody, textBody string) error {
 	log.Println("============================================================")
 	log.Println("[EMAIL - CONSOLE TRANSPORT]")
 	log.Println("------------------------------------------------------------")
 	log.Printf("To:      %s", to)
 	log.Printf("From:    %s <%s>", c.fromName, c.from)
 	log.Printf("Subject: %s", subject)
-	log.Println("------------------------------------------------------------")
-	log.Println(body)
+	log.Println("--- PLAIN TEXT PART --------------------------------------")
+	log.Println(textBody)
+	log.Println("--- HTML PART (length) ------------------------------------")
+	log.Printf("%d bytes", len(htmlBody))
 	log.Println("============================================================")
 	return nil
 }
@@ -52,11 +73,57 @@ type smtpTransport struct {
 }
 
 // Send SMTP ke through email bhejta hai
-func (s *smtpTransport) Send(to, subject, body string) error {
-	// MIME headers ke saath RFC-compliant message banata hai
+//
+// CHANGED: ab `multipart/alternative` MIME message banata hai jisme dono
+// parts hote hain:
+//
+//	part 1 (text/plain)  - fallback
+//	part 2 (text/html)   - rich design
+//
+// `multipart/alternative` ka matlab: mail client jo support karta hai wo
+// HTML wala dikhata hai, baaki plain text wala. Ye RFC-standard approach hai
+// aur Gmail/Outlook/Apple Mail sab isko samajhte hain.
+//
+// NOTE (boundary): boundary string MUST message ke har header aur last
+// closing `--` se match karna chahiye, warna mail client parts parse nahi
+// kar payega aur poori email garbage dikhegi. Isliye ek hi variable use ho
+// raha hai headers + body dono me.
+func (s *smtpTransport) Send(to, subject, htmlBody, textBody string) error {
+	// Random-ish boundary. RFC me koi bhi unique string chalta hai jab tak
+	// body me na aaye. Timestamp-based rakha hai taaki har email unique ho.
+	boundary := fmt.Sprintf("wideo11-%d", time.Now().UnixNano())
+
+	// Subject me non-ASCII ho to RFC 2047 encoding chahiye. Subject hamara
+	// ASCII hi rehta hai, par defensive encoding rakh di hai.
+	encodedSubject := mime.QEncoding.Encode("UTF-8", subject)
+
 	msg := fmt.Sprintf(
-		"From: %s <%s>\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=\"UTF-8\"\r\n\r\n%s",
-		s.fromName, s.from, to, subject, body,
+		"From: %s <%s>\r\n"+
+			"To: %s\r\n"+
+			"Subject: %s\r\n"+
+			"MIME-Version: 1.0\r\n"+
+			"Content-Type: multipart/alternative; boundary=\"%s\"\r\n"+
+			"\r\n"+
+			"--%s\r\n"+
+			"Content-Type: text/plain; charset=\"UTF-8\"\r\n"+
+			"Content-Transfer-Encoding: 8bit\r\n"+
+			"\r\n"+
+			"%s\r\n"+
+			"--%s\r\n"+
+			"Content-Type: text/html; charset=\"UTF-8\"\r\n"+
+			"Content-Transfer-Encoding: 8bit\r\n"+
+			"\r\n"+
+			"%s\r\n"+
+			"--%s--\r\n",
+		s.fromName, s.from,
+		to,
+		encodedSubject,
+		boundary,
+		boundary,
+		textBody,
+		boundary,
+		htmlBody,
+		boundary,
 	)
 
 	return smtp.SendMail(s.addr, s.auth, s.from, []string{to}, []byte(msg))
@@ -121,31 +188,28 @@ func (d *Dispatcher) SetTransport(t Transport) {
 	d.transport = t
 }
 
-// SendVerificationEmail verification email bhejta hai jisme clickable link hai
-func (d *Dispatcher) SendVerificationEmail(to, fullName, verifyURL string, ttlMinutes int) error {
-	// Ye body USER-FACING hai isliye plain English me hai (Hinglish nahi)
-	body := fmt.Sprintf(`Hello %s,
-
-Thank you for registering on Wideo11.
-
-Please confirm your email address by opening the link below:
-
-%s
-
-This link expires in %d minutes. If it is not used within that time, your
-registration will be permanently removed and you will be able to register
-again with the same email address.
-
-If you did not create this account, you can safely ignore this email.
-
-Best regards,
-The Wideo11 Team`, fullName, verifyURL, ttlMinutes)
-
-	return d.transport.Send(to, "Verify your Wideo11 account", body)
+// SendVerificationEmail verification email bhejta hai (HTML + text dono)
+//
+// CHANGED: ab `code` parameter bhi leta hai - wo 6-digit verification code
+// hai jo HTML part me blurred + double-click-reveal block me dikhta hai.
+//
+// NOTE (code kahan se aata hai): ye code VERIFICATION LINK KA HI SHORT
+// FORM hai, alag koi secret system nahi. Code verify karne ke liye backend
+// me token ka corresponding row lookup hoti hai - agar backend me abhi
+// "code" field nahi hai to ye display-only rahega aur verify LINK hi kaam
+// karegi. (Is field ko add karna ek separate, deliberate change hai.)
+func (d *Dispatcher) SendVerificationEmail(to, fullName, verifyURL, code string, ttlMinutes int) error {
+	subject := "Verify your Wideo11 account"
+	htmlBody := VerificationHTML(fullName, verifyURL, code, ttlMinutes)
+	textBody := VerificationText(fullName, verifyURL, code, ttlMinutes)
+	return d.transport.Send(to, subject, htmlBody, textBody)
 }
 
 // SendPurgeNotification unverified account purge hone par user ko batata hai
 // Message exact spec wording use karta hai (plain English, no Hinglish)
 func (d *Dispatcher) SendPurgeNotification(to string) error {
-	return d.transport.Send(to, "Your Wideo11 registration was removed", PurgeMessage)
+	subject := "Your Wideo11 registration was removed"
+	htmlBody := PurgeHTML(to)
+	textBody := PurgeText(to)
+	return d.transport.Send(to, subject, htmlBody, textBody)
 }

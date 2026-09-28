@@ -23,6 +23,10 @@ var (
 type UserRepository interface {
 	Create(ctx context.Context, user *model.User) error
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	// GetByUsername added for migration 003 (username column).
+	// Used by register service for a clean duplicate-username error instead of
+	// relying on the DB UNIQUE violation (which surfaced as a useless 500).
+	GetByUsername(ctx context.Context, username string) (*model.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	Update(ctx context.Context, user *model.User) error
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
@@ -80,6 +84,27 @@ func (r *userRepository) Create(ctx context.Context, user *model.User) error {
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	var user model.User
 	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+// GetByUsername username se user dhoondhta hai.
+//
+// ADDED (migration 003): register service duplicate username check ke liye
+// ye use karta hai, taaki DB UNIQUE violation se pehle hi clean error de sake.
+//
+// NOTE: `deleted_at` filter GORM ka soft-delete automatically lagata hai
+// (jaise GetByEmail me bota hai) - yaani soft-deleted user ka username
+// dobara use ho sakta hai. Ye intentional hai: user delete hone ke baad
+// handle free hona chahiye.
+func (r *userRepository) GetByUsername(ctx context.Context, username string) (*model.User, error) {
+	var user model.User
+	err := r.db.WithContext(ctx).Where("username = ?", username).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrUserNotFound
@@ -154,8 +179,9 @@ func (r *sessionRepository) GetByAccessToken(ctx context.Context, token string) 
 //
 // SECURITY FIX: ab ye SHA-256 hash compute karke compare karta hai, raw token se nahi.
 // Pehle ye RAW JWT ko sessions.refresh_token column se compare karta tha, jisse:
-//   1. DB leak = attacker ko usable session token mil jata tha (session hijack)
-//   2. JWT length badhne par varchar(512) overflow ho jata tha (500 error)
+//  1. DB leak = attacker ko usable session token mil jata tha (session hijack)
+//  2. JWT length badhne par varchar(512) overflow ho jata tha (500 error)
+//
 // Hinglish: raw token DB me store karna unsafe tha - ab hash store hota hai
 func (r *sessionRepository) GetByRefreshToken(ctx context.Context, token string) (*model.Session, error) {
 	var session model.Session

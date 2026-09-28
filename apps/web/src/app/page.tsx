@@ -1,249 +1,189 @@
-// Commercial landing page - Server Component (koi "use client" nahi, isliye zero client JS overhead)
-// Purane editor canvas block aur static template loops (Array.from skeleton loops) poore tarah hata diye gaye hain.
-// Naya page: professional landing dashboard + working auth navigation vectors.
-// Hinglish comments: har block ka arth samjhne ke liye.
+// ============================================================================
+// LANDING PAGE - immersive entertainment shell (Prime Video style)
+// ============================================================================
+//
+// ARCHITECTURE SPLIT (Server + Client boundary):
+//   Ye file ek SERVER COMPONENT hai (koi "use client" nahi). Isliye:
+//     - Zero client JS overhead for the static parts
+//     - `mergePool()` server pe chalta hai (localStorage overlay nahi, seed
+//       return karta hai - no hydration mismatch)
+//     - Sirf carousel aur localStorage merge CLIENT component me jaata hai
+//
+// HYDRATION STRATEGY (no-mismatch guarantee):
+//   - Server pe `SEED_POOL` render hota hai
+//   - Client pe `LandingGrid` (client component) `useEffect` me overlay
+//     merge karta hai - isliye pehla client render server ke IDENTICAL hota
+//     hai, phir overlay apply hota hai. Isse koi flash/mismatch nahi.
+//
+// CONTENT SOURCE (hard rule):
+//   `ad-pool.ts` se. Wo sirf localStorage + static seed padhta hai. Koi
+//   third-party ad network, koi CDN nahi. Video MinIO se.
+//
+// THEME (Grafana exact hex, from design-system.ts):
+//   Layout shell: #111217 (grafanaBgHex)
+//   Panels: #181b1f, borders: #2c3235, text: #d8d9da / #9fa7b3
+//   Ye `bg-[#111217]` Tailwind arbitrary value se directly use hote hain.
+//
+// Hinglish comments: har block ka arth
 
 import Link from 'next/link';
 import { Button } from '@wideo11/ui/button';
-import { Badge } from '@wideo11/ui/badge';
-import { Card, CardContent } from '@wideo11/ui/card';
-import { PlayCircle, ShieldCheck, Gauge, LineChart, Wallet, Globe } from 'lucide-react';
+import { BrandLockup } from '@wideo11/ui/brand/characters';
+import { CHARACTER_SPEC_REVISION } from '@wideo11/ui/brand/characters-manifest';
+import { SEED_POOL } from '@/lib/landing/ad-pool';
+import LandingShell from '@/components/landing/landing-shell';
+import { OnboardingStepsRow } from '@/components/landing/onboarding-steps';
+import { FaqPortal } from '@/components/landing/faq-portal';
 
-export default function HomePage() {
+// ---------------------------------------------------------------------------
+// NAVIGATION HEADER - auth links + brand
+// ---------------------------------------------------------------------------
+function SiteHeader() {
   return (
-    <div className="min-h-full bg-gray-950 text-gray-100">
-      {/* ---------------- Top navigation bar ---------------- */}
-      {/* Auth navigation vectors yahan bhi hain taaki har page se login/register reachable rahe */}
-      <header className="sticky top-0 z-40 border-b border-gray-800 bg-gray-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-              W
-            </span>
-            <span className="text-lg font-semibold tracking-tight text-white">Wideo11</span>
+    <header className="sticky top-0 z-40 border-b border-[#2c3235] bg-[#111217]/90 backdrop-blur">
+      <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
+        {/* Brand - Wino + Rino lockup (manifest-locked vectors, inline SVG) */}
+        <Link href="/" className="flex items-center gap-2.5">
+          <BrandLockup size={32} />
+          <span className="text-lg font-semibold tracking-tight text-[#d8d9da]">
+            Wideo11
+          </span>
+        </Link>
+
+        {/* Auth navigation - Register primary, Log in secondary */}
+        <nav className="flex items-center gap-2">
+          <Link href="/auth/login">
+            <Button variant="ghost" className="h-9 text-[#9fa7b3] hover:text-[#d8d9da]">
+              Log in
+            </Button>
           </Link>
+          <Link href="/auth/register">
+            <Button className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85">
+              Register
+            </Button>
+          </Link>
+        </nav>
+      </div>
+    </header>
+  );
+}
 
-          {/* Login + Register buttons header me - primary action Register */}
-          <nav className="flex items-center gap-3">
-            <Link href="/auth/login">
-              <Button variant="ghost" className="text-gray-300 hover:text-white">
-                Log in
-              </Button>
-            </Link>
-            <Link href="/auth/register">
-              <Button className="bg-blue-600 text-white hover:bg-blue-500">Register</Button>
-            </Link>
-          </nav>
-        </div>
-      </header>
-
-      {/* ---------------- Hero section ---------------- */}
-      {/* Background CSS gradient se banaya gaya hai - koi image asset required nahi */}
-      <section className="relative overflow-hidden border-b border-gray-800">
-        {/* Decorative gradient blobs - purely visual, aria-hidden */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-          <div className="absolute -top-32 left-1/4 h-80 w-80 rounded-full bg-blue-600/20 blur-3xl" />
-          <div className="absolute -bottom-24 right-1/4 h-72 w-72 rounded-full bg-purple-600/10 blur-3xl" />
-        </div>
-
-        <div className="relative mx-auto max-w-6xl px-6 py-20 text-center sm:py-28">
-          <Badge className="mb-6 border-blue-500/40 bg-blue-500/10 text-blue-300">
+// ---------------------------------------------------------------------------
+// HERO PROMOTIONAL STRIP (above carousel)
+// Prime Video style: "Featured today" label + small CTA row
+// ---------------------------------------------------------------------------
+function HeroStrip() {
+  return (
+    <section className="w-full bg-[#181b1f] px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
             Now accepting creators
-          </Badge>
-
-          <h1 className="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-            Publish video. Keep control of every stream.
           </h1>
-
-          <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-400">
-            Wideo11 is a video platform built around edge delivery and honest payouts. Your
-            catalog is transcoded to adaptive HLS, streamed from the edge, and every rupee you
-            earn is recorded in a ledger you can actually audit.
-          </p>
-
-          {/* Primary CTA = Register, Secondary CTA = Login */}
-          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link href="/auth/register" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full bg-blue-600 px-8 text-white hover:bg-blue-500">
-                Create your account
-              </Button>
-            </Link>
-            <Link href="/auth/login" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full border-gray-700 px-8 text-gray-200 hover:bg-gray-800"
-              >
-                I already have an account
-              </Button>
-            </Link>
-          </div>
-
-          <p className="mt-4 text-sm text-gray-500">
-            Free to start. No card required to publish your first video.
+          <p className="mt-1 text-sm text-[#9fa7b3]">
+            Publish to the edge, keep every rupee. No paid tools in the loop.
           </p>
         </div>
-      </section>
+        {/* Primary CTA */}
+        <Link href="/auth/register" className="shrink-0">
+          <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
+            Create your account
+          </Button>
+        </Link>
+      </div>
+    </section>
+  );
+}
 
-      {/* ---------------- Stats strip ---------------- */}
-      {/* Chaar stat cards - statically likhe gaye hain, koi loop nahi */}
-      <section className="border-b border-gray-800 bg-gray-900/30">
-        <div className="mx-auto max-w-6xl px-6 py-10">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Card className="border-gray-800 bg-gray-900/60">
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-400">Uptime SLA</p>
-                <p className="mt-1 text-2xl font-bold text-white">99.98%</p>
-              </CardContent>
-            </Card>
-            <Card className="border-gray-800 bg-gray-900/60">
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-400">Edge regions</p>
-                <p className="mt-1 text-2xl font-bold text-white">12</p>
-              </CardContent>
-            </Card>
-            <Card className="border-gray-800 bg-gray-900/60">
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-400">Streams per day</p>
-                <p className="mt-1 text-2xl font-bold text-white">48K</p>
-              </CardContent>
-            </Card>
-            <Card className="border-gray-800 bg-gray-900/60">
-              <CardContent className="pt-6">
-                <p className="text-sm text-gray-400">Support response</p>
-                <p className="mt-1 text-2xl font-bold text-white">&lt; 2h</p>
-              </CardContent>
-            </Card>
-          </div>
+// ---------------------------------------------------------------------------
+// MID-PAGE CONVERSION CTA
+// ---------------------------------------------------------------------------
+function MidPageCta() {
+  return (
+    <section className="w-full border-y border-[#2c3235] bg-[#181b1f] px-4 py-12 sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 text-center">
+        <h2 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
+          Ready to publish your first video?
+        </h2>
+        <p className="max-w-xl text-sm text-[#9fa7b3]">
+          Create an account in under a minute. Free to start, no card required.
+        </p>
+        <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <Link href="/auth/register" className="w-full sm:w-auto">
+            <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
+              Register now
+            </Button>
+          </Link>
+          <Link href="/auth/login" className="w-full sm:w-auto">
+            <Button
+              variant="outline"
+              className="w-full border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+            >
+              Log in
+            </Button>
+          </Link>
         </div>
-      </section>
+      </div>
+    </section>
+  );
+}
 
-      {/* ---------------- Product pillars ---------------- */}
-      {/* Feature blocks - har block manually likha gaya hai, koi map loop nhi chalata */}
-      <section className="mx-auto max-w-6xl px-6 py-20">
-        <div className="max-w-2xl">
-          <h2 className="text-3xl font-bold tracking-tight text-white">
-            Built for creators who want the numbers to hold up
-          </h2>
-          <p className="mt-4 text-gray-400">
-            Infrastructure decisions that normally get bolted on later are part of the product
-            from day one.
+// ---------------------------------------------------------------------------
+// FOOTER
+// ---------------------------------------------------------------------------
+function SiteFooter() {
+  return (
+    <footer className="w-full border-t border-[#2c3235] bg-[#111217] py-8">
+      <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-sm text-[#9fa7b3] sm:flex-row sm:px-6 lg:px-8">
+        <p>&copy; {new Date().getFullYear()} Wideo11. All rights reserved.</p>
+        <div className="flex items-center gap-4">
+          {/* Brand spec revision stamp - transparent about the locked vectors */}
+          <p className="font-mono text-[10px] text-[#9fa7b3]/50">
+            brand spec v{CHARACTER_SPEC_REVISION}
           </p>
-        </div>
-
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <PlayCircle className="h-6 w-6 text-blue-400" />
-              <h3 className="mt-4 font-semibold text-white">Adaptive HLS streaming</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                2-second optimized fragments are served directly from the video bucket and CDN
-                edge, so playback never routes through application compute.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <ShieldCheck className="h-6 w-6 text-green-400" />
-              <h3 className="mt-4 font-semibold text-white">Verified signups only</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                Per-IP registration throttling keeps onboarding human-paced and stops automated
-                abuse before it can leak into billing.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <Gauge className="h-6 w-6 text-purple-400" />
-              <h3 className="mt-4 font-semibold text-white">Self-hosted observability</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                A custom console on port 3001 tracks egress, connection pools and container
-                restarts with no paid vendor tooling in the loop.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <LineChart className="h-6 w-6 text-yellow-400" />
-              <h3 className="mt-4 font-semibold text-white">Creator analytics</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                Revenue, watch time and retention per channel, exportable in clean formats for
-                your finance team.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <Wallet className="h-6 w-6 text-emerald-400" />
-              <h3 className="mt-4 font-semibold text-white">Transparent payouts</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                Clear ledger entries, buffer-aware balances, and a fixed share allocation
-                recorded on every settlement run.
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="border-gray-800 bg-gray-900/50">
-            <CardContent className="pt-6">
-              <Globe className="h-6 w-6 text-cyan-400" />
-              <h3 className="mt-4 font-semibold text-white">Edge-first delivery</h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-400">
-                Static assets and video segments ship from the edge, keeping egress predictable
-                and infrastructure cost bounded.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* ---------------- Bottom CTA ---------------- */}
-      {/* Secondary conversion block - Register primary, Login secondary */}
-      <section className="border-t border-gray-800 bg-gray-900/40">
-        <div className="mx-auto max-w-3xl px-6 py-16 text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Ready to publish your first video?
-          </h2>
-          <p className="mt-3 text-gray-400">
-            Create an account in under a minute, or log in and pick up where you left off.
-          </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row">
-            <Link href="/auth/register" className="w-full sm:w-auto">
-              <Button size="lg" className="w-full bg-blue-600 px-8 text-white hover:bg-blue-500">
-                Register now
-              </Button>
-            </Link>
-            <Link href="/auth/login" className="w-full sm:w-auto">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-full border-gray-700 px-8 text-gray-200 hover:bg-gray-800"
-              >
-                Log in
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- Footer ---------------- */}
-      <footer className="border-t border-gray-800 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 text-sm text-gray-500 sm:flex-row">
-          <p>&copy; {new Date().getFullYear()} Wideo11. All rights reserved.</p>
-          {/* Auth links footer me bhi - accessibility aur easy navigation ke liye */}
           <nav className="flex items-center gap-4">
-            <Link href="/auth/login" className="transition-colors hover:text-gray-300">
+            <Link href="/auth/login" className="transition-colors hover:text-[#d8d9da]">
               Login
             </Link>
-            <Link href="/auth/register" className="transition-colors hover:text-gray-300">
+            <Link href="/auth/register" className="transition-colors hover:text-[#d8d9da]">
               Register
             </Link>
           </nav>
         </div>
-      </footer>
+      </div>
+    </footer>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PAGE ROOT
+// ---------------------------------------------------------------------------
+export default function HomePage() {
+  return (
+    // Full-bleed entertainment shell. `bg-[#111217]` = exact Grafana hex.
+    // min-h-screen ensures it fills viewport even on short content.
+    <div className="min-h-screen w-full bg-[#111217] text-[#d8d9da]">
+      <SiteHeader />
+      <HeroStrip />
+
+      {/* ---- HERO CAROUSEL + CONTENT ROWS ----
+          `LandingShell` is a CLIENT component that:
+            - reads localStorage overlay on mount (appendable pool)
+            - renders HeroCarousel (autoplay) + three ContentRows
+          It receives the server-resolved SEED_POOL as initial content, so
+          server render is deterministic (no mismatch). */}
+      <LandingShell initialPool={SEED_POOL} />
+
+      {/* ---- ONBOARDING WORKFLOW (3 steps) ---- */}
+      <OnboardingStepsRow />
+
+      {/* ---- MID-PAGE CTA (between workflow and FAQ) ---- */}
+      <MidPageCta />
+
+      {/* ---- FAQ PORTAL (accessible accordion) ---- */}
+      <FaqPortal />
+
+      <SiteFooter />
     </div>
   );
 }

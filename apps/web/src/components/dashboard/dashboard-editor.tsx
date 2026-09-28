@@ -161,7 +161,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
           <Button 
             variant="ghost" 
             size="sm" 
-            className="w-full text-gray-300 hover:text-white hover:bg-gray-800"
+            className="w-full text-gray-300 hover:text-ink hover:bg-gray-800"
             onClick={handleSave}
           >
             <Layers className="h-4 w-4 mr-2" /> Save Dashboard
@@ -240,13 +240,13 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
                   <Input
                     id="panel-title"
                     defaultValue={selectedPanel.title}
-                    className="bg-gray-700 border-gray-600 text-white mt-1"
+                    className="bg-gray-700 border-gray-600 text-ink mt-1"
                   />
                 </div>
                 <div>
                   <Label htmlFor="panel-type">Visualization Type</Label>
                   <Select defaultValue={selectedPanel.type}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-white mt-1">
+                    <SelectTrigger className="bg-gray-700 border-gray-600 text-ink mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-gray-800 border-gray-700">
@@ -265,7 +265,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
                   <Input
                     id="panel-query"
                     placeholder="sum(rate(http_requests_total[5m]))"
-                    className="bg-gray-700 border-gray-600 text-white mt-1 font-mono"
+                    className="bg-gray-700 border-gray-600 text-ink mt-1 font-mono"
                   />
                 </div>
               </div>
@@ -302,7 +302,7 @@ function renderPanelContent(panel: Panel) {
     case 'stat':
       return (
         <div className="h-full flex flex-col items-center justify-center text-center">
-          <div className="text-3xl font-bold text-white">
+          <div className="text-3xl font-bold text-ink">
             {Math.floor(Math.random() * 10000).toLocaleString()}
           </div>
           <p className="text-sm text-gray-400 mt-2">{panel.title}</p>
@@ -412,7 +412,7 @@ function renderPanelContent(panel: Panel) {
               <div key={i} className="flex items-start space-x-3 p-2 rounded border border-red-500/20 bg-red-500/5">
                 <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
-                  <div className="font-medium text-white">
+                  <div className="font-medium text-ink">
                     {['HighMemoryUsage', 'APIHighLatency', 'DiskSpaceLow'][i % 3]}
                   </div>
                   <p className="text-sm text-gray-300 mt-1">Alert condition has been firing</p>

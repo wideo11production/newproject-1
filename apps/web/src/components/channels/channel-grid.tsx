@@ -14,7 +14,7 @@ export default function ChannelGrid() {
                 <AvatarFallback>{channel.name.charAt(0)}</AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="font-medium text-white">{channel.name}</h3>
+                <h3 className="font-medium text-ink">{channel.name}</h3>
                 <p className="text-xs text-gray-500">{channel.subscribers}</p>
               </div>
             </div>

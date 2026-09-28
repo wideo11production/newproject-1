@@ -115,7 +115,7 @@ function AlertHistory({ filter, search }: AlertHistoryProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium text-white">{alert.name}</span>
+                  <span className="font-medium text-ink">{alert.name}</span>
                   <Badge variant={alert.state === 'firing' ? 'destructive' : 'default'}>
                     {alert.state}
                   </Badge>

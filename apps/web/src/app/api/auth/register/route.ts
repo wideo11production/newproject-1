@@ -30,7 +30,17 @@ export async function POST(request: Request) {
   }
 
   // Fields normalize karo
+  // NOTE: `fullName` ab OPTIONAL hai. Register form se ye field hata diya
+  // gaya hai (600px compact card requirement), to form empty string bhejta
+  // hai. Backend `full_name` ko bhi optional kar diya gaya hai, isliye
+  // validation yahan enforce nahi hoti.
+  // Asar: user ka display name khaali rahega jab tak wo profile/settings me
+  // na bhare. Ye jaan-boojh kar maara gaya hai.
   const fullName = typeof body.fullName === 'string' ? body.fullName.trim() : '';
+  // `username` NEW (migration 003). Public handle - channel URL me dikhega.
+  // Normalize yahi karni hai jo backend karta hai (lowercase + trim), taaki
+  // user ko "taken" na lage jab sirf case alag ho.
+  const username = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const enableBiometric = body.enableBiometric === true;
@@ -40,8 +50,19 @@ export async function POST(request: Request) {
   // client validation bypass kar sakta hai. Server par hi final authority hai.
   const errors: Record<string, string> = {};
 
-  if (!fullName) {
-    errors.fullName = 'Full name is required';
+  // NOTE: `fullName` required-check HATA diya hai - form se field hata hai,
+  // to check rakhne se registration fail hoti.
+
+  // ---- Username validation (mirrors the Go service rules exactly) ----
+  // Length 3-30, aur sirf lowercase letters / digits / `_` / `.` / `-`.
+  // Backend bhi EXACTLY yehi rules lagata hai (`service.Register`), to dono
+  // jagah same rule rakhna zaroori hai - warna user ko client pass ho jaye
+  // aur server reject kare (confusing 400).
+  if (!username) {
+    errors.username = 'Username is required';
+  } else if (!/^[a-z0-9._-]{3,30}$/.test(username)) {
+    errors.username =
+      'Username must be 3-30 characters: letters, numbers, underscore, dot or hyphen';
   }
 
   if (!email) {
@@ -69,7 +90,10 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         email,
         password,
+        // Snake_case me bhejte hain kyunki Go model ke json tags
+        // `full_name` / `username` hain (camelCase me unmarshal nahi hoga).
         full_name: fullName,
+        username,
         // Device fingerprint nahi bhejte - auth-service use tabhi store karta hai
         // jab non-empty ho (unique index protection)
         device: {},

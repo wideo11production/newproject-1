@@ -29,8 +29,12 @@ const BATCH_SIZE = 10;
 // Audit endpoint - same-origin proxy.
 // NOTE: har app ka apna /api/audit route hona chahiye jo auth-service tak forward kare.
 // App specific URL chahiye to env se override kar sakte ho (NEXT_PUBLIC_AUDIT_ENDPOINT).
+// NOTE: bracket access `['NEXT_PUBLIC_AUDIT_ENDPOINT']` (dot nahi) isliye ki
+// `packages/ui` ka tsconfig me `noPropertyAccessFromIndexSignature` ON hai.
+// `process.env` index signature hai, isliye dot notation par TS4111 aata hai
+// aur package ka `tsc` build fail ho jata tha.
 const AUDIT_ENDPOINT =
-  process.env.NEXT_PUBLIC_AUDIT_ENDPOINT ?? '/api/audit';
+  process.env['NEXT_PUBLIC_AUDIT_ENDPOINT'] ?? '/api/audit';
 
 interface QueuedEvent {
   timestamp: string;

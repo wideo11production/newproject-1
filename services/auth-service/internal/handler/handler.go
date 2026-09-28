@@ -50,6 +50,22 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		switch err {
 		case service.ErrUserExists:
 			c.JSON(http.StatusConflict, gin.H{"error": "user already exists"})
+
+		// ---- Username errors (migration 003) ----
+		// 400: format galat - user ko batana hai ki theek karna kya hai
+		case service.ErrInvalidUsername:
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid username",
+				"message": "Username must be 3-30 characters using letters, numbers, underscore, dot or hyphen",
+			})
+
+		// 409: conflict - koi aur user ye handle already le raha hai
+		case service.ErrUsernameTaken:
+			c.JSON(http.StatusConflict, gin.H{
+				"error":   "username taken",
+				"message": "That username is already taken. Please choose another.",
+			})
+
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "registration failed"})
 		}
@@ -60,6 +76,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		"user": gin.H{
 			"id":          user.ID,
 			"email":       user.Email,
+			"username":    user.Username,
 			"full_name":   user.FullName,
 			"is_active":   user.IsActive,
 			"is_verified": user.IsVerified,

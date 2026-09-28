@@ -1,6 +1,6 @@
 "use client";
 
-import { Moon, Sun, User, LogOut, Settings } from 'lucide-react';
+import { Moon, Sun, User, LogOut, Settings, BarChart3, Activity, Bell, Users, Database, Loader2, CheckCircle2, AlertCircle, Eye, EyeOff, Fingerprint, ShieldCheck, LogIn, Lock, RefreshCw } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { useTheme } from 'next-themes';
 import type { ReactNode } from 'react';
@@ -36,7 +36,7 @@ export function ThemeToggle() {
       variant="ghost"
       size="sm"
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-      className="text-gray-300 hover:text-white hover:bg-gray-800"
+      className="text-gray-300 hover:text-ink hover:bg-gray-800"
     >
       <Sun className="h-4 w-4 dark:hidden" />
       <Moon className="h-4 w-4 hidden dark:block" />
@@ -48,7 +48,7 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger>
-        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
           <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-700 text-xs text-gray-300">
             <img src="/placeholder.svg" alt="User avatar" className="h-full w-full object-cover" />
           </div>

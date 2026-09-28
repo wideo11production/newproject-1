@@ -27,6 +27,56 @@
 // Grafana-inspired dark palette. Ye values Tailwind ke built-in scale me hain,
 // isliye koi custom config nahi chahiye - seedha kaam karti hain.
 
+/**
+ * RAW GRAFANA HEX - exact palette values (source: enterprise-theme.ts)
+ *
+ * KYUN YE ALAG SECTION HAI:
+ * Neeche wale tokens (`surface`, `surfaceRaised`, ...) Tailwind ke built-in
+ * gray scale pe based hain. Ye wala section wo EXACT hex values expose karta
+ * hai jo `enterprise-theme.ts` ke `colors.grafana` me hain - taaki koi bhi
+ * app Tailwind ke `bg-gray-950` guess karna na pade aur wahi value use kare.
+ *
+ * Specifically `#111217` = `colors.grafana.bg` = app background. Landing page
+ * (Prime Video style entertainment shell) isko full-bleed layout shell par
+ * lagata hai.
+ *
+ * NOTE: class tokens me backtick interpolation use hui hai isliye inhe
+ * `cn()`/twMerge ke saath bhi sahi treat kiya jaata hai - plain string nahi.
+ */
+
+/** Exact app background hex - `#111217` (colors.grafana.bg) */
+export const grafanaBgHex = '#111217';
+
+/** Exact panel/card background hex (colors.grafana.panel) */
+export const grafanaPanelHex = '#181b1f';
+
+/** Exact panel hover hex (colors.grafana.panelHover) */
+export const grafanaPanelHoverHex = '#1f2227';
+
+/** Exact border hex (colors.grafana.border) */
+export const grafanaBorderHex = '#2c3235';
+
+/** Exact primary text hex (colors.grafana.text) */
+export const grafanaTextHex = '#d8d9da';
+
+/** Exact muted text hex (colors.grafana.textMuted) */
+export const grafanaTextMutedHex = '#9fa7b3';
+
+/** Exact accent/primary action hex (colors.grafana.primary) */
+export const grafanaPrimaryHex = '#5794f2';
+
+/** Exact success hex (colors.grafana.success) */
+export const grafanaSuccessHex = '#73bf69';
+
+/** Exact warning hex (colors.grafana.warning) */
+export const grafanaWarningHex = '#f2cc0c';
+
+/** Exact danger hex (colors.grafana.danger) */
+export const grafanaDangerHex = '#f2495c';
+
+/** Exact info hex (colors.grafana.info) */
+export const grafanaInfoHex = '#8ab8ff';
+
 /** Page background - deep neutral */
 export const surface = 'bg-gray-950';
 
@@ -63,6 +113,24 @@ export const warning = 'text-yellow-400';
 
 /** Standard card container - every panel uses this */
 export const card = `${surfaceRaised} ${border} rounded-xl p-5`;
+
+/**
+ * ENTERTAINMENT SHELL - full-bleed dark layout shell (landing page)
+ *
+ * `bg-[#111217]` = `colors.grafana.bg` EXACT hex. Ye `surface` (`bg-gray-950`)
+ * se ALAG hai - gray-950 Tailwind ka built-in hai aur exact grafana value
+ * nahi hai. Jab koi specifically "Grafana #111217 shell" maangta hai to ye
+ * token use karo, `surface` nahi.
+ *
+ * `twMerge` discipline: ye token class-STRINGS hai, aur consumers inhe
+ * `cn()` ke through dete hain - twMerge duplicate `bg-*` ko de-conflict karta
+ * hai, isliye isko apni custom width/height ke saath safely mix kiya ja sakta
+ * hai bina manual override kiye.
+ */
+export const entertainmentShell = 'bg-[#111217] text-[#d8d9da]';
+
+/** Entertainment panel (hero card, content row tile) */
+export const entertainmentPanel = 'border border-[#2c3235] bg-[#181b1f]';
 
 /** Standard page shell - centers content with max width */
 export const pageShell = `min-h-screen ${surface} ${textPrimary} p-6`;

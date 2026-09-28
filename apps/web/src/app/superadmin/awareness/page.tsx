@@ -120,7 +120,7 @@ export default function AwarenessReportsPage() {
               <ArrowLeft className="h-4 w-4" />
             </a>
             <div>
-              <h1 className="text-2xl font-bold text-white">Awareness Reports</h1>
+              <h1 className="text-2xl font-bold text-ink">Awareness Reports</h1>
               <p className="text-sm text-gray-400">
                 Security intelligence across all accounts and devices
               </p>
@@ -199,7 +199,7 @@ export default function AwarenessReportsPage() {
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div>
-                    <p className="font-mono text-sm font-semibold text-white">{email}</p>
+                    <p className="font-mono text-sm font-semibold text-ink">{email}</p>
                     <p className="text-xs text-gray-500">
                       {userEvents.length} event{userEvents.length > 1 ? 's' : ''}
                     </p>

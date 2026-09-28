@@ -38,14 +38,14 @@ export default function UserMenu() {
       {isOpen && (
         <div className="absolute right-0 mt-2 w-48 bg-gray-900 rounded-lg shadow-lg border border-gray-800 py-1 z-50">
           <div className="px-4 py-2 border-b border-gray-800">
-            <p className="text-sm font-medium text-white truncate">{session.user.name || "User"}</p>
+            <p className="text-sm font-medium text-ink truncate">{session.user.name || "User"}</p>
             <p className="text-xs text-gray-400 truncate">{session.user.email}</p>
           </div>
-          <a href="/dashboard" className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">
+          <a href="/dashboard" className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-ink">
             <User className="w-4 h-4" />
             <span>Dashboard</span>
           </a>
-          <a href="/settings" className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-white">
+          <a href="/settings" className="flex items-center space-x-2 px-4 py-2 text-gray-300 hover:bg-gray-800 hover:text-ink">
             <Settings className="w-4 h-4" />
             <span>Settings</span>
           </a>

@@ -4,6 +4,27 @@
 
 @layer base {
   :root {
+    /* ---- APP SURFACE / TEXT TOKENS (light theme) ----
+       Ye variables Tailwind ke `gray` scale aur `ink` token ko drive karte
+       hain (packages/ui/src/enterprise-theme.ts). Isi wajah se poori app -
+       hardcoded `bg-gray-950` / `text-gray-400` / `border-gray-800` wale
+       bhi - light mode me sahi invert ho jaati hai.
+
+       IMPORTANT: values RGB CHANNELS hain (`249 250 251`), poore color
+       values nahi (`#f9fafb`). Tailwind ko `rgb(var(--app-bg) / <alpha-value>)`
+       me `<alpha-value>` substitute karna hota hai - sirf is format me
+       `bg-gray-950/60` jaise opacity variants generate hote hain. Hex ya hsl
+       likhne par wo classes chup-chaap CSS se gayab ho jaati hain. */
+    --app-bg: 255 255 255;
+    --app-surface: 249 250 251;
+    --app-surface-raised: 243 244 246;
+    --app-border: 229 231 235;
+    --app-border-strong: 209 213 219;
+    --app-ink: 17 24 39;
+    --app-fg-strong: 55 65 81;
+    --app-fg-muted: 107 114 128;
+    --app-fg-subtle: 156 163 175;
+
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -27,6 +48,18 @@
   }
 
   .dark {
+    /* ---- APP SURFACE / TEXT TOKENS (dark theme) ----
+       Same RGB channel format (upar wali comment dekho) */
+    --app-bg: 3 7 18;
+    --app-surface: 17 24 39;
+    --app-surface-raised: 31 41 55;
+    --app-border: 31 41 55;
+    --app-border-strong: 55 65 81;
+    --app-ink: 255 255 255;
+    --app-fg-strong: 209 213 219;
+    --app-fg-muted: 156 163 175;
+    --app-fg-subtle: 107 114 128;
+
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
     --card: 222.2 84% 4.9%;
@@ -57,4 +90,38 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+/* ============================================================================
+   AUTH SCROLL - invisible scrollbar for the auth card inner region
+   ============================================================================
+   WHY (user complaint: "side me scroll bar form me bhut bura lagta hai"):
+
+   The auth card is capped at `max-h-[60vh]` because the page wrapper reserves
+   20vh top + 20vh bottom = 40vh. That leaves exactly 60vh of usable height.
+   The register form (single column, 44px inputs, 16px gaps, strength meter,
+   2 consent panels) needs roughly 640-680px, so on a typical 1080p screen
+   (~900px viewport, 60vh = 540px available) the content is genuinely taller
+   than the box and MUST scroll. The scroll is necessary - the problem is only
+   that the DEFAULT scrollbar chrome looks cheap.
+
+   SOLUTION: keep the scroll fully functional, hide only the visual chrome.
+     - `scrollbar-width: none`  -> Firefox
+     - `::-webkit-scrollbar { display: none }` -> Chrome/Edge/Safari
+   Scrolling still works via wheel, trackpad, touch, keyboard (Tab/arrows) and
+   screen-reader virtual cursor. Nothing becomes unreachable.
+
+   NOTE: I am NOT using Tailwind's `scrollbar-none`/`scrollbar-thin` utilities
+   here on purpose - I verified earlier that this build does NOT emit any
+   `scrollbar-*` core plugin rules (checked the compiled CSS: zero matches), so
+   those classes would be dead code that silently does nothing. Plain CSS is
+   version-proof.
+   ========================================================================== */
+.auth-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none; /* legacy Edge/IE */
+}
+.auth-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }

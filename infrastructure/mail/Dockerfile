@@ -15,15 +15,32 @@
 #   Read karein:  docker compose exec mail cat /var/log/mail.log
 #
 # PRODUCTION MODE (POSTFIX_CAPTURE_ONLY=false)
-#   virtual_transport hat jata hai aur Postfix normal direct delivery karta
-#   hai. Iske liye zaroori hai:
+#   capturelog pipe transport hat jata hai aur Postfix normal direct delivery
+#   karta hai. Iske liye zaroori hai:
 #     1. Apna domain (e.g. wideo11.com) with MX record:
 #          IN MX 10 mail.wideo11.com
 #     2. Public IP par port 25 open
 #     3. SPF/DKIM/DMARC DNS records
 #   Ye sab infrastructure hai - koi PAID service nahi lagti.
 #
+#   >>> IMPORTANT - is host par port 25 BLOCKED hai <<<
+#     Verified: TCP 25 -> 1.1.1.1 = FAIL, par 587/465 = OPEN.
+#     Isliye sirf POSTFIX_CAPTURE_ONLY=false karna KAAFI NAHI hai. Bina
+#     relayhost ke Postfix seedha recipient ke MX par port 25 pe connect
+#     karega, wo connect hi nahi hoga, aur mail queue me atak kar bounce
+#     ho jayega. Inbox me kuch nahi aayega.
+#     Solution: POSTFIX_RELAYHOST set karo (587/2525 pe sunta hai).
+#   Hinglish: capture off karna akela kaafi nahi, relayhost bhi chahiye
+#
 # Hinglish comments: har block ka arth
+#
+# RELAYHOST note (naya):
+#   Agar POSTFIX_RELAYHOST set hai to ye real delivery ka asal raasta hai -
+#   Postfix seedha us host tak jaata hai (usually 587/2525 pe, jo port 25 ke
+#   mukable zyada tar open hota hai). Bina relayhost ke Postfix recipient ka
+#   MX khud dhoondhta hai aur port 25 pe jaata hai.
+#   Is host par port 25 blocked hai, isliye production ke liye relayhost
+#   lagana zaroori hai - warna email queue me hi atak jayega.
 FROM alpine:3.19
 
 # Postfix install karo
@@ -39,6 +56,11 @@ RUN apk add --no-cache postfix ca-certificates shadow
 ARG POSTFIX_HOSTNAME=mail.wideo11.local
 ARG POSTFIX_DOMAIN=wideo11.local
 ARG POSTFIX_CAPTURE_ONLY=true
+# RELAYHOST: jis doosre mail server tak Postfix apna mail bhejega.
+# Syntax: [smtp.provider.com]:587  (square bracket = MX lookup skip karo)
+# Khaali chhodne par relayhost= rehta hai - Postfix seedha recipient ke MX
+# par PORT 25 se connect karta hai.
+ARG POSTFIX_RELAYHOST=
 
 RUN set -eux; \
     # --- Identity ---
@@ -48,7 +70,11 @@ RUN set -eux; \
     # --- Kya yahan deliver karna hai ---
     # Khaali karna matlab "sirf internet par bhejo", local fallback nahi
     postconf -e "mydestination="; \
-    postconf -e "relayhost="; \
+    # relayhost: DEFAULT khali - Postfix seedha recipient ke MX par port 25 pe
+    # connect karega. Ye mode unhi host par kaam karta hai jahan outbound 25
+    # open hai. Jahan ISP/network port 25 block karta hai, wahan ye khaali
+    # chhodne par saara mail queue me atak jayega aur bounce hoga.
+    postconf -e "relayhost=${POSTFIX_RELAYHOST}"; \
     postconf -e "inet_interfaces=all"; \
     # --- Network permissions (DHOKA NAHI) ---
     # "mynetworks_style=host" sirf localhost ko allow karta tha, isliye doosre

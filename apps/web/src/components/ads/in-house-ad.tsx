@@ -88,7 +88,7 @@ export default function InHouseAd({ slotId, creative, onViewed }: InHouseAdProps
         {creative.ctaLabel ? (
           <button
             type="button"
-            className="mt-3 h-9 rounded-md bg-grafana-primary px-3.5 text-xs font-medium text-white transition-colors hover:bg-grafana-primary/85"
+            className="mt-3 h-9 rounded-md bg-grafana-primary px-3.5 text-xs font-medium text-ink transition-colors hover:bg-grafana-primary/85"
             onClick={() => {
               // CTA click bhi ek interaction hai
               confirmPresence();
@@ -117,7 +117,7 @@ export default function InHouseAd({ slotId, creative, onViewed }: InHouseAdProps
           <button
             type="button"
             onClick={confirmPresence}
-            className="rounded-md bg-grafana-primary px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-grafana-primary/85"
+            className="rounded-md bg-grafana-primary px-3.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-grafana-primary/85"
           >
             I am watching
           </button>
@@ -134,7 +134,7 @@ export default function InHouseAd({ slotId, creative, onViewed }: InHouseAdProps
           <button
             type="button"
             onClick={confirmPresence}
-            className="rounded-md bg-grafana-primary px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-grafana-primary/85"
+            className="rounded-md bg-grafana-primary px-3.5 py-1.5 text-xs font-medium text-ink transition-colors hover:bg-grafana-primary/85"
           >
             Start viewing
           </button>

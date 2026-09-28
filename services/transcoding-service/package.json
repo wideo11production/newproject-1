@@ -2,10 +2,10 @@
   "name": "transcoding-service",
   "version": "1.0.0",
   "description": "Video transcoding service for converting uploaded videos to HLS format",
-  "main": "cmd/main.go",
+  "main": "cmd/transcoding-service/main.go",
   "scripts": {
-    "start": "go run cmd/main.go",
-    "build": "go build -o transcoding-service cmd/main.go"
+    "start": "go run ./cmd/transcoding-service",
+    "build": "go build -o transcoding-service ./cmd/transcoding-service"
   },
   "dependencies": {}
 }

@@ -31,6 +31,64 @@ import type { Config } from 'tailwindcss';
 export const enterpriseTheme = {
   extend: {
     colors: {
+      // ---- THEME-AWARE GRAY SCALE (light/dark dono me chalti hai) ----
+      //
+      // KYUN YE ZAROORI HAI:
+      // Poore app me ~450 jagah hardcoded `bg-gray-950` / `text-gray-400` /
+      // `border-gray-800` jaise classes likhe gaye hain. Ye Tailwind ke STATIC
+      // hex values the, isliye `.dark` class toggle karne se ye KABHI nahi
+      // badal-te the - sirf wahi elements badle jo CSS variables use karte
+      // the (shadcn tokens). Isi wajah se light mode me "sirf kuch cheezein"
+      // hi badalti thi - baaki app dark hi rehta tha.
+      //
+      // AB: gray scale CSS variables se aati hai. `:root` (light) aur `.dark`
+      // me in values ko alag-alag define kiya gaya hai, to ek hi class list
+      // poori app ko light AUR dark dono me sahi dikhati hai - bina 450 files
+      // me ek bhi class badle.
+      //
+      // !!!!! BAHUT ZAROORI: RGB CHANNEL FORMAT !!!!!
+      // Values ko `3 7 18` (space-separated channels) me rakhna ZAROORI hai,
+      // `3 7 18 / 0.6` ya `hsl(...)` NAHI.
+      //
+      // Agar `var(--app-bg)` ko poora color value (`#030712` ya `hsl(...)`)
+      // ki tarah doge, to Tailwind OPACITY MODIFIER (`bg-gray-950/60`,
+      // `bg-gray-900/70`) ko resolve hi nahi kar pata - wo class CSS me
+      // generate hi nahi hoti, chup-chaap. Isse card ka background, input ka
+      // background, sab gayab ho jate hain aur input me browser ka default
+      // light background aa jaata hai (dark theme pe bhi).
+      //
+      // `<alpha-value>` placeholder hi wo magic hai jo Tailwind ko
+      // `rgb(var(--app-bg) / 0.6)` banane deta hai - yahi shadcn ka bhi
+      // standard pattern hai. Isliye ye file `hsl(var(--...))` wale purane
+      // tokens se bhi IMPORTANT hai.
+      //
+      // Note ki text colors INVERT hote hain:
+      //   dark  mode: gray-400 = halka (156 163 175) - dark bg pe readable
+      //   light mode: gray-400 = gehra (107 114 128) - white bg pe readable
+      // Isi wajah se "kam number = zyada contrast against surface" dono
+      // themes me sahi rehta hai.
+      gray: {
+        50: 'rgb(var(--app-ink) / <alpha-value>)',
+        100: 'rgb(var(--app-ink) / <alpha-value>)',
+        200: 'rgb(var(--app-ink) / <alpha-value>)',
+        300: 'rgb(var(--app-fg-strong) / <alpha-value>)',
+        400: 'rgb(var(--app-fg-muted) / <alpha-value>)',
+        500: 'rgb(var(--app-fg-subtle) / <alpha-value>)',
+        600: 'rgb(var(--app-border-strong) / <alpha-value>)',
+        700: 'rgb(var(--app-border) / <alpha-value>)',
+        800: 'rgb(var(--app-surface-raised) / <alpha-value>)',
+        900: 'rgb(var(--app-surface) / <alpha-value>)',
+        950: 'rgb(var(--app-bg) / <alpha-value>)',
+      },
+
+      // ---- APP INK (primary text on app background) ----
+      //
+      // `text-white` ko humne JAAN-BUJH KAR nahi badla, kyunki wo ~90 jagah
+      // colored buttons (bg-blue-600 etc.) pe text ke liye use hota hai -
+      // unhe hamesha white hi rehna chahiye. Isliye app-background pe primary
+      // text ke liye dedicated `ink` token banaya gaya hai.
+      ink: 'rgb(var(--app-ink) / <alpha-value>)',
+
       // ---- shadcn semantic tokens (CSS variables se) ----
       border: 'hsl(var(--border))',
       input: 'hsl(var(--input))',

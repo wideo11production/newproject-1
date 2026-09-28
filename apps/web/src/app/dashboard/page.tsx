@@ -83,11 +83,11 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Link href="/">
-                <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white">
+                <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink">
                   <BarChart3 className="h-5 w-5" />
                 </Button>
               </Link>
-              <h1 className="text-xl font-semibold text-white">{dashboard.title}</h1>
+              <h1 className="text-xl font-semibold text-ink">{dashboard.title}</h1>
               <Badge variant="outline" className="border-gray-700 text-gray-400">
                 {dashboard.panels.length} panels
               </Badge>
@@ -105,13 +105,13 @@ export default function DashboardPage() {
                 <option value="1m">1m</option>
                 <option value="5m">5m</option>
               </select>
-              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
                 <Save className="h-4 w-4 mr-1" /> Save
               </Button>
-              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
                 <Share2 className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-white hover:bg-gray-800">
+              <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
                 <Settings className="h-4 w-4" />
               </Button>
             </div>
@@ -155,7 +155,7 @@ function DashboardStatCard({ card }: { card: StatCardData }) {
         <Icon className={`h-4 w-4 ${card.iconColor}`} />
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold text-white">{card.value}</div>
+        <div className="text-2xl font-bold text-ink">{card.value}</div>
         <p className={`text-xs ${card.change.startsWith('+') ? 'text-green-400' : 'text-red-400'}`}>
           {card.change} from last period
         </p>

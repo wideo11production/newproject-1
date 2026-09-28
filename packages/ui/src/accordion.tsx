@@ -5,6 +5,43 @@ import { cn } from "./lib/utils";
 
 const Accordion = AccordionPrimitive.Root;
 
+/**
+ * AccordionItem - ek collapsible item ka wrapper (borders + styling)
+ *
+ * ---- BUG FIX (critically broken pehle) ----
+ * Ye component PEHLE ye render karta tha:
+ *
+ *     <AccordionPrimitive.Item {...props}>
+ *       <Header><Trigger /></Header>     <-- apna KHUD ka trigger
+ *     </AccordionPrimitive.Item>
+ *
+ * `...props` me `children` jaata tha, matlab consumer ka
+ * `<AccordionTrigger>` + `<AccordionContent>` bhi `Item` ke children ban
+ * jaate the. Radix `Item` ko exactly `[Header, Content]` chahiye - extra
+ * children milne par wo unhe DISCARD kar deta hai.
+ *
+ * Net result: consumer ka trigger + content kabhi DOM me nahi pahunchte.
+ * Sirf ek KHALI trigger (sirf chevron icon, koi text nahi) render hota tha.
+ * Iska matlab: koi bhi standard shadcn usage
+ * (`<AccordionItem><AccordionTrigger>Q</AccordionTrigger><AccordionContent>A</AccordionContent></AccordionItem>`)
+ * silently ek KHAALI, text-less accordion de raha tha - jo screen readers
+ * ke liye bekaar thi (accessible name zero).
+ *
+ * NOTE: ye tab tak unnoticed raha kyunki build/TS kuch nahi todta - sirf
+ * runtime DOM galat banta hai. Isliye is type ke bugs ke liye rendered
+ * HTML verify karna zaroori hai, typecheck kaafi nahi.
+ *
+ * THE FIX: `AccordionItem` ab pure pass-through wrapper hai (shadcn ka
+ * canonical behaviour). Consumer apna `AccordionTrigger` + `AccordionContent`
+ * children ke roop me deta hai, aur Radix unhe sahi jagah mount karta hai
+ * ([Header, Content]) - jisse aria-expanded, aria-controls, keyboard nav
+ * sab sahi se kaam karte hain.
+ *
+ * NOTE (breaking change surface): repo me is component ka sirf ek consumer
+ * tha (`apps/web/src/components/landing/faq-portal.tsx`), aur wo already
+ * standard shadcn API use kar raha tha - isliye ye fix usko theek karta
+ * hai, kisi aur ko toota nahi. (Verified: full-repo grep)
+ */
 const AccordionItem = React.forwardRef<
   React.ElementRef<typeof AccordionPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof AccordionPrimitive.Item>
@@ -13,11 +50,7 @@ const AccordionItem = React.forwardRef<
     ref={ref}
     className={cn("border-b", className)}
     {...props}
-  >
-    <AccordionPrimitive.Header>
-      <AccordionTrigger />
-    </AccordionPrimitive.Header>
-  </AccordionPrimitive.Item>
+  />
 ));
 AccordionItem.displayName = "AccordionItem";
 

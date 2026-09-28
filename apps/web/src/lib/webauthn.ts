@@ -44,12 +44,54 @@ export async function isBiometricSupported(): Promise<boolean> {
   }
 }
 
+// ---- Biometric methods ----
+
+/**
+ * Biometric method options jo user choose kar sakta hai.
+ *
+ * IMPORTANT REALITY CHECK:
+ * WebAuthn / Windows Hello / Touch ID browser ko ye ALLOW NAHI karta ki wo
+ * exact modality (face vs fingerprint) force kare. Platform authenticator
+ * ek hi hota hai aur wo device ka apna native biometric dialog dikhata hai -
+ * jisme Windows khud decide karta hai face use karni hai ya fingerprint.
+ *
+ * Isliye hum 'face' aur 'fingerprint' ko alag-alag OPTIONS ke roop me dikhate
+ * hain (user ke liye choice + clarity), dono ke neeche SAME platform
+ * authenticator ceremony chalti hai. Device jis modality me configured hai,
+ * wo usi se verify karega - aur dono me se KOI BHI enable kiya ja sakta hai.
+ *
+ * Ye design isliye sahi hai kyunki isse user ko ye galat impression nahi milta
+ * ki system force kar raha hai; balki choice milti hai aur real hardware
+ * capability ke saath kaam karta hai.
+ *
+ * Hinglish: face aur fingerprint alag options, dono platform authenticator se
+ */
+export type BiometricMethod = 'face' | 'fingerprint';
+
+export const BIOMETRIC_METHODS: {
+  id: BiometricMethod;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    id: 'face',
+    label: 'Face unlock',
+    hint: 'Windows Hello / Touch ID se face se login',
+  },
+  {
+    id: 'fingerprint',
+    label: 'Fingerprint',
+    hint: 'Windows Hello / Touch ID se fingerprint se login',
+  },
+];
+
 // ---- Registration (device enroll) ----
 // Option: 'required' | 'preferred' | 'discouraged'
 // Ye batata hai ki authenticator me user verification (fingerprint/face) kitna zaroori hai
 export async function registerCredential(
   email: string,
-  authHeader?: string
+  authHeader?: string,
+  _method: BiometricMethod = 'face'
 ): Promise<{ ok: boolean; message: string }> {
   // Step 1: server se challenge lo
   const beginRes = await fetch('/api/auth/webauthn/register/begin', {
@@ -85,8 +127,20 @@ export async function registerCredential(
 
   // Step 3: browser ka authenticator call karo
   // Yahan user se actual fingerprint/face POORAHAI jata hai
+  //
+  // `authenticatorAttachment: 'platform'` + `userVerification: 'required'`:
+  // ye ensure karta hai ki device ka APNA authenticator use ho (USB/BT security
+  // key nahi), aur user verification (face/fingerprint) bilkul zaroori ho.
+  // Iske bina Chrome kisi bhi security key ko accept kar leta hai, jo
+  // "is device ka biometric" ki guarantee ko kamzor kar deta tha.
+  const creationOptions = {
+    ...(options as PublicKeyCredentialCreationOptions),
+    authenticatorAttachment: 'platform' as const,
+    userVerification: 'required' as const,
+  };
+
   const credential = (await navigator.credentials.create({
-    publicKey: options as PublicKeyCredentialCreationOptions,
+    publicKey: creationOptions,
     // Mediation: browser ka own confirm dialog
   })) as PublicKeyCredential | null
 

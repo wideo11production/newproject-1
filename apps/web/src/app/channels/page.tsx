@@ -16,7 +16,7 @@ export default function ChannelsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-white">Channels</h1>
+        <h1 className="text-3xl font-bold text-ink">Channels</h1>
         <p className="text-gray-400 mt-1">Follow channels and creators</p>
       </div>
 

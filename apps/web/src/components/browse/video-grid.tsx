@@ -16,7 +16,7 @@ export default function VideoGrid() {
               fill
               className="object-cover group-hover:scale-105 transition-transform"
             />
-            <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1 rounded">
+            <div className="absolute bottom-1 right-1 bg-black/70 text-ink text-xs px-1 rounded">
               {video.duration}
             </div>
           </div>

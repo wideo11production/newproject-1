@@ -11,8 +11,12 @@
 // Hinglish comments: har block ka arth
 import { NextResponse } from 'next/server';
 
+// NOTE: bracket access `['AUTH_INTERNAL_URL']` (dot nahi) isliye ki `packages/ui`
+// ka tsconfig me `noPropertyAccessFromIndexSignature` ON hai. `process.env` ka
+// type ek index signature hai, isliye dot notation par TS4111 error aata hai
+// aur `tsc` (turbo build) fail ho jata tha.
 const AUTH_SERVICE_URL =
-  process.env.AUTH_INTERNAL_URL ?? 'http://auth-service:8085';
+  process.env['AUTH_INTERNAL_URL'] ?? 'http://auth-service:8085';
 
 interface ClickEventInput {
   timestamp: string;

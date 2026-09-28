@@ -263,7 +263,7 @@ export default function SecuritySetupGate({
         <CardHeader className="space-y-3 px-8 pt-8">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 text-blue-400" />
-            <CardTitle className="text-2xl font-semibold tracking-tight text-white">
+            <CardTitle className="text-2xl font-semibold tracking-tight text-ink">
               Mandatory Security Setup
             </CardTitle>
           </div>
@@ -313,7 +313,7 @@ export default function SecuritySetupGate({
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                   placeholder="******"
-                  className="h-11 border-gray-700 bg-gray-950 text-white"
+                  className="h-11 border-gray-700 bg-gray-950 text-ink"
                 />
               </div>
               <div className="space-y-2">
@@ -326,7 +326,7 @@ export default function SecuritySetupGate({
                   value={confirmPin}
                   onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
                   placeholder="******"
-                  className="h-11 border-gray-700 bg-gray-950 text-white"
+                  className="h-11 border-gray-700 bg-gray-950 text-ink"
                 />
               </div>
               <Button
@@ -428,7 +428,7 @@ export default function SecuritySetupGate({
                   <select
                     value={picked[pos] ?? ''}
                     onChange={(e) => setPicked((p) => ({ ...p, [pos]: e.target.value }))}
-                    className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
+                    className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-ink focus:border-blue-500 focus:outline-none"
                   >
                     <option value="">Select a question...</option>
                     {availableQuestions.map((q) => (
@@ -443,7 +443,7 @@ export default function SecuritySetupGate({
                       value={answers[pos] ?? ''}
                       onChange={(e) => setAnswers((a) => ({ ...a, [pos]: e.target.value }))}
                       placeholder="Your answer"
-                      className="h-10 border-gray-700 bg-gray-950 text-sm text-white"
+                      className="h-10 border-gray-700 bg-gray-950 text-sm text-ink"
                     />
                   ) : null}
                 </div>

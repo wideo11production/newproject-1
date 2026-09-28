@@ -5,11 +5,12 @@
 // Pehle har page alag markup likhta tha, isliye styling drift hoti thi.
 //
 // HEIGHT SYMMETRY:
-// Register card me 5 fields + strength meter + 2 checkbox panels hain, login me
-// sirf 2 fields. AuthShell par `min-h-[600px]` hai, aur neeche hum "Forgot
-// password" row + "Security" note panel add kiya hai - ye naturally card ko
-// fill karta hai jisse dono cards baseline par align hote hain, bina kuch
-// overflow ya artificial spacer ke.
+// AuthShell ka card ab FIXED `h-[500px]` hai (pehle `min-h-[600px]` tha, phir
+// temporarily hata diya gaya tha - dono baar me scrollbar aa raha tha ya card
+// content se ubhar jaata tha). Ab login sirf 2 fields ka hai jo 500px me aaram
+// se aa jaate hain. Neeche ka "Forgot password" row + "Security note" panel
+// ab FILLER nahi, balki real content (trust note) hai - dono cards phir bhi
+// visually match karte hain bina artificial spacer ke.
 //
 // BACKEND SAFETY: Koi backend route, GORM mapping, Postfix ya purge logic
 // touch NAHI kiya gaya. Ye sirf UI layer hai.
@@ -198,8 +199,12 @@ export default function LoginPage() {
   // ---- Lockout: 3 failed password -> PIN verification ----
   if (pinRequired) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-10">
-        <AuthShell
+      // NOTE: pehle ye `<div className="flex min-h-screen ... py-10">`
+      // AuthShell ke AAGE wrap karta tha. AuthShell apne aap `min-h-screen`
+      // + `px-4 py-6 sm:py-8` de raha hai, to ye wrapper double padding aur
+      // double min-height de raha tha. Ab AuthShell akela bahar hai - wahi
+      // styling register/login main form se bhi match karta hai.
+      <AuthShell
           title="Security verification required"
           description="Too many failed attempts. Enter your 6-digit security PIN to continue."
           footer={
@@ -271,8 +276,7 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-        </AuthShell>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -281,8 +285,9 @@ export default function LoginPage() {
     const mins = Math.floor(countdown / 60);
     const secs = countdown % 60;
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-10">
-        <AuthShell
+      // NOTE: ye bhi pehle ka double-wrapper tha - AuthShell khud
+      // `min-h-screen` + padding de raha hai. Ab AuthShell akela bahar hai.
+      <AuthShell
           title="Account temporarily blocked"
           description="Too many failed security PIN attempts."
           footer={
@@ -301,21 +306,20 @@ export default function LoginPage() {
         >
           <div className="space-y-4 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-600/50 bg-red-950/40">
-              <span className="font-mono text-xl font-bold text-red-400">
+              <span className="font-mono text-xl font-bold text-[#f2495c]">
                 {mins}:{secs.toString().padStart(2, '0')}
               </span>
             </div>
-            <p className="animate-pulse text-sm font-semibold text-red-400">
+            <p className="animate-pulse text-sm font-semibold text-[#f2495c]">
               Warning: Account will be blocked if biometric credentials are not verified
               within 3 minutes.
             </p>
-            <p className="text-xs leading-relaxed text-gray-500">
+            <p className="text-xs leading-relaxed text-[#9fa7b3]">
               An incorrect security PIN was entered. The countdown resets once it
               reaches zero.
             </p>
           </div>
-        </AuthShell>
-      </div>
+      </AuthShell>
     );
   }
 
@@ -337,7 +341,7 @@ export default function LoginPage() {
       title="Welcome back"
       description="Log in to manage your channels, catalog and payouts."
       footer={
-        <p className="text-center text-sm text-gray-400">
+        <p className="text-center text-sm text-[#9fa7b3]">
           New to Wideo11?{' '}
           <Link
             href="/auth/register"
@@ -373,14 +377,14 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Your password"
-              className={`${INPUT_CLASS} pr-11`}
+              className={`${INPUT_CLASS} pr-10`}
               aria-invalid={Boolean(errors.password)}
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
               aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-md text-gray-400 transition-colors hover:text-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+              className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -390,14 +394,15 @@ export default function LoginPage() {
         {/* Forgot password row - register form ki "options" row se visually
             balanced lagta hai, aur card height symmetry me help karta hai */}
         <div className="flex items-center justify-end pt-0.5">
-          <span className="text-xs text-gray-500">Forgot password?</span>
+          <span className="text-xs text-[#9fa7b3]">Forgot password?</span>
         </div>
 
-        {/* Server message */}
+        {/* Server message - `p-2.5` + `text-xs` (pehle `p-3` + `text-sm`)
+            taaki 500px card me sab kuch samet jaaye. */}
         {message ? (
           <div
             role="alert"
-            className="flex items-start gap-2.5 rounded-lg border border-red-700/60 bg-red-950/40 p-3 text-sm text-red-300"
+            className="flex items-start gap-2 rounded-lg border border-red-700/60 bg-red-950/40 p-2.5 text-xs text-red-300"
           >
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span className="leading-relaxed">{message}</span>
@@ -421,18 +426,20 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      {/* Security note panel - ye register form ke checkbox panels jaisa height
-          fill karta hai, jisse dono cards baseline par align hote hain.
-          Ye card symmetry ke liye hai, koi naya feature nahi. */}
-      <div className="mt-6 flex items-start gap-3 rounded-lg border border-gray-800 bg-gray-950/40 p-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-gray-700 bg-gray-800/60">
-          <Lock className="h-4 w-4 text-gray-400" />
+      {/* Security note panel - trust/assurance content (bcrypt note).
+          NOTE: iska PEHLE ka kaam register form ki height se match karna tha
+          (dono cards baseline aligned dikhein). Ab AuthShell ka card FIXED
+          `h-[500px]` hai, to ye filler ki zaroorat nahi - ye ab apne aap
+          content ki height leta hai. Compact kar diya gaya hai. */}
+      <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#2c3235] bg-[#0d0f11]/40 p-2.5">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#2c3235] bg-[#1f2227]">
+          <Lock className="h-3.5 w-3.5 text-[#9fa7b3]" />
         </div>
-        <div className="space-y-1">
-          <p className="text-sm font-medium leading-none text-gray-300">
+        <div className="space-y-0.5">
+          <p className="text-xs font-medium leading-none text-[#d8d9da]">
             Secure sign in
           </p>
-          <p className="text-xs leading-relaxed text-gray-500">
+          <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
             Passwords are hashed with bcrypt. We never store or log your plain
             text password.
           </p>

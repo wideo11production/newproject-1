@@ -53,7 +53,7 @@ function AnalyticsMetrics() {
                 <span className="text-xs text-gray-500">{metric.title}</span>
                 <Icon className="h-3 w-3 text-gray-500" />
               </div>
-              <div className="text-lg font-bold text-white">{metric.value.toLocaleString()}</div>
+              <div className="text-lg font-bold text-ink">{metric.value.toLocaleString()}</div>
               <Badge variant="secondary" className="text-xs mt-1 bg-green-500/10 text-green-400 border-green-500/20">
                 {metric.trend}
               </Badge>

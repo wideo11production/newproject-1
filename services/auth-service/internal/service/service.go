@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,20 @@ var (
 	ErrPINLocked          = errors.New("PIN is locked")
 	ErrInvalidPIN         = errors.New("invalid PIN")
 	ErrTooManyAttempts    = errors.New("too many PIN attempts")
+
+	// ---- Username errors (migration 003) ----
+	// ErrInvalidUsername: format galat hai (length 3-30 ya invalid chars).
+	// Ye 400-level error hai - user ko batana padega ki kya theek karna hai.
+	ErrInvalidUsername = errors.New("username must be 3-30 characters using letters, numbers, underscore, dot or hyphen")
+
+	// ErrUsernameTaken: username already kisi aur ka hai.
+	// Ye 409-level error hai (conflict), email duplicate jaisa hi.
+	//
+	// KYUN YE ZAROORI HAI: bina iske, duplicate username par Postgres UNIQUE
+	// index insert ko reject karega aur handler generic 500 "registration
+	// failed" dega - user ko samajh nahi aayega kya karna hai. Isse pehle
+	// check karke clear message dete hain.
+	ErrUsernameTaken = errors.New("that username is already taken")
 
 	// ErrUserExists repository layer ka error hai, par handler use service package
 	// se reference karta hai. Ye alias dono layers ko ek jaisa rakhta hai
@@ -54,18 +69,18 @@ func (s *AuthService) ValidateAccessToken(accessToken string) (*token.Claims, er
 }
 
 type AuthService struct {
-	cfg           *config.Config
-	userRepo      repository.UserRepository
-	sessionRepo   repository.SessionRepository
-	deviceRepo    repository.DeviceRepository
-	pinRepo       repository.PINRepository
-	tokenRepo     repository.RefreshTokenRepository
-	tokenService  *token.TokenService
-	passwordSvc   *password.PasswordService
+	cfg          *config.Config
+	userRepo     repository.UserRepository
+	sessionRepo  repository.SessionRepository
+	deviceRepo   repository.DeviceRepository
+	pinRepo      repository.PINRepository
+	tokenRepo    repository.RefreshTokenRepository
+	tokenService *token.TokenService
+	passwordSvc  *password.PasswordService
 	// verifRepo verification tokens manage karta hai (30-min purge lifecycle)
-	verifRepo     repository.VerificationTokenRepository
+	verifRepo repository.VerificationTokenRepository
 	// emailer verification email bhejne ke liye (interface type - circular dep se bachne ke liye)
-	emailer       emailDispatcher
+	emailer emailDispatcher
 }
 
 func NewAuthService(cfg *config.Config, userRepo repository.UserRepository, sessionRepo repository.SessionRepository,
@@ -92,12 +107,44 @@ func (s *AuthService) SetVerificationRepo(r repository.VerificationTokenReposito
 }
 
 func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, deviceInfo model.DeviceInfo) (*model.User, *model.TokenPair, error) {
+	// ---- USERNAME NORMALIZE + VALIDATE (new in migration 003) ----
+	// Username public handle hai, isliye normalize karna zaroori hai:
+	//   - trim + lowercase -> "Aarav" aur "aarav" ek hi account na banein
+	//   - validation: 3-30 chars, sirf letters/digits/underscore/dot/dash
+	// Ye normalization SAME rule frontend se bhi chalni chahiye (form me
+	// live validation hai) - par server par bhi enforce karna zaroori hai
+	// kyunki client validation bypass ho sakta hai.
+	username := strings.ToLower(strings.TrimSpace(req.Username))
+	if len(username) < 3 || len(username) > 30 {
+		return nil, nil, ErrInvalidUsername
+	}
+	for _, r := range username {
+		isLower := r >= 'a' && r <= 'z'
+		isDigit := r >= '0' && r <= '9'
+		isSpecial := r == '_' || r == '.' || r == '-'
+		if !isLower && !isDigit && !isSpecial {
+			return nil, nil, ErrInvalidUsername
+		}
+	}
+
 	// Check if user already exists
 	// Postgres se duplicate email check - user ko variable me store karne ki zaroorat
 	// nahi, sirf "exist karta hai ya nahi" ye jaanna hai. Isliye _ use kiya gaya hai.
 	// Hinglish: duplicate email check taaki same email se dobara account na ban sake
 	if _, err := s.userRepo.GetByEmail(ctx, req.Email); err == nil {
 		return nil, nil, repository.ErrUserExists
+	} else if !errors.Is(err, repository.ErrUserNotFound) {
+		return nil, nil, err
+	}
+
+	// ---- DUPLICATE USERNAME CHECK ----
+	// `idx_users_username` par UNIQUE index hai. Agar hum ye check nahi karte,
+	// to duplicate username par Postgres insert REJECT karega aur handler
+	// generic 500 "registration failed" return karega - jo user ke liye
+	// useless error hai (kya karu? batao nahi).
+	// Isliye pehle se check karke ek CLEAR error dete hain.
+	if _, err := s.userRepo.GetByUsername(ctx, username); err == nil {
+		return nil, nil, ErrUsernameTaken
 	} else if !errors.Is(err, repository.ErrUserNotFound) {
 		return nil, nil, err
 	}
@@ -113,6 +160,7 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		Email:        req.Email,
 		PasswordHash: hashedPassword,
 		FullName:     req.FullName,
+		Username:     username,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -187,7 +235,7 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 
 	session.AccessToken = password.HashToken(accessToken)
 	// SECURITY: raw JWT DB me store karna unsafe hai (DB leak = session hijack) + column size overflow.
-// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
+	// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
 	session.RefreshToken = password.HashToken(refreshToken)
 	session.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
@@ -246,6 +294,28 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 		return nil, nil, err
 	}
 
+	// SECURITY FIX: email verify hone se PEHLE login BAND karna zaroori hai.
+	//
+	// BUG (kyun bug tha): ye check KABHI exist hi nahi tha. Isliye koi bhi user
+	// jo signup bhi kar chuka tha aur jiska email deliver bhi nahi hua (ya user
+	// ne link click hi nahi kiya), wo seedha LOGIN kar sakta tha aur usse full
+	// token pair mil jaata tha. `ErrUserNotVerified` pehle se DECLARED tha aur
+	// handler me uska 403 mapping bhi likha hua tha (handler.go se
+	// "please verify your email"), par yahan kahin bhi `return` nahi hota tha -
+	// wo 403 branch poori tarah DEAD CODE tha.
+	//
+	// ORDER: ye check password verify hone ke BAAD hai, isliye PEHLE karne ka
+	// koi nahi kiya. Agar ye password se pehle hota, to koi bhi attacker
+	// bina password jaane hi pata kar leta ki ye email registered hai aur
+	// unverified hai - ye ACCOUNT ENUMERATION ka leak hota.
+	// Ab sequence: galat password -> ErrInvalidCredentials (401),
+	// sahi password + unverified email -> ErrUserNotVerified (403).
+	//
+	// Hinglish: email verify nahi hua to login nahi hona chahiye - ab check laga hai
+	if !user.IsVerified {
+		return nil, nil, ErrUserNotVerified
+	}
+
 	// Get or create device
 	var device *model.Device
 	if deviceInfo.Fingerprint != "" {
@@ -300,7 +370,7 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 
 	session.AccessToken = password.HashToken(accessToken)
 	// SECURITY: raw JWT DB me store karna unsafe hai (DB leak = session hijack) + column size overflow.
-// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
+	// Hinglish: sirf SHA-256 hash store karte hain, raw token kabhi DB me nahi jaata
 	session.RefreshToken = password.HashToken(refreshToken)
 	session.ExpiresAt = time.Now().Add(time.Duration(s.cfg.JWT.AccessTokenTTL) * time.Minute)
 
@@ -368,6 +438,16 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 
 	if !user.IsActive {
 		return nil, ErrUserInactive
+	}
+
+	// SECURITY FIX (same gap as Login): refresh token path me bhi verified
+	// check missing tha. Register karte waqt auth-service ek poora token pair
+	// bana ke deta hai (handler.go 201 + tokens), aur wo refresh token se
+	// continuously naye access tokens mint hote rehte - to login gate lagane
+	// se sirf ek moment ke liye rokna kaafi nahi tha. Ye gate zaroori hai taaki
+	// unverified account ka token refresh se renew na ho sake.
+	if !user.IsVerified {
+		return nil, ErrUserNotVerified
 	}
 
 	// Revoke old session and refresh token

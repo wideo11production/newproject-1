@@ -130,7 +130,17 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 # Set working directory
 WORKDIR /app
 
-# web app ke paas public/ assets directory nahi hai, isliye kuch copy nahi karte
+# web app ke `public/` assets (brand.svg, placeholder.svg) runner stage me
+# niche `COPY --from=builder ... /app/apps/web/public` se copy hote hain
+
+# FIX: `public/` ko runner stage me copy karna ZAROORI hai.
+#
+# Standalone output apne aap me sirf `.next` bundle uthaata hai - `public/`
+# ka koi hissa nahi. Isliye pehle ye line missing thi, aur result me:
+#   - /brand.svg   -> 404  (auth card ka logo toota hua dikhta tha)
+#   - /placeholder.svg -> 404
+# Standalone trace `public/` ko bundle nahi karta, isliye explicit COPY zaroori hai.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 
 # Copy Next.js standalone output - self-contained minimal server bundle
 # Standalone output apne aap me required node_modules include karta hai, isliye

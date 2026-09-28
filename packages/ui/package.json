@@ -44,7 +44,10 @@
     "./alert-dialog": "./src/alert-dialog.tsx",
     "./toggle": "./src/toggle.tsx",
     "./toggle-group": "./src/toggle-group.tsx",
-    "./lib/utils": "./lib/utils.ts"
+    "./brand": "./src/brand/index.ts",
+    "./brand/characters": "./src/brand/characters.tsx",
+    "./brand/characters-manifest": "./src/brand/characters-manifest.ts",
+    "./lib/utils": "./src/lib/utils.ts"
   },
   "scripts": {
     "build": "tsc",
