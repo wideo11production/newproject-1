@@ -60,6 +60,48 @@ function updateGlobalMetrics(isAuthenticated: boolean, isSurge: boolean) {
 }
 
 /**
+ * RATE LIMIT CONFIG - per route type
+ *
+ * ---- YE VALUES KABHI 1/60s NAHI HONI CHAHIYE ----
+ * Pehle yahan hardcoded `if (rateData.count > 1)` tha, yaani 60 second
+ * me DOOSRA request hi 429 "Too many attempts" throw kar deta tha.
+ *
+ * Ye real users ko lock kar raha tha, sirf bots ko nahi:
+ *   register (1st) -> email kholo -> verify link click (2nd) = 429
+ *   galat password -> sahi password retry                  = 429
+ * Matlab ek normal signup flow hi break ho jata tha. User ne ise
+ * "Too many attempts" error ke roop me report kiya.
+ *
+ * ---- NAYA APPROACH ----
+ * Har route type ka apna budget hai. Credential stuffing defense ZAROORI
+ * hai, par budget aisa hona chahiye jo legit user ko block na kare:
+ *
+ *   registration : 3 per 5 min  (mass account creation rokna hai - strict)
+ *   login        : 8 per min    (typo + retry allowed, brute force nahi)
+ *   verify       : 10 per min   (link clicks safe hain; user multiple
+ *                                baar click kar sakta hai)
+ *   auth (other) : 20 per min   (webauthn ceremonies etc.)
+ *
+ * Verify ko alag (generous) bucket dena zaroori hai kyunki:
+ *   - verification link email client me click hota hai (guaranteed follow-up)
+ *   - 30-min token window hai; user ko baar baar try karne ka option milna
+ *     chahiye warna koi genuine miss hone par account permanently purge ho
+ *     jayega (aur resend ka koi route nahi hai)
+ *
+ * Window bhi per-route rakha hai - registration ka 5-minute window ek
+ * 5-minute timer use karta hai, baaki 1-minute.
+ */
+const RATE_LIMITS: Record<
+  'registration' | 'login' | 'auth' | 'verify',
+  { max: number; windowMs: number }
+> = {
+  registration: { max: 3, windowMs: 5 * 60 * 1000 },
+  login: { max: 8, windowMs: 60 * 1000 },
+  verify: { max: 10, windowMs: 60 * 1000 },
+  auth: { max: 20, windowMs: 60 * 1000 },
+};
+
+/**
  * Get adaptive scaling decision for GKE
  * Returns true if scaling should proceed based on auth load
  */
@@ -75,25 +117,26 @@ export function shouldScaleGKE(): boolean {
 /**
  * Check and enforce adaptive rate limit for authentication routes
  * Returns NextResponse with 429 if limit exceeded, null if allowed
- * 
+ *
  * @param request - Incoming NextRequest
- * @param routeType - 'registration' | 'login' | 'auth'
+ * @param routeType - route bucket (drives max + window)
  * @param isAuthenticated - Whether the request has valid auth
  * @returns NextResponse | null
  */
 export function checkAuthRateLimit(
-  request: NextRequest, 
-  routeType: 'registration' | 'login' | 'auth',
+  request: NextRequest,
+  routeType: 'registration' | 'login' | 'auth' | 'verify',
   isAuthenticated: boolean = false
 ): NextResponse | null {
   // Get client IP - check headers for proxy/load balancer
   const forwardedFor = request.headers.get('x-forwarded-for');
   const realIP = request.headers.get('x-real-ip');
   const clientIP = forwardedFor?.split(',')[0]?.trim() || realIP || request.ip || 'unknown';
-  
+
   // Rate limit key: IP + route type for granular control
   const rateLimitKey = `${clientIP}:${routeType}`;
   const now = Date.now();
+  const { max, windowMs } = RATE_LIMITS[routeType];
   
   // Get or create rate limit data for this IP
   let rateData = rateLimitStore.get(rateLimitKey);
@@ -111,8 +154,8 @@ export function checkAuthRateLimit(
     rateLimitStore.set(rateLimitKey, rateData);
   }
   
-  // Check if current window has expired (60 seconds)
-  if (now - rateData.windowStart > 60000) {
+  // Check if current window has expired
+  if (now - rateData.windowStart > windowMs) {
     // Window expired - reset for new window
     rateData.count = 0;
     rateData.windowStart = now;
@@ -128,7 +171,9 @@ export function checkAuthRateLimit(
   rateData.lastRequest = now;
   
   // Check for surge: multiple requests from same IP in short time
-  const isSurge = rateData.count > 1 && !isAuthenticated;
+  // NOTE: abhi surge tabhi maana jaata hai jab budget ACTUALLY cross ho,
+  // na ki har doosre request pe (pehle `count > 1` tha - bahut aggressive).
+  const isSurge = rateData.count > max && !isAuthenticated;
   if (isSurge) {
     rateData.surgeCount++;
   }
@@ -140,31 +185,33 @@ export function checkAuthRateLimit(
   // 1. If unauthenticated surge -> 429 + flag IP + drop connection
   // 2. If authenticated load increasing -> allow (GKE will scale)
   
-  if (rateData.count > 1) {
+  if (rateData.count > max) {
     // Flag the IP for suspicious activity
     rateData.flagged = true;
     
     if (!isAuthenticated) {
-      // UNAUTHENTICATED SURGE: Drop connection, 429, flag IP
+      // BUDGET CROSSED: 429 + flag IP
       // Log the violation for security monitoring
-      console.warn(`[RATE-LIMIT] UNAUTHENTICATED SURGE: IP ${clientIP} exceeded limit on ${routeType} route. Count: ${rateData.count}, Flagged: true`);
+      console.warn(`[RATE-LIMIT] SURGE: IP ${clientIP} exceeded limit on ${routeType} route. Count: ${rateData.count}/${max}, Flagged: true`);
+      
+      const retryAfterSec = Math.ceil(windowMs / 1000);
       
       // Return 429 Too Many Requests with Retry-After header
       const response = NextResponse.json(
         { 
           error: 'Too Many Requests', 
-          message: 'Registration/Login rate limit exceeded. Unauthenticated surge detected. Please wait 60 seconds.',
-          retryAfter: 60,
+          message: `Too many ${routeType} attempts from this network. Please wait ${retryAfterSec} seconds and try again.`,
+          retryAfter: retryAfterSec,
           surgeDetected: true,
           defenseBarrier: true
         },
         { 
           status: 429,
           headers: {
-            'Retry-After': '60',
-            'X-RateLimit-Limit': '1',
+            'Retry-After': retryAfterSec.toString(),
+            'X-RateLimit-Limit': max.toString(),
             'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': Math.ceil((rateData.windowStart + 60000) / 1000).toString(),
+            'X-RateLimit-Reset': Math.ceil((rateData.windowStart + windowMs) / 1000).toString(),
             'X-Defense-Barrier': 'activated',
             'X-Surge-Detected': 'true'
           }
@@ -212,6 +259,20 @@ export function authRateLimitMiddleware(request: NextRequest): NextResponse | nu
   
   if (path.startsWith('/api/auth/login') || path.startsWith('/api/auth/signin')) {
     return checkAuthRateLimit(request, 'login', hasAuth);
+  }
+  
+  // ---- VERIFY + RESEND: generous bucket ----
+  // Ye pehle generic 'auth' bucket me jate the. Ab inka apna bucket hai
+  // kyunki:
+  //   - verification email link browser me click hoti hai (guaranteed
+  //     follow-up request)
+  //   - 30-min token window hai; user ko retry karne dena zaroori hai
+  //   - resend bhi isi bucket se guzarta hai (legit action hai)
+  if (
+    path.startsWith('/api/auth/verify') ||
+    path.startsWith('/api/auth/resend')
+  ) {
+    return checkAuthRateLimit(request, 'verify', hasAuth);
   }
   
   if (path.startsWith('/api/auth/') && !path.startsWith('/api/auth/callback')) {

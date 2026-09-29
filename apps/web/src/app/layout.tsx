@@ -31,8 +31,33 @@ export default function RootLayout({
   // Log config for verification (server side)
   console.log("Config loaded:", { appUrl: process.env.NEXT_PUBLIC_APP_URL, buffer: process.env.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: process.env.SISTER_SHARE_PERCENTAGE });
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }} suppressContentEditableWarning>
+    // ---- `dark` class on <html> (theme fix) ----
+    // `globals.css` me do theme blocks hain:
+    //   `:root` (default) -> `--background: 0 0% 100%` = **WHITE**
+    //   `.dark`           -> dark Grafana tokens (#111217 family)
+    //
+    // Pehle `<html>` par `dark` class KABHI nahi lagta tha. Matlab har page
+    // `:root` (light) par render hoti thi, aur har shadcn component
+    // (`bg-card`, `bg-background`, `text-foreground`, `bg-muted` ...)
+    // WHITE dikhta tha.
+    //
+    // Auth pages phir bhi dark lagti thi - sirf isliye ki `AuthShell` ne
+    // apna background HARDCODE kiya hai (`bg-[#111217]`). Isliye transition
+    // invisible tha jab tak user auth page se nikal kar kisi shadcn-token
+    // wale page par nahi gaya - aur wahin "dark se light" flash dikhta tha.
+    //
+    // `dark` class lagane se poora app consistently dark hota hai aur wo
+    // flash khatam ho jata hai.
+    //
+    // `colorScheme: 'dark'` bhi set kiya hai taaki browser ka native
+    // scrollbar, form controls (checkbox/select), aur autofill styling bhi
+    // dark rahein - inhe CSS variables control nahi karte.
+    //
+    // NOTE: agar future me light theme bhi chahiye, to ye static class
+    // replace karke next-themes provider lagana padega. Abhi app sirf dark
+    // hai, to static sahi (aur zero flash - koi hydration mismatch nahi).
+    <html lang="en" className="dark" style={{ colorScheme: 'dark' }} suppressHydrationWarning>
+      <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK, backgroundColor: '#111217', color: '#d8d9da' }} suppressContentEditableWarning>
         {/* Global activity capture - har click/change persist hota hai.
             NOTE: ye <body> ke ANDAR hona zaroori hai - bahar rakhne par
             invalid HTML ban jata hai aur hydration fail hoti hai. */}

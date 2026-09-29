@@ -44,6 +44,13 @@ export async function POST(request: Request) {
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const enableBiometric = body.enableBiometric === true;
+  // NEW (migration 004): client batata hai device me sensor hai ya nahi.
+  // Ye FORWARD hona zaroori hai - warna backend ko pata hi nahi chalega, aur
+  // sensor-less users security gate me permanently phas jayenge.
+  // `boolean` check karna zaroori hai taaki `undefined` na jaaye (backend
+  // `*bool` me nil receive karega aur safe default `true` maan lega).
+  const biometricCapable =
+    typeof body.biometricCapable === 'boolean' ? body.biometricCapable : null;
 
   // ---- Server side validation ----
   // Ye client validation se ALAG hai, kyunki koi bhi seedha API call karke
@@ -94,6 +101,9 @@ export async function POST(request: Request) {
         // `full_name` / `username` hain (camelCase me unmarshal nahi hoga).
         full_name: fullName,
         username,
+        // NEW (migration 004): device capability forward karo taaki backend
+        // decide kar sake biometric enrollment mandatory hai ya nahi.
+        biometric_capable: biometricCapable,
         // Device fingerprint nahi bhejte - auth-service use tabhi store karta hai
         // jab non-empty ho (unique index protection)
         device: {},
@@ -106,7 +116,35 @@ export async function POST(request: Request) {
 
     // Backend ka status pass-through karte hain (201 success, 409 duplicate, etc.)
     // Taaki frontend ko accurate signal mile
-    return NextResponse.json(payload, { status: authResponse.status });
+    const res = NextResponse.json(payload, { status: authResponse.status });
+
+    // ---- SESSION COOKIE after registration ----
+    // Registration bhi successful login ke barabar hota hai - backend tokens
+    // bhejta hai. Pehle ye cookie nahi set hoti thi, jisse:
+    //   1. user ko turant login nahi milta tha (dobara login karna padta)
+    //   2. WORSE: registration ke baad biometric enroll karna IMPOSSIBLE tha,
+    //      kyunki WebAuthn endpoints authenticated hain aur koi session hi
+    //      nahi tha. Isliye register form par "Enable biometric" checkbox
+    //      tick karne par "Could not start biometric registration" aata tha -
+    //      kyunki `register/begin` par 401 mil raha tha.
+    //
+    // Ab cookie set hone se:
+    //   - user logged-in ho jata hai
+    //   - webauthn-proxy cookie se token uthata hai -> enrollment kaam karta hai
+    if (authResponse.status === 201 && payload?.tokens?.access_token) {
+      const expiresInSec = Number(payload?.tokens?.expires_in) || 900;
+      res.cookies.set({
+        name: 'wideo11_session',
+        value: String(payload.tokens.access_token),
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: expiresInSec,
+      });
+    }
+
+    return res;
   } catch {
     // Auth service reachable nahi - clear error
     return NextResponse.json(

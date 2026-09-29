@@ -24,7 +24,34 @@ type User struct {
 	//
 	// UNIQUE: `idx_users_username`. Collision par registration fail hogi
 	// (409/500 se handle karna zaroori - dekh service layer).
-	Username    string         `gorm:"uniqueIndex;size:100" json:"username"`
+	Username string `gorm:"uniqueIndex;size:100" json:"username"`
+	// BiometricCapable: is device me biometric sensor hai ya nahi.
+	// Migration 004. Default true (safe/strict) - see migration comment.
+	// Isse `recomputeSetupComplete` decide karta hai ki biometric enrollment
+	// mandatory hai ya nahi.
+	//
+	// ---- GORM GOTCHA (isliye struct tag me `default:true` NAHI hai) ----
+	// Pehle ye tha:
+	//     BiometricCapable bool `gorm:"not null;default:true"`
+	// Jo GALAT tha. GORM ka rule: jis field par `default` tag ho AUR uski
+	// value zero ho (false), to GORM us column ko INSERT se HI chhaap deta
+	// hai aur DB default (true) use karne deta hai. Matlab:
+	//     client bheje  biometric_capable=false
+	//     DB me store  true      <-- GALAT! capability lost ho gayi
+	// Iska matlab tha: sensor-less user ka record bhi "capable=true" ban raha
+	// tha, aur wo phir bhi permanently lock ho jata.
+	//
+	// FIX: struct tag se `default:true` hata diya. Ab GORM hamesha field
+	// INSERT karta hai (chahe false ho). DB-level DEFAULT true migration 004
+	// me set hai aur wahi raw/non-GORM inserts ke liye fallback banega -
+	// bas Go struct se announce nahi hona chahiye.
+	BiometricCapable bool `gorm:"not null" json:"biometric_capable"`
+	// AvatarURL: profile image ka URL (migration 005).
+	// Empty = koi avatar nahi, UI initials fallback dikhata hai.
+	// SECURITY: sirf relative path ("/...") ya http(s) URL store hota hai
+	// (handler validate karta hai) - `javascript:`/`data:` schemes reject
+	// hote hain, warna stored XSS ho sakta hai.
+	AvatarURL   string         `gorm:"size:500" json:"avatar_url"`
 	FullName    string         `gorm:"size:255" json:"full_name"`
 	IsActive    bool           `gorm:"default:true" json:"is_active"`
 	IsVerified  bool           `gorm:"default:false" json:"is_verified"`
@@ -156,8 +183,21 @@ type RegisterRequest struct {
 	// underscore/dot/dash). Ye form me bhi hai, isliye validation tag yahan
 	// matter karti hai documentation ke liye - par enforce service layer me
 	// hota hai (ye tags dead hain).
-	Username string     `json:"username" validate:"required,min=3,max=30"`
-	Device   DeviceInfo `json:"device"`
+	Username string `json:"username" validate:"required,min=3,max=30"`
+	// BiometricCapable: client batata hai ki is DEVICE me biometric sensor
+	// hai ya nahi (browser ne `PublicKeyCredential` check kiya).
+	//
+	// WHY: security setup ka rule conditional hai -
+	//   device support karta hai  -> enroll karna ZAROORI
+	//   device support NAHI karta -> enroll karna zaroori nahi
+	// Bina is flag ke, sensor-less users PERMANENTLY dashboard se lock ho
+	// jaate the (bioCount hamesha 0 rehta). Migration 004 ne column add kiya.
+	//
+	// POINTER kyun: `nil` ka matlab "client ne nahi bataya" -> hum safe
+	// default `true` assume karte hain (stricter side, security down-grade
+	// nahi hota). `false` ka matlab "client ne confirm kiya sensor nahi hai".
+	BiometricCapable *bool      `json:"biometric_capable"`
+	Device           DeviceInfo `json:"device"`
 }
 
 type TokenPair struct {

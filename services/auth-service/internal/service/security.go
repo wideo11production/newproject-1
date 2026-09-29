@@ -1,11 +1,11 @@
 // Security service - lockout engine, PIN, security questions, device limits
 //
 // YE "CHAKRAVYUH DEFENSE" ENGINE HAI. Iska kaam:
-//   1. 3 galat passwords -> PIN required lockout
-//   2. Galat PIN -> 3 minute blocked countdown
-//   3. PIN/Questions/Password rotation with proper old-value verification
-//   4. Device limit: max 3 accounts per device fingerprint
-//   5. Security audit trail (Awareness Reports ka source)
+//  1. 3 galat passwords -> PIN required lockout
+//  2. Galat PIN -> 3 minute blocked countdown
+//  3. PIN/Questions/Password rotation with proper old-value verification
+//  4. Device limit: max 3 accounts per device fingerprint
+//  5. Security audit trail (Awareness Reports ka source)
 //
 // Hinglish comments: har block ka arth
 package service
@@ -39,6 +39,11 @@ var (
 	ErrSetupIncomplete     = errors.New("mandatory security setup incomplete")
 	ErrInsufficientAnswers = errors.New("security answers do not match")
 	ErrOldPINIncorrect     = errors.New("current PIN is incorrect")
+
+	// ErrNewPINSameAsOld - user ne wahi PIN "change" kiya jo pehle se hai.
+	// Isko reject karte hain kyunki tab PIN change ka koi security fayda nahi
+	// hota - purana compromised PIN waisa hi rehta.
+	ErrNewPINSameAsOld = errors.New("new PIN must be different from your current PIN")
 )
 
 // SecurityService security operations handle karta hai
@@ -60,6 +65,7 @@ func NewSecurityService(db *gorm.DB) *SecurityService {
 //   - PIN sirf 6 digits hai (10^6 combinations) - brute force already feasible
 //   - bcrypt intentionally slow hai, jo chhoti secrets ke liye unnecessary cost
 //   - Salt + iterated SHA-256 standard practice hai
+//
 // NOTE: real protection RATE LIMITING se aati hai jo middleware already karta hai.
 // Hinglish: chhote secrets ke liye salt+sha256, bcrypt zaroorat nahi
 func hashSecret(secret string) string {
@@ -123,7 +129,7 @@ func (s *SecurityService) GetOrCreateProfile(ctx context.Context, userID uuid.UU
 
 	// Naya profile banao
 	profile = model.SecurityProfile{
-		UserID:      userID,
+		UserID:       userID,
 		LockoutState: model.LockoutStateNone,
 	}
 	if err := s.db.WithContext(ctx).Create(&profile).Error; err != nil {
@@ -254,8 +260,8 @@ func (s *SecurityService) SetPIN(ctx context.Context, userID uuid.UUID, pin stri
 	}
 
 	record := model.SecurityPIN{
-		UserID:   userID,
-		PINHash:  hashSecret(pin),
+		UserID:            userID,
+		PINHash:           hashSecret(pin),
 		FailedPINAttempts: 0,
 	}
 
@@ -263,9 +269,9 @@ func (s *SecurityService) SetPIN(ctx context.Context, userID uuid.UUID, pin stri
 	err := s.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Assign(map[string]interface{}{
-			"pin_hash":             record.PINHash,
-			"failed_pin_attempts":  0,
-			"pin_locked_until":     nil,
+			"pin_hash":            record.PINHash,
+			"failed_pin_attempts": 0,
+			"pin_locked_until":    nil,
 		}).
 		FirstOrCreate(&record).Error
 
@@ -361,6 +367,14 @@ func (s *SecurityService) ChangePIN(ctx context.Context, userID uuid.UUID, oldPI
 		return fmt.Errorf("new PIN must be exactly %d digits", model.PINLength)
 	}
 
+	// ---- REUSE PREVENTION ----
+	// Naya PIN purane ke barabar nahi ho sakta. Agar allowed hota, to PIN
+	// "change" karna koi faayda nahi deta - purana compromised PIN waisa hi
+	// rehta. Ye chhota par important rule hai.
+	if verifySecret(hashSecret(oldPIN), newPIN) {
+		return ErrNewPINSameAsOld
+	}
+
 	var record model.SecurityPIN
 	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).First(&record).Error; err != nil {
 		return ErrPINInvalid
@@ -376,6 +390,47 @@ func (s *SecurityService) ChangePIN(ctx context.Context, userID uuid.UUID, oldPI
 	record.PINLockedUntil = nil
 
 	return s.db.WithContext(ctx).Save(&record).Error
+}
+
+// InvalidateAllSessionsForUser user ke SAARE active sessions revoke karta hai
+// aur refresh tokens delete karta hai.
+//
+// ---- YE KYUN ZAROORI HAI (security-critical) ----
+// PIN change ka security value tabhi hota hai jab PURANA PIN kisi aur ke
+// haath se nikal chuka ho (shoulder-surf, shared device, lost phone). Agar
+// purane PIN wale sessions ZALDI NAHI hote, to:
+//
+//	Attack: attacker ne device A par PIN chura liya. User PIN change karta
+//	hai (device B par). Attacker ka device-A session AB BHI VALID rehta hai -
+//	kyunki wo JWT carry karta hai, aur PIN usne nahi, wo toh account access
+//	ke liye chahiye hi nahi. PIN change ka koi fayda nahi.
+//
+// Isliye PIN change = "har aur jagah se logout". Attacker ka token
+// invalid ho jaata hai, use dobara login karna padega aur naya PIN use karna
+// padega (jo use nahi pata).
+//
+// NOTE: ye call karne wala user APNE HI session ko bhi invalidate kar raha
+// hai - isliye caller ko ye decide karna hota hai ki use turant logout
+// karna hai ya naya token issue karna hai. Auth-service me PIN-change ke
+// baad refresh flow user ko wapas login karwana hai.
+func (s *SecurityService) InvalidateAllSessionsForUser(ctx context.Context, userID uuid.UUID) (int, error) {
+	// 1) Saare refresh tokens delete (inse naye access tokens issue nahi honge)
+	if err := s.db.WithContext(ctx).Where("user_id = ?", userID).
+		Delete(&model.RefreshToken{}).Error; err != nil {
+		return 0, err
+	}
+
+	// 2) Saare sessions revoke (access JWT ke saath session row bhi check
+	//    hota hai - middleware/logout dono `GetSessionByAccessToken` use
+	//    karte hain, to revoked session = dead JWT)
+	result := s.db.WithContext(ctx).Model(&model.Session{}).
+		Where("user_id = ?", userID).
+		Update("revoked_at", time.Now())
+
+	if result.Error != nil {
+		return 0, result.Error
+	}
+	return int(result.RowsAffected), nil
 }
 
 // HasPIN user ne PIN set kiya hai ya nahi
@@ -587,6 +642,27 @@ func (s *SecurityService) CountDeviceAccounts(ctx context.Context, fingerprint s
 //
 // MANDATORY (SPEC): PIN + Biometric + 3 Security Questions
 // Teeno chahiye tab hi dashboard access milega.
+//
+// ---- IMPORTANT: biometric CONDITIONAL hai (migration 004) ----
+// Pehle ye tha:
+//
+//	complete := hasPin && hasQuestions && bioCount > 0
+//
+// Jo GALAT tha, kyunki register form me biometric checkbox SIRF tab dikhta
+// hai jab device me asli sensor ho. Matlab sensor-less user:
+//   - checkbox hi nahi dikhta -> enroll kar hi nahi sakta
+//   - bioCount hamesha 0
+//   - setup_complete hamesha false
+//   - PERMANENTLY dashboard se block (aur koi error nahi milta tha)
+//
+// Ab:
+//
+//	  complete := hasPin && hasQuestions && (!capable || bioCount > 0)
+//
+//	- device sensor SUPPORT karta hai -> enroll karna zaroori (security bar
+//	  koi nahi girta)
+//	- device sensor support NAHI karta -> enroll zaroori nahi (fair, aur
+//	  user ke device ki limitation account par penalize nahi hoti)
 func (s *SecurityService) recomputeSetupComplete(ctx context.Context, userID uuid.UUID, profile *model.SecurityProfile) {
 	hasPin, _ := s.HasPIN(ctx, userID)
 	hasQuestions, _ := s.HasSecurityQuestions(ctx, userID)
@@ -596,11 +672,21 @@ func (s *SecurityService) recomputeSetupComplete(ctx context.Context, userID uui
 	s.db.WithContext(ctx).Model(&model.WebAuthnCredential{}).
 		Where("user_id = ?", userID).Count(&bioCount)
 
+	// Device capability padho. Column NOT NULL hai, lekin agar kisi wajah se
+	// user row na mile to safe default `true` maano (stricter side).
+	capable := true
+	var userRow model.User
+	if err := s.db.WithContext(ctx).Select("biometric_capable").First(&userRow, "id = ?", userID).Error; err == nil {
+		capable = userRow.BiometricCapable
+	}
+
 	profile.PINConfigured = hasPin
 	profile.SecurityQuestionsConfigured = hasQuestions
 	profile.BiometricRegistered = bioCount > 0
 
-	complete := hasPin && hasQuestions && bioCount > 0
+	// ---- THE CONDITIONAL RULE ----
+	// Biometric sirf tab mandatory hai jab device support karta hai.
+	complete := hasPin && hasQuestions && (!capable || bioCount > 0)
 	profile.SecuritySetupComplete = complete
 
 	if complete && profile.SecuritySetupCompletedAt == nil {

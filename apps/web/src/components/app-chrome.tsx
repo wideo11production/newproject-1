@@ -41,8 +41,23 @@ import { BarChart3, Activity, Bell, Settings } from 'lucide-react';
  * pages, catalog pages ya auth pages pe dikhana galat tha.
  *
  * Naya route console banwana ho to yahan add karo.
+ *
+ * ---- FIX: `/dashboard` REMOVED from this list ----
+ * `/dashboard` ab CREATOR ka home hai (profile + channels + devices), koi
+ * admin/console page nahi. Ye list me rehne se kya hota tha:
+ *
+ *   AppChrome admin sidebar (NAVIGATION / Dashboard / Analytics / Alerts /
+ *   Settings) + apna header render karta, aur creator dashboard apna header
+ *   bhi render karta. dono ek ke upar ek - visible overlap, aur page
+ *   SUPERADMIN jaisa dikhta tha jabki wo user ka apna dashboard tha.
+ *
+ * Ab `/dashboard` list se bahar hai, isliye creator dashboard standalone
+ * render hota hai (bilkul auth pages ki tarah) - koi double nav nahi.
+ *
+ * Console pages (Analytics / Alerts / Settings) abhi bhi AppChrome ke andar
+ * hain, aur creator dashboard se ek "Console" link unhe pahunchata hai.
  */
-const CONSOLE_ROUTES = ['/dashboard', '/analytics', '/alerts', '/settings'];
+const CONSOLE_ROUTES = ['/analytics', '/alerts', '/settings'];
 
 function isConsoleRoute(pathname: string | null): boolean {
   if (!pathname) return false;

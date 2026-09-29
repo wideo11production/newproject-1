@@ -25,10 +25,10 @@
 
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
 
 import {
   AuthShell,
@@ -46,11 +46,43 @@ function VerifyContent() {
   const searchParams = useSearchParams();
   const token = searchParams?.get('token') ?? null;
 
+  // ---- Email for resend ----
+  // Verification email ka link `?email=<address>` ke saath bheja jaata hai.
+  // Isse resend panel ko email pata hota hai aur user ko type nahi karni
+  // padti. Agar link me email nahi hai, to resend panel input field dikhata
+  // hai (fallback).
+  const emailToResend = searchParams?.get('email') ?? '';
+
   const [status, setStatus] = useState<'checking' | 'success' | 'error'>(
     token ? 'checking' : 'error'
   );
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
+
+  // ---- Shared verify promise (StrictMode-safe) ----
+  //
+  // Ye effect run kitni bhi baar ho (StrictMode = 2), dono invocations SAME
+  // promise ko share karti hain:
+  //   - pehli run  -> promise banati hai (ek hi network call)
+  //   - doosri run -> `verifyPromiseRef.current` already set hai, to reuse
+  //
+  // Aur koi `cancelled` flag nahi hai - matlab fetch ka result KABHI
+  // suppress nahi hota. Pehle `hasRequested` guard + `cancelled` flag ki
+  // wajah se spinner forever ho jata tha (comment effect ke andar hai).
+  const verifyPromiseRef = useRef<Promise<void> | null>(null);
+
+  // Elapsed milliseconds - loading state ko phase-aware banata hai.
+  // Spinner + text se zyada helpful hai: user ko dikhta hai process chal raha
+  // hai, aur 4s cross karne par message badal jata hai.
+  const [elapsed, setElapsed] = useState(0);
+
+  // Retry counter - "Try again" button isko increment karta hai.
+  //
+  // YE ZAROORI HAI: verify effect `[token]` par depend karta hai. Sirf
+  // `setStatus('checking')` karne se effect DOBARA nahi chalta (token same
+  // hai), isliye retry button kuch nahi karta tha. Ye nonce dependencies me
+  // hone se effect ko force-retrigger karta hai.
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     // Token hi nahi hai - kuch verify karne ko nahi. Backend call bhi nahi karte
@@ -62,32 +94,82 @@ function VerifyContent() {
       return;
     }
 
-    // React 18 StrictMode development me effect 2 baar chala deta hai.
-    // Verification token SINGLE-USE hai, isliye hum ek guard latch karte hain
-    // taaki dobara call na jaaye aur valid token waste na ho.
-    let cancelled = false;
-    let started = false;
+    // -----------------------------------------------------------------------
+    // STRICTMODE DOUBLE-INVOCATION GUARD (the fix)
+    // -----------------------------------------------------------------------
+    // `next.config.mjs` me `reactStrictMode: true` hai, aur development me
+    // React 18 ka StrictMode har effect ko JAAN-BUJH KAR 2 BAAR chalata hai
+    // (intentional double-render jo bugs pakadne ke liye hai).
+    //
+    // Verification token SINGLE-USE hai - `MarkVerified` use hone par
+    // `verified_at` set kar deta hai, aur `IsUsable()` uske baad us token ko
+    // "not found" bolta hai. Matlab:
+    //
+    //     call #1 -> SUCCESS (token consume, account verified)
+    //     call #2 -> FAILED  (token ab use ho chuka hai)
+    //
+    // Doosri call ki error PEHLI call ke SUCCESS ko overwrite kar deti thi -
+    // user ko "verification failed" dikhta tha jabki account actually
+    // verify ho chuka tha. (Yehi wo symptom tha jo aapne report kiya.)
+    //
+    // ---- PEHLE KA GUARD KAAM KYUN NAHI KARTA THA ----
+    // Effect ke andar `let started = false` likha gaya tha. Lekin wo variable
+    // har effect invocation me NAAYA ban-ta hai - yaani doosri run me phir
+    // `false` hota hai. Isliye `if (started) return;` kabhi true nahi hua,
+    // aur guard bilkul no-op tha.
+    //
+    // ---- SAHI FIX ----
+    // -----------------------------------------------------------------------
+    // STRICTMODE DOUBLE-INVOCATION - THE CORRECT FIX
+    // -----------------------------------------------------------------------
+    // `next.config.mjs` me `reactStrictMode: true` hai, to development me
+    // React har effect ko JAAN-BOOH KAR 2 baar chalata hai. Verification token
+    // single-use hai, isliye 2 network calls me se ek fail hoti.
+    //
+    // ---- PEHLE KA APPROACH KAISE DEADLOCK HUA ----
+    // Maine do guards saath lagaye the:
+    //   1. `hasRequested` ref  - taaki doosri run fetch start na kare
+    //   2. `cancelled` flag    - taaki unmounted ho to state update na kare
+    //
+    // Ye dono MILKAR poora kaam kar dete the:
+    //
+    //   Run 1  : guard allow  -> hasRequested = true -> fetch shuru
+    //   Cleanup: cancelled = true
+    //   Run 2  : guard BLOCK  -> koi fetch start nahi hoti
+    //   Fetch resolve: `cancelled === true` -> SILENTLY return
+    //   Result: `status` kabhi 'checking' se bahar nahi nikalta
+    //           -> SPINNER FOREVER (yahi bug aap dekh rahe the)
+    //
+    // ---- NAYA APPROACH ----
+    // Ab ek SHARED PROMISE ref hai. Effect kitni bhi baar chale, dono
+    // invocations SAME promise ko attach ho jaati hain:
+    //   - pehli run promise banati hai
+    //   - doosri run usi promise ko reuse karti hai (koi naya fetch nahi)
+    // Aur `cancelled` flag POORI TARAH hata diya gaya hai - iska matlab
+    // fetch ka result KABHI suppress nahi hota, chahe component StrictMode
+    // cleanup se guzar jaye.
+    //
+    // NOTE: React 18 me unmounted component par setState karna warning nahi
+    // deta, aur ye component page-level hai - isliye ye safe hai.
+    //
+    // Ye zaroori hai kyunki verification ek ONE-SHOT MUTATION hai: ise
+    // "sirf ek baar" chahiye, lekin uska result zaroor apply hona chahiye.
+    if (!verifyPromiseRef.current) {
+      verifyPromiseRef.current = (async () => {
+        try {
+          const res = await fetch(`/api/auth/verify?token=${encodeURIComponent(token)}`, {
+            cache: 'no-store',
+          });
+          const payload = await res.json().catch(() => ({}));
 
-    if (started) return;
-    started = true;
-
-    (async () => {
-      try {
-        const res = await fetch(`/api/auth/verify?token=${encodeURIComponent(token)}`, {
-          cache: 'no-store',
-        });
-        const payload = await res.json().catch(() => ({}));
-
-        if (cancelled) return;
-
-        if (res.ok && payload.verified) {
-          setStatus('success');
-          setEmail(typeof payload.email === 'string' ? payload.email : '');
-          setMessage(
-            payload.message ?? 'Your email address has been verified successfully.'
-          );
-          return;
-        }
+          if (res.ok && payload.verified) {
+            setStatus('success');
+            setEmail(typeof payload.email === 'string' ? payload.email : '');
+            setMessage(
+              payload.message ?? 'Your email address has been verified successfully.'
+            );
+            return;
+          }
 
         setStatus('error');
 
@@ -119,26 +201,116 @@ function VerifyContent() {
             'This verification link is invalid or has expired. Please register again.'
         );
       } catch {
-        if (cancelled) return;
+        // NOTE: `cancelled` check YAHAN se hata diya gaya hai. Pehle ye
+        // fetch ke result ko suppress kar deta tha, jo StrictMode ke saath
+        // milkar spinner-forever deadlock create karta tha (comment upar).
+        // Ab network error ALWAYS user tak pahunchta hai.
         setStatus('error');
         setMessage(
           'We could not reach the verification service. Please check your connection and try again.'
         );
       }
-    })();
+      })();
+    }
+    // NOTE: is effect ka koi cleanup NAHI hai - jaan-boojh kar.
+    // Pehle `return () => { cancelled = true; }` tha jo result ko suppress
+    // kar deta tha. Ab result hamesha apply hota hai.
+    //
+    // NOTE: `retryNonce` dependencies me hai. Bina iske "Try again" button
+    // bekaar tha - sirf `token` par depend karne se effect dobara nahi
+    // chalta, kyunki token to badla hi nahi.
+  }, [token, retryNonce]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  // ---- ELAPSED TIMER ----
+  //
+  // Ye alag effect hai (upar wale se independent) kyunki:
+  //   - upar wala API call karta hai (aur StrictMode guard rakhta hai)
+  //   - ye sirf UI ka timer chalata hai
+  //
+  // `status === 'checking'` tak chalta hai, phir ruk jata hai - idle state
+  // me timer bekaar chalta rahega to nahi.
+  useEffect(() => {
+    if (status !== 'checking') return;
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      setElapsed(Date.now() - startedAt);
+    }, 250); // 4x/sec - enough for a smooth counter, cheap to render
+    return () => window.clearInterval(id);
+  }, [status]);
 
-  // ---- Checking state: spinner + "verifying" ----
+  // ---- Checking state: spinner with a HARD TIMEOUT + honest messaging ----
+  //
+  // ---- YE UX FIX KYUN ZAROORI THA ----
+  // Pehle yahan ek bare spinner tha ("Verifying your email address..."),
+  // bina kisi timeout ke. Development me FIRST visit par Next.js route ko
+  // on-demand compile karta hai, jo measured me ye hai:
+  //     page compile  ~6.7s
+  //     api  compile  ~2.2s
+  //     total spin    ~9 seconds
+  // User ko 9 second tak ek khali ghoorta circle dikhta hai - jo "hang ho
+  // gaya" ya "fail ho gaya" lagta hai. Wahi feeling thi aapki.
+  //
+  // Ab teen cheezein beech me hoti hain:
+  //   1. `elapsed` state badhta rehta hai - user ko pata rehta hai process
+  //      chal raha hai (spinner alone se zyada reassuring)
+  //   2. 4 second cross karne par message badal jata hai jo EXACTLY batata
+  //      hai ki kya ho raha hai (dev compile), spinner nahi
+  //   3. 20 second par HARD timeout - ab ye kabhi nahi ghoorrega. User ko
+  //      retry milta hai instead of an eternal spinner
   if (status === 'checking') {
     return (
       <div className="flex flex-col items-center gap-3 py-6 text-center">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="text-sm text-gray-400">Verifying your email address…</p>
-        <p className="text-xs text-gray-500">This usually takes a moment.</p>
+
+        {/* ---- Phase 1: normal (0-4s) ---- */}
+        {elapsed < 4000 ? (
+          <>
+            <p className="text-sm text-gray-400">Verifying your email address…</p>
+            <p className="text-xs text-gray-500">This usually takes a moment.</p>
+          </>
+        ) : elapsed < 20000 ? (
+          /* ---- Phase 2: long wait (4-20s) ----
+              Ye message jaan-boojh kar dev-specific hai. Production me
+              build pre-compiled hota hai, to ye phase wahan aayega hi
+              nahi - sirf development me. Isliye user ko confuse nahi
+              karega production me. */
+          <>
+            <p className="text-sm text-gray-400">Still working…</p>
+            <p className="max-w-sm text-xs leading-relaxed text-gray-500">
+              If you are running a development server, the first visit has to
+              compile this page, which can take several seconds. You are safe to
+              wait.
+            </p>
+            <p className="text-xs text-gray-600">{Math.floor(elapsed / 1000)}s elapsed</p>
+          </>
+        ) : (
+          // Phase 3: hard timeout (>20s). Ab infinite spinner nahi -
+          // user ko actionable retry milta hai.
+          <>
+            <AlertCircle className="h-8 w-8 text-red-400" />
+            <p className="text-sm text-gray-200">This is taking too long</p>
+            <p className="max-w-sm text-xs leading-relaxed text-gray-500">
+              We could not confirm your verification. The link may have expired
+              (they last 30 minutes). Request a fresh one below.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                // Promise ref CLEAR karo - taaki naya fetch actually start ho.
+                // Bina iske `if (!verifyPromiseRef.current)` condition false
+                // rehta aur effect kuch nahi karta.
+                verifyPromiseRef.current = null;
+                setRetryNonce((n) => n + 1);
+                setStatus('checking');
+                setElapsed(0);
+                setMessage('');
+              }}
+              className="mt-1 rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
+            >
+              Try again
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -174,6 +346,34 @@ function VerifyContent() {
         </div>
       </div>
 
+      {/* ---- RESEND VERIFICATION (failure state me) ----
+          User ka requirement: "jahan Too Many Attempts likha ho, wahan resend
+          verification email bhejne ka button ho".
+
+          Ye block EXACTLY wahi cover karta hai:
+            - token missing / expired / invalid  (common case)
+            - "Too many attempts" 429            (rate limit - jiska
+                                                   complaint aaya tha)
+
+          KYUN ZAROORI: token 30 min me expire ho jata hai, aur uske baad
+          account purge ho jata hai. Bina resend ke user ko naya account
+          banana padta tha - purana username/email dobara use kar sakta tha.
+
+          `emailToResend` wo email hai jiske liye token verify hone ki koshish
+          ho rahi hai. Ye tab available hota hai jab page `?email=` query
+          param ke saath khula ho (verification email ka link isse aata
+          hai) - tab user ko email type nahi karni padti.
+
+          Agar email pata nahi hai, to input field render hota hai jisme user
+          apni email daal sakta hai. Backend email enumeration nahi karta
+          (same 200 har case me), isliye ye safe hai.
+
+          Hinglish: verification fail ya 429 ho to yahan resend button
+          dikhta hai - user email miss kare to recover kar sakta hai. */}
+      {!success ? (
+        <ResendPanel initialEmail={emailToResend} />
+      ) : null}
+
       {/* Success me login, failure me register - dono ke liye clear next step */}
       {success ? (
         <Link href="/auth/login" className={PRIMARY_BUTTON_CLASS}>
@@ -185,6 +385,173 @@ function VerifyContent() {
         </Link>
       )}
     </div>
+  );
+}
+
+/**
+ * ResendPanel - resend verification email form.
+ *
+ * Alag component isliye ki verify page ka main flow saaf rahe aur resend
+ * ka apna state + loading + retry handling alag rahe.
+ *
+ * STATES:
+ *   idle     -> email input (agar email pata na ho) + Resend button
+ *   sending  -> "Sending…" (button disabled, spinner)
+ *   sent     -> green confirmation
+ *   error    -> red message (429 par "wait karke try karo" + retry hint)
+ *
+ * RATE LIMIT NOTE: 429 aane par `retryAfter` seconds dikhate hain jo
+ * backend `Retry-After` header se aata hai. Button turant active rehta hai
+ * taaki user wait karke retry kar sake.
+ */
+function ResendPanel({ initialEmail }: { initialEmail: string }) {
+  const [email, setEmail] = useState(initialEmail);
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error'>(
+    'idle'
+  );
+  const [feedback, setFeedback] = useState('');
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
+
+  async function handleResend(e: React.FormEvent) {
+    e.preventDefault();
+    const value = email.trim().toLowerCase();
+    if (!value) return;
+
+    setState('sending');
+    setFeedback('');
+    setRetryAfter(null);
+
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 429) {
+        // Rate limited - user ko EXACTLY bataye kitna wait karna hai
+        const secs = Number(data?.retryAfter) || 60;
+        setRetryAfter(secs);
+        setState('error');
+        setFeedback(
+          data?.message ??
+            `Too many resend attempts. Please wait ${secs} seconds and try again.`
+        );
+        return;
+      }
+
+      if (!res.ok) {
+        setState('error');
+        setFeedback(
+          data?.message ?? 'Could not send a new email. Please try again.'
+        );
+        return;
+      }
+
+      // Success. Backend intentionally generic message deta hai (email
+      // enumeration prevention) - isliye hum bhi wahi honest rahein.
+      setState('sent');
+      setFeedback(
+        data?.already_verified
+          ? 'This account is already verified. You can log in now.'
+          : (data?.message ??
+            'If an unverified account exists for that address, a fresh verification email has been sent.')
+      );
+    } catch {
+      setState('error');
+      setFeedback(
+        'Network error. Please check your connection and try again.'
+      );
+    }
+  }
+
+  // Sent ho gaya: success message + done
+  if (state === 'sent') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-start gap-2.5 rounded-lg border border-emerald-700/60 bg-emerald-950/40 p-3 text-xs text-emerald-300">
+          <Send className="mt-0.5 h-4 w-4 shrink-0" />
+          <p className="leading-relaxed">{feedback}</p>
+        </div>
+        <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+          Your previous verification link is no longer valid - only the newest
+          email link will work. The new link is valid for 30 minutes.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setState('idle');
+            setFeedback('');
+          }}
+          className="text-xs text-[#9fa7b3] underline transition-colors hover:text-[#d8d9da]"
+        >
+          Send another email
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleResend} className="space-y-3">
+      <div className="flex items-start gap-2.5 rounded-lg border border-[#2c3235] bg-[#0d0f11]/50 p-3">
+        <Send className="mt-0.5 h-4 w-4 shrink-0 text-[#9fa7b3]" />
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <p className="text-xs leading-relaxed text-[#d8d9da]">
+            Didn&apos;t get the email, or did it expire?
+          </p>
+
+          {/* Email input sirf tab jab email pata na ho.
+              Agar `?email=` se aaya hai to prefill hai - user ko type nahi. */}
+          {!initialEmail ? (
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+              className="h-10 w-full rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/60 focus:border-[#5794f2] focus:outline-none focus:ring-2 focus:ring-[#5794f2]/30"
+            />
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={state === 'sending' || !email.trim()}
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1f2227] text-sm font-medium text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {state === 'sending' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending…
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Resend verification email
+              </>
+            )}
+          </button>
+
+          {/* Error / rate-limit message.
+              429 par retryAfter seconds dikhate hain taaki user ko pata ho
+              EXACTLY kitna wait karna hai (rather than guessing). */}
+          {state === 'error' && feedback ? (
+            <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-2.5">
+              <p className="text-[11px] leading-relaxed text-amber-300">
+                {feedback}
+              </p>
+              {retryAfter ? (
+                <p className="mt-1 text-[10px] text-amber-400/80">
+                  Try again in about {retryAfter} second
+                  {retryAfter === 1 ? '' : 's'}.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </form>
   );
 }
 

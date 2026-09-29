@@ -17,11 +17,11 @@ import (
 	"github.com/wideo11/auth-service/internal/email"
 	"github.com/wideo11/auth-service/internal/handler"
 	"github.com/wideo11/auth-service/internal/middleware"
+	"github.com/wideo11/auth-service/internal/password"
 	"github.com/wideo11/auth-service/internal/purge"
 	"github.com/wideo11/auth-service/internal/repository"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
-	"github.com/wideo11/auth-service/internal/password"
 )
 
 func main() {
@@ -96,11 +96,35 @@ func main() {
 
 	// Verification repositories inject karo (dependency injection - constructor nahi badla)
 	authService.SetVerificationRepo(verifRepo)
+	// Creator dashboard operations (channels, avatar, sessions) raw GORM handle
+	// use karte hain - repositories sirf `users`/`sessions` ka narrow surface
+	// cover karti hain, nayi entities (channels) ke liye direct db chahiye.
+	authService.SetDB(db)
 
 	// Email dispatcher - SMTP config set ho to real email, warna console log
 	// Koi paid provider nahi: local dev me console, production me apna SMTP
 	emailDispatcher := email.NewDispatcher(&cfg.Email)
 	authService.SetEmailer(emailDispatcher)
+
+	// ---- BACKGROUND EMAIL QUEUE ----
+	// Ye verification email ko request se DETACH karta hai, taaki registration
+	// ~5 second na ruke. Gmail ka SMTP handshake slow hai; pehle wo request
+	// ke andar SYNCHRONOUS chalta tha, jiski wajah se user ka button 5 second
+	// disabled rehta tha.
+	//
+	// NOTE: ye `email.Dispatcher` (console-vs-smtp choose karta hai) ko hi
+	// sender ke roop me use karta hai - alag SMTP connection nahi banata.
+	emailQueue := email.NewEmailQueue(emailDispatcher, 256)
+	emailQueue.Start()
+	// Shutdown par queue drain karo, taaki restart par emails drop na hon.
+	defer emailQueue.Close()
+
+	// Service ko queue ke saath wire karo. Ye `emailDispatcher` ko REPLACE
+	// nahi karta - wo `*email.Dispatcher` hi rehta hai (jo
+	// `SendVerificationEmail` implement karta hai). Service type-assertion se
+	// `QueueVerificationEmail` method dhoondhta hai; jo mil gaya to queue use
+	// karta hai, warna synchronous path.
+	authService.SetEmailQueue(emailQueue)
 
 	// 30-minute purge worker start karo (background Go worker, koi paid cron nahi)
 	// Hinglish: unverified accounts 30 minute baad permanently purge honge
@@ -155,8 +179,8 @@ func main() {
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"service": "auth-service",
+			"status":    "ok",
+			"service":   "auth-service",
 			"timestamp": time.Now().UTC(),
 		})
 	})
@@ -168,16 +192,36 @@ func main() {
 		auth.POST("/login", authHandler.Login)
 		// Verification link click handler - GET se call hota hai
 		auth.GET("/verify", authHandler.VerifyEmail)
+		// Resend verification email - naya token + naya email.
+		// PRE-auth hai (user abhi login nahi kar sakta, email hi uska proof
+		// hai). Handler email enumeration nahi karta - har case me same 200.
+		// Purana token automatically delete hota hai (IssueVerificationToken
+		// ke andar DeleteByUserID hai), to "resend par purana token hat jaye"
+		// requirement bina extra code ke satisfy hoti hai.
+		auth.POST("/resend-verification", authHandler.ResendVerification)
 		auth.POST("/refresh", authHandler.RefreshToken)
 		auth.POST("/logout", authHandler.AuthMiddleware(), authHandler.Logout)
+		// ---- Creator dashboard: active devices ----
+		// "Aap kis device par logged in hain" - token se user_id lekar
+		// scoped query chalata hai (cross-user leak nahi).
+		auth.GET("/sessions", authHandler.AuthMiddleware(), authHandler.ListMySessions)
 
 		// Protected routes
 		protected := auth.Group("")
 		protected.Use(authHandler.AuthMiddleware())
 		{
 			protected.GET("/profile", authHandler.GetProfile)
-			protected.POST("/pin/setup", authHandler.SetupPIN)
+			protected.GET("/pin/setup", authHandler.SetupPIN)
 			protected.POST("/pin/verify", authHandler.VerifyPIN)
+
+			// ---- Creator dashboard endpoints (migration 005) ----
+			// Sab token-derived user_id par scoped hain.
+			protected.GET("/channels", authHandler.ListChannels)
+			protected.POST("/channels", authHandler.CreateChannel)
+			protected.PATCH("/profile", authHandler.UpdateProfile)
+			// Profile GET v2 - avatar_url ke saath (purana `GetProfile`
+			// fields ka subset return karta hai, isliye naya endpoint).
+			protected.GET("/profile/full", authHandler.GetProfileV2)
 		}
 	}
 

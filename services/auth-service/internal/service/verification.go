@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,6 +82,39 @@ func (s *AuthService) BuildVerificationURL(plainToken string) string {
 	return fmt.Sprintf("%s/auth/verify?token=%s", base, plainToken)
 }
 
+// BuildVerificationURLWithEmail verification link banata hai jisme email bhi
+// query param ke roop me hota hai.
+//
+// KYUN: `/auth/verify` page par RESEND panel hota hai (token expire / 429 par).
+// Agar link me email carried hota hai to wo panel PRE-FILLED ho jaata hai aur
+// user ko email dobara type nahi karni padti.
+//
+// SECURITY: ye sirf UX convenience hai, koi auth decision nahi. Token hi
+// proof hai; email param ke baghair bhi verification kaam karta hai. Aur ye
+// email wo HI hai jispar email bheja gaya tha - koi sensitive leak nahi
+// (user khud usi inbox me link click kar raha hai).
+//
+// Email ko `url.QueryEscape` karna ZAROORI hai - `@` aur `+` jaise chars
+// URL me safe nahi hote (plus `+` space ban jata hai).
+func (s *AuthService) BuildVerificationURLWithEmail(plainToken, emailAddr string) string {
+	base := s.cfg.Verification.BaseURL
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+	for len(base) > 0 && base[len(base)-1] == '/' {
+		base = base[:len(base)-1]
+	}
+	if emailAddr == "" {
+		return fmt.Sprintf("%s/auth/verify?token=%s", base, plainToken)
+	}
+	return fmt.Sprintf(
+		"%s/auth/verify?token=%s&email=%s",
+		base,
+		plainToken,
+		url.QueryEscape(emailAddr),
+	)
+}
+
 // SendVerificationEmail verification email bhejta hai
 func (s *AuthService) SendVerificationEmail(ctx context.Context, user *model.User, plainToken string) error {
 	if s.emailer == nil {
@@ -88,7 +122,9 @@ func (s *AuthService) SendVerificationEmail(ctx context.Context, user *model.Use
 		return nil
 	}
 
-	verifyURL := s.BuildVerificationURL(plainToken)
+	// Link me email bhi carry karo taaki /auth/verify page ka resend panel
+	// pre-filled ho (user ko email dobara type nahi karni padti).
+	verifyURL := s.BuildVerificationURLWithEmail(plainToken, user.Email)
 	ttl := s.cfg.Verification.TTLMinutes
 	if ttl <= 0 {
 		ttl = 30
@@ -112,7 +148,53 @@ func (s *AuthService) SendVerificationEmail(ctx context.Context, user *model.Use
 	// hain). Real verify ke liye link use karo.
 	displayCode := shortDisplayCode(plainToken)
 
-	return s.emailer.SendVerificationEmail(user.Email, user.FullName, verifyURL, displayCode, ttl)
+	// ---- SUCCESS LOG (pehle missing tha) ----
+	// Pehle yahan koi "email bhej diya" log nahi tha. Sirf FAILURE log hota
+	// tha (`[VERIFY] Failed to send...`). Iska matlab: agar email bhejne me
+	// error nahi aaya to log me KUCH nahi dikhta - aur hum "bheja gaya" aur
+	// "bheja hi nahi" me differentiate hi nahi kar paate the.
+	//
+	// Ab har successful send par ek line log hota hai jisme:
+	//   - recipient
+	//   - verify URL ka BASE (localhost ya real domain)
+	//   - token expiry
+	// Ye debugging ke liye critical hai, kyunki verification link
+	// localhost jaisa base URL point karta hai to bade problem hote hain
+	// (email PHONE pe kholne par link dead ho jata hai).
+	//
+	// NOTE: token value LOG nahi hota (secret hai). Sirf base URL log hota
+	// hai jo secret nahi hai.
+	log.Printf("[VERIFY] Verification email queued to=%s base_url=%s expires_in=%dm",
+		user.Email, s.cfg.Verification.BaseURL, ttl)
+
+	// ---- FAST PATH: background queue (preferred) ----
+	//
+	// Agar queue set hai (main.go me `SetEmailQueue` se inject hota hai), to
+	// email DETACH kar do - request turant return ho jati hai aur worker
+	// email bhejta hai. Yehi wo fix hai jo registration ka ~5s wait hata deta
+	// hai.
+	//
+	// FALLBACK: queue nil hai ya bhar gaya hai -> synchronous path pe girte
+	// hain, taaki email kabhi DROP na ho. (Rare fallback, bas slow ho jata
+	// hai - jo email bhejne se behtar hai.)
+	if s.emailQueue != nil {
+		if queued := s.emailQueue.QueueVerificationEmail(
+			user.Email, user.FullName, verifyURL, displayCode, ttl,
+		); queued {
+			return nil
+		}
+		log.Printf("[VERIFY] Queue unavailable, falling back to synchronous send for %s", user.Email)
+	}
+
+	// ---- SLOW PATH: synchronous (fallback / queue disabled) ----
+	err := s.emailer.SendVerificationEmail(user.Email, user.FullName, verifyURL, displayCode, ttl)
+	if err != nil {
+		log.Printf("[VERIFY] SendVerificationEmail returned error for %s: %v", user.Email, err)
+		return err
+	}
+
+	log.Printf("[VERIFY] SMTP accepted message for %s (link: %s)", user.Email, verifyURL)
+	return nil
 }
 
 // shortDisplayCode token se ek chhota 6-digit code banata hai.
@@ -158,6 +240,27 @@ func (s *AuthService) VerifyEmail(ctx context.Context, plainToken string) (*mode
 	tokenHash := password.HashToken(plainToken)
 	record, err := s.verifRepo.GetByHash(ctx, tokenHash)
 	if err != nil {
+		// ---- FALLBACK: token pehle consume ho chuka hai kya? ----
+		// `GetByHash` sirf UNUSED tokens return karta hai (`IsUsable()`
+		// check karta hai). Ab consumed token ko raw lookup se dhoondhte hain.
+		//
+		// USER-FACING PROBLEM jo ye solve karta hai:
+		//   Email link click kiya -> account verified -> user ne page
+		//   REFRESH kiya (ya email dobara khola, ya back-forward kiya) ->
+		//   wahi token dobara gaya -> "not found or expired" ERROR dikha,
+		//   jabki account actually verified hai. User confuse hota hai ki
+		//   verification fail hui.
+		//
+		// SECURITY: ye koi naya account verify nahi kar sakta. Ye sirf
+		// ALREADY-verified state report karta hai - koi state change nahi
+		// hota, sirf ek honest success response milta hai.
+		if used, uErr := s.verifRepo.GetByHashIncludingUsed(ctx, tokenHash); uErr == nil && used.VerifiedAt != nil {
+			// Token use ho chuka hai -> user verified hai ya nahi check karo
+			if existing, eErr := s.userRepo.GetByID(ctx, used.UserID); eErr == nil && existing.IsVerified {
+				log.Printf("[VERIFY] Re-click on consumed token for %s - already verified, returning success", existing.Email)
+				return existing, nil
+			}
+		}
 		return nil, err
 	}
 
@@ -176,6 +279,67 @@ func (s *AuthService) VerifyEmail(ctx context.Context, plainToken string) (*mode
 
 	log.Printf("[VERIFY] Email verified for %s", user.Email)
 	return user, nil
+}
+
+// verificationEmailQueuer - OPTIONAL interface.
+//
+// Ye tab implement hota hai jab emailer background queue deta hai
+// (`email.Dispatcher`). Type assertion se pata lagta hai ki queue available
+// hai ya nahi - agar nahi, to code synchronous path par chalta hai (jo bhi
+// theek hai, bas slow).
+//
+// Ye design isliye "optional interface" hai taki email package aur service
+// package ka coupling kam rahe, aur test stubs (jo sirf
+// `SendVerificationEmail` implement karte hain) bhi chal sakein.
+type verificationEmailQueuer interface {
+	QueueVerificationEmail(to, fullName, verifyURL, code string, ttlMinutes int) bool
+}
+
+// VerificationTTLMinutes configured TTL minutes me return karta hai.
+//
+// Resend handler ko ye chahiye taaki response me bata sake ki naya token
+// kitni der valid rahega. Config 0 ya negative hua to default 30 (jo
+// IssueVerificationToken bhi use karta hai).
+func (s *AuthService) VerificationTTLMinutes() int {
+	ttl := s.cfg.Verification.TTLMinutes
+	if ttl <= 0 {
+		return 30
+	}
+	return ttl
+}
+
+// ResendVerificationForUser unverified user ko naya verification token issue
+// karta hai aur email bhejta hai.
+//
+// IMPORTANT: ye `IssueVerificationToken` internally call karta hai, jisme
+// PEHLE `verifRepo.DeleteByUserID` hota hai. Matlab:
+//   - purana / expired / already-used token DELETE ho jata hai
+//   - sirf naya token valid rehta hai
+//
+// Isse requirement "resend click karne par purana token bhi delete ho jaye"
+// naturally satisfy hoti hai - alag se kuch karne ki zaroorat nahi.
+//
+// Ye method sirf UNVERIFIED users ke liye call hona chahiye (verified users
+// ko naye token ki zaroorat nahi - wo login kar sakte hain).
+//
+// Hinglish: naya token banao, purana delete karo, email bhejo
+func (s *AuthService) ResendVerificationForUser(ctx context.Context, user *model.User) error {
+	if user == nil {
+		return fmt.Errorf("user is nil")
+	}
+	if user.IsVerified {
+		return fmt.Errorf("user already verified")
+	}
+
+	// Same code path as registration - purana token delete + naya issue.
+	plainToken, err := s.IssueVerificationToken(ctx, user.ID, user.Email)
+	if err != nil {
+		return err
+	}
+
+	// Email bhejo. Iska error PROPAGATE karna zaroori hai - warna user ko
+	// "email bhej diya" dikhega jabki actually bheja nahi gaya.
+	return s.SendVerificationEmail(ctx, user, plainToken)
 }
 
 // emailDispatcherAdapter service ko email.Dispatcher se connect karta hai

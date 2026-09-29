@@ -21,8 +21,21 @@ import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, ShieldCheck, HelpCircle } from 'lucide-react';
 import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+// `BiometricDiagnostics` type chahiye state declare karne ke liye.
+// `diagnoseBiometrics` runtime pe dynamic import hota hai (load() ke andar)
+// taaki ye sirf tab load ho jab gate render ho.
+import type { BiometricDiagnostics } from '@/lib/webauthn';
 
-const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API ?? 'http://localhost:8085';
+// ---- SECURITY API BASE (same-origin proxy) ----
+// Session token httpOnly cookie me hai, isliye browser JS use nahi padh sakta.
+// Isliye security calls SAME-ORIGIN proxy (`/api/auth/security/*`) par jaati
+// hain, aur token server-side attach hota hai. Isse:
+//   - token browser tak nahi aata (XSS safe)
+//   - CORS issue zero
+// NOTE: pehle ye direct `${AUTH_API}/api/v1/auth/...` par auth-service ko
+// jaati thi - jo httpOnly cookie wale architecture ke saath kaam hi nahi
+// kar sakti thi (client ke paas token hota hi nahi).
+const SECURITY_API = '/api/auth/security';
 
 interface SetupStatus {
   pin_configured: boolean;
@@ -65,27 +78,57 @@ export default function SecuritySetupGate({
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
 
+  // ---- PIN CHANGE MODE ----
+  // `changingPin` true ho to step 1 "set" nahi, "change" mode me chalta hai:
+  //   - current PIN verify karna zaroori (taaki koi logged-in attacker
+  //     silently PIN badal na sake)
+  //   - new PIN + uska confirm dono chahiye
+  //
+  // NOTE: ye tab zaroori hai jab user pehle se PIN set karke aata hai
+  // (jaise login ke baad security screen kholne par).
+  const [changingPin, setChangingPin] = useState(false);
+  const [currentPin, setCurrentPin] = useState('');
+
   // Biometric state
   const [biometricSupported, setBiometricSupported] = useState(false);
   const [biometricDone, setBiometricDone] = useState(false);
+  // Full WebAuthn diagnostic report - jisme user-READABLE reason hota hai.
+  // Iske bina "biometrics not available" ek black box hai.
+  const [biometricDiag, setBiometricDiag] = useState<BiometricDiagnostics | null>(null);
 
   // Questions state
   const [availableQuestions, setAvailableQuestions] = useState<string[]>([]);
   const [picked, setPicked] = useState<Record<number, string>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
 
-  const authHeaders = { Authorization: `Bearer ${accessToken}` };
+  // ---- Auth headers ----
+  //
+  // SECURITY FIX: pehle ye unconditional tha:
+  //     const authHeaders = { Authorization: `Bearer ${accessToken}` };
+  // `/auth/security-setup` page par `accessToken=""` hota hai (token httpOnly
+  // cookie me hai, JS nahi padh sakta), isliye ye `Authorization: "Bearer "`
+  // bhejta - ek MALFORMED header.
+  //
+  // Wo string truthy hai, isliye webauthn-proxy me cookie fallback ko override
+  // kar deti thi -> auth-service ko empty bearer milta -> 401 ->
+  // "Could not start biometric registration".
+  //
+  // Ab: token na ho to header BILKUL nahi bhejte. Proxy phir httpOnly cookie
+  // se token uthata hai - jo secure bhi hai aur hamesha kaam karta hai.
+  const authHeaders: Record<string, string> = accessToken
+    ? { Authorization: `Bearer ${accessToken}` }
+    : {};
 
   // ---- Initial load ----
   useEffect(() => {
     async function load() {
       try {
         const [statusRes, qRes] = await Promise.all([
-          fetch(`${AUTH_API}/api/v1/auth/security/setup-status`, {
+          fetch(`${SECURITY_API}/setup-status`, {
             headers: authHeaders,
             cache: 'no-store',
           }),
-          fetch(`${AUTH_API}/api/v1/auth/security/questions/available`, {
+          fetch(`${SECURITY_API}/questions/available`, {
             cache: 'no-store',
           }),
         ]);
@@ -105,15 +148,15 @@ export default function SecuritySetupGate({
           setStep(2);
         }
 
-        // WebAuthn support
-        if (typeof window !== 'undefined' && !!window.PublicKeyCredential) {
-          try {
-            const avail = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-            setBiometricSupported(avail);
-          } catch {
-            setBiometricSupported(false);
-          }
-        }
+        // ---- WebAuthn support: DIAGNOSTIC version ----
+        // Pehle ye single boolean check tha, jo `false` aane par koi
+        // reason nahi batata tha - user ko bas "not available" dikhta.
+        // Ab full report lete hain jisme USER-READABLE reason hota hai, taaki
+        // actual fix pata chale (secure context? browser? Windows setting?).
+        const { diagnoseBiometrics } = await import('@/lib/webauthn');
+        const diag = await diagnoseBiometrics();
+        setBiometricDiag(diag);
+        setBiometricSupported(diag.canUseBiometrics);
       } catch {
         setError('Could not load security setup status.');
       } finally {
@@ -124,30 +167,108 @@ export default function SecuritySetupGate({
   }, [accessToken]);
 
   // ---- Step 1: PIN ----
+  //
+  // Do modes:
+  //   - SET    (naya user): sirf new PIN + confirm
+  //   - CHANGE (purana user): current PIN + new PIN + confirm
+  //
+  // CHANGE mode kyun zaroori: agar koi device shared ho, ya kisi ne
+  // shoulder-surf karke PIN dekha ho, to user ko PIN badalna chahiye - bina
+  // purana PIN verify kiye nahi. Isse attacker ka already-logged-in session
+  // useless ho jata hai.
   async function submitPin() {
     setError('');
+
+    // ---- Length check ----
     if (pin.length !== 6) {
       setError('PIN must be exactly 6 digits.');
       return;
     }
     if (pin !== confirmPin) {
-      setError('PINs do not match.');
+      setError('The two new PINs do not match.');
       return;
+    }
+
+    // ---- CHANGE mode: current PIN bhi validate karo (client side sanity) ----
+    if (changingPin) {
+      if (currentPin.length !== 6) {
+        setError('Enter your current 6-digit PIN.');
+        return;
+      }
+      if (currentPin === pin) {
+        setError('Your new PIN must be different from the current one.');
+        return;
+      }
     }
 
     setBusy(true);
     try {
-      const res = await fetch(`${AUTH_API}/api/v1/auth/security/pin`, {
-        method: 'POST',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        setError(err.error ?? 'Failed to set PIN.');
-        return;
+      if (changingPin) {
+        // ---- CHANGE: PUT /security/pin {old_pin, new_pin} ----
+        // Backend purana PIN verify karta hai (bcrypt compare) aur naya set
+        // karta hai. Galat purana PIN -> 403 OLD_PIN_INCORRECT.
+        const res = await fetch(`${SECURITY_API}/pin`, {
+          method: 'PUT',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ old_pin: currentPin, new_pin: pin }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setError(
+            err.message ?? err.error ?? 'Could not change your PIN.'
+          );
+          return;
+        }
+
+        // ---- RE-AUTH REQUIRED ----
+        // Backend PIN change ke baad SAARE sessions revoke kar deta hai
+        // (security: purana PIN chura gaya ho to uska session bhi mare).
+        // Iska matlab user ka APNA session bhi ab dead hai. Agar ise
+        // chup-chaap continue karenge to har subsequent call 401 dega aur
+        // user ko confuse 401 screens dikhenge.
+        //
+        // Isliye backend `reauth_required: true` bhejta hai, aur hum user ko
+        // saaf message ke saath login page par bhej dete hain - naye PIN se
+        // dobara login karna hoga.
+        const payload = await res.json().catch(() => ({}));
+        if (payload?.reauth_required) {
+          // Cookie bhi saaf kardo taaki stale token na rahe
+          try {
+            document.cookie =
+              'wideo11_session=; Max-Age=0; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+          } catch {
+            // httpOnly cookie JS se delete nahi ho sakti - backend logout
+            // endpoint par bhejna padega. Par redirect ke baad middleware
+            // use reject kar dega (session revoked), isliye ye best-effort hai.
+          }
+          setError(
+            'Your PIN was changed and all devices were signed out. Please log in again with your new PIN.'
+          );
+          setTimeout(() => {
+            window.location.href = '/auth/login?reason=pin-changed';
+          }, 2500);
+          return;
+        }
+      } else {
+        // ---- SET: POST /security/pin {pin} ----
+        const res = await fetch(`${SECURITY_API}/pin`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          setError(err.error ?? 'Failed to set PIN.');
+          return;
+        }
       }
+
       setStatus((s) => (s ? { ...s, pin_configured: true } : s));
+      // Change mode me fields clear karo sensitive data hatane ke liye
+      setPin('');
+      setConfirmPin('');
+      setCurrentPin('');
+      setChangingPin(false);
       setStep(2);
     } catch {
       setError('Network error. Please try again.');
@@ -156,7 +277,7 @@ export default function SecuritySetupGate({
     }
   }
 
-  // ---- Step 2: Biometric ----
+  // ---- Step 3 (LAST): Biometric ----
   async function registerBiometric() {
     setError('');
     setBusy(true);
@@ -170,14 +291,29 @@ export default function SecuritySetupGate({
       }
 
       // Backend ko batao biometric register ho gaya
-      const res = await fetch(`${AUTH_API}/api/v1/auth/security/biometric/complete`, {
+      const res = await fetch(`${SECURITY_API}/biometric/complete`, {
         method: 'POST',
         headers: authHeaders,
       });
       const payload = await res.json().catch(() => ({}));
       setStatus((s) => (s ? { ...s, biometric_registered: true, setup_complete: payload.setup_complete } : s));
       setBiometricDone(true);
-      setStep(3);
+
+      // ---- STEP 3 (LAST) ke baad: final status check ----
+      // Pehle yahan `setStep(3)` tha jo questions step pe le jaata tha.
+      // Ab questions step 2 pe hain, to iske baad seedha completion check.
+      const finalRes = await fetch(`${SECURITY_API}/setup-status`, {
+        headers: authHeaders,
+        cache: 'no-store',
+      });
+      const final = await finalRes.json().catch(() => ({}));
+      setStatus(final);
+
+      if (final.setup_complete) {
+        onComplete();
+      } else {
+        setError('Setup is still incomplete. Please review the previous steps.');
+      }
     } catch {
       setError('Biometric registration failed. Please try again.');
     } finally {
@@ -185,7 +321,7 @@ export default function SecuritySetupGate({
     }
   }
 
-  // ---- Step 3: Exactly 3 security questions ----
+  // ---- Step 2: Exactly 3 security questions ----
   async function submitQuestions() {
     setError('');
 
@@ -211,7 +347,7 @@ export default function SecuritySetupGate({
 
     setBusy(true);
     try {
-      const res = await fetch(`${AUTH_API}/api/v1/auth/security/questions`, {
+      const res = await fetch(`${SECURITY_API}/questions`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ questions: questionsMap }),
@@ -222,19 +358,21 @@ export default function SecuritySetupGate({
         return;
       }
 
-      // Final status check - teeno complete hone hi chahiye
-      const finalRes = await fetch(`${AUTH_API}/api/v1/auth/security/setup-status`, {
+      // Final status check - teeno complete hone hi chahiye.
+      // NOTE: ab questions ke baad seedha biometric step pe jaate hain
+      // (step 3), onComplete yahan NAHI call hota - wo biometric ke baad hota
+      // hai. Isse user ko biometric enroll karne ka mauka milta hai.
+      const finalRes = await fetch(`${SECURITY_API}/setup-status`, {
         headers: authHeaders,
         cache: 'no-store',
       });
       const final = await finalRes.json();
       setStatus(final);
 
-      if (final.setup_complete) {
-        onComplete();
-        router.push('/dashboard');
+      if (final.security_questions_configured) {
+        setStep(3);
       } else {
-        setError('Setup incomplete. Please finish all three steps.');
+        setError('Could not save your security questions. Please retry.');
       }
     } catch {
       setError('Network error. Please try again.');
@@ -253,8 +391,17 @@ export default function SecuritySetupGate({
 
   const steps = [
     { n: 1, label: 'Security PIN', done: status?.pin_configured },
-    { n: 2, label: 'Biometric', done: status?.biometric_registered },
-    { n: 3, label: 'Security Questions', done: status?.security_questions_configured },
+    // NOTE: order SPEC ke mutabiq hai - 1) PIN, 2) Security Questions,
+    // 3) Biometric. Pehle yahan 1=PIN, 2=Biometric, 3=Questions tha.
+    // Biometric ko LAST kyun rakha gaya:
+    //   - Wo sabse fragile step hai (hardware, OS dialog, cancel)
+    //   - Agar wo beech me hota aur fail hota, user ko yeh sochna padta ki
+    //     kahan se dobara start kare
+    //   - Last me hone se saare data entry steps pehle complete ho jaate hain,
+    //     aur biometric last me fail hone par bhi user ka kaam zyada ho chuka
+    //     hota hai
+    { n: 2, label: 'Security Questions', done: status?.security_questions_configured },
+    { n: 3, label: 'Biometric', done: status?.biometric_registered },
   ];
 
   return (
@@ -296,19 +443,53 @@ export default function SecuritySetupGate({
             </div>
           ) : null}
 
-          {/* ---- STEP 1: PIN ---- */}
+          {/* ---- STEP 1: PIN (set OR change) ---- */}
           {step === 1 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-gray-300">
                 <KeyRound className="h-4 w-4 text-blue-400" />
-                Set your 6-digit security PIN
+                {changingPin
+                  ? 'Change your 6-digit security PIN'
+                  : status?.pin_configured
+                  ? 'Your security PIN is set. Change it if you want.'
+                  : 'Set your 6-digit security PIN'}
               </div>
+
+              {/* ---- CHANGE mode: current PIN (verify + rollback safety) ----
+                  Ye field sirf tab dikhta hai jab user PIN CHANGE kar raha
+                  ho. Backend ye bcrypt se verify karta hai - bina sahi
+                  current PIN ke naya PIN set nahi ho sakta. */}
+              {changingPin ? (
+                <div className="space-y-2">
+                  <Label htmlFor="currentPin" className="text-sm text-gray-300">
+                    Current 6-digit PIN
+                  </Label>
+                  <Input
+                    id="currentPin"
+                    type="password"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    maxLength={6}
+                    value={currentPin}
+                    onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
+                    placeholder="Current PIN"
+                    className="h-11 border-gray-700 bg-gray-950 text-ink"
+                  />
+                </div>
+              ) : null}
+
               <div className="space-y-2">
-                <Label htmlFor="pin" className="text-sm text-gray-300">6-digit PIN</Label>
+                <Label htmlFor="pin" className="text-sm text-gray-300">
+                  {changingPin ? 'New 6-digit PIN' : '6-digit PIN'}
+                </Label>
                 <Input
                   id="pin"
                   type="password"
                   inputMode="numeric"
+                  // `autoComplete="new-password"` browser se "save this PIN"
+                  // prompt rokta hai - security PIN browser me store hona
+                  // nahi chahiye (hum khud bcrypt se hash karte hain).
+                  autoComplete="new-password"
                   maxLength={6}
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
@@ -317,11 +498,14 @@ export default function SecuritySetupGate({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirmPin" className="text-sm text-gray-300">Confirm PIN</Label>
+                <Label htmlFor="confirmPin" className="text-sm text-gray-300">
+                  Confirm {changingPin ? 'new ' : ''}PIN
+                </Label>
                 <Input
                   id="confirmPin"
                   type="password"
                   inputMode="numeric"
+                  autoComplete="new-password"
                   maxLength={6}
                   value={confirmPin}
                   onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
@@ -334,88 +518,49 @@ export default function SecuritySetupGate({
                 disabled={busy}
                 className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
               >
-                {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue'}
+                {busy ? (
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                ) : changingPin ? (
+                  'Change PIN'
+                ) : (
+                  'Continue'
+                )}
               </Button>
+
+              {/* ---- Toggle: set <-> change ----
+                  Sirf tab dikhta hai jab PIN ALREADY set hai (status se pata
+                  chalta hai). Naye user ko ye option nahi chahiye. */}
+              {status?.pin_configured ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChangingPin((v) => !v);
+                    setError('');
+                    setPin('');
+                    setConfirmPin('');
+                    setCurrentPin('');
+                  }}
+                  className="w-full text-center text-xs text-gray-500 underline underline-offset-2 transition-colors hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                >
+                  {changingPin ? 'Cancel PIN change' : 'Change PIN'}
+                </button>
+              ) : null}
+
+              {/* ---- Security note: PIN change ka asar ----
+                  User ko bataya jaata hai ki PIN change karne par kya
+                  hota hai - transparency best practice hai. */}
+      {changingPin ? (
+        <p className="rounded-md border border-amber-700/40 bg-amber-950/20 p-2.5 text-[11px] leading-relaxed text-amber-300/90">
+          When you change your PIN, every other signed-in device is signed
+          out - including this one. Your old PIN stops working immediately,
+          and you will be asked to log in again with the new PIN.
+        </p>
+      ) : null}
             </div>
           )}
 
-          {/* ---- STEP 2: Biometric ---- */}
+          {/* ---- STEP 2: Exactly 3 questions ---- */}
           {step === 2 && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Fingerprint className="h-4 w-4 text-blue-400" />
-                Register biometric authentication
-              </div>
-
-              {biometricSupported ? (
-                <>
-                  <p className="text-sm leading-relaxed text-gray-400">
-                    You will be asked to touch your fingerprint or face. This credential never
-                    leaves your device.
-                  </p>
-                  <Button
-                    onClick={registerBiometric}
-                    disabled={busy}
-                    className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
-                  >
-                    {busy ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Touch your sensor
-                      </>
-                    ) : (
-                      'Register biometric'
-                    )}
-                  </Button>
-                </>
-              ) : (
-                /* DEVICE SENSOR NAHI HAI - ALTERNATE RECOVERY PATH.
-                   SPEC clarification ke mutabiq: register form me checkbox
-                   chhupa diya gaya hai jab sensor nahi hota. Yahan bhi hum
-                   step ko SKIP karke user ko aage badhte hain - taaki koi
-                   user PERMANENTLY trap na ho.
-
-                   Ye "hard block" nahi hai, balki capability-aware bypass:
-                   - device me sensor hai   -> biometric HARD required
-                   - device me sensor nahi  -> skip + PIN/Questions se aage
-                */
-                <div className="space-y-3">
-                  <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3 text-sm text-gray-300">
-                    <p className="font-medium">Biometrics not available on this device</p>
-                    <p className="mt-1 text-xs leading-relaxed text-gray-500">
-                      No fingerprint or face hardware was detected. This step is skipped -
-                      your PIN and security questions provide the security layer instead.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={async () => {
-                      // Biometric ko "N/A" mark karo taaki setup complete ho sake
-                      setBusy(true);
-                      try {
-                        await fetch(`${AUTH_API}/api/v1/auth/security/biometric/complete`, {
-                          method: 'POST',
-                          headers: authHeaders,
-                        });
-                      } catch {
-                        // ignore
-                      }
-                      setStatus((s) =>
-                        s ? { ...s, biometric_registered: true, setup_complete: true } : s
-                      );
-                      setStep(3);
-                      setBusy(false);
-                    }}
-                    className="h-11 w-full rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
-                  >
-                    {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue'}
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ---- STEP 3: Exactly 3 questions ---- */}
-          {step === 3 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-gray-300">
                 <HelpCircle className="h-4 w-4 text-blue-400" />
@@ -456,6 +601,116 @@ export default function SecuritySetupGate({
               >
                 {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Complete setup'}
               </Button>
+            </div>
+          )}
+          {/* ---- STEP 3: Biometric ---- */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-gray-300">
+                <Fingerprint className="h-4 w-4 text-blue-400" />
+                Register biometric authentication
+              </div>
+
+              {biometricSupported ? (
+                <>
+                  <p className="text-sm leading-relaxed text-gray-400">
+                    You will be asked to touch your fingerprint or face. This credential never
+                    leaves your device.
+                  </p>
+                  <Button
+                    onClick={registerBiometric}
+                    disabled={busy}
+                    className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                  >
+                    {busy ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Touch your sensor
+                      </>
+                    ) : (
+                      'Register biometric'
+                    )}
+                  </Button>
+                </>
+              ) : (
+                /* DEVICE SENSOR NAHI HAI - ALTERNATE RECOVERY PATH.
+                   SPEC clarification ke mutabiq: register form me checkbox
+                   chhupa diya gaya hai jab sensor nahi hota. Yahan bhi hum
+                   step ko SKIP karke user ko aage badhte hain - taaki koi
+                   user PERMANENTLY trap na ho.
+
+                   Ye "hard block" nahi hai, balki capability-aware bypass:
+                   - device me sensor hai   -> biometric HARD required
+                   - device me sensor nahi  -> skip + PIN/Questions se aage
+                */
+                  <div className="space-y-3">
+                    <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3 text-sm text-gray-300">
+                      <p className="font-medium">Biometrics not available on this device</p>
+
+                      {/* ---- DIAGNOSTIC: ASLI WAJAH BATHAO ----
+                          Pehle yahan hardcoded text tha ("No fingerprint or
+                          face hardware was detected") - jo GALAT bhi ho
+                          sakta tha aur useless bhi.
+
+                          Ab `biometricDiag.reason` dikhaya jaata hai, jo
+                          actually check karke batata hai problem kya hai:
+                            - secure context nahi (LAN IP se khola?)
+                            - browser WebAuthn support nahi karta
+                            - Windows "Web Authentication" setting band
+                            - Windows Hello set up nahi
+                          Bina iske user ko sirf ek dead-end message milta
+                          tha. Ab use EXACT fix milta hai. */}
+                      <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                        {biometricDiag?.reason ??
+                          'Checking your device for a Windows Hello or Touch ID authenticator...'}
+                      </p>
+
+                      {/* Diagnostic facts - compact, debug-friendly */}
+                      {biometricDiag ? (
+                        <ul className="mt-2 space-y-0.5 text-[10px] text-gray-500">
+                          <li>
+                            Secure context: {biometricDiag.secureContext ? 'yes' : 'no'}
+                            {' '}({biometricDiag.origin})
+                          </li>
+                          <li>
+                            WebAuthn API: {biometricDiag.hasPublicKeyCredential ? 'yes' : 'no'}
+                          </li>
+                          <li>
+                            Platform authenticator (Windows Hello):{' '}
+                            {biometricDiag.platformAuthenticator ? 'found' : 'not found'}
+                          </li>
+                        </ul>
+                      ) : null}
+
+                      <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+                        You can skip this step - your PIN and security questions still
+                        protect your account.
+                      </p>
+                    </div>
+                  <Button
+                    onClick={async () => {
+                      // Biometric ko "N/A" mark karo taaki setup complete ho sake
+                      setBusy(true);
+                      try {
+                        await fetch(`${SECURITY_API}/biometric/complete`, {
+                          method: 'POST',
+                          headers: authHeaders,
+                        });
+                      } catch {
+                        // ignore
+                      }
+                      setStatus((s) =>
+                        s ? { ...s, biometric_registered: true, setup_complete: true } : s
+                      );
+                      onComplete();
+                      setBusy(false);
+                    }}
+                    className="h-11 w-full rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
+                  >
+                    {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 

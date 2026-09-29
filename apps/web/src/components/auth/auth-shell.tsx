@@ -51,7 +51,10 @@
 //   - 16px tak crisp (vector resample hota hai)
 //   - Deterministic - koi AI drift nahi, manifest se geometry locked hai
 import { BrandLockup } from '@wideo11/ui/brand/characters';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@wideo11/ui/card';
+// NOTE: `CardDescription` pehle import kiya tha par compact header ke baad
+// render nahi hota (600px budget me jagah nahi). Ab import bhi hata diya -
+// unused import rakhna lint noise deta hai.
+import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
 import type { ReactNode } from 'react';
 
 /**
@@ -244,36 +247,50 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
                 - Isliye `decorative` (aria-hidden) sahi choice hai. Brand
                   naam visually `Wideo11` text ke roop me bhi present hai. */}
           <div className="flex items-center justify-between gap-3">
-            {/* Left: mascots + wordmark */}
-            <div className="flex min-w-0 items-center gap-2">
+            {/* Left: mascots + wordmark.
+                `shrink-0` ZAROORI hai - iske bina flex ye side compress ho
+                jata tha jab title lambi ho, aur wordmark "Wide..." me truncate
+                ho jata tha (screenshot me dikha). Ab left side kabhi shrink
+                nahi hoga; truncate sirf right side (title) pe lagega. */}
+            <div className="flex shrink-0 items-center gap-2">
               <BrandLockup size={26} />
-              <span className="truncate text-sm font-semibold tracking-tight text-[#d8d9da]">
+              <span className="text-sm font-semibold tracking-tight text-[#d8d9da]">
                 Wideo11
               </span>
             </div>
-            {/* Right: page title. Compact header me title yahan aata hai
-                (pehle separate row me tha). `truncate` + `min-w-0` safety
-                de deta hai agar title lambi ho to ellipsis lag jaye. */}
-            <CardTitle className="min-w-0 shrink-0 truncate text-base font-semibold tracking-tight text-[#d8d9da]">
+            {/* Right: page title + description.
+                `truncate` + `min-w-0` safety deta hai agar title lambi ho
+                to ellipsis lag jaye (login page ka "Welcome back" short hai,
+                register ka "Create your account" thoda lamba). */}
+          <div className="min-w-0 text-right">
+            <CardTitle className="truncate text-base font-semibold tracking-tight text-[#d8d9da]">
               {title}
             </CardTitle>
+            {/* `description` pehle REMOVED tha - wo tab jab card par FIXED
+                600px height thi aur header me jagah nahi thi. Ab card
+                `h-auto` hai (content-fit), yaani extra line lene se koi
+                problem nahi, isliye ye wapas render kiya gaya.
+
+                NOTE: `line-clamp-1` (single line + ellipsis) `truncate` se
+                behtar hai yahan - `truncate` overflow:hidden use karta hai
+                jo flex row me height collapse kar sakta tha. `line-clamp-1`
+                height ko line-height tak hi rakhta hai. */}
+            <p className="mt-0.5 line-clamp-1 text-[11px] leading-none text-[#9fa7b3]">
+              {description}
+            </p>
           </div>
-        </CardHeader>
+        </div>
+      </CardHeader>
 
         {/* Content area - consistent padding dono forms me.
             `flex-1 min-h-0` zaroori hai: isse ye apna bacha hua height leta
-            hai aur flex-1 wala child (form) overflow na karaye.
-
-            NOTE: `description` prop ab RENDER nahi hota (compact header ne
-            us jagah bacha liya). Prop API me rakha gaya hai taki call sites
-            change na hone pade, aur future me chahiye to wapas aa sakta hai -
-            but abhi 600px budget me uski jagah nahi hai. */}
+            hai aur flex-1 wala child (form) overflow na karaye. */}
         <CardContent className="flex min-h-0 flex-1 flex-col px-5 pb-4 sm:px-7 sm:pb-4">
           {/* Form fields yahan render hote hain.
               KOI SCROLL LAYER NAHI - `overflow-y-auto` poori tarah hata diya
-              gaya hai, aur `.auth-scroll` class bhi nahi lagi (globals.css me
-              uski definition abhi bhi hai par use nahi ho rahi - future me
-              agar kabhi zaroorat lage to available rahegi).
+              gaya hai, aur `.auth-scroll` class + uski CSS definition dono
+              globals.css se remove kar di gayi hain (koi component use nahi
+              karta tha).
 
               KYUN: user requirement tha "scroll na karna pade, not at all".
               600px card me content ~580px hai, yaani scroll ki ZAROORAT hi

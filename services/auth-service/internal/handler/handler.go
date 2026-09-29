@@ -3,7 +3,9 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -45,7 +47,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Fingerprint: c.GetHeader("X-Fingerprint"),
 	}
 
-	user, tokenPair, err := h.authService.Register(c.Request.Context(), &req, deviceInfo)
+	// IP + User-Agent ko context me daal rahe hain taaki nayi session me
+	// save ho sake (creator dashboard ka "kis device par login hai" panel
+	// inhi values par kaam karta hai). Pehle ye hamesha empty store hota tha.
+	// SECURITY: ye values DISPLAY ke liye hain, authorization ke liye nahi -
+	// client dono spoof kar sakta hai.
+	reqCtx := service.WithClientInfo(
+		c.Request.Context(), clientIP(c.Request), c.Request.UserAgent(),
+	)
+
+	user, tokenPair, err := h.authService.Register(reqCtx, &req, deviceInfo)
 	if err != nil {
 		switch err {
 		case service.ErrUserExists:
@@ -176,7 +187,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 	}
 
-	user, tokenPair, err := h.authService.Login(ctx, &req, deviceInfo)
+	// IP + UA context me daalo (nayi session me save hoga - device panel ke liye)
+	loginCtx := service.WithClientInfo(
+		c.Request.Context(), clientIP(c.Request), c.Request.UserAgent(),
+	)
+	user, tokenPair, err := h.authService.Login(loginCtx, &req, deviceInfo)
 	if err != nil {
 		switch err {
 		case service.ErrInvalidCredentials:
@@ -240,6 +255,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"biometric_registered":          profile.BiometricRegistered,
 			"security_questions_configured": profile.SecurityQuestionsConfigured,
 			"setup_complete":                profile.SecuritySetupComplete,
+			// NEW (migration 004): frontend ko ye batana zaroori hai ki
+			// biometric step skip hone layak hai ya nahi. Bina iske gate
+			// un users ko step 2 pe rok dega jinke device me sensor hi
+			// nahi hai - wo step kabhi complete nahi kar paayenge.
+			"biometric_capable":  user.BiometricCapable,
+			"required_questions": 3,
 		}
 	} else {
 		setupRequired = false
@@ -249,6 +270,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		"user": gin.H{
 			"id":            user.ID,
 			"email":         user.Email,
+			"username":      user.Username,
 			"full_name":     user.FullName,
 			"is_active":     user.IsActive,
 			"is_verified":   user.IsVerified,
@@ -409,6 +431,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"id":            user.ID,
 		"email":         user.Email,
+		"username":      user.Username,
 		"full_name":     user.FullName,
 		"is_active":     user.IsActive,
 		"is_verified":   user.IsVerified,
@@ -500,4 +523,113 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 		c.Set("session_id", claims.SessionID.String())
 		c.Next()
 	}
+}
+
+// ============================================================================
+// ResendVerification - naya verification email bhejta hai
+// ============================================================================
+//
+// KYUN YE ZAROORI HAI (real problem):
+// Verification email 30-minute TTL wala hota hai. Agar user ne email miss
+// kar diya, ya link expire ho gaya, ya network pe atak gaya - to uska account
+// 30 min baad PURGE ho jata hai aur wapas REGISTER karna padta hai. Resend
+// se woh 30-minute window dobara 30 min extend ho jaata hai bina naya
+// account banaye.
+//
+// IMPORTANT SECURITY NOTE - koi bhi email enumeration nahi:
+//
+//	Ye handler KABHI nahi batata ki email exist karta hai ya nahi. Dono
+//	cases me SAME 200 response jaata hai. Warna ye endpoint attacker ke liye
+//	"is email par account hai ya nahi" check karne ka tool ban jayega.
+//
+// BEHAVIOUR:
+//   - user nahi mila            -> generic 200 (kuch nahi hota)
+//   - user already verified    -> generic 200 + note
+//   - user verified nahi hai   -> purana token DELETE + naya token + email
+//
+// Purana token delete: `IssueVerificationToken` ke andar already hai
+// (`verifRepo.DeleteByUserID` BEFORE create). Isliye "jo token use ho chuka
+// hai wo bhi resend ke saath delete ho jaye" - ye requirement naturally
+// satisfy ho jaati hai, koi extra kaam nahi karna pada.
+//
+// Hinglish comments: har block ka arth
+func (h *AuthHandler) ResendVerification(c *gin.Context) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	email := strings.ToLower(strings.TrimSpace(req.Email))
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		return
+	}
+
+	// ---- Generic response (email enumeration prevention) ----
+	// Ye SAME payload har situation me jaayega, sirf ek `alreadyVerified`
+	// flag jo user ko helpfully batata hai. Email EXISTENCE leak nahi hota.
+	respondGeneric := func(alreadyVerified bool, ttl int) {
+		msg := "If an unverified account exists for that address, a fresh verification email has been sent."
+		if alreadyVerified {
+			msg = "This account is already verified. You can log in now."
+		}
+		c.JSON(http.StatusOK, gin.H{
+			"message":          msg,
+			"already_verified": alreadyVerified,
+			"ttl_minutes":      ttl,
+		})
+	}
+
+	ctx := c.Request.Context()
+	user, err := h.authService.GetUserByEmailForSecurity(ctx, email)
+	if err != nil {
+		// User nahi mila -> generic success. Email exist karta hai ya nahi,
+		// ye attacker ko pata nahi chalega.
+		//
+		// ---- BUG FIX (critical): `return` ZAROORI tha ----
+		// Pehle yahan `return respondGeneric(...)` tha. Ek TypeScript error
+		// ("no value used as value") fix karte waqt `return` galti se hata
+		// diya gaya tha, aur sirf `respondGeneric(...)` reh gaya.
+		//
+		// Uska asar: `respondGeneric` already 200 response likh deta hai, par
+		// execution CONTINUE hota tha. Ab ye line padhta tha
+		// `user.IsVerified` jab `user` nil hai (kyunki lookup fail hua) ->
+		// NIL POINTER PANIC. Server panic log karta, user ko 200 milta -
+		// par koi email bhi nahi jata, aur user ko pata bhi nahi chalta.
+		//
+		// Isliye ab `respondGeneric(...); return;` - dono statements alag.
+		// (`return respondGeneric(...)` invalid TS hai kyunki wo function
+		// koi value return nahi karti.)
+		log.Printf("[RESEND] No unverified account found for %s (generic 200 returned, no email sent)", email)
+		respondGeneric(false, int(h.authService.VerificationTTLMinutes()))
+		return
+	}
+
+	// Already verified: naya email bhejne ki zaroorat nahi
+	if user.IsVerified {
+		log.Printf("[RESEND] Account %s is already verified - no email sent", email)
+		respondGeneric(true, 0)
+		return
+	}
+
+	// ---- Naya token issue karo (purana automatically delete hoga) ----
+	// Ye wahi code path hai jo registration use karta hai, isliye TTL,
+	// hashing, aur "old tokens delete" behaviour IDENTICAL hai.
+	log.Printf("[RESEND] Unverified account found for %s - issuing fresh token + sending email", email)
+	if err := h.authService.ResendVerificationForUser(ctx, user); err != nil {
+		// Email bhejne me dikkat aayi. User ko pata chalna chahiye ki
+		// retry kare, isliye 503 (temporary) return karte hain.
+		log.Printf("[RESEND] FAILED to send for %s: %v", email, err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "could not send verification email",
+			"message": "Please try again in a moment.",
+		})
+		return
+	}
+
+	log.Printf("[RESEND] Email sent successfully to %s", email)
+	respondGeneric(false, int(h.authService.VerificationTTLMinutes()))
 }

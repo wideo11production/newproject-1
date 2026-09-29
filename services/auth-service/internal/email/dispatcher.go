@@ -66,9 +66,9 @@ func (c *consoleTransport) Send(to, subject, htmlBody, textBody string) error {
 
 // smtpTransport real SMTP server ke through email bhejta hai (production)
 type smtpTransport struct {
-	addr  string
-	auth  smtp.Auth
-	from  string
+	addr     string
+	auth     smtp.Auth
+	from     string
 	fromName string
 }
 
@@ -202,6 +202,25 @@ func (d *Dispatcher) SendVerificationEmail(to, fullName, verifyURL, code string,
 	subject := "Verify your Wideo11 account"
 	htmlBody := VerificationHTML(fullName, verifyURL, code, ttlMinutes)
 	textBody := VerificationText(fullName, verifyURL, code, ttlMinutes)
+	return d.transport.Send(to, subject, htmlBody, textBody)
+}
+
+// Send generic email bhejta hai (subject + html + text).
+//
+// YE KYUN ADD KIYA GAYA:
+// Background queue (`EmailQueue`, queue.go) ko ek GENERIC sender chahiye tha,
+// taaki wo sirf verification tak limited na rahe. Aage purge notification,
+// security alerts, ya koi bhi transactional email background queue se ja
+// sake, bina SMTP logic duplicate kiye.
+//
+// Transport wahi rehta hai jo config ke hisaab se chuna gaya tha (SMTP ya
+// console) - isliye koi alag connection logic nahi hai aur
+// `SendVerificationEmail` / `SendPurgeNotification` isi par based hain.
+//
+// NOTE: ye `Transport` interface ka seedha passthrough hai, isliye koi extra
+// logic (rate limit, retry, validation) YAHAN nahi - wo queue worker ka kaam
+// hai.
+func (d *Dispatcher) Send(to, subject, htmlBody, textBody string) error {
 	return d.transport.Send(to, subject, htmlBody, textBody)
 }
 

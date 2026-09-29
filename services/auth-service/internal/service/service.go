@@ -13,6 +13,7 @@ import (
 	"github.com/wideo11/auth-service/internal/password"
 	"github.com/wideo11/auth-service/internal/repository"
 	"github.com/wideo11/auth-service/internal/token"
+	"gorm.io/gorm"
 )
 
 var (
@@ -81,6 +82,30 @@ type AuthService struct {
 	verifRepo repository.VerificationTokenRepository
 	// emailer verification email bhejne ke liye (interface type - circular dep se bachne ke liye)
 	emailer emailDispatcher
+	// emailQueue OPTIONAL background email queue. Set hone par verification
+	// email DETACH ho jati hai (request turant return) aur background worker
+	// bhejta hai - jisse registration ka ~5s wait nikal jata hai.
+	// Nil ho to synchronous path chalta hai (slow, par kaam karta hai).
+	emailQueue verificationEmailQueuer
+	// db raw GORM handle - creator dashboard operations (channels, avatar,
+	// sessions) ke liye. Repositories sirf `users`/`sessions` ke narrow
+	// surface cover karte hain; nayi entities (channels) ke liye direct db
+	// chahiye. main.go me `SetDB()` se inject hota hai.
+	db *gorm.DB
+}
+
+// SetDB raw GORM handle inject karta hai (creator dashboard ke liye).
+func (s *AuthService) SetDB(db *gorm.DB) {
+	s.db = db
+}
+
+// SetEmailQueue background email queue inject karta hai.
+//
+// Ye OPTIONAL hai: agar set nahi hota, to verification email synchronous
+// bheji jati hai (pichla behaviour). Set hone par email background me chali
+// jati hai aur request turant return ho jati hai.
+func (s *AuthService) SetEmailQueue(q verificationEmailQueuer) {
+	s.emailQueue = q
 }
 
 func NewAuthService(cfg *config.Config, userRepo repository.UserRepository, sessionRepo repository.SessionRepository,
@@ -156,11 +181,23 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 	}
 
 	// Create user
+	//
+	// BiometricCapable: client ne bataya ya nahi?
+	//   nil (nahi bataya) -> true assume karte hain (safe/strict default,
+	//                        migration 004 ka documented behaviour)
+	//   false              -> client ne confirm kiya sensor nahi hai
+	//   true               -> sensor hai
+	biometricCapable := true
+	if req.BiometricCapable != nil {
+		biometricCapable = *req.BiometricCapable
+	}
+
 	user := &model.User{
-		Email:        req.Email,
-		PasswordHash: hashedPassword,
-		FullName:     req.FullName,
-		Username:     username,
+		Email:            req.Email,
+		PasswordHash:     hashedPassword,
+		FullName:         req.FullName,
+		Username:         username,
+		BiometricCapable: biometricCapable,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -211,11 +248,12 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		}
 	}
 
+	ip, ua := clientInfoFromContext(ctx)
 	// Create session and tokens
 	session := &model.Session{
 		UserID:    user.ID,
-		IPAddress: "", // Would be extracted from request in handler
-		UserAgent: "", // Would be extracted from request in handler
+		IPAddress: ip, // handler se context ke through aata hai (clientInfoFromContext)
+		UserAgent: ua, // handler se context ke through aata hai
 	}
 
 	// DeviceID sirf tab set karte hain jab device actually persist hua ho
@@ -346,11 +384,12 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	// ho jati thi. Device optional hai, isliye device nil rehne dena sahi hai.
 	// Hinglish: fingerprint nahi hai to device record banate hi nahi
 
+	ip, ua := clientInfoFromContext(ctx)
 	// Create session and tokens
 	session := &model.Session{
 		UserID:    user.ID,
-		IPAddress: "", // Would be extracted from request in handler
-		UserAgent: "", // Would be extracted from request in handler
+		IPAddress: ip, // handler se context ke through aata hai
+		UserAgent: ua, // handler se context ke through aata hai
 	}
 
 	// DeviceID sirf tab set karte hain jab device actually persist hua ho

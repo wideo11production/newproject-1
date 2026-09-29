@@ -528,3 +528,60 @@
 - [ ] Zero Recurring AI Subscription Cost
 - [ ] Enterprise Scalable Infrastructure
 - [ ] Production Launch Ready
+---
+
+# Session Addendum - 2026-09-29 (auth reliability + creator dashboard UX)
+
+## Completed in this session (verified, not assumed)
+
+### Auth reliability
+- [x] **Register/login/verify 404s** - corrupted `.next` dev cache, cleared
+- [x] **Verify page "spinner forever"** - root cause was TWO guards deadlocking
+      under React StrictMode: a `hasRequested` ref blocked the 2nd effect run
+      while a `cancelled` flag suppressed the 1st run's result. Replaced with a
+      shared promise ref (exactly one network call, result always applied).
+- [x] **Verify re-click** - consumed token now returns "already verified" success
+      instead of an error (read-only fallback; cannot verify a new account)
+- [x] **Unverified login blocked** - 403 "please verify your email" (verified)
+- [x] **Resend verification** - new token issued, old deleted, 30-min TTL reset
+- [x] **Rate limiter** - was 1 req/60s (broke every signup). Now per-route:
+      registration 3/5min, login 8/min, verify 10/min, auth 20/min
+- [x] **Missing `return` in resend handler** - nil-deref panic on unknown email
+- [x] **Tooltip without TooltipProvider** - wrapped dashboard editor
+
+### Performance
+- [x] **SMTP no longer blocks registration** - background email queue added
+      (`internal/email/queue.go`). Buffered channel + worker goroutine.
+      - register: ~5000ms -> **266ms**
+      - resend:   ~4700ms -> **340ms**
+      - Email still delivered (verified in logs: `[EMAIL] Sent to=...`)
+      - Falls back to synchronous if queue unavailable (email never dropped)
+      - Drains queue on shutdown so restarts don't lose mail
+
+### Creator dashboard (user-facing)
+- [x] Profile panel (username, email, verified badges)
+- [x] Avatar set/clear - `javascript:`/`data:` schemes REJECTED (XSS guard)
+- [x] Create channel - duplicate 409, invalid handle 400
+- [x] Signed-in devices list
+- [x] IP + User-Agent now actually captured (was a TODO, always empty)
+- [x] **Removed `/dashboard` from CONSOLE_ROUTES** - admin console sidebar was
+      wrapping the creator dashboard (two nav layers, looked like superadmin)
+- [x] PIN change verifies current PIN, rejects reuse, **revokes all sessions**
+- [x] Security gate order: PIN -> Security Questions -> Biometric (last)
+
+### Email
+- [x] Gmail transport working (App Password, 587)
+- [x] HTML templates (responsive, dark theme, plain-text fallback)
+- [x] Success logging added (only failures were logged before)
+
+## Known gaps (not bugs, deliberate scope limits)
+- [ ] Avatar is URL-based, not file upload (needs MinIO presigned upload)
+- [ ] Verification link is `localhost:3000` - breaks on phone / LAN (needs real domain)
+- [ ] Gmail ~500 emails/day limit; Postfix for production
+
+## Next phase (this is the current task)
+- [ ] Chrome-style 3-dot overflow menu in dashboard
+- [ ] Collapsible side bar with icon-only tabs
+- [ ] PWA install: QR code in the 3-dot menu for phone handoff
+- [ ] PWA manifest + service worker + icons (required for install prompt)
+- [ ] Security review of all the above before merge

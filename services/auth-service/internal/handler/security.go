@@ -5,6 +5,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -43,7 +44,7 @@ func clientIP(r *http.Request) string {
 	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
 		return strings.TrimSpace(strings.Split(fwd, ",")[0])
 	}
-		return r.RemoteAddr
+	return r.RemoteAddr
 }
 
 func secEmail(c *gin.Context) string {
@@ -67,8 +68,8 @@ func (h *SecurityHandler) LockoutStatus(c *gin.Context) {
 	if err != nil || user == nil {
 		// User exist nahi karta - generic response (enumeration avoid)
 		c.JSON(http.StatusOK, gin.H{
-			"locked":  false,
-			"state":   model.LockoutStateNone,
+			"locked": false,
+			"state":  model.LockoutStateNone,
 		})
 		return
 	}
@@ -130,14 +131,14 @@ func (h *SecurityHandler) SetupStatus(c *gin.Context) {
 	//   - security_questions_configured (exactly 3)
 	//   - setup_complete = teeno ka AND
 	c.JSON(http.StatusOK, gin.H{
-		"pin_configured":             profile.PINConfigured,
-		"biometric_registered":       profile.BiometricRegistered,
+		"pin_configured":                profile.PINConfigured,
+		"biometric_registered":          profile.BiometricRegistered,
 		"security_questions_configured": profile.SecurityQuestionsConfigured,
-		"setup_complete":             profile.SecuritySetupComplete,
-		"configured_questions":       questions,
-		"required_questions":         model.RequiredSecurityQuestions,
-		"lockout_state":              lockoutState,
-		"lockout_seconds_remaining":  remaining,
+		"setup_complete":                profile.SecuritySetupComplete,
+		"configured_questions":          questions,
+		"required_questions":            model.RequiredSecurityQuestions,
+		"lockout_state":                 lockoutState,
+		"lockout_seconds_remaining":     remaining,
 	})
 }
 
@@ -166,7 +167,7 @@ func (h *SecurityHandler) SetPIN(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "PIN configured successfully",
-		"digits":   model.PINLength,
+		"digits":  model.PINLength,
 	})
 }
 
@@ -189,12 +190,20 @@ func (h *SecurityHandler) ChangePIN(c *gin.Context) {
 	}
 
 	if err := h.svc.ChangePIN(c.Request.Context(), userID, req.OldPIN, req.NewPIN); err != nil {
+		switch {
 		// Old PIN galat = specific error
-		if err == service.ErrOldPINIncorrect {
+		case err == service.ErrOldPINIncorrect:
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "current PIN is incorrect",
 				"code":    "OLD_PIN_INCORRECT",
 				"message": "Verification failed. PIN was not changed.",
+			})
+			return
+		// Naya PIN purane jaisa = reject
+		case err == service.ErrNewPINSameAsOld:
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "same_pin",
+				"message": "Your new PIN must be different from your current PIN.",
 			})
 			return
 		}
@@ -202,7 +211,30 @@ func (h *SecurityHandler) ChangePIN(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "PIN changed successfully"})
+	// ---- SESSION INVALIDATION (security-critical) ----
+	// PIN change hone par SAARE sessions revoke kar dete hain - taaki agar
+	// purana PIN kisi aur ke haath se chura hua tha (shared device, shoulder
+	// surf, lost phone), to uska session bhi mar jaye. Warna attacker ka
+	// JWT valid rehta aur PIN change karna bekaar ho jata.
+	//
+	// NOTE: is caller ka apna session bhi revoke ho jata hai. Isliye response
+	// me `reauth_required: true` bhejte hain, taaki frontend user ko turant
+	// logout karke naye PIN se dobara login karwaye.
+	revoked, err := h.svc.InvalidateAllSessionsForUser(c.Request.Context(), userID)
+	if err != nil {
+		// PIN change ho chuka hai; sirf session cleanup fail hua.
+		// Log karke continue karte hain - user ko galat error mat dikhao
+		// kyunki uska PIN actually change ho gaya hai.
+		c.Header("X-Session-Invalidation", "failed")
+	} else {
+		c.Header("X-Sessions-Revoked", strconv.Itoa(revoked))
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":          "PIN changed successfully",
+		"reauth_required":  true,
+		"sessions_revoked": revoked,
+	})
 }
 
 // VerifyPIN POST /api/v1/security/pin/verify
@@ -233,10 +265,10 @@ func (h *SecurityHandler) VerifyPIN(c *gin.Context) {
 
 	if err == service.ErrAccountBlocked {
 		c.JSON(http.StatusLocked, gin.H{
-			"error": "account blocked",
-			"message": "Warning: Account will be blocked if biometric credentials are not verified within 3 minutes.",
+			"error":             "account blocked",
+			"message":           "Warning: Account will be blocked if biometric credentials are not verified within 3 minutes.",
 			"seconds_remaining": remaining,
-			"blocked": true,
+			"blocked":           true,
 		})
 		return
 	}
@@ -311,8 +343,8 @@ func (h *SecurityHandler) MarkBiometric(c *gin.Context) {
 
 	profile, _ := h.svc.GetSetupStatus(c.Request.Context(), userID)
 	c.JSON(http.StatusOK, gin.H{
-		"message":         "Biometric registered",
-		"setup_complete":  profile.SecuritySetupComplete,
+		"message":        "Biometric registered",
+		"setup_complete": profile.SecuritySetupComplete,
 	})
 }
 
@@ -351,8 +383,8 @@ func (h *SecurityHandler) SecurityEvents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"total":   len(events),
-		"events":  out,
+		"total":  len(events),
+		"events": out,
 	})
 }
 

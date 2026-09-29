@@ -18,6 +18,10 @@ var ErrVerificationTokenNotFound = errors.New("verification token not found or e
 type VerificationTokenRepository interface {
 	Create(ctx context.Context, token *model.VerificationToken) error
 	GetByHash(ctx context.Context, tokenHash string) (*model.VerificationToken, error)
+	// GetByHashIncludingUsed - consumed token bhi dhoondhta hai (read-only).
+	// VerifyEmail ka fallback isse use hota hai taaki user ne link re-click /
+	// refresh kiya ho to error ke bajaye honest "already verified" mile.
+	GetByHashIncludingUsed(ctx context.Context, tokenHash string) (*model.VerificationToken, error)
 	MarkVerified(ctx context.Context, tokenID uuid.UUID, userID uuid.UUID) error
 	DeleteByUserID(ctx context.Context, userID uuid.UUID) error
 }
@@ -57,6 +61,40 @@ func (r *verificationTokenRepository) GetByHash(ctx context.Context, tokenHash s
 		return nil, ErrVerificationTokenNotFound
 	}
 
+	return &token, nil
+}
+
+// GetByHashIncludingUsed token hash se token dhoondhta hai - CHAHYE wo
+// abhi use hua ho ya nahi.
+//
+// KYUN YE ZAROORI HAI:
+// Verification token single-use hai. `GetByHash` sirf UNUSED tokens return
+// karta hai (`IsUsable()` check), jo security ke liye sahi hai. Lekin use
+// hone ke baad use karna CHAHTE HAIN to ye chahiye - specifically is case
+// me:
+//
+//	user ne link click kiya -> verify ho gaya -> user ne page refresh kiya
+//	-> wahi token dobara gaya -> `GetByHash` "not found" deta
+//
+// Yahan se service pata kar leti hai ki "haan token use ho chuka tha, aur
+// user verified bhi hai" - aur honest success response de sakti hai,
+// error ke bajaye. Ye koi naya account verify NAHI kar sakta - sirf
+// already-verified state report karta hai.
+//
+// SECURITY: ye method sirf INTERNAL fallback ke liye hai. Verification ka
+// actual path `GetByHash` + `MarkVerified` hai jo `IsUsable()` gate karta
+// hai. Is method se koi state mutate nahi hoti - sirf read.
+func (r *verificationTokenRepository) GetByHashIncludingUsed(ctx context.Context, tokenHash string) (*model.VerificationToken, error) {
+	var token model.VerificationToken
+	err := r.db.WithContext(ctx).
+		Where("token_hash = ?", tokenHash).
+		First(&token).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrVerificationTokenNotFound
+		}
+		return nil, err
+	}
 	return &token, nil
 }
 

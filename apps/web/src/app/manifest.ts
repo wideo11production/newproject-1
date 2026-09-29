@@ -30,19 +30,35 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#111217', // grafana.bg - app background se match
     theme_color: '#111217', // browser chrome ka colour
     orientation: 'any',
+    // ---- ICONS: PNG zaroori hai, SVG kaafi nahi ----
+    //
+    // Chrome ka install criteria specifically 192x192 aur 512x512 **PNG**
+    // icons maangta hai. Sirf SVG dene se browser "Install app" prompt
+    // HI NAHI DIKHAYEGA, chahe manifest aur rest sab perfect ho.
+    //
+    // Ye PNGs `public/brand.svg` se generate hue hain (headless Edge se
+    // rasterize karke) - koi naya image dependency add nahi hua.
+    //
+    // `purpose: 'maskable'` wale alag se hain: Android inhe circle/squircle
+    // me crop kar sakta hai, isliye unme glyph ke around extra padding hoti
+    // hai jisse crop hone par bhi logo poori tarah dikhe.
     icons: [
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
       {
-        src: '/icon.svg',
-        sizes: 'any',
-        type: 'image/svg+xml',
-        purpose: 'any',
-      },
-      {
-        src: '/apple-icon.svg',
-        sizes: '180x180',
-        type: 'image/svg+xml',
+        src: '/icon-maskable-192.png',
+        sizes: '192x192',
+        type: 'image/png',
         purpose: 'maskable',
       },
+      {
+        src: '/icon-maskable-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+      // iOS home-screen icon (manifest ke bajaye apple-touch-icon link)
+      { src: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
     ],
     // PWA shortcuts - mobile long-press menu me direct access
     shortcuts: [

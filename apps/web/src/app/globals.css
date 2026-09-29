@@ -91,37 +91,3 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
-/* ============================================================================
-   AUTH SCROLL - invisible scrollbar for the auth card inner region
-   ============================================================================
-   WHY (user complaint: "side me scroll bar form me bhut bura lagta hai"):
-
-   The auth card is capped at `max-h-[60vh]` because the page wrapper reserves
-   20vh top + 20vh bottom = 40vh. That leaves exactly 60vh of usable height.
-   The register form (single column, 44px inputs, 16px gaps, strength meter,
-   2 consent panels) needs roughly 640-680px, so on a typical 1080p screen
-   (~900px viewport, 60vh = 540px available) the content is genuinely taller
-   than the box and MUST scroll. The scroll is necessary - the problem is only
-   that the DEFAULT scrollbar chrome looks cheap.
-
-   SOLUTION: keep the scroll fully functional, hide only the visual chrome.
-     - `scrollbar-width: none`  -> Firefox
-     - `::-webkit-scrollbar { display: none }` -> Chrome/Edge/Safari
-   Scrolling still works via wheel, trackpad, touch, keyboard (Tab/arrows) and
-   screen-reader virtual cursor. Nothing becomes unreachable.
-
-   NOTE: I am NOT using Tailwind's `scrollbar-none`/`scrollbar-thin` utilities
-   here on purpose - I verified earlier that this build does NOT emit any
-   `scrollbar-*` core plugin rules (checked the compiled CSS: zero matches), so
-   those classes would be dead code that silently does nothing. Plain CSS is
-   version-proof.
-   ========================================================================== */
-.auth-scroll {
-  scrollbar-width: none;
-  -ms-overflow-style: none; /* legacy Edge/IE */
-}
-.auth-scroll::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
-}

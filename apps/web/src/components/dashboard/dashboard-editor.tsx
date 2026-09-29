@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@wide
 import { Button, buttonVariants } from '@wideo11/ui/button';
 import { Badge } from '@wideo11/ui/badge';
 import { Skeleton } from '@wideo11/ui';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@wideo11/ui/tooltip';
 import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@wideo11/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@wideo11/ui/dropdown-menu';
 import { Input } from '@wideo11/ui/input';
@@ -124,6 +124,20 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
   };
 
   return (
+    // ---- TooltipProvider (REQUIRED) ----
+    // Radix ka `<Tooltip>` bina apne `<TooltipProvider>` ancestor ke THROW
+    // karta hai: "Tooltip must be used within TooltipProvider".
+    //
+    // Ye error tab aaya jab ye editor dashboard page pe render hua - kyunki
+    // app root layout me koi TooltipProvider nahi tha (poore app me wo
+    // component kabhi use hi nahi hua tha - yahan pehli baar use hua).
+    //
+    // FIX: poore editor ko TooltipProvider se wrap kar diya. Isse har Tooltip
+    // ko context mil jaata hai.
+    //
+    // NOTE: Radix `delayDuration` 200ms rakha hai taaki hover karte hi tooltip
+    // na phate - sirf deliberate hover pe dikhe. Ye UX polish hai.
+    <TooltipProvider delayDuration={200}>
     <div className="h-full flex">
       {/* Panel Picker Sidebar (draggable from) */}
       <div className="w-64 border-r border-gray-800 p-4 overflow-y-auto">
@@ -278,6 +292,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
         </Dialog>
       </div>
     </div>
+    </TooltipProvider>
   );
 }
 

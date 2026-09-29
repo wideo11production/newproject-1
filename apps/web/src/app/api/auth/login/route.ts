@@ -69,7 +69,42 @@ export async function POST(request: Request) {
     const payload = await authResponse.json().catch(() => ({}));
 
     // Backend ka status pass-through (200 success, 401 wrong password, etc.)
-    return NextResponse.json(payload, { status: authResponse.status });
+    const res = NextResponse.json(payload, { status: authResponse.status });
+
+    // ---- SESSION COOKIE SET (middleware ke liye) ----
+    // Sirf SUCCESSFUL login pe cookie set karo (200). 401/403 pe cookie set
+    // karna galat hoga - warna invalid credentials ke baad bhi user
+    // "logged in" maana jayega.
+    if (authResponse.status === 200 && payload?.tokens?.access_token) {
+      const accessToken = String(payload.tokens.access_token);
+
+      // TTL: auth-service `jwt.access_token_ttl` (minutes) me deta hai, aur
+      // response me `expires_in` (seconds) aata hai. Response value use karo
+      // taaki dono side ka TTL exactly match ho - warna cookie JWT se zyada
+      // zyada zinda rehta hai.
+      const expiresInSec = Number(payload?.tokens?.expires_in) || 900;
+
+      res.cookies.set({
+        name: 'wideo11_session',
+        value: accessToken,
+        // ---- COOKIE SECURITY FLAGS ----
+        // `httpOnly`: browser JS (XSS payload) ise nahi padh sakta.
+        //   Isse token chori karna XSS se nahi ho sakta.
+        // `sameSite: 'lax'`: CSRF se protect karta hai, par top-level
+        //   navigation (redirect) me cookie jaata hai - isliye login ke baad
+        //   dashboard pe jaana kaam karta hai.
+        // `secure`: production me HTTPS hi hona chahiye. `false` rakha hai
+        //   kyunki dev http://localhost pe hai; production me true karna
+        //   padega (ya env se control karo).
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: expiresInSec,
+      });
+    }
+
+    return res;
   } catch {
     // Auth service reachable nahi - clear error
     return NextResponse.json(

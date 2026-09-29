@@ -62,7 +62,7 @@ INPUT_CLASS,
 PRIMARY_BUTTON_CLASS,
 FORM_SPACING,
 } from '@/components/auth/auth-shell';
-import { type BiometricMethod } from '@/lib/webauthn';
+import { type BiometricMethod, type BiometricDiagnostics } from '@/lib/webauthn';
 // Click tracking + security audit (staff trap)
 import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
 
@@ -100,6 +100,11 @@ const [message, setMessage] = useState('');
 const [biometricSupported, setBiometricSupported] = useState(false);
 const [biometricEnrolling, setBiometricEnrolling] = useState(false);
 const [biometricMessage, setBiometricMessage] = useState('');
+// WebAuthn diagnostic report - jisme user-READABLE reason hota hai ki
+// biometric kyun available hai ya nahi. Register form me iska use: jab user
+// checkbox nahi dekh raha, to usse pata chale KYA fix karna hai
+// (localhost vs LAN IP, browser support, Windows Hello setup).
+const [biometricDiag, setBiometricDiag] = useState<BiometricDiagnostics | null>(null);
 // Kaunsa method chuna hai - 'face' ya 'fingerprint'
 // Default 'face': Windows Hello laptop pe face unlock zyada common hai
   const [biometricMethod, setBiometricMethod] = useState<BiometricMethod>('face');
@@ -143,18 +148,15 @@ useEffect(() => {
   // (disabled placeholder nahi) - checkbox jo kabhi kaam nahi kar sakta wo
   // user ko sirf confuse karta hai.
   // Hinglish: asli sensor check karo, nahi hai to checkbox chhupa do
+  //
+  // NOTE: ab `diagnoseBiometrics` use ho raha hai (same helper jo security
+  // gate me hai) taaki dono jagah EXACT same logic chale. Pehle ye inline
+  // boolean check tha, jo bina reason bataye `false` de deta tha.
   const checkBiometric = async () => {
-    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-      setBiometricSupported(false);
-      return;
-    }
-    try {
-      const available =
-        await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-      setBiometricSupported(available);
-    } catch {
-      setBiometricSupported(false);
-    }
+    const { diagnoseBiometrics } = await import('@/lib/webauthn');
+    const diag = await diagnoseBiometrics();
+    setBiometricDiag(diag);
+    setBiometricSupported(diag.canUseBiometrics);
   };
 
   checkBiometric();
@@ -249,9 +251,42 @@ const showError = (field: string, err: string | null) =>
   touched[field] ? err : null;
 
 // WebAuthn device enrollment - browser authenticator call karta hai
-async function registerBiometric() {
+//
+// ---- YE AB PRE-REGISTER CALL NAHI HAI ----
+// Pehle ye form submit se PEHLE call hota tha, `undefined` auth header ke
+// saath. Wo STRUCTURALLY IMPOSSIBLE tha:
+//   - WebAuthn endpoints (auth-service me) authenticated hain
+//   - registration ke waqt user ka koi session hota hi nahi
+//   - to `register/begin` par 401 -> "Could not start biometric registration"
+//
+// Ab enrollment registration KE BAAD hoti hai, jab:
+//   - backend ne tokens return kiye (register response me)
+//   - proxy ne `wideo11_session` cookie set kar di
+//   - to proxy cookie se token uthakar authenticated call kar pata hai
+//
+// Hinglish: pehle login ke bina hi biometric puchh rahe the (impossible);
+// ab register hone ke baad, jab session ban chuka ho.
+async function enrollBiometricAfterRegistration(): Promise<string | null> {
   const { registerCredential } = await import('@/lib/webauthn');
-  return registerCredential(email.trim().toLowerCase(), undefined, biometricMethod);
+  // `undefined` = koi header nahi; proxy httpOnly cookie se token uthayega.
+  const result = await registerCredential(email.trim().toLowerCase(), undefined, biometricMethod);
+  if (!result.ok) {
+    return result.message;
+  }
+
+  // Backend ko batado ki credential enroll ho gaya - tabhi `biometric_registered`
+  // flag set hota hai aur security setup recompute hota hai.
+  try {
+    await fetch('/api/auth/security/biometric/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+  } catch {
+    // Is failure ko fatal mat samjho - credential device par enroll ho chuka
+    // hai. Security gate me userdobara enroll kar sakta hai.
+  }
+  return null;
 }
 
 // ---- Form submit ----
@@ -280,6 +315,13 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         // Username lowercase + trim bhejte hain - backend bhi yahi karta hai.
         // Isse "Taken" vs "taken" ka mismatch nahi hoga.
         username: username.trim().toLowerCase(),
+        // NEW (migration 004): device me biometric sensor hai ya nahi, ye
+        // backend ko batana zaroori hai. Bina iske backend assume karta hai
+        // ki sensor hai (strict default), aur jiske device me sensor nahi
+        // hai wo security gate me permanently phas jata - kyunki wo enroll
+        // hi nahi kar sakta.
+        // `biometricSupported` client-side WebAuthn check ka result hai.
+        biometricCapable: biometricSupported,
         email: email.trim().toLowerCase(),
         password,
         enableBiometric,
@@ -294,6 +336,31 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
         payload.message ??
           'Account created. Please check your email to verify your address within 30 minutes.'
       );
+
+      // ---- BIOMETRIC ENROLLMENT (AB SESSION KE BAAD) ----
+      // Agar user ne "Enable biometric" tick kiya tha, to ab enroll karo.
+      // Ye tabhi possible hai kyunki ab `wideo11_session` cookie set ho chuki
+      // hai (proxy ne registration response pe set ki) - isliye WebAuthn ke
+      // authenticated endpoints call ho sakte hain.
+      //
+      // NOTE: ye AWAIT nahi karta main success path se - message foran
+      // dikhana zaroori hai, enrollment background me chalta hai. Par error
+      // aaye to user ko pata chalna chahiye, isliye state update hota hai.
+      if (enableBiometric) {
+        setBiometricEnrolling(true);
+        void enrollBiometricAfterRegistration().then((err) => {
+          setBiometricEnrolling(false);
+          if (err) {
+            setBiometricMessage(`Biometric setup failed: ${err}`);
+            // User ko gate me bhej do jahan wo dobara try kar sake
+            setMessage(
+              `Account created, but biometric enrollment failed: ${err}. You can enable it from your security settings after verifying your email.`
+            );
+          } else {
+            setBiometricMessage('Biometric enrolled on this device.');
+          }
+        });
+      }
       return;
     }
 
@@ -559,32 +626,23 @@ return (
             checked={enableBiometric}
             disabled={biometricEnrolling}
             onCheckedChange={async (v) => {
+              // ---- CHECKBOX AB SIRF FLAG SET KARTA HAI ----
+              // Pehle yahan turant device enrollment shuru hoti thi. Wo
+              // IMPOSSIBLE tha - registration ke waqt koi session nahi hota,
+              // to WebAuthn ke authenticated endpoints 401 dete the aur user
+              // ko "Could not start biometric registration" dikhta tha.
+              //
+              // Ab checkbox sirf `enableBiometric` flag set karti hai, aur
+              // ACTUAL enrollment registration submit hone ke BAAD hoti hai
+              // (jab session cookie ban chuki ho). Dekho
+              // `enrollBiometricAfterRegistration()`.
+              setEnableBiometric(v === true);
               if (v !== true) {
-                setEnableBiometric(false);
                 setBiometricMessage('');
-                return;
-              }
-
-              // User ne checkbox ON kiya - actual device enrollment shuru karo
-              setBiometricEnrolling(true);
-              setBiometricMessage('');
-
-              try {
-                const result = await registerBiometric();
-                if (result.ok) {
-                  setEnableBiometric(true);
-                  setBiometricMessage(result.message);
-                } else {
-                  setEnableBiometric(false);
-                  setBiometricMessage(result.message);
-                }
-              } catch {
-                setEnableBiometric(false);
+              } else {
                 setBiometricMessage(
-                  'Biometric setup failed on this device. Password login will still work.'
+                  'Biometric will be enrolled on this device right after you create your account.'
                 );
-              } finally {
-                setBiometricEnrolling(false);
               }
             }}
             className="mt-px shrink-0 border-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
@@ -618,9 +676,6 @@ return (
               ho), sirf help PANEL conditional hai - isliye user ko pata
               rehta hai ki help exist karti hai.
 
-              NOTE: help panel `absolute` position me hai, yaani ye card ki
-              height 600px se ZYADA nahi karta jab khulta hai - wo upar ke
-              taraf overlay hota hai. Isse form ka layout nahi hilta.
               Hinglish: "?" dabaye to help khulti hai, Escape se band. */}
           <button
             type="button"
@@ -636,13 +691,65 @@ return (
 
         {/* ---- Enrollment status (live feedback) ----
             Ye sirf TAB dikhta hai jab enrollment chal raha ho ya result aaya
-            ho. Idle state me kuch nahi - 600px budget bachta hai. */}
+            ho. Idle state me kuch nahi - card auto-height hai, par extra line
+            sirf tabhi aati hai jab zaroorat ho. */}
         {biometricEnrolling || biometricMessage ? (
           <p className="mt-1 text-[11px] leading-snug text-[#9fa7b3]">
             {biometricEnrolling
               ? 'Touch your fingerprint or face to finish setting up...'
               : biometricMessage}
           </p>
+        ) : null}
+
+        {/* ---- BIOMETRIC HELP PANEL (conditional) ----
+            ---- BUG FIX: ye panel PEHLE GHAAYAB tha ----
+            Biometric block simplify karte waqt (Face/Fingerprint method
+            selector hataate waqt) ye `{showBiometricHelp ? ... : null}`
+            JSX bhi galti se delete ho gaya tha.
+
+            Uska asar: "?" button `onClick` se state toggle to hota tha, par
+            render karne ke liye kuch tha hi nahi. User ko button daba kar
+            KUCH nahi hota tha - yahi report mila ("? wala kaam nahi kar raha").
+
+            Isliye ab ye panel wapas aa gaya hai, aur `aria-controls` attribute
+            (jo pehle ek DANDA (dangling) id ko point kar raha tha) ab ek
+            sach me maujood element ko point karta hai. `id="biometric-help"`
+            dono jagah MATCH karna zaroori hai - accessibility tooling aur
+            keyboard/screen-reader testing dono isi par depend karti hai.
+
+            BEHAVIOUR:
+              - "?" click -> khulta hai, dobara click -> band
+              - Escape (document-level capture listener) -> band
+            Card ab `h-auto` hai, isliye panel khulne se card thoda barha sakta
+            hai - jo theek hai, kyunki form ke content ko koi scroll nahi chahiye.
+            Text COMPLETE hai - koi "..." truncation nahi. */}
+        {showBiometricHelp ? (
+          <div
+            id="biometric-help"
+            role="region"
+            aria-label="About biometric login"
+            className="mt-1.5 space-y-1.5 rounded-md border border-[#2c3235] bg-[#0d0f11]/70 p-2.5"
+          >
+            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+              Biometric login uses your device&apos;s own security hardware - a
+              fingerprint scanner or a face camera. Your biometric data never
+              leaves the device and is never sent to our servers. We only store
+              a public key that your device generates.
+            </p>
+            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+              This is an addition, not a replacement. Your password keeps
+              working, and you can turn biometrics off at any time from
+              settings.
+            </p>
+            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+              If this checkbox is not showing, your device was not detected as
+              having a platform authenticator. Check that you opened the site
+              at <span className="font-mono">http://localhost:3000</span> (WebAuthn
+              needs HTTPS or localhost - a LAN address like 192.168.x.x will not
+              work), and that Windows Hello is set up in Settings &gt; Accounts &gt;
+              Sign-in options.
+            </p>
+          </div>
         ) : null}
       </div>
       )}
