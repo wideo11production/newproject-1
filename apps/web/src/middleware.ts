@@ -107,7 +107,10 @@ const PUBLIC_API_PREFIXES = [
   '/api/audit',
   '/api/telemetry',
   '/api/health-check',
-  '/api/superadmin/awareness', // master dashboard public health surface
+  // NOTE: `/api/superadmin/awareness` YAHAN SE HATA DAYA GAYA HAI.
+  // Ye pehle public list me tha, jisse middleware early-return karta tha aur
+  // role gate tak pahunchta hi nahi tha - matlab koi bhi logged-in user
+  // superadmin API hit kar sakta tha. Ab ye role-gated hai (upar check).
 ];
 
 /**
@@ -405,6 +408,52 @@ if (!authenticated) {
     }
   }
 
+  // ==========================================================================
+  // SUPERADMIN ROLE GATE (migration 006)
+  // ==========================================================================
+  //
+  // Reality check (audit): pehle `users` table me ROLE COLUMN HI NAHI THA.
+  // Matlab `/superadmin` kisi bhi logged-in user ke liye open tha - koi
+  // real authorization nahi thi, sirf UI me chhupana tha (jo security nahi hai).
+  //
+  // Ab role JWT ke SIGNED claim se aata hai. Token verify ho chuka hai
+  // upar (`isValidSession` -> `jwtVerify` with the real secret), isliye role
+  // claim bhi authenticated hai - client ise forge nahi kar sakta.
+  //
+  // SECURITY: ye role claim TABHI trusted hai jab signature verify hua ho.
+  // Isliye ye check `!authenticated` ke BAAD hai, pehle nahi - warna
+  // unsigned/garbage token se koi admin ban jayega.
+  const isAdminRoute =
+    pathname === '/superadmin' ||
+    pathname.startsWith('/superadmin/') ||
+    // ---- API bhi cover hona zaroori hai ----
+    // Pehle sirf `/superadmin` match hota tha. Iska matlab
+    // `/api/superadmin/*` role check se BACH jata tha - aur wo bhi public
+    // API list me tha, yaani middleware early-return kar deta tha. Net: API
+    // par koi role enforcement hi nahi thi.
+    pathname === '/api/superadmin' ||
+    pathname.startsWith('/api/superadmin/');
+
+  if (isAdminRoute) {
+    const role = await getRoleFromToken(token!);
+
+    if (role !== 'superadmin') {
+      // API pe JSON, page pe redirect - API clients ko HTML nahi chahiye
+      if (isApiRequest) {
+        return NextResponse.json(
+          {
+            error: 'forbidden',
+            message: 'This area is restricted to superadmins.',
+          },
+          { status: 403 }
+        );
+      }
+      // Logged-in user ko apne dashboard pe bhejo (403 page nahi - zyada
+      // useful hai, aur user ko pata chal jayega ki access nahi mila)
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
+
   // ---- Authenticated + security complete: allow ----
   const authed = NextResponse.next();
   authed.headers.set('x-wideo11-auth', 'session-valid');
@@ -413,6 +462,31 @@ if (!authenticated) {
     isSessionOnlyApi ? 'session-only' : 'complete'
   );
   return authed;
+}
+
+/**
+ * JWT se ROLE claim padta hai (signature verify karke).
+ *
+ * SECURITY - ye function KABHI unverified token ka role trust nahi karta:
+ *   - `jwtVerify` real HS256 secret ke saath chalta hai
+ *   - `audience` bhi match hona zaroori hai
+ *   - verify fail -> `null` return (fail CLOSED, fail-open nahi)
+ *
+ * Isi liye ye `isValidSession` ke BAAD call hota hai - signature verify
+ * ho chuka hota hai tabhi role claim padha jaata hai.
+ */
+async function getRoleFromToken(jwt: string): Promise<string | null> {
+  if (!JWT_SECRET) return null; // fail closed
+  try {
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const { payload } = await jwtVerify(jwt, secret, {
+      audience: 'wideo11-api',
+    });
+    const role = payload.role;
+    return typeof role === 'string' ? role : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

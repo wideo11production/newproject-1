@@ -73,7 +73,12 @@ export const DASHBOARD_TABS: SidebarTab[] = [
   {
     id: 'settings',
     label: 'Settings',
-    href: '/settings',
+    // FIX: pehle ye `/settings` tha - jo apps/web me EXIST hi nahi karta
+    // (wo route banaaya hi nahi gaya), isliye click karne par user ko
+    // kuch galat mil raha tha. Ab ye USER ke apne settings hub par jaata
+    // hai, jo ek hi page par profile + appearance + language + security +
+    // content sab deta hai (requirement: "ek jagah, baar baar mat badlo").
+    href: '/dashboard/settings',
     icon: <Settings className="h-4 w-4" />,
   },
 ];

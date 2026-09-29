@@ -684,15 +684,67 @@ func (s *SecurityService) recomputeSetupComplete(ctx context.Context, userID uui
 	profile.SecurityQuestionsConfigured = hasQuestions
 	profile.BiometricRegistered = bioCount > 0
 
-	// ---- THE CONDITIONAL RULE ----
-	// Biometric sirf tab mandatory hai jab device support karta hai.
-	complete := hasPin && hasQuestions && (!capable || bioCount > 0)
+	// ---- THE CONDITIONAL RULE (with explicit opt-out) ----
+	// Biometric SIRF tab mandatory hai jab:
+	//   - device support karta hai, AUR
+	//   - user ne explicitly opt-out NAHI kiya
+	//
+	// Pehle sirf `!capable || bioCount > 0` tha. Isse ek bug tha: capable
+	// device par "skip" karne par koi credential create nahi hota tha, to
+	// complete=false rehta tha aur user dashboard/security-setup ke beech
+	// loop me fas jata tha. Ab `optedOut` wo missing state represent karta
+	// hai - user ke decision ko record karke, loop khatam.
+	biometricSatisfied := profile.BiometricOptedOut || !capable || bioCount > 0
+	complete := hasPin && hasQuestions && biometricSatisfied
 	profile.SecuritySetupComplete = complete
 
 	if complete && profile.SecuritySetupCompletedAt == nil {
 		now := time.Now()
 		profile.SecuritySetupCompletedAt = &now
 	}
+	// NOTE: opt-out BACK karne par (user biometric enable karta hai) hum
+	// completed-at reset karte hain taaki status honest rahe.
+	if !complete {
+		profile.SecuritySetupCompletedAt = nil
+	}
+}
+
+// SkipBiometricSetup user ke EXPLICIT opt-out ko record karta hai.
+//
+// YE "mark as registered" NAHI hai - ye saaf maan raha hai ki user
+// biometric NAHI chahta. Difference matter karta hai:
+//
+//   - fake "registered": backend me credential nahi -> complete=false ->
+//     middleware loop (pichla bug)
+//   - opted out: decision PERSIST -> complete=true -> user dashboard par
+//
+// SECURITY: ye sirf TAB kaam karta hai jab `biometric_capable = false` ho
+// YA user ek capable device par consciously skip kar raha ho. Koi aur
+// cheez is flag ko touch nahi karti, isliye isse security kam nahi hoti -
+// bas "user ne mana kar diya" record ho jaata hai.
+func (s *SecurityService) SkipBiometricSetup(
+	ctx context.Context,
+	userID uuid.UUID,
+	email, ip, userAgent string,
+) error {
+	profile, err := s.GetOrCreateProfile(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Opt-out clear karo, phir recompute (jisme ab ye count hoga)
+	profile.BiometricOptedOut = true
+	s.recomputeSetupComplete(ctx, userID, profile)
+
+	if err := s.db.WithContext(ctx).Save(profile).Error; err != nil {
+		return err
+	}
+
+	if profile.SecuritySetupComplete {
+		s.logEvent(ctx, &userID, email, model.EventSecuritySetupCompleted,
+			"PIN + 3 security questions configured (biometric declined by user)", ip, userAgent)
+	}
+	return nil
 }
 
 // MarkBiometricRegistered biometric setup hone par call hota hai
@@ -701,6 +753,12 @@ func (s *SecurityService) MarkBiometricRegistered(ctx context.Context, userID uu
 	if err != nil {
 		return err
 	}
+
+	// Credential ab ASLI se register hua hai (webauthn flow ne insert kiya),
+	// isliye pehle ka "opted out" flag CLEAR kar do - user ne ab biometric
+	// enable kar diya hai. Warna profile dono contradictory states
+	// (registered + opted_out) dikhati.
+	profile.BiometricOptedOut = false
 
 	s.recomputeSetupComplete(ctx, userID, profile)
 	if err := s.db.WithContext(ctx).Save(profile).Error; err != nil {

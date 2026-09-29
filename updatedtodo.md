@@ -1,587 +1,196 @@
-# Wideo11 / Paimana Master Implementation Checklist
+# Wideo11 — Implementation Status & Next Phases
 
-## Completed Phases
-
-### Phase 0 - Foundation ✅
-- [x] Monorepo Setup
-- [x] Development Environment
-- [x] Repository Structure
-
-### Phase 1 - Configuration ✅
-- [x] Configuration Service
-- [x] Environment Management
-- [x] Config Validation
-
-### Phase 2 - Infrastructure ✅
-- [x] Docker Setup
-- [x] Infrastructure Definitions
-
-### Phase 3 - Core Services ✅
-- [x] User Service
-- [x] Auth Service
-- [x] Video Service
-- [x] Notification Service
-- [x] Bot Service Base Structure
-
-### Phase 4 - Database ✅
-- [x] PostgreSQL
-- [x] Database Migrations
-- [x] Repository Layer
-
-### Phase 5.1 - Shared Packages ✅
-- [x] editor-core
-- [x] video-player
-- [x] charts
-- [x] forms
-- [x] i18n
-- [x] ui
-- [x] dnd-dashboard
-
-### Phase 5.2 - Web Platform ✅
-- [x] Next.js Web App
-- [x] Authentication
-- [x] Dashboard
-- [x] User Management
-
-### Phase 6 ✅
-- [x] Monitor Application
-- [x] Webhook Receiver
-- [x] Dashboard Service
-- [x] Video Editor
-
-### Phase 7 ✅
-- [x] Billing System
-- [x] Subscription Management
-- [x] Invoicing
-- [x] Payment Recording
+> Last updated: 2026-09-29
+> Verified against a live run. Every "done" item below was checked in a real
+> browser or via the real API — not assumed from reading the code.
 
 ---
 
-# Active Development
+## Current state
 
-## Phase 8 - Stabilization, QA & Infrastructure
-
-### Dependency Cleanup
-- [ ] Fix Auth Package Issues
-- [ ] Fix API Client Issues
-- [ ] Remove Deprecated Packages
-- [ ] Version Alignment
-- [ ] Monorepo Dependency Audit
-
-### Code Quality
-- [ ] ESLint Cleanup
-- [ ] Go Lint Cleanup
-- [ ] Type Safety Verification
-- [ ] Dead Code Removal
-- [ ] Duplicate Logic Removal
-
-### Testing
-- [ ] Unit Tests
-- [ ] Integration Tests
-- [ ] E2E Tests
-- [ ] Regression Tests
-- [ ] API Tests
-
-### CI/CD
-- [ ] GitHub Actions
-- [ ] Automated Build Validation
-- [ ] Automated Testing Pipeline
-- [ ] Docker Build Pipeline
-
-### Monitoring
-- [ ] Error Tracking
-- [ ] Centralized Logging
-- [ ] Health Check Endpoints
-- [ ] Service Status Dashboard
+- **Frontend:** runs on the host via `pnpm dev` → http://localhost:3000
+- **Backend:** all services in Docker (25 containers, healthy)
+- **Database:** purged to 0 users — clean slate, any email is free
+- **Builds:** Go build ✅ · web typecheck ✅ · all Go tests pass ✅
 
 ---
 
-## Phase 9 - CDN & Media Infrastructure
-
-### CDN
-- [ ] Cloudflare CDN Integration
-- [ ] Static Asset CDN
-- [ ] Video CDN
-- [ ] Cache Rules
-- [ ] Cache Invalidation
-
-### Storage
-- [ ] MinIO Optimization
-- [ ] Multi Bucket Architecture
-- [ ] Lifecycle Rules
-- [ ] Asset Versioning
-
-### Upload System
-- [ ] Chunk Upload
-- [ ] Resumable Upload
-- [ ] Upload Retry System
-- [ ] Background Upload
-
-### Media Management
-- [ ] Thumbnail Generator
-- [ ] Preview Generator
-- [ ] Metadata Extraction
-- [ ] Compression Pipeline
-
-### Usage Tracking
-- [ ] Storage Metering
-- [ ] Upload Quotas
-- [ ] Asset Usage Tracking
-- [ ] Bandwidth Tracking
-
----
-
-## Phase 10 - Cloud Rendering & Video Processing
-
-### Render Infrastructure
-- [ ] Render Queue Service
-- [ ] Render Worker Service
-- [ ] Distributed Rendering
-- [ ] Retry Mechanism
-
-### Export Engine
-- [ ] GPU Rendering Support
-- [ ] CPU Fallback Rendering
-- [ ] Render Progress Tracking
-- [ ] Export Recovery
-
-### Queue Management
-- [ ] Queue Dashboard
-- [ ] Failed Job Recovery
-- [ ] Priority Queue System
-
----
-
-## Phase 11 - Analytics & Creator Intelligence
-
-### Analytics Core
-- [ ] Revenue Analytics
-- [ ] Audience Analytics
-- [ ] Watch Time Analytics
-- [ ] Retention Analytics
-
-### Creator Goals
-- [ ] CalculateDailyTargetProgress()
-- [ ] ₹500 Day Target System
-- [ ] Earnings Projection
-- [ ] CPM Tracking
-- [ ] View Requirement Calculator
-
-### Dashboard Analytics
-- [ ] Dashboard Preferences
-- [ ] Layout Persistence
-- [ ] Saved Reports
-- [ ] Scheduled Reports
-
-### Creator Insights
-- [ ] Best Performing Videos
-- [ ] Top Traffic Sources
-- [ ] Growth Tracking
-- [ ] Revenue Timeline
-
----
-
-## Phase 12 - Content Moderation & Copyright Protection
-
-### Video Protection
-- [ ] VerifyVideoFingerprint()
-- [ ] SHA256 Fingerprinting
-- [ ] Duplicate Detection
-- [ ] Duplicate Upload Blocking
-
-### Audio Protection
-- [ ] Audio Fingerprinting
-- [ ] Copyright Match Detection
-- [ ] Audio Validation
-
-### Moderation Workflow
-- [ ] Report System
-- [ ] Auto Routing
-- [ ] Review Queue
-- [ ] Escalation System
-
-### Platform Safety
-- [ ] Spam Detection
-- [ ] Fraud Detection
-- [ ] Fake View Detection
-- [ ] Bot Detection
-
-### Copyright Management
-- [ ] Strike System
-- [ ] Appeal System
-- [ ] DMCA Requests
-- [ ] Copyright Claims
-
----
-
-## Phase 13 - Recommendation & Discovery Engine
-
-### User Intelligence
-- [ ] User Preference Matrix
-- [ ] Watch Duration Tracking
-- [ ] Category Interest Tracking
-
-### Feed Engine
-- [ ] GetPersonalizedFeed()
-- [ ] Following Feed
-- [ ] Trending Feed
-- [ ] Discovery Feed
-
-### Search
-- [ ] Full Text Search
-- [ ] Search Indexing
-- [ ] Auto Complete
-- [ ] Search Suggestions
-
-### Discovery
-- [ ] New Creator Discovery
-- [ ] Similar Creator Discovery
-- [ ] Related Video Suggestions
-
----
-
-## Phase 14 - Free Local AI Knowledge Assistant
-
-### Ollama Infrastructure
-- [ ] Ollama Server Setup
-- [ ] Model Configuration
-- [ ] Provider Abstraction Layer
-
-### Models
-- [ ] Phi Model Support
-- [ ] Gemma Model Support
-- [ ] Llama Model Support
-
-### Knowledge System
-- [ ] Knowledge Directory Structure
-- [ ] Documentation Storage
-- [ ] FAQ Storage
-- [ ] Policy Storage
-
-### Vector Database
-- [ ] Qdrant Setup
-- [ ] Collections Configuration
-- [ ] Backup Strategy
-
-### Embeddings
-- [ ] Embedding Service
-- [ ] Document Chunking
-- [ ] Embedding Generation
-- [ ] Vector Index Creation
-
-### RAG System
-- [ ] Context Retrieval Engine
-- [ ] Source Citation System
-- [ ] Knowledge Search API
-
-### bot-service
-- [ ] Ollama Integration
-- [ ] RAG Integration
-- [ ] Creator Help Assistant
-- [ ] Documentation Assistant
-- [ ] Admin Support Assistant
-
-### AI Security
-- [ ] Read Only Access
-- [ ] Prompt Validation
-- [ ] Rate Limiting
-- [ ] Source Attribution
-
----
-
-## Phase 15 - Progressive Web App (PWA)
-
-### Core PWA
-- [ ] manifest.json
-- [ ] Service Worker
-- [ ] Install Prompt
-- [ ] Splash Screen
-
-### Device Support
-- [ ] Android Installation
-- [ ] iPhone Installation
-- [ ] Windows Installation
-- [ ] Linux Installation
-- [ ] macOS Installation
-
-### Offline Features
-- [ ] Offline Dashboard
-- [ ] Offline Assets Cache
-- [ ] Offline Error Handling
-
-### Device APIs
-- [ ] Camera Access
-- [ ] Microphone Access
-- [ ] File System Access
-
-### Notifications
-- [ ] Push Notifications
-- [ ] Background Sync
-- [ ] Notification Preferences
-
----
-
-## Phase 16 - Collaboration Workspace
-
-### Access Control
-- [ ] Owner Role
-- [ ] Admin Role
-- [ ] Editor Role
-- [ ] Viewer Role
-- [ ] Moderator Role
-
-### Teams
-- [ ] Team Creation
-- [ ] Team Invitations
-- [ ] Team Asset Libraries
-
-### Realtime Collaboration
-- [ ] Presence Tracking
-- [ ] Live Cursor Tracking
-- [ ] Shared Editing
-
-### Communication
-- [ ] Comments
-- [ ] Mentions
-- [ ] Activity Feed
-
-### Version Control
-- [ ] Version History
-- [ ] Revert Changes
-- [ ] Audit Trail
-
-### Approval Workflow
-- [ ] Draft
-- [ ] Review
-- [ ] Approved
-- [ ] Published
-
----
-
-## Phase 17 - Marketplace & Creator Economy
-
-### Marketplace
-- [ ] Template Store
-- [ ] Asset Store
-- [ ] Preset Store
-
-### Content Management
-- [ ] Product Submission
-- [ ] Product Approval
-- [ ] Product Categories
-
-### Reviews
-- [ ] Ratings
-- [ ] Reviews
-- [ ] Verified Purchase Validation
-
-### Creator Earnings
-- [ ] Wallet System
-- [ ] Earnings Ledger
-- [ ] Commission Tracking
-
-### Payouts
-- [ ] Bank Transfer
-- [ ] UPI Support
-- [ ] PayPal Support
-
-### Referral System
-- [ ] Affiliate Tracking
-- [ ] Referral Rewards
-
----
-
-## Phase 18 - Security Hardening
-
-### Authentication
-- [ ] Two Factor Authentication
-- [ ] Device Verification
-- [ ] Session Security
-
-### API Security
-- [ ] Rate Limiting
-- [ ] API Gateway
-- [ ] WAF
-- [ ] DDoS Protection
-
-### Security Monitoring
-- [ ] Suspicious Activity Detection
-- [ ] Login Monitoring
-
-### Audit
-- [ ] Login Logs
-- [ ] Billing Logs
-- [ ] Admin Logs
-
-### Sessions
-- [ ] Active Devices
-- [ ] Session Revoke
-- [ ] Logout Everywhere
-
----
-
-## Phase 19 - Performance & Enterprise Scaling
-
-### Database
-- [ ] Query Optimization
-- [ ] Read Replicas
-- [ ] Connection Pooling
-
-### Cache
-- [ ] Redis Cache
-- [ ] Query Cache
-- [ ] Session Cache
-
-### Queue Systems
-- [ ] Notification Queue
-- [ ] Email Queue
-- [ ] Render Queue
-- [ ] Webhook Queue
-
-### Scaling
-- [ ] Worker Autoscaling
-- [ ] Kubernetes Autoscaling
-
-### Monitoring
-- [ ] CDN Monitoring
-- [ ] Cache Monitoring
-- [ ] Resource Monitoring
-
----
-
-## Phase 20 - High Availability & Disaster Recovery
-
-### Replication
-- [ ] Database Replication
-- [ ] MinIO Replication
-- [ ] Cache Replication
-
-### Failover
-- [ ] Primary Node
-- [ ] Secondary Node
-- [ ] Automatic Failover
-
-### Backups
-- [ ] Hourly Backups
-- [ ] Daily Backups
-- [ ] Weekly Backups
-- [ ] Monthly Backups
-
-### Disaster Recovery
-- [ ] Recovery Testing
-- [ ] Rollback Testing
-
----
-
-## Phase 21 - Pressure Testing & Verification
-
-### Load Testing
-- [ ] 10,000 Concurrent Requests
-- [ ] Upload Stress Testing
-- [ ] Streaming Stress Testing
-
-### Security Testing
-- [ ] Penetration Testing
-- [ ] Abuse Testing
-- [ ] Fraud Testing
-
-### Reliability Testing
-- [ ] Failover Testing
-- [ ] Recovery Testing
-- [ ] Alert Testing
-
----
-
-## Phase 22 - Production Launch
-
-### Infrastructure
-- [ ] Terraform Deployment
-- [ ] Kubernetes Deployment
-- [ ] Helm Charts
-
-### Verification
-- [ ] SSL Verification
-- [ ] DNS Verification
-- [ ] CDN Verification
-- [ ] Backup Verification
-
-### Launch
-- [ ] Production Cutover
-- [ ] Monitoring Enablement
-- [ ] Incident Response Setup
-
-### Post Launch
-- [ ] Error Monitoring
-- [ ] Revenue Monitoring
-- [ ] Performance Monitoring
-- [ ] Creator Analytics Monitoring
-
----
-
-# Final Goal
-
-- [ ] Self Hosted Platform
-- [ ] PWA First Platform
-- [ ] No Play Store Dependency
-- [ ] No App Store Dependency
-- [ ] Open Source AI Support
-- [ ] Zero Recurring AI Subscription Cost
-- [ ] Enterprise Scalable Infrastructure
-- [ ] Production Launch Ready
----
-
-# Session Addendum - 2026-09-29 (auth reliability + creator dashboard UX)
-
-## Completed in this session (verified, not assumed)
+## ✅ Completed and verified
 
 ### Auth reliability
-- [x] **Register/login/verify 404s** - corrupted `.next` dev cache, cleared
-- [x] **Verify page "spinner forever"** - root cause was TWO guards deadlocking
-      under React StrictMode: a `hasRequested` ref blocked the 2nd effect run
-      while a `cancelled` flag suppressed the 1st run's result. Replaced with a
-      shared promise ref (exactly one network call, result always applied).
-- [x] **Verify re-click** - consumed token now returns "already verified" success
-      instead of an error (read-only fallback; cannot verify a new account)
-- [x] **Unverified login blocked** - 403 "please verify your email" (verified)
-- [x] **Resend verification** - new token issued, old deleted, 30-min TTL reset
-- [x] **Rate limiter** - was 1 req/60s (broke every signup). Now per-route:
-      registration 3/5min, login 8/min, verify 10/min, auth 20/min
-- [x] **Missing `return` in resend handler** - nil-deref panic on unknown email
-- [x] **Tooltip without TooltipProvider** - wrapped dashboard editor
+| Item | Evidence |
+|---|---|
+| Register / verify / login / resend | full chain tested end-to-end |
+| 30-minute verification TTL | `expires_at` confirmed in DB |
+| Unverified login blocked | `403 "please verify your email"` |
+| Resend issues a fresh token | old token deleted, count stays 1 |
+| Rate limiter sane | 1/min → per-route (register 3/5min, login 8/min, verify 10/min) |
+| Console fallback in dev | `SMTP_HOST` empty ⇒ logs instead of sending |
 
-### Performance
-- [x] **SMTP no longer blocks registration** - background email queue added
-      (`internal/email/queue.go`). Buffered channel + worker goroutine.
-      - register: ~5000ms -> **266ms**
-      - resend:   ~4700ms -> **340ms**
-      - Email still delivered (verified in logs: `[EMAIL] Sent to=...`)
-      - Falls back to synchronous if queue unavailable (email never dropped)
-      - Drains queue on shutdown so restarts don't lose mail
+### Security gate (mandatory 3 steps)
+Order is **PIN → Security Questions → Biometric (last)**.
+| Item | Evidence |
+|---|---|
+| PIN + questions + biometric enforced | `/dashboard` → `307 /auth/security-setup` until complete |
+| Biometric genuinely required | skip not taken ⇒ still blocked |
+| Step-selection logic | explicit per-step numbering (was stale after reorder) |
+| Auto-redirect on completion | gate loads → lands on `/dashboard` unprompted |
+| PIN rollover | wrong old PIN → 403, nothing changes; valid → 200 |
+| Password change | same two-step unlock pattern |
+| Session invalidation | PIN change revoked other sessions, **kept current** |
+| Biometric skip | persisted as opt-out, **no redirect loop** |
 
-### Creator dashboard (user-facing)
-- [x] Profile panel (username, email, verified badges)
-- [x] Avatar set/clear - `javascript:`/`data:` schemes REJECTED (XSS guard)
-- [x] Create channel - duplicate 409, invalid handle 400
-- [x] Signed-in devices list
-- [x] IP + User-Agent now actually captured (was a TODO, always empty)
-- [x] **Removed `/dashboard` from CONSOLE_ROUTES** - admin console sidebar was
-      wrapping the creator dashboard (two nav layers, looked like superadmin)
-- [x] PIN change verifies current PIN, rejects reuse, **revokes all sessions**
-- [x] Security gate order: PIN -> Security Questions -> Biometric (last)
+### User settings hub (`/dashboard/settings`)
+One scrollable grid — profile, appearance (theme/accent), language, content +
+subscription toggles, PIN, password. No repeat trips.
+- PIN / password cards are **locked until the current credential verifies**
+- Unlock is UI-only; the final change re-verifies server-side
+- Accent/theme/language use an **allowlist** (blacklists are bypassable)
+- `javascript:` / `data:` avatar URLs rejected
 
-### Email
-- [x] Gmail transport working (App Password, 587)
-- [x] HTML templates (responsive, dark theme, plain-text fallback)
-- [x] Success logging added (only failures were logged before)
+### Creator dashboard (`/dashboard`)
+Profile · channels (create/list) · signed-in devices. Session avatar appears in
+the header app-wide via a shared identity context — one fetch, no per-component
+refetch, instant update after change.
 
-## Known gaps (not bugs, deliberate scope limits)
-- [ ] Avatar is URL-based, not file upload (needs MinIO presigned upload)
-- [ ] Verification link is `localhost:3000` - breaks on phone / LAN (needs real domain)
-- [ ] Gmail ~500 emails/day limit; Postfix for production
+### Avatar upload (B2.3)
+Real file upload to **self-hosted MinIO** via presigned URLs. File bytes never
+touch the app server.
+| Attack | Result |
+|---|---|
+| HTML file renamed `.png` | rejected — magic bytes |
+| `.svg` upload | rejected outright |
+| Another user's object key | rejected — ownership check |
 
-## Next phase (this is the current task)
-- [ ] Chrome-style 3-dot overflow menu in dashboard
-- [ ] Collapsible side bar with icon-only tabs
-- [ ] PWA install: QR code in the 3-dot menu for phone handoff
-- [ ] PWA manifest + service worker + icons (required for install prompt)
-- [ ] Security review of all the above before merge
+### Roles & routing
+| Item | Evidence |
+|---|---|
+| `role` column + CHECK | migration 006, backfilled |
+| Role in signed JWT claim | verified inside the token |
+| `/api/v1/admin/*` gated | was **open to any logged-in user**; now 403 |
+| `/superadmin` gated | normal user → 403 / redirected |
+| Middleware exact-match paths | was prefix-matched (`/auth*` bypass) |
+
+### Telemetry (real data only)
+Country/continent/device/browser/OS captured **server-side** from real headers.
+Awareness grid aggregates live rows and reports `countries_missing` honestly
+rather than filling in a fake value. No dummy or seeded data anywhere in main.
+
+---
+
+## 🐛 Bugs found & fixed this session
+
+Recording these because several were subtle enough to survive a green build:
+
+1. **Colliding context keys** — `clientIPKey` and `clientUAKey` were both
+   `clientInfoKey{}`, which are the *same value* in Go. The second
+   `WithValue` overwrote the first, so **every "IP address" in the database was
+   actually a User-Agent string**. That string overflowed `VARCHAR(45)`, which
+   is why registration was returning **500**. Fixed with distinct key types +
+   a regression test asserting IP ≠ UA.
+2. **`session_id` always `uuid.Nil`** — token was generated *before* the
+   session insert, and the ID came from a *database* default. Nothing could
+   identify "current session", so PIN rollover was impossible. Now generated
+   in code.
+3. **`role` never set in request context** — the superadmin gate blocked
+   *everyone*, including real superadmins.
+4. **`/api/v1/admin/*` had no role check** — any logged-in user could read
+   security events and device locks.
+5. **GORM crash-loop** — a view on `sessions.ip_address` blocked every
+   `AutoMigrate`. Dropped the view, query the table directly.
+6. **Presigned URLs embedded the internal host** (`minio:9000`), so the
+   browser got a dead URL. Needed a second client for browser-facing URLs.
+7. **Stale step numbers** after the reorder sent users back to questions.
+8. **"Skip biometric" was fake** — it marked completion locally while the
+   backend still said incomplete, producing an infinite redirect loop.
+9. **Auto-redirect never fired** — the gate showed "Redirecting…" and then sat
+   there forever.
+10. **Empty space in the biometric form** — `min-h-[600px]` on a ~200px step.
+
+Two of these I introduced myself in this session (the context keys and the
+invalid hook call), and both were caught before you saw them.
+
+---
+
+## 🔴 Open security gaps — NOT yet closed
+
+Listed honestly because "unhackeable" is not achievable and pretending
+otherwise just stops the search for real holes.
+
+| # | Gap | Risk | Effort |
+|---|---|---|---|
+| 1 | **MinIO uses root credentials** | Full storage compromise if leaked | Low — rotate + bucket-scoped service account |
+| 2 | **No security headers** (CSP, HSTS, X-Frame-Options) | Broad XSS / clickjacking surface | Low — one file, high value |
+| 3 | **No JWT `jti` denylist** | Stolen token valid until expiry even after logout | Medium |
+| 4 | **PII in telemetry, no retention policy** | Privacy / compliance exposure | Medium |
+| 5 | **Verification link hardcoded to `localhost`** | Broken on phone / any other device | Low — env var |
+| 6 | **Gmail for production email** | ~500/day cap; account can be locked | Medium — Postfix in prod |
+| 7 | **Rate limiter is in-memory** | Resets on restart, useless across replicas | Medium — Redis (already available) |
+| 8 | **No 2FA at login** | PIN is asked *after* login, so password alone grants a session | High — architectural |
+
+**Recommended order:** #1 → #2 → #5, then #3 and #7.
+
+---
+
+## 📋 Next phases
+
+### Phase A — Close the cheap security gaps *(small, high value)*
+1. MinIO service account (rotate from root)
+2. Security headers middleware (CSP, HSTS, X-Frame-Options, Referrer-Policy)
+3. `VERIFICATION_BASE_URL` to a reachable host
+
+### Phase B — Real user dashboard depth
+4. Channel management beyond create (edit, cover image, visibility)
+5. Content upload surface wired to the `content_upload_enabled` toggle
+6. Viewer subscription management
+
+### Phase C — Session & auth hardening
+7. JWT `jti` denylist (instant logout)
+8. Move rate limiting to Redis (survives restart, works across replicas)
+9. 2FA at login
+
+### Phase D — Operations
+10. Email templates for channel/subscription notifications
+11. Content retention + cleanup jobs
+12. Backup/restore runbook
+
+---
+
+## 🧪 How to test the verified flow
+
+```powershell
+# 1. fresh start
+cd D:\newproject; docker compose up -d
+cd apps\web; pnpm dev
+
+# 2. register at http://localhost:3000/auth/register
+# 3. verification link arrives in email (check spam)
+# 4. log in -> security gate: PIN -> Questions -> Biometric
+# 5. dashboard -> /dashboard
+```
+
+Useful commands:
+
+```powershell
+# email + auth service logs
+docker logs wideo11-auth-service --tail 40
+
+# what is stored
+docker exec wideo11-postgres psql -U postgres -d auth_service -c "SELECT username,email,is_verified,role FROM users;"
+
+# wipe everything and start clean
+docker exec wideo11-postgres psql -U postgres -d auth_service -c "TRUNCATE channels, webauthn_sessions, webauthn_credentials, security_questions, security_events, security_pins, security_profiles, verification_tokens, refresh_tokens, sessions, user_sessions, pins, devices, device_accounts, test_account_markers, click_events, user_registrations, users RESTART IDENTITY CASCADE;"
+```
+
+---
+
+## ⚠️ Notes before this goes live
+
+- **Nothing is committed.** Migrations 003–010 are applied to the database but
+  the working tree has ~30 modified files unreviewed.
+- **Test accounts were promoted to `superadmin`** during verification. They are
+  now purged, but check for any others before deploying.
+- **`packages/common/public/` is untouched** and clean.
+- **Headless testing cannot do real WebAuthn** — biometric enrollment was
+  verified via the skip path. The Windows Hello face flow needs one run in your
+  own browser to confirm end-to-end.

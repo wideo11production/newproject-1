@@ -34,6 +34,13 @@ func (s *ClickService) RecordClick(
 	userEmail, page, target, label, elementID, userAgent, ip, referrer string,
 	x, y int,
 	eventTime time.Time,
+	// ---- GEO + DEVICE (migration 007) ----
+	// Handler `ParseTelemetry(request)` se bhejta hai - server-par derived,
+	// isliye client spoof nahi kar sakta.
+	telemetry DeviceInfoParsed,
+	// ---- SESSION LINK (migration 007) ----
+	// Token ke `session_id` claim se. `nil` ho sakta hai (anonymous visitor).
+	sessionID *uuid.UUID,
 ) error {
 	// Timestamp fallback
 	if eventTime.IsZero() {
@@ -54,6 +61,19 @@ func (s *ClickService) RecordClick(
 		Referrer:  truncateStr(referrer, 255),
 		// Frontend ka timestamp (microsecond precision)
 		Timestamp: eventTime.UTC(),
+		// ---- GEO + DEVICE enrichment (migration 007) ----
+		// Ye SERVER par derive hota hai (User-Agent + trusted geo headers),
+		// isliye client spoof nahi kar sakta. Handler `Record` me
+		// `ParseTelemetry(c.Request)` se bhejta hai.
+		Country:    truncateStr(telemetry.Country, 2),
+		Continent:  truncateStr(telemetry.Continent, 8),
+		DeviceType: truncateStr(telemetry.DeviceType, 16),
+		Browser:    truncateStr(telemetry.Browser, 64),
+		OS:         truncateStr(telemetry.OS, 64),
+		// ---- Session link ----
+		// Token ke session_id claim se aata hai. Isse superadmin panel par
+		// "is user ne ye click kis session se kiya" correlate kar sakta hai.
+		SessionID: sessionID,
 	}
 
 	return s.db.WithContext(ctx).Create(event).Error
@@ -61,16 +81,16 @@ func (s *ClickService) RecordClick(
 
 // ClickQuery - list ke filters
 type ClickQuery struct {
-	Page       string
-	UserEmail  string
-	Since      *time.Time
-	Limit      int
-	Offset     int
+	Page      string
+	UserEmail string
+	Since     *time.Time
+	Limit     int
+	Offset    int
 }
 
 // ClickListResult - paginated result
 type ClickListResult struct {
-	Total  int64             `json:"total"`
+	Total  int64              `json:"total"`
 	Events []model.ClickEvent `json:"events"`
 }
 
@@ -111,10 +131,10 @@ func (s *ClickService) ListClicks(ctx context.Context, q ClickQuery) (*ClickList
 
 // ClickStats - dashboard summary numbers
 type ClickStats struct {
-	TotalClicks      int64      `json:"total_clicks"`
-	ClicksToday      int64      `json:"clicks_today"`
-	ClicksLast24h     int64      `json:"clicks_24h"`
-	UniqueUsers      int64      `json:"unique_users"`
+	TotalClicks      int64       `json:"total_clicks"`
+	ClicksToday      int64       `json:"clicks_today"`
+	ClicksLast24h    int64       `json:"clicks_24h"`
+	UniqueUsers      int64       `json:"unique_users"`
 	TopPages         []PageCount `json:"top_pages"`
 	OldestEvent      *time.Time  `json:"oldest_event"`
 	NewestEvent      *time.Time  `json:"newest_event"`
@@ -124,7 +144,7 @@ type ClickStats struct {
 
 // PageCount - ek page par kitne clicks
 type PageCount struct {
-	Page  string `json:"page"`
+	Page   string `json:"page"`
 	Clicks int64  `json:"clicks"`
 }
 

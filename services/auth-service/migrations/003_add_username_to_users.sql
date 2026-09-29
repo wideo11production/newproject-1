@@ -36,60 +36,66 @@
 -- ============================================================================
 
 -- ---- Step 1: column add karo (agar pehle se nahi hai) ----
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS username VARCHAR(100);
+IF COL_LENGTH('dbo.users', 'username') IS NULL
+    ALTER TABLE dbo.users ADD username VARCHAR(100);
 
 -- ---- Step 2: backfill - existing users ko email ka local-part do ----
 -- Sirf un rows ke liye jinka username abhi NULL/empty hai.
-DO $$
-DECLARE
-    rec RECORD;
-    base TEXT;
-    candidate TEXT;
-    suffix INT := 2;
+DECLARE @id INT, @email VARCHAR(320), @base VARCHAR(100),
+        @candidate VARCHAR(100), @suffix INT, @at INT, @bad INT;
+
+DECLARE users_cursor CURSOR LOCAL FAST_FORWARD FOR
+    SELECT id, email FROM dbo.users
+    WHERE username IS NULL OR username = ''
+    ORDER BY created_at ASC;
+
+OPEN users_cursor;
+FETCH NEXT FROM users_cursor INTO @id, @email;
+WHILE @@FETCH_STATUS = 0
 BEGIN
-    FOR rec IN
-        SELECT id, email FROM users
-        WHERE username IS NULL OR username = ''
-        ORDER BY created_at ASC
-    LOOP
-        -- Email ka local part: 'aarav.sharma@gmail.com' -> 'aarav.sharma'
-        base := split_part(rec.email, '@', 1);
+    -- Email ka local part: 'aarav.sharma@gmail.com' -> 'aarav.sharma'
+    SET @at = CHARINDEX('@', @email);
+    SET @base = LEFT(CASE WHEN @at > 0 THEN LEFT(@email, @at - 1) ELSE @email END, 100);
 
-        -- Sirf safe characters rakho (letters, digits, dot, underscore, dash)
-        base := regexp_replace(base, '[^a-zA-Z0-9._-]', '', 'g');
+    -- Sirf safe characters rakho (letters, digits, dot, underscore, dash)
+    SET @bad = PATINDEX('%[^a-zA-Z0-9._-]%', @base COLLATE Latin1_General_100_BIN2);
+    WHILE @bad > 0
+    BEGIN
+        SET @base = STUFF(@base, @bad, 1, '');
+        SET @bad = PATINDEX('%[^a-zA-Z0-9._-]%', @base COLLATE Latin1_General_100_BIN2);
+    END;
 
-        -- Edge case: email local part empty ya sab special tha
-        IF base = '' THEN
-            base := 'user';
-        END IF;
+    IF @base = '' SET @base = 'user';
+    SET @candidate = @base;
+    SET @suffix = 2;
 
-        -- 100 char se lamba email local part ho sakta hai - truncate
-        base := left(base, 100);
+    WHILE EXISTS (SELECT 1 FROM dbo.users WHERE username = @candidate)
+    BEGIN
+        SET @candidate = LEFT(@base, 96) + '-' + CAST(@suffix AS VARCHAR(10));
+        SET @suffix = @suffix + 1;
+    END;
 
-        candidate := base;
-
-        -- UNIQUE guarantee: agar same naam already hai to -2, -3 ... lagao
-        WHILE EXISTS (SELECT 1 FROM users WHERE username = candidate) LOOP
-            candidate := left(base, 96) || '-' || suffix::TEXT;
-            suffix := suffix + 1;
-        END LOOP;
-
-        UPDATE users SET username = candidate WHERE id = rec.id;
-
-        -- Har row ke liye suffix reset taaki counter overflow na ho
-        suffix := 2;
-    END LOOP;
-END $$;
+    UPDATE dbo.users SET username = @candidate WHERE id = @id;
+    FETCH NEXT FROM users_cursor INTO @id, @email;
+END;
+CLOSE users_cursor;
+DEALLOCATE users_cursor;
 
 -- ---- Step 3: unique index banao (agar pehle se nahi hai) ----
 -- CONCURRENTLY nahi use kiya - ye ek chhoti dev table hai (9 rows), aur
 -- CONCURRENTLY transaction block ke andar nahi chal sakta.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);
+IF NOT EXISTS (SELECT 1 FROM sys.indexes
+                             WHERE name = 'idx_users_username'
+                                 AND object_id = OBJECT_ID('dbo.users'))
+        CREATE UNIQUE INDEX idx_users_username ON dbo.users(username);
 
 -- ---- Step 4: comment ----
-COMMENT ON COLUMN users.username IS
-  'Public handle for the creator (e.g. "aarav"). Nullable only for legacy rows created before migration 003; new registrations require it.';
+EXEC sys.sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Public handle for the creator (e.g. "aarav"). Nullable only for legacy rows created before migration 003; new registrations require it.',
+        @level0type = N'SCHEMA', @level0name = N'dbo',
+        @level1type = N'TABLE', @level1name = N'users',
+        @level2type = N'COLUMN', @level2name = N'username';
 
 -- ============================================================================
 -- NOTE (NOT NULL constraint - abhi nahi lagaya):

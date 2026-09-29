@@ -299,6 +299,29 @@ services:
       EMAIL_USER: ${SMTP_USER:-}
       EMAIL_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_FROM: ${SMTP_FROM:-no-reply@wideo11.com}
+
+      # ---- STORAGE (MinIO) - apna self-hosted S3, koi paid provider nahi ----
+      #
+      # Avatar uploads yahan jate hain. Auth-service presigned URL deta hai,
+      # browser seedha MinIO me PUT karta hai - file bytes app server par
+      # kabhi nahi aate.
+      #
+      # NOTE: ye MinIO ke ROOT credentials hain. Production me inhe
+      # rotate karke limited-scope service account banana chahiye.
+      # NOTE: `MINIO_ROOT_USER/PASSWORD` wahi hain jo MinIO container khud
+      # use karta hai (.env me defined). Ye nested `${A:-${B}}` form Compose
+      # me NAHI chalta - isliye direct un vars ko reference kiya hai.
+      STORAGE_ENABLED: ${STORAGE_ENABLED:-true}
+      STORAGE_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-wideo11admin}
+      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
+      STORAGE_AVATAR_BUCKET: ${MINIO_AVATAR_BUCKET:-avatars}
+      STORAGE_PRESIGN_TTL_MINUTES: ${STORAGE_PRESIGN_TTL_MINUTES:-15}
+      # NOTE: ye BROWSER ko dikhta hai (image yahan se load hoti hai),
+      # isliye container-internal `minio:9000` NAHI - `localhost:9000`
+      # hona chahiye.
+      STORAGE_PUBLIC_HOST: ${MINIO_PUBLIC_HOST:-localhost:9000}
+      STORAGE_USE_SSL: ${MINIO_USE_SSL:-false}
       EMAIL_FROM_NAME: ${SMTP_FROM_NAME:-Wideo11 Security}
       EMAIL_USE_TLS: ${SMTP_USE_TLS:-false}
       # WebAuthn / biometric - RP ID aur origin browser se match karne zaroori hain

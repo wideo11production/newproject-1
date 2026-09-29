@@ -45,6 +45,8 @@ import {
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
+import { useSessionIdentity } from '@/lib/identity-context';
+import { AvatarUploader } from '@/components/dashboard/avatar-uploader';
 import { DashboardSidebar } from '@/components/dashboard/dashboard-sidebar';
 import { OverflowMenu, type MenuItem } from '@/components/dashboard/overflow-menu';
 import { InstallPanel } from '@/components/dashboard/install-panel';
@@ -186,24 +188,31 @@ export default function CreatorDashboard() {
   // ======================================================================
   // Avatar save
   // ======================================================================
-  async function saveAvatar() {
+  // Avatar save karo. `boolean` return karta hai taaki caller (B2.4 sync)
+  // decide kar sake ki identity refresh karna hai ya nahi.
+  async function saveAvatarTo(url: string): Promise<boolean> {
     setAvatarBusy(true);
     setAvatarMsg(null);
     try {
       const res = await fetch('/api/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ avatar_url: avatarInput.trim() }),
+        body: JSON.stringify({ avatar_url: url }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setAvatarMsg({ ok: false, text: data.message ?? data.error ?? 'Could not save avatar.' });
-        return;
+        setAvatarMsg({
+          ok: false,
+          text: data.message ?? data.error ?? 'Could not save avatar.',
+        });
+        return false;
       }
       setAvatarMsg({ ok: true, text: 'Profile image updated.' });
       await loadAll();
+      return true;
     } catch {
       setAvatarMsg({ ok: false, text: 'Network error. Please try again.' });
+      return false;
     } finally {
       setAvatarBusy(false);
     }
@@ -254,6 +263,10 @@ export default function CreatorDashboard() {
       setChannelBusy(false);
     }
   }
+
+  // Session identity (avatar/username/role) - shared app-wide via context.
+  // Ek hi `/api/auth/me` fetch, saare consumers yahan se padhte hain.
+  const identity = useSessionIdentity();
 
   // ======================================================================
   // PANEL STATE - 3-dot menu se install panel toggle hota hai
@@ -357,6 +370,35 @@ export default function CreatorDashboard() {
             </h1>
           </div>
           <div className="flex items-center gap-1">
+            {/* ---- Session avatar (B2.4) ----
+                Requirement: "session se har jagah uski profile image jaha bhi
+                woh jayegi uske sath honi chahiye".
+
+                `useSessionIdentity()` se aata hai - ek hi fetch, pure app
+                me shared. Settings me avatar change karte hi `refresh()`
+                call hota hai aur YAHAN turant update ho jata hai (page reload
+                ki zarurat nahi). */}
+            <Link
+              href="/dashboard/settings"
+              title="Your profile"
+              className="flex items-center gap-2 rounded-lg p-1 pr-2 transition-colors hover:bg-[#1f2227]"
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#2c3235] bg-[#0d0f11] text-xs font-bold text-[#5794f2]">
+                {identity.avatar_url ? (
+                  <img
+                    src={identity.avatar_url}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  identity.initials || '?'
+                )}
+              </span>
+              <span className="hidden text-sm text-[#9fa7b3] sm:inline">
+                @{identity.username}
+              </span>
+            </Link>
+
             {/* ---- Browse: public landing page (desktop pe visible) ---- */}
             <Link href="/">
               <Button variant="ghost" size="sm" className="hidden text-[#9fa7b3] hover:text-[#d8d9da] sm:inline-flex">
@@ -441,31 +483,22 @@ export default function CreatorDashboard() {
                 </span>
               </div>
 
-              {/* ---- Avatar URL editor ----
-                  NOTE: abhi URL-based hai (MinIO ya koi bhi http(s) URL).
-                  Abhi FILE UPLOAD ka flow nahi hai - backend sirf URL store
-                  karta hai. Upload flow agla step hai; tab ye input
-                  auto-fill ho jayega. */}
+              {/* ---- AVATAR UPLOADER (B2.3) ----
+                  Ab real FILE upload hai (apne MinIO me, presigned URL ke
+                  through) - URL paste box hata diya gaya.
+
+                  `onUploaded` ke baad `identity.refresh()` call hota hai taaki
+                  naya avatar POORI APP me turant dikhe (header, sidebar) -
+                  page reload ke bina. */}
               <div className="space-y-2 border-t border-[#2c3235] pt-3">
-                <Label htmlFor="avatar" className="text-xs text-[#9fa7b3]">
-                  Profile image URL
-                </Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    id="avatar"
-                    value={avatarInput}
-                    onChange={(e) => setAvatarInput(e.target.value)}
-                    placeholder="https://... ya /avatars/me.png"
-                    className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
-                  />
-                  <Button
-                    onClick={saveAvatar}
-                    disabled={avatarBusy}
-                    className="h-10 shrink-0 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
-                  >
-                    {avatarBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
-                  </Button>
-                </div>
+                <AvatarUploader
+                  currentUrl={profile?.avatar_url}
+                  initials={initialsOf(profile)}
+                  onUploaded={async (publicUrl: string) => {
+                    const ok = await saveAvatarTo(publicUrl);
+                    if (ok) await identity.refresh();
+                  }}
+                />
                 {avatarMsg ? (
                   <p
                     className={`text-[11px] ${
@@ -474,11 +507,7 @@ export default function CreatorDashboard() {
                   >
                     {avatarMsg.text}
                   </p>
-                ) : (
-                  <p className="text-[11px] text-[#9fa7b3]">
-                    Paste an image URL. Leave empty and save to remove it.
-                  </p>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

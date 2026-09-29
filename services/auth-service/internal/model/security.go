@@ -6,12 +6,12 @@
 // hota hai - isliye ek hi unit me banaya ja raha hai.
 //
 // FLOW (jispar ye base karta hai):
-//   1. 3 galat passwords -> lockout_state = "pin_required"
-//   2. User se 6-digit PIN puchha jata hai
-//   3. Galat PIN ek baar -> 3 MINUTE countdown warning + blocked
-//   4. Sahi PIN -> login allow
-//   5. Login ke baad MANDATORY security setup (biometric + PIN + 3 questions)
-//      complete hone tak DASHBOARD BLOCKED
+//  1. 3 galat passwords -> lockout_state = "pin_required"
+//  2. User se 6-digit PIN puchha jata hai
+//  3. Galat PIN ek baar -> 3 MINUTE countdown warning + blocked
+//  4. Sahi PIN -> login allow
+//  5. Login ke baad MANDATORY security setup (biometric + PIN + 3 questions)
+//     complete hone tak DASHBOARD BLOCKED
 //
 // Hinglish comments: har block ka arth
 package model
@@ -62,6 +62,18 @@ type SecurityProfile struct {
 
 	// BiometricRegistered: user ne WebAuthn credential register kiya hai ya nahi
 	BiometricRegistered bool `gorm:"not null;default:false" json:"biometric_registered"`
+
+	// BiometricOptedOut: user ne EXPLICITLY "biometric nahi chahiye" bola hai.
+	//
+	// Kyun zaroori (migration 010): bina iske "skip" ka koi real record hi
+	// nahi tha. Gate optimistically complete set karta tha, par backend
+	// recompute me credential nahi milta tha -> complete=false -> middleware
+	// wapas security-setup bhej deta tha -> LOOP.
+	//
+	// Is field se skip ka decision PERSIST ho jata hai, aur completion rule
+	// isko "satisfied" maanta hai. Default false - koi bina soche opted out
+	// nahi hota.
+	BiometricOptedOut bool `gorm:"not null;default:false" json:"biometric_opted_out"`
 
 	// SecurityQuestionsConfigured: 3 questions set hain ya nahi.
 	// NOTE: ye boolean hai par backend me actual count bhi verify hota hai
@@ -161,7 +173,7 @@ func (DeviceAccount) TableName() string { return "device_accounts" }
 // YE "AWARENESS REPORTS" ka backend source hai - superadmin dashboard
 // par ye events dikhte hain.
 type SecurityEvent struct {
-	ID     uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	ID     uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	UserID *uuid.UUID `gorm:"type:uuid;index" json:"user_id,omitempty"`
 	Email  string     `gorm:"size:255;index" json:"email,omitempty"`
 

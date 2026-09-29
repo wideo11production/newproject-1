@@ -19,6 +19,18 @@ type AuthHandler struct {
 	// securitySvc lockout/PIN/device-limit enforce karta hai.
 	// Login me inject hota hai. Nil ho to security features gracefully skip hoti hain.
 	securitySvc *service.SecurityService
+	// storage - direct-to-MinIO avatar uploads (presigned URLs).
+	//
+	// Nil ho sakta hai agar storage config missing hai. Handlers us case me
+	// saaf 503 return karte hain (crash nahi) - user ko pata chalega ki
+	// upload available nahi hai, blank screen nahi milega.
+	storage *service.StorageService
+}
+
+// SetStorageService storage service inject karta hai (constructor dependency
+// cycle se bachne ke liye setter pattern, baaki services jaisa).
+func (h *AuthHandler) SetStorageService(st *service.StorageService) {
+	h.storage = st
 }
 
 // SetSecurityService security service inject karta hai (circular dep se bachne ke liye
@@ -55,6 +67,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	reqCtx := service.WithClientInfo(
 		c.Request.Context(), clientIP(c.Request), c.Request.UserAgent(),
 	)
+	// Telemetry (geo + device + browser) SERVER par derive karo.
+	//
+	// Ye CLIENT payload se nahi aata - User-Agent aur trusted proxy geo
+	// headers se banta hai, isliye browser me jhooth bol ke device/country
+	// nahi badal sakta.
+	reqCtx = service.WithTelemetryInContext(reqCtx, service.ParseTelemetry(c.Request))
 
 	user, tokenPair, err := h.authService.Register(reqCtx, &req, deviceInfo)
 	if err != nil {
@@ -521,6 +539,21 @@ func (h *AuthHandler) AuthMiddleware() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID.String())
 		c.Set("email", claims.Email)
 		c.Set("session_id", claims.SessionID.String())
+		// ---- ROLE (migration 006) ----
+		//
+		// BUG FIX: ye MISSING tha. `RequireSuperadmin` middleware `c.Get("role")`
+		// se role padhta tha, par yahan role kabhi set hi nahi hota tha. Iska
+		// asar: role gate CHAL hi nahi sakta tha - koi bhi user (superadmin
+		// sameth) 403 "forbidden" chala jata tha.
+		//
+		// SECURITY: ye value token ke SIGNED claim se aati hai (AuthMiddleware
+		// upar `jwtVerify` real secret ke saath kar chuka hai), isliye client
+		// ise forge nahi kar sakta.
+		//
+		// NOTE: khaali/legacy token (purane tokens jisme role claim nahi tha)
+		// ke liye ye `""` hoga - jo `IsSuperadmin("")` = false deta hai. Yaani
+		// fail CLOSED: nahi pata to access nahi. Sahi behaviour.
+		c.Set("role", claims.Role)
 		c.Next()
 	}
 }

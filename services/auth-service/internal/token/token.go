@@ -18,6 +18,16 @@ type Claims struct {
 	UserID    uuid.UUID `json:"user_id"`
 	SessionID uuid.UUID `json:"session_id"`
 	Email     string    `json:"email"`
+
+	// ---- ROLE (migration 006) ----
+	// Role JWT me carry hota hai taaki middleware / API guards ko har
+	// request par DB hit kiye BINA role decide kar sake.
+	//
+	// SECURITY NOTE - ye claim AUTHZ ke liye use hota hai, isliye ye
+	// IMPORTANT hai ki ye token SIGNED hai (HS256). Client role bhej kar
+	// apna role badl nahi sakta - signature verify hona zaroori hai.
+	// Isliye middleware me `jwtVerify()` ke baad hi role padha jayega.
+	Role string `json:"role"`
 	jwt.RegisteredClaims
 }
 
@@ -35,12 +45,19 @@ func NewTokenService(cfg *config.JWTConfig) *TokenService {
 	return &TokenService{cfg: cfg}
 }
 
-func (s *TokenService) GenerateAccessToken(userID, sessionID uuid.UUID, email string) (string, error) {
+// GenerateAccessToken access token banata hai.
+//
+// `role` claim add kiya gaya hai (migration 006) - authz decisions ke liye.
+// Role token me SIGNED hota hai, isliye client ise forge nahi kar sakta.
+//
+// Hinglish: role bhi token me daalo - har request par DB hit na karna pade
+func (s *TokenService) GenerateAccessToken(userID, sessionID uuid.UUID, email, role string) (string, error) {
 	now := time.Now()
 	claims := Claims{
 		UserID:    userID,
 		SessionID: sessionID,
 		Email:     email,
+		Role:      role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.cfg.Issuer,
 			Audience:  jwt.ClaimStrings{s.cfg.Audience},

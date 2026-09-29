@@ -13,7 +13,7 @@
 // Hinglish comments: har block ka arth
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@wideo11/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@wideo11/ui/card';
@@ -101,6 +101,34 @@ export default function SecuritySetupGate({
   const [picked, setPicked] = useState<Record<number, string>>({});
   const [answers, setAnswers] = useState<Record<number, string>>({});
 
+  // ---- AUTO-REDIRECT jab setup complete ho ----
+  //
+  // BUG FIX: pehle ye redirect KABHI nahi hota tha. Gate "Security setup
+  // complete. Redirecting to dashboard..." message to dikhata tha, par
+  // koi redirect logic hi nahi tha - `onComplete()` sirf button handlers
+  // me call hota tha.
+  //
+  // Result: biometric/skip complete hone ke baad, ya page refresh karne
+  // par, ya back button se wapas aane par, user us message par ATKA
+  // rehta tha. Dashboard tak pahunchta hi nahi tha.
+  //
+  // Ye effect har render pe `setup_complete` check karta hai, isliye complete
+  // status kaise bhi aaye (fresh load, refresh, back nav) - redirect ho jayega.
+  //
+  // `redirected` ref isliye hai ki redirect hone ke baad component dobara
+  // render ho to user wapas na aaye (double navigation).
+  //
+  // NOTE: ye hooks component ke TOP LEVEL par hain - loading effect ke
+  // andar nahi. Hooks conditional ya nested call nahi hone CHAHIYE, warna
+  // "Invalid hook call" error aata hai.
+  const redirected = useRef(false);
+  useEffect(() => {
+    if (status?.setup_complete && !redirected.current) {
+      redirected.current = true;
+      onComplete();
+    }
+  }, [status?.setup_complete, onComplete]);
+
   // ---- Auth headers ----
   //
   // SECURITY FIX: pehle ye unconditional tha:
@@ -141,11 +169,31 @@ export default function SecuritySetupGate({
           setAvailableQuestions(q.questions ?? []);
         }
 
-        // Step kahan se shuru karein - pehle se done hain to skip
-        if (st.pin_configured && st.security_questions_configured && !st.biometric_registered) {
-          setStep(2);
-        } else if (st.pin_configured) {
-          setStep(2);
+        // ---- Step kahan se shuru karein (pehle se done hain to skip) ----
+        //
+        // BUG FIX: ye logic STEP REORDER ke BAAD stale ho gaya tha.
+        //
+        // Step order ab: 1 = PIN, 2 = Security Questions, 3 = Biometric.
+        // Pehle (purane order me) ye tha: 1 = PIN, 2 = Biometric,
+        // 3 = Questions.
+        //
+        // Stale code me likha tha:
+        //     if (pin && questions && !biometric) setStep(2)   // 2 = biometric THA
+        //     else if (pin) setStep(2)                        // 2 = biometric THA
+        // Aaj ke order me 2 = QUESTIONS hai, isliye user biometric complete
+        // karne ke baad dobara questions par wapas chala jata tha, dashboard
+        // par pahunchta hi nahi tha.
+        //
+        // Naya logic EXPLICIT hai, taaki order change karne par dobara ye
+        // galti na ho - har step ka apna number likha hai.
+        if (!st.pin_configured) {
+          setStep(1); // PIN abhi nahi
+        } else if (!st.security_questions_configured) {
+          setStep(2); // questions abhi nahi
+        } else {
+          // PIN + questions dono done. Biometric bhi ho chuka hai to gate
+          // khatam - user ko dashboard jaana chahiye.
+          setStep(3);
         }
 
         // ---- WebAuthn support: DIAGNOSTIC version ----
@@ -406,7 +454,23 @@ export default function SecuritySetupGate({
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4 py-10">
-      <Card className="w-full max-w-[450px] min-h-[600px] border-gray-800 bg-gray-900/70">
+      {/* ---- CARD SIZING FIX ----
+          Pehle yaha `min-h-[600px]` tha. Ye problem create kar raha tha:
+
+          Biometric step ka content sirf ~200px ka hai (heading + ek button +
+          ek chhota note), lekin card 600px MINIMUM height force kar raha
+          tha - yaani ~400px ka KHALI void dikhai de raha tha. Screenshot
+          me yahi "bahut khaali khaali" wala issue dikha.
+
+          Fix: `min-h` hata diya. Ab card apne content ke barabar hota
+          hai. Har step ka content alag length ka hai, to card height step
+          change par badlegi - ye NORMAL hai aur huge empty space se kahin
+          behtar dikhta hai.
+
+          NOTE: `transition` nahi lagaya height par - flex centering me
+          height transition karne se card "jump" karta hai jo awkward
+          lagta hai. Content change par seedha settle hona better hai. */}
+      <Card className="w-full max-w-[450px] border-gray-800 bg-gray-900/70">
         <CardHeader className="space-y-3 px-8 pt-8">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 text-blue-400" />
@@ -689,35 +753,72 @@ export default function SecuritySetupGate({
                     </div>
                   <Button
                     onClick={async () => {
-                      // Biometric ko "N/A" mark karo taaki setup complete ho sake
+                      // ---- EXPLICIT SKIP (biometric/skip) ----
+                      // Pehle yahan `biometric/complete` call hota tha, jo
+                      // sirf recompute karta tha - koi credential create
+                      // nahi karta. Capable device par isse bioCount=0
+                      // rehta tha, complete=false hota tha, aur user
+                      // dashboard <-> security-setup ke beech LOOP me
+                      // fas jata tha.
+                      //
+                      // Ab dedicated skip endpoint use karte hain jo user
+                      // ke decision ko PERSIST karta hai, aur completion
+                      // rule usko "satisfied" maanti hai.
                       setBusy(true);
                       try {
-                        await fetch(`${SECURITY_API}/biometric/complete`, {
+                        const res = await fetch(`${SECURITY_API}/biometric/skip`, {
                           method: 'POST',
                           headers: authHeaders,
                         });
+                        const payload = await res.json().catch(() => ({}));
+
+                        // Server ka ASLI status authoritative hai - local
+                        // optimistic update nahi karte (pichla bug wahi tha).
+                        const stRes = await fetch(`${SECURITY_API}/setup-status`, {
+                          headers: authHeaders,
+                          cache: 'no-store',
+                        });
+                        const final = await stRes.json().catch(() => ({}));
+                        setStatus(final);
+
+                        if (final.setup_complete) {
+                          onComplete();
+                        } else {
+                          setError(
+                            'Setup is still incomplete. Please review the earlier steps.'
+                          );
+                        }
                       } catch {
-                        // ignore
+                        setError('Could not skip biometric setup. Please try again.');
+                      } finally {
+                        setBusy(false);
                       }
-                      setStatus((s) =>
-                        s ? { ...s, biometric_registered: true, setup_complete: true } : s
-                      );
-                      onComplete();
-                      setBusy(false);
                     }}
                     className="h-11 w-full rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
                   >
-                    {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue'}
+                    {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue without biometric'}
                   </Button>
                 </div>
               )}
             </div>
           )}
 
+          {/* ---- SETUP COMPLETE: auto-redirect ----
+              BUG FIX: ye message pehle sirf DIKHATA tha ("Redirecting to
+              dashboard...") par KABHI redirect nahi karta tha. `onComplete()`
+              sirf button handlers me call hota tha - agar status load hone
+              par complete mila (page refresh, back button, ya kisi aur flow
+              se aakar), to user yahi message dekh kar ATKA rehta tha,
+              kyunki koi redirect hone wala hi nahi tha.
+
+              Ab niche ek `useEffect` hai jo `setup_complete` true hote hi
+              redirect karta hai. Ye effect har render check karta hai, isliye
+              chahe complete status kaise bhi aaye - redirect ho jayega. */}
           {status?.setup_complete && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-green-700/60 bg-green-950/40 p-3 text-sm text-green-300">
-              <CheckCircle2 className="h-4 w-4" />
-              Security setup complete. Redirecting to dashboard...
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-700/60 bg-emerald-950/40 p-3 text-sm text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Security setup complete. Taking you to your dashboard...</span>
+              <Loader2 className="ml-auto h-4 w-4 animate-spin" aria-hidden="true" />
             </div>
           )}
         </CardContent>

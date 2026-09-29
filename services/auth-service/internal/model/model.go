@@ -46,6 +46,10 @@ type User struct {
 	// me set hai aur wahi raw/non-GORM inserts ke liye fallback banega -
 	// bas Go struct se announce nahi hona chahiye.
 	BiometricCapable bool `gorm:"not null" json:"biometric_capable"`
+	// Role: 'user' (default) ya 'superadmin' (migration 006).
+	// Ye AUTHZ ka source of truth hai DB me. Token me bhi role claim jata hai
+	// (signed), par DB hi ultimate authority hai.
+	Role string `gorm:"size:20;not null;default:user" json:"role"`
 	// AvatarURL: profile image ka URL (migration 005).
 	// Empty = koi avatar nahi, UI initials fallback dikhata hai.
 	// SECURITY: sirf relative path ("/...") ya http(s) URL store hota hai
@@ -78,14 +82,20 @@ type Session struct {
 	// Hinglish: raw token DB me nahi, sirf hash
 	AccessToken string `gorm:"size:64;not null" json:"-"`
 	// SECURITY FIX: same - raw refresh JWT nahi, sirf hash store hota hai
-	RefreshToken string         `gorm:"size:64;not null" json:"-"`
-	IPAddress    string         `gorm:"size:45" json:"ip_address"`
-	UserAgent    string         `gorm:"size:512" json:"user_agent"`
-	ExpiresAt    time.Time      `gorm:"not null;index" json:"expires_at"`
-	RevokedAt    *time.Time     `json:"revoked_at"`
-	CreatedAt    time.Time      `json:"created_at"`
-	UpdatedAt    time.Time      `json:"updated_at"`
-	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
+	RefreshToken string `gorm:"size:64;not null" json:"-"`
+	// size:64 (migration 009) - pehle 45 tha, jo full IPv6 aur
+	// multi-proxy `X-Forwarded-For` chains ko fail kar raha tha
+	// ("value too long for type character varying(45)"). DB column aur ye tag
+	// MATCH karne zaroori hain: agar tag 45 rahe to GORM AutoMigrate column
+	// ko wapas 45 me SHRINK karta hai, jo `active_user_sessions` view
+	// (migration 007) par depend karta hai -> crash loop.
+	IPAddress string         `gorm:"size:64" json:"ip_address"`
+	UserAgent string         `gorm:"size:512" json:"user_agent"`
+	ExpiresAt time.Time      `gorm:"not null;index" json:"expires_at"`
+	RevokedAt *time.Time     `json:"revoked_at"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	User   User    `gorm:"foreignKey:UserID" json:"-"`
 	Device *Device `gorm:"foreignKey:DeviceID" json:"-"`

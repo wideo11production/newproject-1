@@ -19,17 +19,14 @@
 -- ============================================================================
 
 -- ---- Step 1: users.avatar_url ----
--- Idempotent. NULL = user ne abhi image nahi upload ki.
+-- NULL = user ne abhi image nahi upload ki.
 ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS avatar_url TEXT;
-
-COMMENT ON COLUMN users.avatar_url IS
-  'URL of the user''s profile image. NULL means no avatar set (UI shows initials fallback).';
+  ADD avatar_url TEXT;
 
 -- ============================================================================
 -- channels table
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS channels (
+CREATE TABLE channels (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Owner. ON DELETE CASCADE: user delete hota hai to channels bhi hat jaate
@@ -69,7 +66,7 @@ CREATE TABLE IF NOT EXISTS channels (
   -- ---- Constraints ----
   -- Handle format: 3-30 chars, lowercase letters/digits/underscore/dot/dash.
   -- Ye SAME rule frontend ke validator se match karti hai.
-  CONSTRAINT ch_handle_format CHECK (handle ~ '^[a-z0-9._-]{3,30}$'),
+  CONSTRAINT ch_handle_format CHECK (regexp_match(handle, '^[a-z0-9._-]{3,30}$') IS NOT NULL),
 
   -- Display name length guard (DB-level, in case a client bypasses validation)
   CONSTRAINT ch_display_name_len CHECK (char_length(display_name) BETWEEN 1 AND 80),
@@ -82,11 +79,11 @@ CREATE TABLE IF NOT EXISTS channels (
 -- Unique handle PER USER (do alag users ka same handle allowed hai -
 -- kyunki handle URL me user-scoped hota hai).
 -- NOTE: ye `LOWER(handle)` par hai taaki case-insensitive uniqueness rahe.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_user_handle
-  ON channels (user_id, LOWER(handle));
+CREATE UNIQUE INDEX idx_channels_user_handle
+  ON channels (user_id, handle);
 
 -- Listing fast ho - user ke channels hamesha usi user_id se filter hote hain
-CREATE INDEX IF NOT EXISTS idx_channels_user_id
+CREATE INDEX idx_channels_user_id
   ON channels (user_id);
 
 -- ============================================================================
@@ -106,7 +103,11 @@ CREATE INDEX IF NOT EXISTS idx_channels_user_id
 --
 -- SECURITY NOTE: ye view sirf OWN user ki sessions dikhata hai (user_id
 -- filter query me lagta hai). Koi cross-user leak nahi.
-CREATE OR REPLACE VIEW active_user_sessions AS
+IF OBJECT_ID('active_user_sessions', 'V') IS NOT NULL
+  DROP VIEW active_user_sessions;
+GO
+
+CREATE VIEW active_user_sessions AS
 SELECT
   s.id,
   s.user_id,
@@ -119,7 +120,6 @@ SELECT
 FROM sessions s
 WHERE s.deleted_at IS NULL
   AND s.revoked_at IS NULL
-  AND s.expires_at > now();
+  AND s.expires_at > GETDATE();
 
-COMMENT ON VIEW active_user_sessions IS
-  'Non-revoked, non-expired sessions for a user - powers the "which devices are you signed in on" panel.';
+-- Non-revoked, non-expired sessions for a user - powers the "which devices are you signed in on" panel.

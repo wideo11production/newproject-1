@@ -88,6 +88,28 @@ func (h *ClickHandler) Record(c *gin.Context) {
 	userAgent := c.GetHeader("User-Agent")
 	ip := clientIP(c.Request)
 
+	// ---- GEO + DEVICE enrichment (migration 007, server-side) ----
+	// Ye REQUEST se derive hota hai, client payload se nahi - isliye user
+	// apna device/country browser me jhooth bol ke nahi bhej sakta.
+	//
+	// Country sirf tab bharte hain jab koi TRUSTED proxy/CDN geo header ho
+	// (CF-IPCountry, X-Vercel-IP-Country, ...). Local dev me wo nahi hota ->
+	// country khaali rahegi. Ye THEEK hai - hum fabricated "Unknown"/"IN"
+	// kabhi nahi bharenge.
+	telemetry := service.ParseTelemetry(c.Request)
+
+	// ---- Session link ----
+	// Token ka `session_id` claim. Click ko login session se jodta hai, taaki
+	// "ye click kis device/session se aaya" correlate ho sake.
+	var sessionID *uuid.UUID
+	if raw, ok := c.Get("session_id"); ok {
+		if s, ok := raw.(string); ok {
+			if parsed, err := uuid.Parse(s); err == nil && parsed != uuid.Nil {
+				sessionID = &parsed
+			}
+		}
+	}
+
 	saved := 0
 	for _, e := range payload.Events {
 		// Timestamp parse - frontend ISO string bhejta hai
@@ -105,6 +127,7 @@ func (h *ClickHandler) Record(c *gin.Context) {
 			userAgent, ip, e.Referrer,
 			e.X, e.Y,
 			ts,
+			telemetry, sessionID,
 		)
 		if err == nil {
 			saved++
@@ -167,8 +190,8 @@ func (h *ClickHandler) Purge(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"deleted":         deleted,
-		"retention_days":  30,
-		"message":         "Old clicks purged",
+		"deleted":        deleted,
+		"retention_days": 30,
+		"message":        "Old clicks purged",
 	})
 }

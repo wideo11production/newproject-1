@@ -17,6 +17,9 @@ type Config struct {
 	Email        EmailConfig
 	Purge        PurgeConfig
 	WebAuthn     WebAuthnConfig
+	// Storage - self-hosted MinIO for direct-to-S3 uploads (presigned URLs).
+	// Ye avatars/images ke liye hai. Values .env se aati hain.
+	Storage StorageConfig
 }
 
 // WebAuthnConfig WebAuthn (biometric/passkey) ke relying-party settings hold karta hai.
@@ -130,7 +133,7 @@ type JWTConfig struct {
 	// TURANT expire ho jata tha aur har protected API call "token expired"
 	// fail ho jati thi login ke turant baad.
 	// Hinglish: mapstructure tag ke bina token 0-minute ka tha - turant expire
-	AccessTokenTTL  int `mapstructure:"access_token_ttl"` // minutes
+	AccessTokenTTL  int `mapstructure:"access_token_ttl"`  // minutes
 	RefreshTokenTTL int `mapstructure:"refresh_token_ttl"` // days
 	Issuer          string
 	Audience        string
@@ -185,6 +188,27 @@ func setDefaults() {
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "postgres")
 	viper.SetDefault("database.password", "postgres")
+
+	// ---- STORAGE (MinIO) ----
+	//
+	// KYUN YE ZAROORI HAI (viper ka subtle behaviour):
+	// `viper.AutomaticEnv()` ALONE se nested keys `Unmarshal` me nahi aate.
+	// Viper ko har key pehle se JAANNA chahiye - yaani wo kisi config file
+	// me listed ho, ya `SetDefault` se registered ho. Bina iske:
+	//     container me STORAGE_ACCESS_KEY set tha
+	//     par cfg.Storage.AccessKey KHAALI aa raha tha
+	// Isliye ye saare keys yahan register karte hain.
+	//
+	// NOTE: default values khaali/development-friendly rakhe hain. Ye sirf
+	// "key known hai" ensure karne ke liye hain - actual values env se aayenge.
+	viper.SetDefault("storage.enabled", true)
+	viper.SetDefault("storage.endpoint", "minio:9000")
+	viper.SetDefault("storage.access_key", "")
+	viper.SetDefault("storage.secret_key", "")
+	viper.SetDefault("storage.avatar_bucket", "avatars")
+	viper.SetDefault("storage.presign_ttl_minutes", 15)
+	viper.SetDefault("storage.public_host", "localhost:9000")
+	viper.SetDefault("storage.use_ssl", false)
 	viper.SetDefault("database.dbname", "auth_service")
 	viper.SetDefault("database.sslmode", "disable")
 	viper.SetDefault("database.timezone", "UTC")

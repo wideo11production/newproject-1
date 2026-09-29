@@ -409,3 +409,39 @@ func indicatorFor(eventType string) string {
 		return strings.ToUpper(strings.ReplaceAll(eventType, "_", " "))
 	}
 }
+
+// SkipBiometric - user ke EXPLICIT "biometric nahi chahiye" decision ko record karta hai.
+//
+// ---- YE "MARK AS REGISTERED" NAHI HAI (wo bug tha) ----
+// Pehle gate ka skip button `biometric/complete` call karta tha, jo sirf
+// recompute karta tha - koi credential CREATE nahi karta. Isliye
+// capable device par:
+//
+//	bioCount = 0, capable = true  ->  complete = false
+//
+// Frontend optimistically complete set karta tha, par middleware wapas
+// security-setup bhej deta tha -> LOOP.
+//
+// Is endpoint se decision PERSIST hota hai, aur completion rule isko
+// "satisfied" maanta hai. Loop khatam.
+func (h *SecurityHandler) SkipBiometric(c *gin.Context) {
+	userID, ok := secUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	if err := h.svc.SkipBiometricSetup(
+		c.Request.Context(), userID, secEmail(c), clientIP(c.Request), c.Request.UserAgent(),
+	); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, _ := h.svc.GetSetupStatus(c.Request.Context(), userID)
+	c.JSON(http.StatusOK, gin.H{
+		"message":             "Biometric setup skipped",
+		"biometric_opted_out": true,
+		"setup_complete":      profile.SecuritySetupComplete,
+	})
+}

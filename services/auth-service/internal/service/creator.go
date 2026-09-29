@@ -181,11 +181,30 @@ func (s *AuthService) ListSessions(
 	ctx context.Context,
 	userID uuid.UUID,
 ) ([]model.ActiveDeviceSession, error) {
+	// ---- Direct table query, NOT the view ----
+	//
+	// Pehle ye `active_user_sessions` VIEW par Table() se query karta tha.
+	// WO VIEW HATA DYA GAYA HAI - kyun?
+	//
+	// Kyunki wo view `sessions.ip_address` column par DEPEND karta tha, aur
+	// Postgres kisi bhi view-dependent column par ALTER BLOCK karta hai:
+	//     ERROR: cannot alter type of a column used by a view or rule
+	// Jo GORM AutoMigrate har boot par karta hai - yaani auth-service
+	// CRASH LOOP me chala gaya tha (exit 1, har restart par).
+	//
+	// Ye query VIEW ke EXACT same rows laati hai (same WHERE clause), sirf
+	// source badla hai: view ki jagah base table + explicit filter.
+	// Behaviour IDENTICAL hai, dependency hata di gayi.
 	var sessions []model.ActiveDeviceSession
 	err := s.db.WithContext(ctx).
-		Table("active_user_sessions").
+		Model(&model.Session{}).
+		Select("id, user_id, device_id, ip_address, user_agent, created_at, updated_at AS last_seen, expires_at").
 		Where("user_id = ?", userID).
-		Order("last_seen DESC").
+		// Same filter jo view me tha (bina view ke, directly table par)
+		Where("deleted_at IS NULL").
+		Where("revoked_at IS NULL").
+		Where("expires_at > ?", time.Now()).
+		Order("updated_at DESC").
 		Scan(&sessions).Error
 	if err != nil {
 		return nil, err

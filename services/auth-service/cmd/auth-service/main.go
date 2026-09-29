@@ -192,6 +192,9 @@ func main() {
 		auth.POST("/login", authHandler.Login)
 		// Verification link click handler - GET se call hota hai
 		auth.GET("/verify", authHandler.VerifyEmail)
+		// Settings META public hai - login page bhi theme/language read karta
+		// hai, aur user logged-out ho tab bhi options dikhne chahiye.
+		auth.GET("/settings/meta", authHandler.GetSettingsMeta)
 		// Resend verification email - naya token + naya email.
 		// PRE-auth hai (user abhi login nahi kar sakta, email hi uska proof
 		// hai). Handler email enumeration nahi karta - har case me same 200.
@@ -213,6 +216,42 @@ func main() {
 			protected.GET("/profile", authHandler.GetProfile)
 			protected.GET("/pin/setup", authHandler.SetupPIN)
 			protected.POST("/pin/verify", authHandler.VerifyPIN)
+
+			// ---- SETTINGS (Block 2 - SSOT) ----
+			// User preferences ka single source of truth. Ek hi GET me
+			// identity + preferences dono milte hain (SSOT principle).
+			protected.GET("/settings", authHandler.GetSettings)
+			protected.PATCH("/settings", authHandler.UpdateSettings)
+
+			// ---- IDENTITY / ROLE ----
+			// `/me` se client ko apna role pata chalta hai (superadmin-only
+			// UI hide karne ke liye). NOTE: ye sirf UI hint hai - real
+			// authorization middleware + guards par hai.
+			protected.GET("/me", authHandler.GetMe)
+
+			// ---- SECURITY ROLLOVER (Block 2.5 / 2.6) ----
+			// Old credential verify karke naya set karta hai, aur saare
+			// DUSRE sessions + refresh tokens + expired verification tokens
+			// hard-delete kar deta hai (garbage accumulation nahi).
+			//
+			// SECURITY: current session ID token se aati hai, body se nahi -
+			// warna client "is session ko chhod do" bol ke apni hijacked
+			// session bacha sakta tha.
+			protected.PUT("/security/pin/rollover", authHandler.RolloverPIN)
+			protected.PUT("/password", authHandler.ChangePassword)
+
+			// ---- UNLOCK CHECKS (two-step confirm UI) ----
+			// Sirf VERIFY karte hain, koi state change nahi. Ye un endpoints
+			// ka backend hai jinse UI me "old credential sahi daalo -> form khule".
+			// NOTE: ye `/security/*` bucket me hain, wahi rate limit.
+			protected.POST("/security/pin/check", authHandler.CheckPIN)
+			protected.POST("/password/check", authHandler.CheckPassword)
+
+			// ---- AVATAR UPLOAD (direct to MinIO via presigned URLs) ----
+			// 2-step: pehle URL, phir finalize. File bytes app server par
+			// kabhi nahi aate - browser seedha MinIO me PUT karta hai.
+			protected.POST("/avatar/upload-url", authHandler.AvatarUploadURL)
+			protected.POST("/avatar/finalize", authHandler.AvatarFinalize)
 
 			// ---- Creator dashboard endpoints (migration 005) ----
 			// Sab token-derived user_id par scoped hain.
@@ -247,6 +286,9 @@ func main() {
 		secProtected.PUT("/pin", securityHandler.ChangePIN)
 		secProtected.PUT("/questions", securityHandler.SetSecurityQuestions)
 		secProtected.POST("/biometric/complete", securityHandler.MarkBiometric)
+		// Skip: user ne EXPLICITLY biometric decline kiya (migration 010).
+		// Ye "mark as registered" NAHI hai - wo loop create karta tha.
+		secProtected.POST("/biometric/skip", securityHandler.SkipBiometric)
 		secProtected.GET("/events", securityHandler.SecurityEvents)
 	}
 
@@ -255,6 +297,32 @@ func main() {
 	// har endpoint pe role check karta hai (superadmin ya recovery)
 	superadminHandler.RegisterRoutes(auth, authHandler.AuthMiddleware())
 
+	// Awareness (Block 3) - REAL user data grid.
+	// NOTE: ye apna route group banata hai aur DONO layers lagata hai
+	// (auth + superadmin role), isliye backend-level protection bhi hai -
+	// sirf Next.js middleware par depend nahi karte.
+	authHandler.RegisterAwarenessRoutes(auth)
+
+	// ---- STORAGE (MinIO) init ----
+	//
+	// Avatar uploads apne self-hosted MinIO me jate hain (koi paid provider
+	// nahi). Ye presigned URL deta hai taki browser seedha upload kare.
+	//
+	// NOTE: config missing hone par WARN karke aage badhte hain - app crash
+	// nahi hota, sirf avatar upload unavailable rehta hai. Ye deliberate hai:
+	// ek misconfigured optional feature pure app ko down nahi karega.
+	//
+	// SECURITY: credentials missing hua to ERROR (fail fast) - chhota
+	// fallback use karne se upload chupke se fail hota aur user ko pata
+	// nahi chalta.
+	if storageSvc, sErr := service.NewStorageService(&cfg.Storage); sErr != nil {
+		log.Printf("[WARN] Storage disabled: %v", sErr)
+		log.Printf("[WARN] Avatar upload unavailable. Set MINIO_ACCESS_KEY / MINIO_SECRET_KEY in .env")
+	} else {
+		authHandler.SetStorageService(storageSvc)
+		log.Printf("[OK] Storage ready: MinIO %s (bucket %s)",
+			cfg.Storage.GetEndpoint(), cfg.Storage.GetAvatarBucket())
+	}
 	// Click tracking service - persistent history + 30-day retention
 	clickSvc := service.NewClickService(db)
 	clickHandler := handler.NewClickHandler(clickSvc)

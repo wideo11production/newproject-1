@@ -25,22 +25,49 @@ package service
 
 import "context"
 
-// context keys - unexported struct type taaki koi doosra package
-// jaan-boojh kar same key nahi bana sake (Go me string keys collide kar sakte hain).
-type clientInfoKey struct{}
-
-var (
-	clientIPKey clientInfoKey
-	clientUAKey clientInfoKey
-)
+// ---------------------------------------------------------------------------
+// CONTEXT KEYS
+// ---------------------------------------------------------------------------
+//
+// ---- YAHAN EK SUBTLE GO BUG THA (aur ye real data corrupt kar raha tha) ----
+// Pehle ek hi type use ho raha tha:
+//
+//	type clientInfoKey struct{}
+//	var (
+//		clientIPKey clientInfoKey   // == clientInfoKey{}
+//		clientUAKey clientInfoKey   // == clientInfoKey{}   <-- SAME VALUE!
+//	)
+//
+// Go me `struct{}{}` ZERO-SIZE hai, isliye `clientIPKey == clientUAKey` TRUE
+// hai. Matlab dono keys EQUAL thin!
+//
+// Iska asar:
+//
+//	ctx = context.WithValue(ctx, ipKey{}, ip)        // value store
+//	ctx = context.WithValue(ctx, uaKey{}, userAgent) // SAME KEY -> OVERWRITE
+//
+// Net: sirf userAgent store hota tha. Phir `clientInfoFromContext` me
+// `ctx.Value(ipKey{})` se WAHIN userAgent padha jata tha - yaani
+// `ip` variable me user-agent aa jata tha.
+//
+// Isi wajah se:
+//   - `sessions.ip_address` me 100+ char ka UA string ja raha tha
+//   - jo `VARCHAR(45)` me fit nahi hota tha -> register 500 FAIL
+//   - aur superadmin panel me "IP" dikhta UA
+//
+// FIX: har key ka apna ALAG type. Ab `ipKey{} != uaKey{}` compile-time par
+// hi guarantee hota hai - bhool kar same type dene ka chance hi nahi.
+// (Go me recommended pattern bhi yahi hai.)
+type ipKey struct{}
+type uaKey struct{}
 
 // WithClientInfo request context me IP + User-Agent daalta hai.
 //
 // Handler ye har authenticated request ke liye call karta hai (login,
 // register) - taaki nayi session me IP/UA save ho sake.
 func WithClientInfo(ctx context.Context, ip, userAgent string) context.Context {
-	ctx = context.WithValue(ctx, clientIPKey, ip)
-	ctx = context.WithValue(ctx, clientUAKey, userAgent)
+	ctx = context.WithValue(ctx, ipKey{}, ip)
+	ctx = context.WithValue(ctx, uaKey{}, userAgent)
 	return ctx
 }
 
@@ -52,10 +79,10 @@ func clientInfoFromContext(ctx context.Context) (ip string, userAgent string) {
 	if ctx == nil {
 		return "", ""
 	}
-	if v, ok := ctx.Value(clientIPKey).(string); ok {
+	if v, ok := ctx.Value(ipKey{}).(string); ok {
 		ip = v
 	}
-	if v, ok := ctx.Value(clientUAKey).(string); ok {
+	if v, ok := ctx.Value(uaKey{}).(string); ok {
 		userAgent = v
 	}
 	return ip, userAgent

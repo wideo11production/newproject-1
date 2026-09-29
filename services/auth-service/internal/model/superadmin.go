@@ -1,13 +1,13 @@
 // Superadmin, recovery accounts, device lock aur session tracking
 //
 // YE MODULE Q4 ke baaki hisse cover karta hai:
-//   1. Role field (superadmin / recovery / staff / user)
-//   2. 2 RECOVERY accounts - agar main superadmin ke sath kuch ho jaye
-//      (account lock, credential leak, device kho jaaye) to ye 2 accounts
-//      se access mil sakta hai
-//   3. Device lock (aapne "retina lock" kaha) - superadmin ka login ek
-//      SPECIFIC device se hi chalega, doosre laptop se nahi
-//   4. Session tracking - "kitne time se online hai, kab aaya, kab gaya"
+//  1. Role field (superadmin / recovery / staff / user)
+//  2. 2 RECOVERY accounts - agar main superadmin ke sath kuch ho jaye
+//     (account lock, credential leak, device kho jaaye) to ye 2 accounts
+//     se access mil sakta hai
+//  3. Device lock (aapne "retina lock" kaha) - superadmin ka login ek
+//     SPECIFIC device se hi chalega, doosre laptop se nahi
+//  4. Session tracking - "kitne time se online hai, kab aaya, kab gaya"
 //
 // Hinglish comments: har block ka arth
 package model
@@ -34,6 +34,20 @@ const (
 	RoleSuperadminRecovery = "superadmin_recovery"
 )
 
+// IsSuperadmin - role string se admin check.
+//
+// SECURITY: ye SIRF UI hints / route gating ke liye hai. Real authority
+// hamesha SIGNED JWT role claim ya DB read hai - client se aaya hua role
+// kabhi trust nahi karna chahiye.
+//
+// NOTE: `RoleSuperadminRecovery` ("superadmin_recovery") yahan DELIBERATELY
+// include NAHI hai. Wo recovery-flow account hai - full admin nahi. Agar
+// use future me full access dena hua to wo EXPLICIT decision hoga, par
+// tab tak accidental privilege escalation ka risk rahega.
+func IsSuperadmin(role string) bool {
+	return role == RoleSuperadmin
+}
+
 // SuperadminAccount - superadmin/recovery account ki registry
 //
 // KYUN ALAG TABLE: In accounts ko special treatment chahiye -
@@ -55,7 +69,7 @@ type SuperadminAccount struct {
 	//
 	// DeviceLocked: agar true hai, to ye account SIRF LockedDeviceID se
 	// login kar sakta hai. Doosre laptop se login REJECT.
-	DeviceLocked  bool   `gorm:"not null;default:false" json:"device_locked"`
+	DeviceLocked   bool   `gorm:"not null;default:false" json:"device_locked"`
 	LockedDeviceID string `gorm:"size:128" json:"-"`
 
 	// LockedAt: kab lock kiya gaya
@@ -81,7 +95,8 @@ type SuperadminAccount struct {
 }
 
 func (SuperadminAccount) TableName() string {
-	return "superadmin_accounts" }
+	return "superadmin_accounts"
+}
 
 // UserSession - user ki session tracking (kitne time online tha)
 //
@@ -124,7 +139,8 @@ type UserSession struct {
 }
 
 func (UserSession) TableName() string {
-	return "user_sessions" }
+	return "user_sessions"
+}
 
 // IsOnline abhi online hai ya nahi
 func (s *UserSession) IsOnline() bool {

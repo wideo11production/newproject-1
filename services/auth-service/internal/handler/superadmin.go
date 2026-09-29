@@ -70,6 +70,20 @@ func (h *SuperadminHandler) RegisterRoutes(r *gin.RouterGroup, authMW gin.Handle
 	sa := r.Group("/admin")
 	sa.Use(authMW)
 
+	// ---- SUPERADMIN ROLE GATE (CRITICAL SECURITY FIX) ----
+	//
+	// BUG: pehle yahan sirf `authMW` tha - yaani koi bhi logged-in user
+	// `/api/v1/admin/*` hit kar sakta tha (security events, device lock,
+	// test accounts - sab). Role check KAHAN nahi tha.
+	//
+	// Kyun Next.js middleware ne bacha nahi: wo sirf `/api/superadmin` aur
+	// `/superadmin` path cover karta hai. Ye backend ka `/api/v1/admin/*`
+	// alag path hai jo middleware ke scope se BAHAR hai.
+	//
+	// Defence in depth: middleware (path based) + ye role gate (token based).
+	// Dono alag-alag layer hain, isliye ek me bug aaye to doosra rok leta hai.
+	sa.Use(RequireSuperadmin())
+
 	// ---- Awareness: security events ----
 	sa.GET("/security-events", h.SecurityEvents)
 
@@ -211,9 +225,9 @@ func (h *SuperadminHandler) SetDeviceLock(c *gin.Context) {
 // MarkTestAccount - kisi account ko "testing" mark karta hai
 func (h *SuperadminHandler) MarkTestAccount(c *gin.Context) {
 	var req struct {
-		Email         string  `json:"email"`
-		Reason        string  `json:"reason"`
-		DummyBalance  float64 `json:"dummy_balance_inr"`
+		Email        string  `json:"email"`
+		Reason       string  `json:"reason"`
+		DummyBalance float64 `json:"dummy_balance_inr"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "email required"})

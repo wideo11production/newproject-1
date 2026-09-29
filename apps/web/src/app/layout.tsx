@@ -10,6 +10,7 @@ import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
 import './globals.css';
 import { ReactNode } from 'react';
 import Providers from './providers';
+import { IdentityProvider } from '@/lib/identity-context';
 import { AppChrome } from '@/components/app-chrome';
 
 export const metadata: Metadata = {
@@ -63,10 +64,26 @@ export default function RootLayout({
             invalid HTML ban jata hai aur hydration fail hoti hai. */}
         <GlobalActivityTracker />
         <Providers>
-          {/* Header + sidebar + main scroll container yahan se aata hai.
-              Auth routes (/auth/*) pe ye khud render NAHI hota, warna dashboard
-              chrome full-screen auth card ko cover kar deta tha. */}
-          <AppChrome>{children}</AppChrome>
+          {/* ---- SESSION IDENTITY (avatar/username app-wide) ----
+              Requirement: "session se har jagah uski profile image jaha bhi
+              woh jayegi uske sath honi chahiye".
+
+              Ye provider ek baar `/api/auth/me` call karta hai (httpOnly
+              cookie se proxy hokar) aur avatar/username/role ko pure app
+              me available karata hai - koi bhi component `useSessionIdentity()`
+              se padh sakta hai, bina kisi ke dobara fetch kiye.
+
+              Placement: `<Providers>` ke ANDAR, `<AppChrome>` se pehle -
+              isliye header, sidebar, settings, sab ise use kar sakte hain.
+
+              Public pages (login/register) par user authenticated nahi hota
+              -> `_isAuthenticated` false, consumers apna fallback dikhate hain. */}
+          <IdentityProvider>
+            {/* Header + sidebar + main scroll container yahan se aata hai.
+                Auth routes (/auth/*) pe ye khud render NAHI hota, warna dashboard
+                chrome full-screen auth card ko cover kar deta tha. */}
+            <AppChrome>{children}</AppChrome>
+          </IdentityProvider>
         </Providers>
       </body>
     </html>

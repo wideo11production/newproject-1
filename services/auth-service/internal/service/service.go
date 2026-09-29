@@ -198,6 +198,13 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		FullName:         req.FullName,
 		Username:         username,
 		BiometricCapable: biometricCapable,
+		// Role EXPLICITLY set karo. GORM ka DB-level `default:user` INSERT ke
+		// baad apply hota hai - yaani `user.Role` memory me is waqt KHAALI
+		// hota. Aur token generate karte waqt hum `user.Role` padhte hain,
+		// to bina ye ke token me EMPTY role claim chala jata aur user
+		// superadmin-route par access na paaye (ya worse - koi bug me
+		// empty role ko permissive samet liya jaaye).
+		Role: model.RoleUser,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -251,8 +258,14 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 	ip, ua := clientInfoFromContext(ctx)
 	// Create session and tokens
 	session := &model.Session{
-		UserID:    user.ID,
-		IPAddress: ip, // handler se context ke through aata hai (clientInfoFromContext)
+		// ID explicitly generate karo (BUG FIX: default:gen_random_uuid() DB-level
+		// default hai, jo INSERT ke BAAD hi milta hai - token pehle generate hota
+		// tha to JWT me session_id = uuid.Nil chala jata tha).
+		ID:     uuid.New(),
+		UserID: user.ID,
+		// Defensive truncate: column VARCHAR(64) hai, par agar future me
+		// koi unexpected bada value aaye to insert FAIL na ho.
+		IPAddress: truncateStr(ip, 64),
 		UserAgent: ua, // handler se context ke through aata hai
 	}
 
@@ -261,7 +274,26 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 		session.DeviceID = &device.ID
 	}
 
-	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email)
+	// ---- REGISTRATION TELEMETRY (Block 3) ----
+	// Ek PERMANENT audit record: kaun, kab, kahan se, kis device se.
+	//
+	// NOTE: token generate hone se PEHLE, par account create hone ke BAAD -
+	// aur NON-BLOCKING. Telemetry fail ho jaye to registration FAIL nahi
+	// hona chahiye. Isliye error sirf log hota hai.
+	//
+	// HONESTY: country/continent sirf tab likhe jayenge jab trusted proxy
+	// geo header present ho. Local dev me wo nahi hota -> NULL. Kabhi
+	// fabricated country nahi bharenge.
+	if tel := telemetryFromContext(ctx); tel.DeviceType != "" {
+		if err := s.RecordRegistration(
+			ctx, user.ID, user.Email, user.Username,
+			ip, ua, "", tel,
+		); err != nil {
+			log.Printf("[REGISTER] telemetry record failed (account still created): %v", err)
+		}
+	}
+
+	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -387,8 +419,28 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	ip, ua := clientInfoFromContext(ctx)
 	// Create session and tokens
 	session := &model.Session{
-		UserID:    user.ID,
-		IPAddress: ip, // handler se context ke through aata hai
+		// ---- CRITICAL FIX: ID explicitly generate karo (Register) ----
+		//
+		// BUG: `model.Session.ID` par `gorm:"default:gen_random_uuid()"` hai -
+		// yaani UUID DATABASE default se banta hai, jo sirf INSERT ke BAAD
+		// GORM ko wapas milta hai. Par token hum INSERT se PEHLE generate karte
+		// the, jisme `session.ID` abhi uuid.Nil (all-zero) hota tha.
+		//
+		// Iska asar: har JWT me `session_id` claim = 00000000-0000-0000-
+		// 0000-000000000000 chala jata tha. Jo bhi feature session ID par
+		// depend karta hai (PIN rollover apna current session bachana, ya
+		// kisi specific session ko revoke karna) wo kaam hi nahi karta -
+		// fail-closed hokar 500 deta tha.
+		//
+		// FIX: ID yahin, application me generate kar do. Isse:
+		//   - token sahi session ID carry karega
+		//   - DB default redundant ho jayega (harmless)
+		//   - rollover / revocation apna kaam karega
+		ID:     uuid.New(),
+		UserID: user.ID,
+		// Defensive truncate: column VARCHAR(64) hai, par agar future me
+		// koi unexpected bada value aaye to insert FAIL na ho.
+		IPAddress: truncateStr(ip, 64),
 		UserAgent: ua, // handler se context ke through aata hai
 	}
 
@@ -397,7 +449,7 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 		session.DeviceID = &device.ID
 	}
 
-	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email)
+	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, session.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -500,13 +552,17 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 
 	// Create new session
 	newSession := &model.Session{
+		// ID explicitly generate karo (BUG FIX: default:gen_random_uuid() DB-level
+		// default hai, jo INSERT ke BAAD hi milta hai - token pehle generate hota
+		// tha to JWT me session_id = uuid.Nil chala jata tha).
+		ID:        uuid.New(),
 		UserID:    user.ID,
 		DeviceID:  session.DeviceID,
 		IPAddress: "", // Would be extracted from request in handler
 		UserAgent: "", // Would be extracted from request in handler
 	}
 
-	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, newSession.ID, user.Email)
+	accessToken, err := s.tokenService.GenerateAccessToken(user.ID, newSession.ID, user.Email, user.Role)
 	if err != nil {
 		return nil, err
 	}
