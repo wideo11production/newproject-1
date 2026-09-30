@@ -71,15 +71,11 @@ func (s *AuthService) IssueVerificationToken(ctx context.Context, userID uuid.UU
 // BuildVerificationURL clickable verification link banata hai
 // Hinglish: email me bhejne wala clickable link
 func (s *AuthService) BuildVerificationURL(plainToken string) string {
-	base := s.cfg.Verification.BaseURL
-	if base == "" {
-		base = "http://localhost:3000"
-	}
-	// Trim trailing slash to avoid double slash
-	for len(base) > 0 && base[len(base)-1] == '/' {
-		base = base[:len(base)-1]
-	}
-	return fmt.Sprintf("%s/auth/verify?token=%s", base, plainToken)
+	// Base URL ka normalization (trailing slash trim, empty-to-default)
+	// VerificationBaseURL() me CENTRALIZED hai - teeno call sites yahan se
+	// aate hain, taaki template ka base aur link ka base kabhi diverge na
+	// karein.
+	return fmt.Sprintf("%s/auth/verify?token=%s", s.VerificationBaseURL(), plainToken)
 }
 
 // BuildVerificationURLWithEmail verification link banata hai jisme email bhi
@@ -97,13 +93,7 @@ func (s *AuthService) BuildVerificationURL(plainToken string) string {
 // Email ko `url.QueryEscape` karna ZAROORI hai - `@` aur `+` jaise chars
 // URL me safe nahi hote (plus `+` space ban jata hai).
 func (s *AuthService) BuildVerificationURLWithEmail(plainToken, emailAddr string) string {
-	base := s.cfg.Verification.BaseURL
-	if base == "" {
-		base = "http://localhost:3000"
-	}
-	for len(base) > 0 && base[len(base)-1] == '/' {
-		base = base[:len(base)-1]
-	}
+	base := s.VerificationBaseURL()
 	if emailAddr == "" {
 		return fmt.Sprintf("%s/auth/verify?token=%s", base, plainToken)
 	}
@@ -165,7 +155,7 @@ func (s *AuthService) SendVerificationEmail(ctx context.Context, user *model.Use
 	// NOTE: token value LOG nahi hota (secret hai). Sirf base URL log hota
 	// hai jo secret nahi hai.
 	log.Printf("[VERIFY] Verification email queued to=%s base_url=%s expires_in=%dm",
-		user.Email, s.cfg.Verification.BaseURL, ttl)
+		user.Email, s.VerificationBaseURL(), ttl)
 
 	// ---- FAST PATH: background queue (preferred) ----
 	//

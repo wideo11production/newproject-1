@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { apiClient } from "@wideo11/api-client";
+import { apiClient } from "wideo11-api-client";
 import { useAuthActions, useIsLoading } from "./store";
 
 export function useLogin() {

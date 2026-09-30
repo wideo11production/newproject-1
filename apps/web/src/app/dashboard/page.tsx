@@ -47,6 +47,7 @@ import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 import { useSessionIdentity } from '@/lib/identity-context';
 import { AvatarUploader } from '@/components/dashboard/avatar-uploader';
+import { ChannelManager } from '@/components/channels/channel-manager';
 import { DashboardSidebar } from '@/components/dashboard/dashboard-sidebar';
 import { OverflowMenu, type MenuItem } from '@/components/dashboard/overflow-menu';
 import { InstallPanel } from '@/components/dashboard/install-panel';
@@ -70,7 +71,9 @@ type Channel = {
   display_name: string;
   description: string;
   image_url: string;
+  cover_url: string;
   is_public: boolean;
+  is_active: boolean;
   created_at: string;
 };
 
@@ -629,28 +632,12 @@ export default function CreatorDashboard() {
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2">
                 {channels.map((ch) => (
-                  <li
+                  <ChannelManager
                     key={ch.id}
-                    className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{ch.display_name}</p>
-                        <p className="truncate text-xs text-[#5794f2]">@{ch.handle}</p>
-                      </div>
-                      <span className="shrink-0 rounded-full bg-[#1f2227] px-2 py-0.5 text-[10px] text-[#9fa7b3]">
-                        {ch.is_public ? 'Public' : 'Private'}
-                      </span>
-                    </div>
-                    {ch.description ? (
-                      <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-[#9fa7b3]">
-                        {ch.description}
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-[10px] text-[#9fa7b3]/70">
-                      Created {timeAgo(ch.created_at)}
-                    </p>
-                  </li>
+                    channel={ch}
+                    onChanged={loadAll}
+                    onDeleted={loadAll}
+                  />
                 ))}
               </ul>
             )}

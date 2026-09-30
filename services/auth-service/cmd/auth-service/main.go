@@ -17,8 +17,10 @@ import (
 	"github.com/wideo11/auth-service/internal/email"
 	"github.com/wideo11/auth-service/internal/handler"
 	"github.com/wideo11/auth-service/internal/middleware"
+	"github.com/wideo11/auth-service/internal/natsx"
 	"github.com/wideo11/auth-service/internal/password"
 	"github.com/wideo11/auth-service/internal/purge"
+	"github.com/wideo11/auth-service/internal/redisx"
 	"github.com/wideo11/auth-service/internal/repository"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
@@ -126,6 +128,35 @@ func main() {
 	// karta hai, warna synchronous path.
 	authService.SetEmailQueue(emailQueue)
 
+	// ---- VERIFICATION BASE URL VALIDATION (Phase A / gap #5) ----
+	//
+	// Ye startup par ek baar chalti hai, aur `localhost` wale config ko
+	// BOLDLY flag karti hai. Pehle ye problem bilkul silent thi: koi error
+	// nahi, koi log nahi, bas ek link jo phone par DEAD tha. Ab operator ko
+	// `docker compose logs auth-service` se turant dikh jayega, users ko
+	// 2-3 signup chhodne se pehle.
+	//
+	// NOTE: ye FATAL nahi hai - local dev me `localhost` bilkul sahi hai.
+	// Sirf tab hard-fail karte hain jab ye config `release` mode me ho, yaani
+	// production me. Local dev me warning kaafi hai.
+	if reach := authService.CheckVerificationReachability(); reach.Fatal {
+		if cfg.Server.Mode == "release" {
+			// Production me ye band karne layak nahi hai - par service ko
+			// crash karne se bhi behtar hai ki wo chalu rahe aur log me
+			// clearly bataye. `log.Fatalf` se container crash-loop hoga aur
+			// operator ko sirf "exit 1" dikhega, iske bajaye exact fix
+			// instruction log me print hoti hai.
+			log.Printf("[VERIFY][BLOCKER] %s", reach.Message)
+			log.Printf("[VERIFY][BLOCKER] Server is running in RELEASE mode with an " +
+				"unreachable verification base URL. Signup from any device other than " +
+				"this one will be broken until VERIFICATION_BASE_URL is fixed.")
+		} else {
+			log.Printf("[VERIFY][WARN] %s", reach.Message)
+		}
+	} else if reach.Message != "" {
+		log.Printf("[VERIFY][OK] %s", reach.Message)
+	}
+
 	// 30-minute purge worker start karo (background Go worker, koi paid cron nahi)
 	// Hinglish: unverified accounts 30 minute baad permanently purge honge
 	purgeWorker := purge.NewWorker(cfg, purgeRepo, verifRepo, emailDispatcher)
@@ -149,6 +180,49 @@ func main() {
 	securitySvc := service.NewSecurityService(db)
 	securityHandler := handler.NewSecurityHandler(securitySvc, authService)
 
+	// =========================================================================
+	// REDIS - rate limiting + JWT revocation denylist
+	// =========================================================================
+	//
+	// Ye DEGRADE karte hue start hote hain, crash nahi karte. Rationale:
+	// Redis ek cache hai, ek source of truth nahi. Agar Redis down hone par
+	// auth crash karta, to ek cache outage poore auth ko le jata - jo
+	// brute-force se bada nuksaan hai.
+	//
+	// Redis down hone par jo kya hota hai:
+	//   - rate limiter ALLOW karta hai (fail open) - attack possible, logged
+	//   - denylist check DB wale session check par gir jata hai - correct
+	// dono degraded paths documented hain respective files me.
+	var redisClient *redisx.Client
+	if rc, rErr := redisx.New(cfg.Redis); rErr != nil {
+		log.Printf("[RATELIMIT] Redis unavailable (%v) - rate limiting DEGRADED, "+
+			"brute-force protection is not enforced until Redis recovers", rErr)
+	} else {
+		redisClient = rc
+		log.Println("[RATELIMIT] Redis connected - rate limiting active")
+	}
+	if redisClient != nil {
+		defer redisClient.Close()
+	}
+
+	// =========================================================================
+	// NATS JetStream - security event audit stream
+	// =========================================================================
+	//
+	// Same degrade policy: NATS down hone par sirf audit trail chali jaati
+	// hai, security enforcement nahi. Isiliye ye bhi non-fatal hai.
+	var natsPub *natsx.Publisher
+	if np, nErr := natsx.Connect(cfg.NATS.URL); nErr != nil {
+		log.Printf("[AUDIT] NATS unavailable (%v) - security events will not be "+
+			"streamed (rate limiting itself is unaffected)", nErr)
+	} else {
+		natsPub = np
+		log.Println("[AUDIT] NATS JetStream connected - rate limit events will stream")
+	}
+	if natsPub != nil {
+		defer natsPub.Close()
+	}
+
 	// Superadmin service - recovery accounts, device lock, session tracking
 	superadminSvc := service.NewSuperadminService(db)
 	superadminHandler := handler.NewSuperadminHandler(superadminSvc, authService)
@@ -171,10 +245,71 @@ func main() {
 	// Set up router
 	r := gin.New()
 
-	// Global middleware
+	// ---- Global middleware (ORDER MATTERS) ----
+	//
+	// 1. SecurityHeaders PEHLE - taaki baaki handlers in headers ko
+	//    overwrite na kar sakein, aur har response (including errors) pe
+	//    protection mile.
+	// 2. NoStore - auth API ke responses cache nahi hone chahiye (PII).
+	// 3. Recovery - panic catch (headers already set ho chuke hain, to
+	//    500 response pe bhi security headers rahenge).
+	// 4. Logger - request log.
+	// 5. CORS - origin check (config allowlist se).
+	securityCfg := middleware.DefaultSecurityHeadersConfig()
+	securityCfg.HSTSMaxAge = cfg.Security.HSTSMaxAge
+	securityCfg.HSTSIncludeSubdomains = cfg.Security.HSTSIncludeSubdomains
+	if cfg.Security.CSP != "" {
+		securityCfg.CSP = cfg.Security.CSP
+	}
+	if cfg.Security.ReferrerPolicy != "" {
+		securityCfg.ReferrerPolicy = cfg.Security.ReferrerPolicy
+	}
+	if cfg.Security.FrameOptions != "" {
+		securityCfg.FrameOptions = cfg.Security.FrameOptions
+	}
+	if cfg.Security.PermissionsPolicy != "" {
+		securityCfg.PermissionsPolicy = cfg.Security.PermissionsPolicy
+	}
+
+	r.Use(middleware.SecurityHeaders(securityCfg))
+	r.Use(middleware.NoStore())
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
-	r.Use(middleware.CORS())
+	r.Use(middleware.NewCORS(middleware.CorsConfig{
+		AllowedOrigins:   cfg.Security.GetAllowedOrigins(),
+		AllowCredentials: cfg.Security.AllowCredentials,
+	}))
+
+	// ---- Rate limit body capture ----
+	//
+	// ORDER MATTERS: ye `BodyEmailCapture` hai, `RateLimit` se PEHLE. Ye login
+	// body se email nikaal ke gin context me rakh deta hai taki rate limiter
+	// account-par key kar sake, aur body ko original bytes ke saath wapas
+	// de deta hai. Agar order ulta hua to handler ko empty body milti aur
+	// EVERY login fail ho jati.
+	//
+	// Ye sab routes par lagta hai, par sirf /login, /register, /refresh ke liye
+	// body padhta hai - baaki har request ke liye buffer karna waste hoga.
+	r.Use(middleware.BodyEmailCapture())
+
+	// ---- Audit sink ----
+	//
+	// Rate limiter ko ye chahiye taki blocked attempts NATS JetStream par
+	// stream ho sakein. Nil sink bhi safe hai (events drop ho jaate hain),
+	// isliye ye tab bhi lagta hai jab NATS connect nahi hua.
+	if natsPub != nil {
+		r.Use(middleware.WithRateLimitAudit(middleware.NewRateLimitAuditSink(natsPub)))
+	}
+
+	// Startup par ek baar log karo ki CORS allowlist kya hai - galat config
+	// hone par "login hi nahi ho raha" wali aadat ki bug aasan hoti hai, aur
+	// logs me clear reason hona chahiye.
+	log.Printf("[SECURITY] CORS origins=%v credentials=%v | HSTS max-age=%ds | X-Frame-Options=%s",
+		cfg.Security.GetAllowedOrigins(),
+		cfg.Security.AllowCredentials,
+		securityCfg.HSTSMaxAge,
+		securityCfg.FrameOptions,
+	)
 
 	// Health check endpoint
 	r.GET("/health", func(c *gin.Context) {
@@ -188,21 +323,87 @@ func main() {
 	// Auth routes
 	auth := r.Group("/api/v1/auth")
 	{
-		auth.POST("/register", authHandler.Register)
-		auth.POST("/login", authHandler.Login)
+		// =====================================================================
+		// RATE LIMITED ROUTES
+		// =====================================================================
+		//
+		// ---- YE PEHLE BINARY KISI NE NAHI LIMIT KIYA THA ----
+		//
+		// Pehle auth-service par KOI rate limiting nahi thi. Sirf ek limiter
+		// thi - `apps/web/src/lib/rate-limiter.ts` - jo Next.js ki process
+		// memory me chalti thi. Do wajah se wo ASLI protection nahi thi:
+		//
+		//   1. BYPASSABLE. `auth-service` ka port 8085 host pe published hai.
+		//      Verify kiya gaya: seedhe 6 login attempts -> 6x HTTP 400, zero
+		//      429. Matlab unlimited password guessing.
+		//   2. RESTART-RESET. Next.js restart saare counters wipe kar deta tha.
+		//   3. PER-REPLICA. Do Next.js instances = double the documented limit.
+		//
+		// ---- 4 POLICIES, 3 KEYS ----
+		//
+		// Sirf IP-based limiting credential stuffing me KAMZOR hai: attacker
+		// 500 IPs rotate karke ek hi account par guess karta hai, har IP apni
+		// limit ke andar rehta hai. Isliye teen alag keys chalti hain:
+		//
+		//   login           8/min    per IP+email pair   (narrow, jaldi)
+		//   login_sustained 30/15min per IP+email pair   (total cap)
+		//   login_account   10/15min per EMAIL only     <- ASLI protection
+		//   login_ip        20/5min   per IP only        <- password spray
+		//
+		// `login_account` me IP hai hi nahi - IP rotate karne se koi nahi
+		// bach sakta. Ye wo rule hai jo brute force rokta hai.
+		//
+		// ---- WHY 4 POLICIES ON ONE ROUTE ----
+		//
+		// Kyunki ek limit ek dimension cover karti hai. 8/min per pair se
+		// distributed attack nahi rukta (har pair alag), aur 10/15min per
+		// account se legitimate user jisne 3 baar galat password type kiya
+		// wo nahi rukta. Saare lagane se dono attack shapes cover hote hain
+		// bina legit use ko hurt kiye.
+		auth.POST("/login",
+			middleware.RateLimit(redisClient,
+				middleware.LimitLogin,
+				middleware.LimitLoginSustained,
+				middleware.LimitLoginPerAccount,
+				middleware.LimitLoginPerIP,
+			),
+			authHandler.Login)
+
+		// Registration: 3 per 5 min per IP. Bulk signup rokta hai.
+		auth.POST("/register",
+			middleware.RateLimit(redisClient, middleware.LimitRegister),
+			authHandler.Register)
+
+		// Verification resend: 10 per 5 min. Email-bombing aur sender
+		// reputation damage rokta hai.
+		auth.POST("/resend-verification",
+			middleware.RateLimit(redisClient, middleware.LimitVerify),
+			authHandler.ResendVerification)
+
+		// Refresh: token exchange. Generous - legitimate clients refresh
+		// routinely, aur is route par tight limit refresh loop me user ko
+		// logout kar sakta hai.
+		auth.POST("/refresh",
+			middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
+			authHandler.RefreshToken)
+
+		// PIN verify PUBLIC hai (login ke andar, lockout recovery) - isiliye
+		// ye PIN brute-force ka ek aur darwaza hai. Isko rate limit karna
+		// zaroori hai, warna 4-digit PIN guess karna possible ho jayega.
+		// NOTE: ye route neeche `secGroup` me bhi hai; wahi registration
+		// authoritative hai. Yahan duplicate register karna Next me panic
+		// deta hai, isliye yahan nahi kiya - neeche limit ke saath
+		// register hota hai.
+
 		// Verification link click handler - GET se call hota hai
 		auth.GET("/verify", authHandler.VerifyEmail)
 		// Settings META public hai - login page bhi theme/language read karta
 		// hai, aur user logged-out ho tab bhi options dikhne chahiye.
 		auth.GET("/settings/meta", authHandler.GetSettingsMeta)
-		// Resend verification email - naya token + naya email.
-		// PRE-auth hai (user abhi login nahi kar sakta, email hi uska proof
-		// hai). Handler email enumeration nahi karta - har case me same 200.
-		// Purana token automatically delete hota hai (IssueVerificationToken
-		// ke andar DeleteByUserID hai), to "resend par purana token hat jaye"
-		// requirement bina extra code ke satisfy hoti hai.
-		auth.POST("/resend-verification", authHandler.ResendVerification)
-		auth.POST("/refresh", authHandler.RefreshToken)
+		// NOTE: `/resend-verification` upar rate-limit ke saath register hota
+		// hai. Yahan dobara register karne se gin panic karta tha:
+		//   panic: handlers are already registered for path
+		//   '/api/v1/auth/resend-verification'
 		auth.POST("/logout", authHandler.AuthMiddleware(), authHandler.Logout)
 		// ---- Creator dashboard: active devices ----
 		// "Aap kis device par logged in hain" - token se user_id lekar
@@ -257,10 +458,45 @@ func main() {
 			// Sab token-derived user_id par scoped hain.
 			protected.GET("/channels", authHandler.ListChannels)
 			protected.POST("/channels", authHandler.CreateChannel)
+			// ---- Phase B1: channel management beyond create ----
+			//
+			// SECURITY: `/:id` wale routes me `user_id` filter service layer par
+			// LAGA HUA HAI aur user_id TOKEN se aata hai. Bina token ke koi
+			// doosre user ka channel read/edit/delete nahi kar sakta (IDOR nahi).
+			protected.GET("/channels/:id", authHandler.GetChannel)
+			protected.PATCH("/channels/:id", authHandler.UpdateChannel)
+			protected.DELETE("/channels/:id", authHandler.DeleteChannel)
+			// ---- Channel cover upload (Phase B1) ----
+			// Same 3-step presigned flow as avatars. Both handlers run an
+			// ownership check on `:id` (channel must belong to the caller)
+			// BEFORE minting a URL or saving anything.
+			protected.POST("/channels/:id/cover/upload-url", authHandler.CoverUploadURL)
+			protected.POST("/channels/:id/cover/finalize", authHandler.CoverFinalize)
 			protected.PATCH("/profile", authHandler.UpdateProfile)
 			// Profile GET v2 - avatar_url ke saath (purana `GetProfile`
 			// fields ka subset return karta hai, isliye naya endpoint).
 			protected.GET("/profile/full", authHandler.GetProfileV2)
+		}
+
+		// ---- PUBLIC channel discovery (Phase B1) ----
+		//
+		// ---- WHY A SEPARATE `/public` PREFIX ----
+		// Ye routes `/api/v1/channels/:id` ke saath SAME prefix me nahi rakh sakte
+		// the. Gin ke router me ek static segment aur ek param segment bhai nahi
+		// ho sakte - `/channels/public` aur `/channels/:id` ek saath register
+		// karne pe gin PANIC karta hai ("conflicts with existing wildcard").
+		// Alag prefix isse structurally rok deta hai aur saath me semantics bhi
+		// saaf karta hai: `/public/*` = "auth nahi chahiye".
+		//
+		// SECURITY: in par AuthMiddleware LAGA HUA NAHI HAI - ye jaan-boojh kar
+		// hai, kyunki public channel page login ke bina dikhna chahiye. Privacy
+		// service layer par depend karti hai: sirf `is_public AND is_active` rows
+		// hi return hoti hain, aur private/missing dono ke liye SAME 404 aata hai
+		// ( warna attacker handle enumerate kar sakta tha).
+		publicGroup := r.Group("/api/v1/public/channels")
+		{
+			publicGroup.GET("", authHandler.ListPublicChannels)
+			publicGroup.GET("/:handle", authHandler.GetPublicChannel)
 		}
 	}
 
@@ -272,7 +508,15 @@ func main() {
 		// Public: lockout status check (login screen ke liye)
 		secGroup.GET("/lockout-status", securityHandler.LockoutStatus)
 		// Public: PIN verify (lockout recovery - login ke andar)
-		secGroup.POST("/pin/verify", securityHandler.VerifyPIN)
+		//
+		// RATE LIMITED - ye zaroori hai. Ye route bina token ke khuli hai
+		// (lockout recovery ke liye) aur 4-digit PIN check karta hai. Bina
+		// limit ke koi 10,000 possible PINs chhoti script se enumerate kar
+		// sakta tha. 8/min per IP+pair se ye brute force impractical ho
+		// jata hai jabki legit user ko apna PIN type karne ka time milta hai.
+		secGroup.POST("/pin/verify",
+			middleware.RateLimit(redisClient, middleware.LimitLogin),
+			securityHandler.VerifyPIN)
 		// Public: available questions catalogue
 		secGroup.GET("/questions/available", securityHandler.AvailableQuestions)
 	}
@@ -317,7 +561,7 @@ func main() {
 	// nahi chalta.
 	if storageSvc, sErr := service.NewStorageService(&cfg.Storage); sErr != nil {
 		log.Printf("[WARN] Storage disabled: %v", sErr)
-		log.Printf("[WARN] Avatar upload unavailable. Set MINIO_ACCESS_KEY / MINIO_SECRET_KEY in .env")
+		log.Printf("[WARN] Avatar upload unavailable. Set STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY in .env")
 	} else {
 		authHandler.SetStorageService(storageSvc)
 		log.Printf("[OK] Storage ready: MinIO %s (bucket %s)",

@@ -7,6 +7,25 @@ import { ReactNode, Suspense } from 'react';
 // Hinglish: Google font hata diya, ab system font stack hai - kabhi fail nahi hoga
 import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
+// ---- BUG: ye import MISSING tha ----
+//
+// `globals.css` is layout me KABHI import hi nahi hui thi. Iska matlab:
+//
+//   - koi `<link rel="stylesheet">` HTML me emit nahi hui
+//   - `document.styleSheets` empty tha (0 rules)
+//   - har Tailwind class (`bg-background`, `text-foreground`, `border-border`)
+//     ek no-op thi
+//
+// Page phir bhi render hota tha, har HTTP check 200 deta tha, aur app browser
+// me poora UNSTYLED dikhta tha - bilkul wahi symptom jo monitor dashboard ka
+// tha. Do alag wajah, ek hi dikhav: CSS compile nahi ho rahi thi.
+//
+// Yahan import karna hi kaafi hai - `postcss.config.mjs` (jo is app me bhi
+// missing tha) ensure karta hai ki `@tailwind` directives actually compile
+// hon. Dono chahiye: config compile karta hai, ye import attach karta hai.
+import './globals.css';
+
 import { Providers } from './components/providers';
 import { Navigation } from './components/layout/navigation';
 

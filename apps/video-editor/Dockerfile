@@ -99,6 +99,24 @@ COPY pnpm-lock.yaml ./
 
 COPY apps/video-editor ./apps/video-editor
 
+# ---- Restore the app's own node_modules ----
+#
+# The COPY above REPLACES the whole app directory, including the
+# node_modules that pnpm install created in the deps stage.
+#
+# External deps survive because pnpm hoists them to the root
+# /app/node_modules, but WORKSPACE links (wideo11-charts, @wideo11/ui, and
+# the rest) are symlinked inside the app's own node_modules. Clobbering that
+# directory makes those imports unresolvable and the build fails with:
+#
+#   Module not found: Can't resolve 'wideo11-charts'
+#
+# The error names resolution rather than this COPY, which is what makes it
+# slow to diagnose. Restoring node_modules AFTER the source copy fixes it -
+# order matters.
+COPY --from=deps /app/apps/video-editor/node_modules ./apps/video-editor/node_modules
+
+
 WORKDIR /app/apps/video-editor
 
 # Build Next.js application with production optimization

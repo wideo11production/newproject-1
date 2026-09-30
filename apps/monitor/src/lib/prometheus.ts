@@ -56,6 +56,84 @@ export async function promQuery(
 }
 
 /**
+ * promRangeQuery - Prometheus se RANGE query (time series) leta hai
+ *
+ * `promQuery` sirf ek instant value deta hai (abhi kya hai). Real dashboard
+ * ke liye time series chahiye - yaani pichhle 1 ghante me CPU kaise badha,
+ * memory kab spike hui. Ye wahi deta hai.
+ *
+ * ERROR HANDLING: throw karta hai, `promQuery` ki tarah nahi. Kyunki iska
+ * caller (`/api/timeseries`) poora request fail kar sakta hai - ek panel ki
+ * series na aane par baaki sab dikhni chahiye. Throwing se route handler
+ * cleanly 502 de sakta hai with kaunsi query fail hui.
+ *
+ * PromQL BHANDAAR HAI isliye nahi fail hota: har query alag jaanchti hai
+ * aur response me `error` field ke saath wapas aati hai. Isiliye empty
+ * result ko "no data" maana jaata hai, error ko alag.
+ */
+export interface RangeSeries {
+  /** Metric name / label combination, e.g. "auth_service" */
+  label: string;
+  /** [unixSeconds, value] pairs - ECharts isko seedha consume karta hai */
+  points: Array<[number, number]>;
+}
+
+export async function promRangeQuery(
+  query: string,
+  opts?: { rangeSeconds?: number; step?: number }
+): Promise<RangeSeries[]> {
+  const rangeSeconds = opts?.rangeSeconds ?? 3600;
+  // Step: 15s scrape interval par max ~240 points per hour. Zyada chhota step
+  // CPU waste karta hai bina kuch naya dikhaye; zyada bada step spikes ko
+  // miss kar deta hai.
+  const step = opts?.step ?? 15;
+
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - rangeSeconds;
+  const url =
+    `${PROMETHEUS_URL}/api/v1/query_range` +
+    `?query=${encodeURIComponent(query)}` +
+    `&start=${start}&end=${end}&step=${step}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      throw new Error(`Prometheus returned ${res.status}`);
+    }
+
+    const json = await res.json();
+    if (json.status !== 'success') {
+      throw new Error(json.error ?? 'Prometheus query failed');
+    }
+
+    return (json.data?.result ?? []).map((r: {
+      metric: Record<string, string>;
+      values: Array<[number, string]>;
+    }) => {
+      // Label priority: db/bucket/job sabse useful hain. Inme se pehla jo
+      // maujood ho wo series ka naam ban jaata hai. Isse legend me
+      // "auth_service" dikhta hai, "{__name__=\"pg_stat_...\"}" nahi.
+      const m = r.metric ?? {};
+      const label = m.datname ?? m.bucket ?? m.job ?? m.instance ?? m.__name__ ?? 'value';
+
+      return {
+        label,
+        points: r.values
+          .map(([ts, val]) => [ts, parseFloat(val)] as [number, number])
+          .filter(([, v]) => !Number.isNaN(v)),
+      };
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * getPrometheusMetrics - saare real metrics ek saath laata hai
  *
  * HEADS UP: Data egress abhi bhi SEEDED hai (MinIO se direct nahi, kyunki
@@ -101,6 +179,22 @@ export async function getPrometheusMetrics() {
   const videoBucketSize = await promQuery('minio_bucket_size_bytes{bucket="video"}');
   const scrapeError = await promQuery('max(minio_exporter_scrape_error)');
 
+  // ---- Provenance: real ya degraded? ----
+  //
+  // "live" ka matlab hai: har metric kisi NAHI value ke bajaye ek REAL
+  // number hai. `promQuery` failure par `value: null` aur `error` bharta
+  // hai, to `.value !== null` se pata chal jaata hai.
+  //
+  // Ye isliye zaroori hai kyunki dashboard pehle har haal me "Live from
+  // Prometheus" likhta tha - chahe data aa raha ho ya sab null ho. Adhoora
+  // data ko live bolna wahi jhooth hai jo pehle ki tarah "fake dikhake real
+  // chhupana" tha, bas ulta.
+  const queries = [
+    upResult, cpuCores, memBytes, netRxBytes,
+    bucketSize, bucketObjects, videoBucketSize, scrapeError,
+  ];
+  const allLive = queries.every((q) => q.value !== null);
+
   return {
     containersUp: upResult.value,
     containersUpError: upResult.error,
@@ -132,6 +226,22 @@ export async function getPrometheusMetrics() {
       scrapeErrorDetail: scrapeError.error,
     },
 
+    // ---- Data provenance ----
+    //
+    // `prometheusUrl` ko browser ko BHEJNE ki zaroorat nahi hai. Wo ek
+    // internal container hostname hai (`http://prometheus:9090`) jo browser
+    // ke DNS se resolve hi nahi hota. Pehle dashboard usse header me render
+    // karta tha, jisse user ko ek dead URL dikhta tha aur dashboard "broken"
+    // lagta tha - jabki data bilkul theek aa raha tha.
+    //
+    // `dataSource` woh batata hai jo user ko actually chahiye: data REAL hai
+    // ya seeded/placeholder. Koi bhi metric fail ho raha ho to wo bhi yahan
+    // reflect hota hai, taaki "live" dikhate hue aadhi dashboard jhooth na
+    // bolе.
+    dataSource: allLive ? 'live' : 'degraded',
+
+    // Server-side URL: sirf logs aur debugging ke liye. Client ise render
+    // nahi karta. Isi ko browser tak bhejne se cluster topology leak hota hai.
     prometheusUrl: PROMETHEUS_URL,
     fetchedAt: new Date().toISOString(),
   };

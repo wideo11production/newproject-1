@@ -78,6 +78,12 @@ type Settings = {
   accent: string;
   language: string;
   content_upload_enabled: boolean;
+  // Effective capability - NOT the same as the toggle above. The toggle is
+  // the user's intent; this is whether an upload would actually be accepted
+  // (intent + verified email + active account).
+  content_upload_allowed: boolean;
+  // 'allowed' | 'disabled_by_user' | 'email_unverified' | 'account_inactive'
+  content_upload_reason: string;
   subscriptions_enabled: boolean;
   email_notifications: boolean;
 };
@@ -88,8 +94,44 @@ type Meta = {
   languages: { Code: string; Name: string }[];
 };
 
-/** Theme options ka display - label + inline swatch colour */
-const THEME_META: Record<string, { label: string; hint: string; swatch: string[] }> = {
+/**
+ * Upload-blocked reason -> user-facing message.
+ *
+ * The server sends an enum, not prose, so the wording lives in ONE place here
+ * rather than being duplicated per call site.
+ *
+ * The important property: each message tells the user what they can DO. Telling
+ * someone "not allowed" without a next step is what made this feel broken in
+ * the first place.
+ */
+function uploadBlockedMessage(reason: string): string {
+  switch (reason) {
+    case 'email_unverified':
+      return 'Verify your email address to enable uploads. Your toggle is already on.';
+    case 'account_inactive':
+      return 'Your account is inactive, so uploads are unavailable. Contact support to reactivate it.';
+    case 'disabled_by_user':
+      return 'Turn the toggle above back on to upload content.';
+    default:
+      // Unknown reason - the server added a new one this build does not know.
+      // Stay honest rather than guessing at wording we cannot verify.
+      return 'Uploads are unavailable right now. Contact support if this looks wrong.';
+  }
+}
+
+/** Short hint shown under the toggle label. */
+function uploadBlockedHint(reason: string): string {
+  switch (reason) {
+    case 'email_unverified':
+      return 'Blocked until your email is verified';
+    case 'account_inactive':
+      return 'Blocked while your account is inactive';
+    default:
+      return 'Currently blocked by another condition';
+  }
+}
+
+/** Theme options ka display - label + inline swatch colour */const THEME_META: Record<string, { label: string; hint: string; swatch: string[] }> = {
   dark: {
     label: 'Dark',
     hint: 'Current Grafana dark',
@@ -647,10 +689,26 @@ export default function UserSettingsPage() {
             </h2>
 
             <div className="mt-4 space-y-3">
+              {/* ---- WHY THIS HINT IS NOT JUST STATIC TEXT ----
+               *
+               * `content_upload_enabled` is the user's INTENT, but uploads are
+               * also blocked by things the toggle does not control (unverified
+               * email, inactive account). Showing only the toggle meant a user
+               * could have it ON and still be refused at upload time with no
+               * explanation - the exact "persisted but inert" gap this fixes.
+               *
+               * So when the toggle is ON but uploads are still refused, we say
+               * WHY, and the message tells them what they can actually do.
+               */}
               <ToggleRow
                 icon={<Upload className="h-4 w-4" />}
                 label="Allow me to upload content"
-                hint="Show the upload option across your dashboard"
+                hint={
+                  settings?.content_upload_enabled &&
+                  settings?.content_upload_allowed === false
+                    ? uploadBlockedHint(settings.content_upload_reason)
+                    : 'Show the upload option across your dashboard'
+                }
                 checked={settings?.content_upload_enabled ?? true}
                 onChange={(v) => {
                   setSettings((prev) =>
@@ -659,6 +717,19 @@ export default function UserSettingsPage() {
                   void save({ content_upload_enabled: v }, 'content');
                 }}
               />
+              {settings?.content_upload_enabled &&
+              settings?.content_upload_allowed === false ? (
+                <p
+                  role="status"
+                  className="flex items-start gap-1.5 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
+                >
+                  <AlertTriangle
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <span>{uploadBlockedMessage(settings.content_upload_reason)}</span>
+                </p>
+              ) : null}
               <ToggleRow
                 icon={<Users className="h-4 w-4" />}
                 label="Allow viewer subscriptions"

@@ -39,6 +39,12 @@ type Channel struct {
 	// Channel ka apna image (user avatar se alag - ek channel ka cover,
 	// ek user ki photo)
 	ImageURL string `gorm:"size:500" json:"image_url"`
+	// CoverURL - wide banner (YouTube-style channel header).
+	//
+	// WHY SEPARATE FROM ImageURL: `image_url` square icon/avatar hai, `cover_url`
+	// wide banner hai. Designers inhe alag size me use karte hain; ek hi column
+	// me rakhne par ek set karne se doosra chala jayega. Migration 011.
+	CoverURL string `gorm:"size:500" json:"cover_url"`
 	// ---- State ----
 	IsPublic bool `gorm:"default:true" json:"is_public"`
 	IsActive bool `gorm:"default:true" json:"is_active"`
@@ -106,17 +112,64 @@ type CreateChannelRequest struct {
 	IsPublic *bool `json:"is_public,omitempty"`
 }
 
-// ChannelResponse - create ke baad client ko milta hai.
-type ChannelResponse struct {
+// UpdateChannelRequest - channel edit ke liye.
+//
+// ---- WHY EVERY FIELD IS A POINTER ----
+// `nil` = "is field ko chhod de", `false`/`""` = "is field ko VALUE set kar".
+//
+// Agar ye plain `string`/`bool` hote to PATCH me omitted field aur
+// intentionally-emptied field dono ka representation same ho jata. Iska
+// matlab: user description khaali karna chahta, aur hum uska description
+// chupke se UNCHANGED chhod dete - ya worse, display_name clear karne ki
+// request par use hata dete.
+//
+// Pointer pattern ye ambiguity door karta hai. Ye wahi pattern hai jo
+// `UpdateSettingsRequest` me pehle se use ho raha hai.
+//
+// SECURITY: `handle` YAHAN JAAN-BOJH KAR NAHI HAI. Handle channel ka
+// public URL hai (/@handle). Use badalne se purane links, bookmarks aur
+// shares toot jaate hain - aur koi redirect mapping nahi hai.
+// Handle account lifetime ke liye fixed rehta hai.
+type UpdateChannelRequest struct {
+	DisplayName *string `json:"display_name,omitempty"`
+	Description *string `json:"description,omitempty"`
+	ImageURL    *string `json:"image_url,omitempty"`
+	CoverURL    *string `json:"cover_url,omitempty"`
+	IsPublic    *bool   `json:"is_public,omitempty"`
+	IsActive    *bool   `json:"is_active,omitempty"`
+}
+
+// PublicChannelResponse - public channel page ke liye.
+//
+// SECURITY: ye DTO jaan-boojh kar `UserID` NAHI expose karta. Public
+// payload me internal user UUID daalne se koi faida nahi hai, aur wo
+// enumeration ke liye ek stable identifier ban jata hai.
+type PublicChannelResponse struct {
 	ID          uuid.UUID `json:"id"`
 	Handle      string    `json:"handle"`
 	DisplayName string    `json:"display_name"`
 	Description string    `json:"description"`
 	ImageURL    string    `json:"image_url"`
-	IsPublic    bool      `json:"is_public"`
+	CoverURL    string    `json:"cover_url"`
 	CreatedAt   time.Time `json:"created_at"`
-	VideoCount  int64     `json:"video_count"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
+
+// ---------------------------------------------------------------------------
+// NOTE: yahan ek `ChannelResponse` DTO kabhi tha, jo create ke baad client
+// ko bhejne ke liye tha. Wo DELETE kar diya gaya hai, teen wajahon se:
+//
+//  1. Koi handler ya service use nahi karta tha - create/get dono raw
+//     `*model.Channel` return karte hain. Matlab ye sirf misleading tha.
+//  2. `cover_url` isme nahi tha, jabki migration 011 ne wo add kiya - to ye
+//     struct definition aur real schema se already drift kar chuka tha.
+//  3. `video_count` ka koi counter exist hi nahi karta codebase me.
+//
+// Apne aap me isse revive mat karo. Response shape ASLI hai raw model, aur
+// ise change karna = API contract badalna. Agar future me channel listing
+// me extra computed fields chahiye (jaise video_count), tab ek naya DTO
+// banao - aur use tabhi add karo jab wo actually use ho.
+// ---------------------------------------------------------------------------
 
 // Errors - channel/profile operations ke liye.
 // (Package-level taaki handler `errors.Is` se compare kar sake.)
@@ -127,6 +180,15 @@ var (
 	ErrHandleInvalid = errCreator("handle must be 3-30 characters using lowercase letters, numbers, underscore, dot or hyphen")
 	// ErrChannelNotFound - channel nahi mila (ya is user ka nahi hai).
 	ErrChannelNotFound = errCreator("channel not found")
+	// ErrDisplayNameInvalid - display name 1-80 chars ke beech nahi hai.
+	ErrDisplayNameInvalid = errCreator("display name must be between 1 and 80 characters")
+	// ErrDescriptionTooLong - description 2000 chars se bada.
+	ErrDescriptionTooLong = errCreator("description must be 2000 characters or fewer")
+	// ErrURLTooLong - image/cover URL 500 chars se bada.
+	ErrURLTooLong = errCreator("url must be 500 characters or fewer")
+	// ErrURLSchemeNotAllowed - javascript:/data:/vbscript: jaise schemes
+	// BLOCK hote hain (stored XSS vector). Sirf relative path ya http(s).
+	ErrURLSchemeNotAllowed = errCreator("url must be a relative path (starting with /) or an http(s) url")
 )
 
 type creatorError string

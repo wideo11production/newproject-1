@@ -42,6 +42,13 @@ type StorageConfig struct {
 	SecretKey string `mapstructure:"secret_key"`
 	// Bucket jisme avatars jaayenge
 	AvatarBucket string `mapstructure:"avatar_bucket"`
+	// Bucket jisme channel covers jaayenge.
+	//
+	// WHY A SEPARATE BUCKET: covers wide banners hain (16:9), avatars square
+	// hain. Inhe ek hi bucket me daalne par size/lifecycle rules ek jaisa
+	// rakhna impossible ho jata hai - aur ek oversized "cover" avatar size
+	// limit se nikal kar poore bucket ko bhar sakta hai.
+	CoverBucket string `mapstructure:"cover_bucket"`
 	// Presigned URL ki TTL (minutes)
 	PresignTTLMinutes int `mapstructure:"presign_ttl_minutes"`
 	// Browser ko dene wali public base URL (e.g. http://localhost:9000)
@@ -51,6 +58,26 @@ type StorageConfig struct {
 	// Dev me true rakho - tab tak jab tak MinIO local par hi hai.
 	// Production me MUST false hona chahiye jab tak real TLS nahi hai.
 	Enabled bool `mapstructure:"enabled"`
+	// ManageBucket - kya ye service bucket KHUD banayegi aur uski policy
+	// khud set karegi (`MakeBucket` + `SetBucketPolicy`).
+	//
+	// ---- KYUN YE FLAG ZAROORI HAI ----
+	// `MakeBucket` ko `s3:CreateBucket` chahiye, aur `SetBucketPolicy` ko
+	// `s3:PutBucketPolicy`. Root account ke paas dono hain, isliye pehle ye
+	// chupke se kaam kar raha tha.
+	//
+	// Par jab auth-service ko MINIO ROOT chhodkar bucket-scoped service
+	// account pe migrate kiya (Phase A / gap #1), to wo account DELIBERATELY
+	// in dono actions ko NAHI kar sakta - kyunki unke bina bucket create
+	// karwane ka matlab hai "leak hua account naye bucket bana sakta hai",
+	// jo hum exactly band karna chahte hain.
+	//
+	// Isliye provisioning ka kaam `minio-init` container karta hai (root ke
+	// saath, ek baar), aur yahan flag false ho jaata hai.
+	//
+	// DEFAULT true rakha hai taaki purane setups (jahan sirf root creds
+	// hain) bina kuch kiye na toot-te hain.
+	ManageBucket bool `mapstructure:"manage_bucket"`
 }
 
 // Getter with safe defaults
@@ -59,6 +86,13 @@ func (s *StorageConfig) GetAvatarBucket() string {
 		return "avatars"
 	}
 	return s.AvatarBucket
+}
+
+func (s *StorageConfig) GetCoverBucket() string {
+	if s == nil || s.CoverBucket == "" {
+		return "covers"
+	}
+	return s.CoverBucket
 }
 
 func (s *StorageConfig) GetPresignTTL() int {
@@ -105,6 +139,18 @@ var AllowedImageTypes = map[string]bool{
 // Bade file: memory + upload time dono pe buri. 5MB me har normal avatar
 // aa jaata hai (even 4K screenshot).
 const MaxAvatarBytes int64 = 5 * 1024 * 1024 // 5MB
+
+// MaxCoverBytes - 4 MB.
+//
+// Covers CHHOTI limit kyun (avatar se bhi kam) jabki wo widescreen hoti hain:
+// cover browser me `background-image` / `<img>` ke roop me render hota hai, jo
+// har viewport width par stretch hoti hai. Matlab ek 4MB cover har visitor ke
+// bandwidth khaayegi, jabki 4MB avatar sirf ek 96px circle me dikhti hai.
+//
+// Realistic 4K banner JPEG ~400KB hota hai, to 4MB already generous hai.
+// Isse koi absurdly bada upload (RAW/PNG screenshot) pehle hi reject ho
+// jayega instead of silently serving a 40MB image to every visitor.
+const MaxCoverBytes int64 = 4 * 1024 * 1024 // 4MB
 
 // AllowedImageExtensions - extension -> content type map.
 // Browser sirf filename bhejta hai, content-type unreliable hota hai,

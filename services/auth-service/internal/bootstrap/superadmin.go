@@ -114,6 +114,52 @@ func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, erro
 		return result, nil
 	}
 
+	// ---- User EXISTS: env password APPLY karo (jo pehle nahi hota tha) ----
+	//
+	// BUG jo is block ki wajah se tha: `passwordHash` upar env se derive
+	// hota tha, par EXISTING user ke liye use KABHI DB me nahi likha jaata
+	// tha - sirf naya account create karte waqt. Matlab file ke apne comment
+	// ka waada ("password rotate karna possible hai bina code change kiye")
+	// poore tarah se jhooth tha: env var set karne par bhi account ka
+	// password nahi badalta.
+	//
+	// Isi wajah se setting the env var on this already-seeded account did
+	// nothing at all, and the master-root password stayed at the value baked
+	// into DefaultSuperadminPasswordHash - which is the whole problem that
+	// variable exists to solve.
+	//
+	// ---- KYUN SIRF TAB APPLY HOTA HAI ----
+	//
+	// Sirf isliye ki stored hash abhi BHI built-in default ho. Agar kisi ne
+	// app se ya DB se password rotate kar diya hai, to env var usse
+	// chup-chaap overwrite kar deta - matlab admin apna naya password set
+	// karta, restart hota, aur uska change chup-chaap revert ho jata.
+	//
+	// Ye guard us trap ko band karta hai:
+	//
+	//   stored == built-in default  -> env password apply karo (chahiye hua)
+	//   stored != built-in default  -> chhodo, insaan ne badla hai
+	//
+	// Hinglish: env password tabhi lagega jab account ka hash abhi bhi wahi
+	//            default hai jo code me likha hai.
+	if envPassword := os.Getenv("SECURITY_SUPERADMIN_PASSWORD"); envPassword != "" {
+		if existing.PasswordHash == DefaultSuperadminPasswordHash {
+			if err := db.WithContext(ctx).Model(&model.User{}).
+				Where("id = ?", existing.ID).
+				Updates(map[string]interface{}{"password_hash": passwordHash}).Error; err != nil {
+				return nil, err
+			}
+			log.Println("[SUPERADMIN] Password rotated to SECURITY_SUPERADMIN_PASSWORD value " +
+				"(was still the built-in default)")
+			result.Warning = "superadmin password rotated from built-in default to env value"
+		} else if existing.PasswordHash != passwordHash {
+			log.Println("[SUPERADMIN] SECURITY_SUPERADMIN_PASSWORD is set but the stored " +
+				"hash already differs from the built-in default, so it was NOT applied. " +
+				"Someone rotated this password deliberately; leaving it alone. Unset the " +
+				"env var to silence this, or delete the env value and change it in-app.")
+		}
+	}
+
 	// ---- User EXISTS: security verification ----
 	//
 	// KYUN: agar koi staff/manager manually is account ka password ya role
@@ -177,6 +223,34 @@ func RegisterMasterSuperadminRole(ctx context.Context, db *gorm.DB) error {
 		Where("email = ?", DefaultSuperadminEmail).First(&user).Error; err != nil {
 		// User hi nahi hai to kuch nahi karna
 		return err
+	}
+
+	// ---- users.role ENSURE karo ----
+	//
+	// BUG: ye pehle SIRF `superadmin_accounts` me row banata tha. Par authz
+	// `users.role` se chalti hai:
+	//
+	//   - login JWT ka `role` claim `users.role` se banta hai
+	//   - `RequireSuperadmin()` wahi claim padhta hai
+	//
+	// Matlab master root login karta to uska token `role: "user"` carry karta,
+	// aur har superadmin endpoint 403 deta. `superadmin_accounts` row hone se
+	// kuch nahi hota - wo table sirf provisioning/recovery track karti hai.
+	//
+	// Isi liye log "Master root registered with superadmin role" bolta tha jab
+	// actual role `user` hi rehta tha - log jhooth bolta tha.
+	//
+	// Ye update har startup par chalta hai, aur idempotent hai: agar role pehle
+	// se `superadmin` hai to koi write nahi hota.
+	if user.Role != model.RoleSuperadmin {
+		if err := db.WithContext(ctx).Model(&model.User{}).
+			Where("id = ?", user.ID).
+			Updates(map[string]interface{}{"role": model.RoleSuperadmin}).Error; err != nil {
+			return err
+		}
+		log.Printf("[SUPERADMIN] users.role corrected to %q for %s "+
+			"(the superadmin_accounts row alone does NOT grant access - the JWT "+
+			"role claim comes from users.role)", model.RoleSuperadmin, DefaultSuperadminEmail)
 	}
 
 	// Already registered hai to no-op

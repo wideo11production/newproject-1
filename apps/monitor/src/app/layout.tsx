@@ -34,26 +34,31 @@ export default function Layout({
     sisterShare: config.SISTER_SHARE_PERCENTAGE,
   });
 
-  // Simulating K8s metrics and system data collection from backend API
-  // Hinglish: Backend se aane wala simulated data, ye sirf server side logging ke liye hai
-  const rawMonitorData = {
-    clusterName: "wideo11-k8s-cluster-1",
-    cpuUsage: Math.random() * 80 + 20,
-    memoryUsage: Math.random() * 70 + 30,
-    diskUsage: Math.random() * 60 + 40,
-    activeNodes: Math.floor(Math.random() * 10 + 5),
-    responseTime: Math.random() * 200 + 50,
-    uptime: "99.8%",
-    alertsCount: Math.floor(Math.random() * 5),
-    videoEncodes: Math.floor(Math.random() * 20 + 5),
-    telemetryEvents: Math.floor(Math.random() * 1000 + 500),
-    lastUpdated: new Date().toISOString(),
-  };
+  // ---- REMOVED: the fake telemetry snapshot ----
+  //
+  // This used to build a fake snapshot and inline it into the page:
+  //
+  //   console.log("Monitor telemetry snapshot: {"clusterName":"wideo11-k8s-cluster-1",
+  //    "cpuUsage":75.7,"memoryUsage":51.7,"uptime":"99.8%","alertsCount":4,...}")
+  //
+  // Three problems, all real:
+  //
+  //   1. FABRICATED DATA. Every number was `Math.random()`. `uptime: "99.8%"`
+  //      was hardcoded. `activeNodes: 14` claimed fourteen Kubernetes nodes on
+  //      a Docker Compose stack. This is the same class of invented metric
+  //      that got removed from the telemetry panel earlier - it was just
+  //      hidden in a console.log, so it looked harmless.
+  //   2. IT BROKE THE PAGE. `JSON.stringify` output was interpolated into a
+  //      JS string literal WITHOUT escaping quotes, so the JSON's own `"`
+  //      characters closed the string early. Every page load threw:
+  //          SyntaxError: missing ) after argument list
+  //      A parse error in an inline script is fatal to that script, and it
+  //      happened on the ROOT document, not a lazy chunk.
+  //   3. `Math.random()` in a layout makes every render non-deterministic,
+  //      which also defeats any future static rendering.
 
-  // Stringify complex data on the server so it never crosses the RSC boundary as a live object
-  // Hinglish: Complex data ko server side par stringify karte hain taaki RSC boundary
-  // par "Only plain objects" serialization error na aaye
-  const stringifiedMonitorData = JSON.stringify(rawMonitorData);
+  // The real metrics come from Prometheus via the @metrics dashboard. There
+  // is nothing to log here.
 
   return (
     // Root layout me <html> aur <body> zaroori hain - Next.js App Router isse
@@ -77,13 +82,6 @@ export default function Layout({
       </aside>
       {/* children ko render karte hain taaki default slot bhi available rahe */}
       {children}
-      {/* Server side data log - debugging ke liye, UI me render nahi hota */}
-      <script
-        // Hinglish: Ye sirf server side telemetry log hai, client ko data nahi jaata
-        dangerouslySetInnerHTML={{
-          __html: `console.log("Monitor telemetry snapshot: ${stringifiedMonitorData.replace(/</g, "\\u003c")}")`,
-        }}
-      />
     </div>
       </body>
     </html>

@@ -1,6 +1,82 @@
+
+/* Project-wide ultra-thin scrollbars (2px). Shared file - ek jagah fix = sab
+   jagah fix. Detail: packages/ui/src/styles/scrollbar.css
+
+   @import @tailwind se PEHLE hona zaroori hai - CSS spec ke hisaab se ye
+   har doosri statement se pehle aana chahiye. Uske baad rakhne par browser
+   ise drop kar deta hai aur styling chup-chaap apply nahi hoti. */
+@import '@wideo11/ui/src/styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  /* ==========================================================================
+   * Scrollbars: 1px
+   * ==========================================================================
+   *
+   * Requested as a pencil line: 1px, present but out of the way.
+   *
+   * Scoped to THIS app rather than changed in the shared file, because the
+   * shared file is imported by every app in the monorepo and a request about
+   * this editor's scrollbars is not a request about the rest of the product.
+   *
+   * It is written here rather than trusted from the shared import because the
+   * shared rules demonstrably do not reach the panels: measured in a real
+   * browser, the media bin's scroller rendered a 15px bar - Chrome's DEFAULT -
+   * while the stylesheet claimed 1px. A style that says one thing and renders
+   * another is worse than no style, so the editor pins its own rule and
+   * `tools/check-video-editor.mjs` asserts the RENDERED thickness
+   * (`offsetWidth - clientWidth`) on every run rather than reading the CSS.
+   *
+   * `scrollbar-width` is the standard property and Chrome 121+ reads it in
+   * preference to the webkit pseudo-elements, so it is set on every element as
+   * well as the root. Firefox has no 1px option at all - its thinnest standard
+   * is `thin`, around 8px - and pretending otherwise would just be a lie in the
+   * CSS.
+   */
+  :root {
+    scrollbar-width: thin;
+  }
+
+  ::-webkit-scrollbar {
+    width: 1px;
+    height: 1px;
+  }
+
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgb(var(--ve-text-muted) / 0.55);
+    border-radius: 9999px;
+    /* No border and no padding: both ADD to the rendered width, which would
+     * turn "1px" into 3px and defeat the entire rule. */
+    border: none;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(var(--ve-text-muted));
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: rgb(var(--ve-text-primary) / 0.7);
+  }
+
+  ::-moz-scrollbar-thumb {
+    background-color: rgb(var(--ve-text-muted) / 0.55);
+    border-radius: 9999px;
+    border: none;
+  }
+
+  ::-moz-scrollbar-track,
+  ::-moz-scrollbar-corner {
+    background: transparent;
+  }
+}
 
 @layer base {
   :root {
@@ -24,6 +100,27 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
+
+    /* ---- The editor's own five surface roles, in the dark theme ----
+
+       Named `--ve-*` on purpose. The shared tokens above are HSL channel
+       triples used as `hsl(var(--x))`; feeding one of them to `rgb(var(--x))`
+       is not a missing variable, it is a VALID colour of the wrong kind -
+       `rgb(217.2 32.6% 17.5%)` parses, clamps and paints a dark red, so every
+       border in the editor came out rose with no error anywhere.
+
+       These are RGB channel triples for `rgb(var(--ve-*))`, and the values are
+       the exact slate shades the panels used before they were tokenised, so
+       the dark theme is unchanged. */
+    --ve-surface: 2 6 23;
+    --ve-surface-raised: 15 23 42;
+    --ve-surface-overlay: 30 41 59;
+    --ve-surface-sunken: 51 65 85;
+    --ve-text-primary: 241 245 249;
+    --ve-text-secondary: 148 163 184;
+    --ve-text-muted: 100 116 139;
+    --ve-edge: 30 41 59;
+    --ve-edge-strong: 51 65 85;
   }
 
   .light {
@@ -66,5 +163,27 @@
   }
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
+  }
+
+  /* ---- The editor's own surfaces, in the light theme ----
+
+     An editing workspace is a LIGHT surface with dark text, not the reverse:
+     the panels, rulers and lanes are chrome, and chrome should recede behind
+     the picture. The video area itself stays black - a frame has no
+     background, and a white surround changes how its own black level reads.
+
+     These five roles are what `bg-surface`, `bg-surface-raised`,
+     `bg-surface-overlay`, `text-fg` and `text-fg-muted` resolve to, so the
+     light theme is a variable swap rather than a second component tree. */
+  .light {
+    --ve-surface: 255 255 255;
+    --ve-surface-raised: 248 250 252;
+    --ve-surface-overlay: 238 242 248;
+    --ve-surface-sunken: 203 213 225;
+    --ve-text-primary: 15 23 42;
+    --ve-text-secondary: 51 65 85;
+    --ve-text-muted: 100 116 139;
+    --ve-edge: 214 222 233;
+    --ve-edge-strong: 203 213 225;
   }
 }

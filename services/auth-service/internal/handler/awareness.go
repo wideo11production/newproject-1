@@ -5,8 +5,16 @@ package handler
 // ============================================================================
 //
 // Endpoints (sirf superadmin):
-//   GET /api/v1/admin/awareness      - aggregated overview
-//   GET /api/v1/admin/registrations  - recent real registrations list
+//   GET /api/v1/auth/admin/awareness      - aggregated overview
+//   GET /api/v1/auth/admin/registrations  - recent real registrations list
+//
+// NOTE: pehle yahan `/api/v1/admin/...` likha tha - `/auth` segment missing.
+// Galat hi hai: ye group `auth` (= /api/v1/auth) ke andar banta hai
+// (`RegisterAwarenessRoutes(auth)`), to asli prefix `/api/v1/auth/admin/`
+// hai. Galat comment padh kar 404 aata hai, aur woh 403 (denied) se bilkul
+// alag dikhta hai - 403 matlab "access nahi mila", 404 matlab "route hai hi
+// nahi", yaani bug ho sakta hai nahi ke aapko permission nahi mili.
+// Documentation yahan authorization surface hai, isliye sahi honi zaroori hai.
 //
 // SECURITY - TRIPLE GATE:
 //   1. AuthMiddleware  - valid session (bina token = 401)

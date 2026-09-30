@@ -1,140 +1,86 @@
 'use client';
 
-import { Target, TrendingUp, AlertCircle, CheckCircle, Calendar, DollarSign, BarChart3 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
-import { Badge } from '@wideo11/ui/badge';
-import { Progress } from '@wideo11/ui/progress';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
+// Target ledger - the ₹500/day creator target.
+//
+// ---- WHAT THIS USED TO BE ----
+//
+// A progress-meter panel with a hardcoded target, a hardcoded current value, a
+// hardcoded percentage, and a list of named creators against it. The panel
+// title claims a specific business rule (₹500 per day per creator), which
+// makes invented numbers worse here than anywhere else: a target ledger is a
+// thing people reconcile payouts against.
+//
+// ---- WHAT REPLACED IT ----
+//
+// The measurable part of it, honestly bounded:
+//
+//   target   - the ₹500/day rule, stated as configuration, not a measurement
+//   accounts - how many accounts currently exist
+//   coverage - accounts x target = the daily run-rate IF every account were a
+//              paying creator
+//
+// That last one is a clearly-labelled projection, not a figure anyone should
+// quote. It is computed from real account counts, and it is called a
+// projection on the panel so it cannot be mistaken for revenue.
+//
+// Payout status per creator is not shown, because this app has no payout data.
 
-interface DailyTarget {
-  date: string;
-  target: number;
-  actual: number;
-  creator: string;
-  status: 'met' | 'exceeded' | 'missed';
-}
+import { Panel, Stat, fmtNum } from './ui';
+import type { AnalyticsState } from './use-analytics';
 
-const dailyTargets: DailyTarget[] = [
-  { date: '2024-01-15', target: 500, actual: 620, creator: 'Alex Creator', status: 'exceeded' },
-  { date: '2024-01-14', target: 500, actual: 500, creator: 'Sarah Videos', status: 'met' },
-  { date: '2024-01-13', target: 500, actual: 380, creator: 'Mike Tutorials', status: 'missed' },
-  { date: '2024-01-12', target: 500, actual: 750, creator: 'Emma Edits', status: 'exceeded' },
-  { date: '2024-01-11', target: 500, actual: 450, creator: 'Chris Clips', status: 'missed' },
-  { date: '2024-01-10', target: 500, actual: 500, creator: 'Lisa Vlogs', status: 'met' },
-  { date: '2024-01-09', target: 500, actual: 890, creator: 'Alex Creator', status: 'exceeded' },
-  { date: '2024-01-08', target: 500, actual: 420, creator: 'Mike Tutorials', status: 'missed' },
-  { date: '2024-01-07', target: 500, actual: 560, creator: 'Sarah Videos', status: 'exceeded' },
-  { date: '2024-01-06', target: 500, actual: 500, creator: 'Chris Clips', status: 'met' },
-  { date: '2024-01-05', target: 500, actual: 680, creator: 'Emma Edits', status: 'exceeded' },
-  { date: '2024-01-04', target: 500, actual: 390, creator: 'Lisa Vlogs', status: 'missed' },
-  { date: '2024-01-03', target: 500, actual: 500, creator: 'Alex Creator', status: 'met' },
-  { date: '2024-01-02', target: 500, actual: 470, creator: 'Mike Tutorials', status: 'missed' },
-  { date: '2024-01-01', target: 500, actual: 530, creator: 'Sarah Videos', status: 'exceeded' },
-];
+// The rule this panel is named after. It is a business constant, not a
+// measurement - kept in one place so it is not accidentally presented as an
+// observed value.
+const TARGET_PER_CREATOR_PER_DAY = 500;
 
-const DAILY_TARGET = 500;
-
-function getStatusConfig(status: DailyTarget['status']) {
-  const config = {
-    met: { label: 'Target Met', icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-500/20', border: 'border-green-500/30' },
-    exceeded: { label: 'Exceeded', icon: TrendingUp, color: 'text-blue-400', bg: 'bg-blue-500/20', border: 'border-blue-500/30' },
-    missed: { label: 'Missed', icon: AlertCircle, color: 'text-red-400', bg: 'bg-red-500/20', border: 'border-red-500/30' },
-  };
-  return config[status];
-}
-
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-export function TargetLedger() {
-  const totalDays = dailyTargets.length;
-  const metDays = dailyTargets.filter(d => d.status !== 'missed').length;
-  const totalEarned = dailyTargets.reduce((sum, d) => sum + d.actual, 0);
-  const avgDaily = Math.round(totalEarned / totalDays);
-  const successRate = Math.round((metDays / totalDays) * 100);
+export function TargetLedger({ state }: { state: AnalyticsState }) {
+  const { data } = state;
+  const accounts = data?.overview.totalVerified ?? 0;
+  const totalAccounts = data?.overview.totalUsers ?? 0;
+  // Clearly a projection: what the account base would be worth per day at the
+  // target rate, assuming every one of them were a paying creator. That
+  // assumption is almost certainly false, which is why it is labelled.
+  const projectedDaily = accounts * TARGET_PER_CREATOR_PER_DAY;
 
   return (
-    <Card className="analytics-panel h-full">
-      <CardHeader className="analytics-panel-header">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <Target className="h-5 w-5" />
-          Target Ledger - ₹500/Day
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="analytics-panel-content">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-card border-border p-4 text-center">
-            <Target className="h-8 w-8 mx-auto text-primary mb-2" />
-            <div className="text-2xl font-bold text-foreground">₹{avgDaily.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Avg Daily Earning</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <TrendingUp className="h-8 w-8 mx-auto text-green-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">{successRate}%</div>
-            <div className="text-xs text-muted-foreground">Success Rate</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <DollarSign className="h-8 w-8 mx-auto text-yellow-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">₹{totalEarned.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Total Earned</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <Calendar className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">{metDays}/{totalDays}</div>
-            <div className="text-xs text-muted-foreground">Days Target Met</div>
-          </Card>
-        </div>
+    <Panel
+      title="Target ledger"
+      note="₹500/day per creator. The projection below assumes every verified account is a paying creator — it is not a revenue figure."
+    >
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Stat
+          label="Target / creator / day"
+          value={`₹${TARGET_PER_CREATOR_PER_DAY}`}
+          hint="Business rule, not a measurement"
+        />
+        <Stat label="Verified accounts" value={fmtNum(accounts)} hint="users where is_verified = true" />
+        <Stat label="All accounts" value={fmtNum(totalAccounts)} hint="including unverified" />
+        <Stat
+          label="Projected daily"
+          value={accounts > 0 ? `₹${projectedDaily.toLocaleString('en-IN')}` : 'n/a'}
+          tone={accounts > 0 ? 'warn' : 'default'}
+          hint={`${accounts} verified x ₹${TARGET_PER_CREATOR_PER_DAY}. A PROJECTION, not revenue.`}
+        />
+      </div>
 
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-sm font-medium text-muted-foreground">Progress to Monthly Goal (₹15,000)</h4>
-            <span className="text-sm font-semibold text-primary">
-              {Math.round((totalEarned / 15000) * 100)}%
-            </span>
-          </div>
-          <Progress value={Math.min((totalEarned / 15000) * 100, 100)} className="h-3" />
+      {accounts === 0 ? (
+        <div
+          className="mt-3 flex min-h-[80px] items-center justify-center rounded border border-dashed border-gray-800 p-3 text-center"
+          title="No verified accounts yet."
+        >
+          <p className="max-w-[56ch] text-[11px] leading-relaxed text-gray-600">
+            No verified accounts, so there is nothing to measure a target against. The projection
+            stays at n/a rather than showing ₹0, because ₹0 would claim the target was assessed
+            and found wanting.
+          </p>
         </div>
-
-        <ScrollArea className="h-[300px]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted-foreground">
-                <th className="pb-2 px-2">Date</th>
-                <th className="pb-2 px-2">Creator</th>
-                <th className="pb-2 px-2 text-right">Target</th>
-                <th className="pb-2 px-2 text-right">Actual</th>
-                <th className="pb-2 px-2 text-right">Diff</th>
-                <th className="pb-2 px-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dailyTargets.map((row) => {
-                const diff = row.actual - row.target;
-                const statusConfig = getStatusConfig(row.status);
-                const StatusIcon = statusConfig.icon;
-                return (
-                  <tr key={row.date} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-2 px-2 text-foreground">{formatDate(row.date)}</td>
-                    <td className="py-2 px-2 text-foreground">{row.creator}</td>
-                    <td className="py-2 px-2 text-right text-muted-foreground">₹{row.target.toLocaleString()}</td>
-                    <td className="py-2 px-2 text-right font-medium text-foreground">₹{row.actual.toLocaleString()}</td>
-                    <td className={`py-2 px-2 text-right font-semibold ${diff >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {diff >= 0 ? '+' : ''}₹{Math.abs(diff).toLocaleString()}
-                    </td>
-                    <td className="py-2 px-2">
-                      <Badge variant="outline" className={`${statusConfig.bg} ${statusConfig.color} ${statusConfig.border} text-xs flex items-center gap-1`}>
-                        <StatusIcon className="h-3 w-3" />
-                        {statusConfig.label}
-                      </Badge>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+      ) : (
+        <p className="mt-3 border-t border-gray-800 pt-2 text-[11px] leading-relaxed text-gray-600">
+          The previous version of this panel showed a per-creator payout table with names and
+          amounts. No payout data exists in this app, so the table is gone. Wire the billing
+          service in here and the real figures replace this paragraph.
+        </p>
+      )}
+    </Panel>
   );
 }

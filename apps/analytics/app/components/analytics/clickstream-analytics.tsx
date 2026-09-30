@@ -1,110 +1,93 @@
 'use client';
 
-import { MousePointer, MapPin, Globe, Zap, Search, ExternalLink } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
-import { Badge } from '@wideo11/ui/badge';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
+// Clickstream.
+//
+// ---- WHAT THIS USED TO BE ----
+//
+// A `ClickstreamAnalytics` component with no fetch. It rendered a "live event
+// stream" shape - and a live event stream is the single most convincing thing a
+// dashboard can fake, because real event streams look chaotic and detailed.
+// Nothing about it was connected to `click_events`.
+//
+// ---- WHAT REPLACED IT ----
+//
+// The actual rows: `GET /api/v1/auth/admin/clicks` (superadmin-gated),
+// forwarded through the server-side `/api/analytics` route. These are real
+// events captured from the browser by `GlobalActivityTracker`, with page,
+// target, label, device and timestamp.
+//
+// Aggregation is derived from those rows rather than invented: which pages get
+// clicked, and how often.
 
-interface ClickEvent {
-  id: string;
-  timestamp: string;
-  user: string;
-  event: string;
-  page: string;
-  device: string;
-  location: string;
-  duration: number;
-}
+import { Chart } from 'wideo11-charts';
+import { EmptyState, Panel, Stat, barOption, fmtNum } from './ui';
+import type { AnalyticsState } from './use-analytics';
 
-const events: ClickEvent[] = [
-  { id: '1', timestamp: '2024-01-15 14:32:10', user: 'user_001', event: 'video_play', page: '/watch/abc123', device: 'Desktop', location: 'Mumbai, IN', duration: 245 },
-  { id: '2', timestamp: '2024-01-15 14:31:45', user: 'user_002', event: 'cta_click', page: '/creator/dashboard', device: 'Mobile', location: 'Delhi, IN', duration: 12 },
-  { id: '3', timestamp: '2024-01-15 14:30:22', user: 'user_003', event: 'share_click', page: '/watch/xyz789', device: 'Tablet', location: 'Bangalore, IN', duration: 8 },
-  { id: '4', timestamp: '2024-01-15 14:29:10', user: 'user_004', event: 'video_pause', page: '/watch/def456', device: 'Desktop', location: 'Hyderabad, IN', duration: 180 },
-  { id: '5', timestamp: '2024-01-15 14:28:33', user: 'user_005', event: 'fullscreen_toggle', page: '/watch/ghi789', device: 'Mobile', location: 'Chennai, IN', duration: 5 },
-  { id: '6', timestamp: '2024-01-15 14:27:01', user: 'user_006', event: 'quality_change', page: '/watch/jkl012', device: 'Desktop', location: 'Pune, IN', duration: 3 },
-  { id: '7', timestamp: '2024-01-15 14:25:44', user: 'user_007', event: 'subscribe_click', page: '/channel/creator123', device: 'Mobile', location: 'Kolkata, IN', duration: 2 },
-  { id: '8', timestamp: '2024-01-15 14:24:18', user: 'user_008', event: 'comment_post', page: '/watch/mno345', device: 'Desktop', location: 'Ahmedabad, IN', duration: 45 },
-];
+export function ClickstreamAnalytics({ state }: { state: AnalyticsState }) {
+  const { data } = state;
+  const clicks = data?.clicks ?? [];
 
-const eventColors: Record<string, { bg: string; text: string; border: string }> = {
-  video_play: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
-  cta_click: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-green-500/30' },
-  share_click: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-purple-500/30' },
-  video_pause: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
-  fullscreen_toggle: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
-  quality_change: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' },
-  subscribe_click: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
-  comment_post: { bg: 'bg-pink-500/20', text: 'text-pink-400', border: 'border-pink-500/30' },
-};
+  // Aggregate by page. Normalised so "/auth/register" and "/auth/register/"
+  // do not count as two pages, and the leading slash is dropped so the label
+  // is readable.
+  const pageCounts: Record<string, number> = {};
+  for (const c of clicks) {
+    const raw = String(c.page ?? 'unknown').replace(/\/$/, '') || '/';
+    pageCounts[raw] = (pageCounts[raw] ?? 0) + 1;
+  }
+  const topPages = Object.entries(pageCounts)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8);
 
-export function ClickstreamAnalytics() {
+  const uniquePages = topPages.length;
+  const recent = [...clicks]
+    .sort((a, b) => String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')))
+    .slice(0, 15);
+
   return (
-    <Card className="analytics-panel h-full">
-      <CardHeader className="analytics-panel-header">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <MousePointer className="h-5 w-5" />
-          Clickstream Analytics
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="analytics-panel-content">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-card border-border p-4 text-center">
-            <Zap className="h-8 w-8 mx-auto text-blue-400 mb-2" />
-            <div className="text-3xl font-bold text-foreground">12,450</div>
-            <div className="text-xs text-muted-foreground">Total Events (1h)</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <MousePointer className="h-8 w-8 mx-auto text-green-400 mb-2" />
-            <div className="text-3xl font-bold text-foreground">3,210</div>
-            <div className="text-xs text-muted-foreground">Unique Users</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <Globe className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-            <div className="text-3xl font-bold text-foreground">47</div>
-            <div className="text-xs text-muted-foreground">Countries</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <Search className="h-8 w-8 mx-auto text-orange-400 mb-2" />
-            <div className="text-3xl font-bold text-foreground">2m 34s</div>
-            <div className="text-xs text-muted-foreground">Avg Session</div>
-          </Card>
-        </div>
+    <Panel
+      title="Clickstream"
+      note="Real events from click_events, captured in-browser by GlobalActivityTracker."
+    >
+      <div className="mb-2 grid grid-cols-3 gap-2">
+        <Stat label="Events" value={fmtNum(clicks.length)} hint="rows in this window (server caps the fetch at 100)" />
+        <Stat label="Pages hit" value={fmtNum(uniquePages)} />
+        <Stat
+          label="Devices"
+          value={fmtNum(new Set(clicks.map((c) => String(c.device_type ?? '?'))).size)}
+        />
+      </div>
 
-        <ScrollArea className="h-[300px]">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-muted-foreground">
-                <th className="pb-2 px-2">Time</th>
-                <th className="pb-2 px-2">User</th>
-                <th className="pb-2 px-2">Event</th>
-                <th className="pb-2 px-2">Page</th>
-                <th className="pb-2 px-2">Device</th>
-                <th className="pb-2 px-2">Location</th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((event) => {
-                const colors = eventColors[event.event] || eventColors.video_play;
-                return (
-                  <tr key={event.id} className="border-b border-border/50 hover:bg-muted/30">
-                    <td className="py-2 px-2 text-muted-foreground font-mono text-xs">{event.timestamp}</td>
-                    <td className="py-2 px-2 text-foreground font-mono text-xs">{event.user}</td>
-                    <td className="py-2 px-2">
-                      <Badge variant="outline" className={`${colors.bg} ${colors.text} ${colors.border} text-xs`}>
-                        {event.event}
-                      </Badge>
-                    </td>
-                    <td className="py-2 px-2 text-muted-foreground truncate max-w-[150px]">{event.page}</td>
-                    <td className="py-2 px-2 text-center text-muted-foreground text-xs">{event.device}</td>
-                    <td className="py-2 px-2 text-muted-foreground text-xs">{event.location}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </ScrollArea>
-      </CardContent>
-    </Card>
+      {topPages.length > 0 ? (
+        <Chart option={barOption(Object.fromEntries(topPages))} style={{ height: 150 }} />
+      ) : (
+        <EmptyState why="No click events recorded yet. Browse the app with the tracker active and this fills in." />
+      )}
+
+      {recent.length > 0 && (
+        <ul className="mt-3 max-h-[160px] space-y-1 overflow-y-auto border-t border-gray-800 pt-2">
+          {recent.map((c, i) => {
+            const ts = String(c.timestamp ?? '');
+            // Coerce through String(): the API returns `unknown` values, and
+            // rendering one directly is a type error AND a crash risk if a
+            // value is ever an object.
+            const page = String(c.page ?? '');
+            const label = c.label == null ? '' : String(c.label);
+            return (
+              <li key={String(c.id ?? i)} className="flex items-baseline justify-between gap-2 text-[11px]">
+                <span className="truncate text-gray-300">
+                  <span className="text-gray-500">{page}</span>
+                  {label ? <span className="ml-1.5">{label}</span> : null}
+                </span>
+                <span className="shrink-0 text-gray-600">
+                  {ts ? new Date(ts).toLocaleTimeString() : '—'}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }

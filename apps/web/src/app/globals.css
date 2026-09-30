@@ -1,3 +1,13 @@
+/* Project-wide ultra-thin scrollbars (2px). Shared file - ek jagah fix = sab
+   jagah fix. Detail: packages/ui/src/styles/scrollbar.css
+
+   `@import` SABSE PEHLE hona zaroori hai: CSS spec ke hisaab se ye @charset
+   ke alawa har doosri statement se pehle aana chahiye. `@tailwind` directives
+   ke BAAD rakhne par PostCSS ise inline nahi karta (postcss-import plugin
+   config me nahi hai) aur browser ise drop kar deta hai - yaani scrollbar
+   styling chup-chaap apply hi nahi hoti, aur koi error nahi aata. */
+@import '@wideo11/ui/src/styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

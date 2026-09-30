@@ -10,6 +10,20 @@ alerting:
     - static_configs:
         - targets: ['alertmanager:9093']
 
+# ---- ALERTING RULES ----
+#
+# Ye path compose se MOUNT hota hai (./monitoring/rules -> /etc/prometheus/rules).
+#
+# Pehle ye line thi par compose me koi rules directory mount HI NAHI thi. Matlab
+# Prometheus har start par `/etc/prometheus/rules/*.yml` dhoondta, kuch nahi
+# milta, aur CHUP CHAP koi rule load nahi karta. Alertmanager ek healthy
+# receiver tha jisko kabhi kuch bhi nahi jaata tha - matlab alert pipeline
+# dikhta to bhi tha, sirf kuch trigger nahi hota tha. Woh "monitoring on" ka
+# sabse khatarnaak roop hai: sab green, kuch check nahi.
+#
+# Rules ab `monitoring/rules/` me hain aur compose unhe mount karta hai. Naya
+# rule yahan add karte waqt yaad rakhein: file `.yml` extension ke saath honi
+# chahiye, warna ye glob use nahi hoga.
 rule_files:
   - '/etc/prometheus/rules/*.yml'
 
@@ -35,21 +49,67 @@ scrape_configs:
       - targets: ['minio-exporter:9100']
     metrics_path: '/metrics'
 
+  # ---- node-exporter ----
+  #
+  # Ye job pehle DISABLED thi (`host.docker.internal:9100` kisi service ko
+  # point kar rahi thi jo compose me exist hi nahi karta tha) - yaani target
+  # hamesha DOWN rehta tha.
+  #
+  # Ab `node-exporter` service compose me hai (host filesystem read-only
+  # mount ke saath), isliye ye job sach me disk/CPU/memory laati hai. Ye
+  # `DiskFillingUp` aur `DiskSpaceCritical` rules ko zinda banata hai - wo
+  # `node_filesystem_*` metrics pe depend karte hain, jinake bina dono rules
+  # permanently inert rehte: green dikhte par kabhi fire nahi karte.
   - job_name: 'node-exporter'
     static_configs:
-      - targets: ['host.docker.internal:9100']
+      - targets: ['node-exporter:9100']
+    metrics_path: '/metrics'
+
+  # ---- nats: exporter ke through ----
+  #
+  # NATS ke apne koi Prometheus endpoint NAHI hai. Port 8222 pe wo JSON deta
+  # hai (`/varz`), `/metrics` pe 404. Pehle seedha `nats:8222/metrics` scrape
+  # kar raha tha, to NATS metrics hamesha DOWN rehte the.
+  #
+  # `nats-exporter` service NATS se JSON polling karke Prometheus format me
+  # convert karti hai. `-jsz=all` se JetStream consumer/stream state bhi
+  # aata hai - backlog ya stuck consumer yahi se dikhta hai.
+  #
+  # ---- METRIC PREFIX: `gnatsd_`, `nats_` NAHI ----
+  # Exporter v0.15.0 `gnatsd_*` naam emit karta hai (gnatsd_connz_*, 
+  # gnatsd_varz_*, gnatsd_jsz_*), na ki `nats_*`. Ye likhna zaroori hai
+  # kyunki Galat prefix se banaya hua Grafana panel chup-chap "No data" 
+  # dikhata hai - jo kisi ko yeh nahi batata ki panel banaya hi galat
+  # tareeke se tha. Verify karne ke liye:
+  #   curl -s localhost:9090/api/v1/label/__name__/values | grep -i nats
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['nats-exporter:7777']
+    metrics_path: '/metrics'
 
   - job_name: 'dashboard-service'
     static_configs:
       - targets: ['dashboard-service:8080']
     metrics_path: '/metrics'
 
+  # ---- postgres ----
+  #
+  # Ye job pehle THI hi nahi, isliye `pg_up`, `pg_stat_activity_count`,
+  # `pg_replication_lag_seconds` - teeno ka data source nahi tha. Matlab teen
+  # alert rules (`PostgresDown`, `PostgresConnectionsNearMax`,
+  # `PostgresReplicationLag`) POORI TARAH DEAD thi: load hoti thi, validate
+  # hoti thi, par kabhi fire nahi ho sakti thi.
+  #
+  # `postgres-exporter` service ab compose me hai, jo `pg_monitor` role wale
+  # read-only user se connect hota hai. Isi tarah `http_*` alerts dead the -
+  # unke liye exporter nahi, balki service instrumentation chahiye (rules file
+  # me documented hai).
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: '/metrics'
+
   - job_name: 'webhook-receiver'
     static_configs:
       - targets: ['webhook-receiver:8081']
-    metrics_path: '/metrics'
-
-  - job_name: 'nats'
-    static_configs:
-      - targets: ['nats:8222']
     metrics_path: '/metrics'

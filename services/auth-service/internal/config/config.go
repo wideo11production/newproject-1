@@ -11,15 +11,19 @@ type Config struct {
 	Server       ServerConfig
 	Database     DatabaseConfig
 	Redis        RedisConfig
-	JWT          JWTConfig
+	// NATS - security event audit stream (see NATSConfig for the failure
+	// policy: audit only, never an auth decision)
+	NATS NATSConfig
+	JWT  JWTConfig
 	Log          LogConfig
 	Verification VerificationConfig
 	Email        EmailConfig
 	Purge        PurgeConfig
 	WebAuthn     WebAuthnConfig
-	// Storage - self-hosted MinIO for direct-to-S3 uploads (presigned URLs).
-	// Ye avatars/images ke liye hai. Values .env se aati hain.
+	// Storage StorageConfig
 	Storage StorageConfig
+	// Security - response headers + CORS allowlist (Phase A / gap #2)
+	Security SecurityConfig
 }
 
 // WebAuthnConfig WebAuthn (biometric/passkey) ke relying-party settings hold karta hai.
@@ -115,6 +119,17 @@ type RedisConfig struct {
 	DB       int
 }
 
+// NATSConfig configures the security-event audit stream.
+//
+// NOTE: ye sirf AUDIT ke liye hai - NATS par koi authentication decision nahi
+// leta. Isliye NATS down hone par login chalta rehta hai, sirf event recording
+// ruk jaati hai. Is failure policy ka rationale `internal/natsx` ke package
+// comment me hai.
+type NATSConfig struct {
+	// URL e.g. "nats://nats:4222"
+	URL string
+}
+
 type JWTConfig struct {
 	// SecretKey: JWT signing key
 	//
@@ -142,6 +157,55 @@ type JWTConfig struct {
 type LogConfig struct {
 	Level  string
 	Format string
+}
+
+// SecurityConfig - security response headers + CORS allowlist.
+//
+// Phase A / gap #2: pehle koi security header set nahi hota tha, aur CORS
+// `*` + credentials use karta tha (jo browsers reject karte hain aur jo
+// CSRF ka darwaza kholta hai).
+type SecurityConfig struct {
+	// ---- CORS ----
+	// AllowedOrigins: comma-separated origin allowlist, jaise
+	// "http://localhost:3000,https://app.wideo11.com".
+	//
+	// SECURITY: `*` sirf tab safe hai jab credentials OFF hon. `*` +
+	// credentials = "koi bhi site authenticated request bhej sakti hai".
+	// Isliye production me explicit list do.
+	AllowedOrigins string `mapstructure:"allowed_origins"`
+	// AllowCredentials: cookies / Authorization header allow.
+	AllowCredentials bool `mapstructure:"allow_credentials"`
+
+	// ---- Headers ----
+	// HSTSMaxAge: `Strict-Transport-Security` max-age (seconds).
+	// 0 = off (default). Production me 31536000 (1 saal) rakho.
+	HSTSMaxAge int `mapstructure:"hsts_max_age"`
+	// HSTSIncludeSubdomains: `includeSubDomains` directive.
+	HSTSIncludeSubdomains bool `mapstructure:"hsts_include_subdomains"`
+	// CSP: Content-Security-Policy. Khaali = strict API default.
+	CSP string `mapstructure:"csp"`
+	// ReferrerPolicy, FrameOptions, PermissionsPolicy: khaali = secure default.
+	ReferrerPolicy    string `mapstructure:"referrer_policy"`
+	FrameOptions      string `mapstructure:"frame_options"`
+	PermissionsPolicy string `mapstructure:"permissions_policy"`
+}
+
+// GetAllowedOrigins - comma-separated string ko cleaned slice me deta hai.
+func (s *SecurityConfig) GetAllowedOrigins() []string {
+	if s == nil || s.AllowedOrigins == "" {
+		return []string{"http://localhost:3000"}
+	}
+	parts := strings.Split(s.AllowedOrigins, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if trimmed := strings.TrimSpace(p); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return []string{"http://localhost:3000"}
+	}
+	return out
 }
 
 func LoadConfig() (*Config, error) {
@@ -206,9 +270,32 @@ func setDefaults() {
 	viper.SetDefault("storage.access_key", "")
 	viper.SetDefault("storage.secret_key", "")
 	viper.SetDefault("storage.avatar_bucket", "avatars")
+	viper.SetDefault("storage.cover_bucket", "covers")
 	viper.SetDefault("storage.presign_ttl_minutes", 15)
 	viper.SetDefault("storage.public_host", "localhost:9000")
 	viper.SetDefault("storage.use_ssl", false)
+	// Bucket provisioning ka kaam `minio-init` karta hai. Default false, taaki
+	// scoped (non-root) service account ke saath bhi startup na fail ho.
+	// Purane setups jo sirf root creds use karte hain, unke liye `.env` ya
+	// compose me ise true kar sakte hain.
+	viper.SetDefault("storage.manage_bucket", false)
+
+	// ---- SECURITY (Phase A / gap #2) ----
+	//
+	// CORS: default sirf local dev origin. `*` NAHI - wo credentials ke
+	// saath invalid hai aur kisi bhi site ko authenticated request bhejne
+	// deta hai.
+	viper.SetDefault("security.allowed_origins", "http://localhost:3000")
+	viper.SetDefault("security.allow_credentials", true)
+	// HSTS default OFF: local dev plain HTTP par chalta hai aur HSTS cache
+	// browser me 6 mahine tak atak jaata hai. Production me .env se on karo.
+	viper.SetDefault("security.hsts_max_age", 0)
+	viper.SetDefault("security.hsts_include_subdomains", false)
+	// CSP / referrer / frame / permissions: khaali = code me secure defaults.
+	viper.SetDefault("security.csp", "")
+	viper.SetDefault("security.referrer_policy", "")
+	viper.SetDefault("security.frame_options", "")
+	viper.SetDefault("security.permissions_policy", "")
 	viper.SetDefault("database.dbname", "auth_service")
 	viper.SetDefault("database.sslmode", "disable")
 	viper.SetDefault("database.timezone", "UTC")
@@ -216,6 +303,10 @@ func setDefaults() {
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
+
+	// NATS - audit stream only. Default is the compose service name, matching
+	// how Redis defaults to "localhost" for host-machine dev runs.
+	viper.SetDefault("nats.url", "nats://nats:4222")
 	viper.SetDefault("redis.db", 0)
 
 	viper.SetDefault("jwt.secret_key", "your-secret-key-change-in-production")

@@ -107,6 +107,22 @@ const PUBLIC_API_PREFIXES = [
   '/api/audit',
   '/api/telemetry',
   '/api/health-check',
+  // ---- Public channel discovery (Phase B1) ----
+  //
+  // `/api/v1/public/channels` (Go) jaan-boojh kar auth group ke BAHAR hai aur
+  // uspe koi auth middleware nahi hai. Ye usi cheez ka web-side counterpart
+  // hai, isliye yahan bhi public hona chahiye - warna middleware 401 de kar
+  // public channel browse ko BLOCK kar dega.
+  //
+  // SAFE KYUN: prefix match yahan `pathname === p || pathname.startsWith(p + '/')`
+  // se hota hai - yaani trailing `/` jodne se. `/api/publicfoo` ise match
+  // NAHI karega. (Ye wahi fix hai jo pehle `/auth` prefix bug me kiya gaya
+  // tha - `/api/authenticated-anything` public na ban jaaye.)
+  //
+  // SECURITY: ye sirf PUBLIC (is_public AND is_active) channels ka data
+  // deta hai. Private channel aur unknown handle dono 404 hote hain, to
+  // is endpoint se private handles enumerate nahi ho sakte.
+  '/api/public',
   // NOTE: `/api/superadmin/awareness` YAHAN SE HATA DAYA GAYA HAI.
   // Ye pehle public list me tha, jisse middleware early-return karta tha aur
   // role gate tak pahunchta hi nahi tha - matlab koi bhi logged-in user
@@ -183,18 +199,51 @@ const SESSION_ONLY_API_PREFIXES = [
  * par auth-service ka `/security/setup-status` call hota - har navigation par
  * ek extra network hop + latency + auth-service load.
  *
- * TTL chhota rakha hai (10s): performance theek rahe, par user ko setup
- * complete karne ke baad 10 second ruke na pade, aur bypass window bhi na
- * khule.
+ * ---- WHY NEGATIVE RESULTS ARE *NOT* CACHED ----
+ *
+ * Ye line security gate ke infinite loop ko rokta hai, isliye poori comment
+ * zaroori hai.
+ *
+ * Pehle cache `false` ko bhi store karta tha. Uska matlab tha:
+ *
+ *   1. User gate complete karta hai. Backend ab `setup_complete: true`
+ *      return karta hai - verified, DB me bhi true.
+ *   2. Gate `window.location.href = '/dashboard'` chalata hai.
+ *   3. Middleware chalti hai, aur CACHED `false` padhti hai (TTL 10s abhi
+ *      expire nahi hua) -> user ko wapas `/auth/security-setup` bhejti hai.
+ *   4. Gate remount hota hai, ab `setup_complete: true` dekhta hai, dobara
+ *      `/dashboard` jaata hai -> step 3.
+ *
+ * Yahi wo loop hai jo report hua: "saare steps complete karne ke baad bhi
+ * wapas PIN par aa jaata hai." Jitni baar refresh karo, 10 second tak wahi.
+ * 10 second baad cache expire hoti hai aur user finally dashboard par pahunch
+ * ta hai - isliye bug "kabhi kabhi theek ho jaata hai" lagta hai, jabki
+ * asal me ye guaranteed loop hai.
+ *
+ * ---- THE RULE ----
+ *
+ * Sirf `true` cache karo. `false` KABHI nahi.
+ *
+ *   true  - cached: yeh decision expensive thi (network hop), aur
+ *           security-upgrade direction me hai. Galat `true` ka matlab hai
+ *           "user ko thoda extra time mil gaya", jo accept hai.
+ *   false - NEVER cached: yeh decision user ko BLOCK karti hai. Isko cache
+ *           karna self-perpetuating trap banata hai - jo bhi stale value thi
+ *           wahi re-enforce hoti rehti hai, jab tak TTL na nikle. TTL ke
+ *           bajaye ek miss bhi user ko galat tareeke se rok sakta hai.
+ *
+ * Asli cost: ek incomplete user har navigation par ek call karega. Ye theek
+ * hai - wo ek user hai, setup complete karne se uski saari calls band ho
+ * jati hain.
  *
  * NOTE: per-process cache (dev me 1 process, prod me har pod ka apna).
- * Worst case sirf 10s staleness, aur decision conservative side
- * (incomplete = block) rakhte hain.
+ * `true` cache hone se completed users par koi staleness nahi hoti - setup
+ * kabhi un-complete nahi hota.
  */
 const setupCache = new Map<string, { complete: boolean; expiresAt: number }>();
 
-/** Cache TTL - milliseconds */
-const SETUP_CACHE_TTL_MS = 10_000;
+/** Cache TTL - milliseconds. Sirf `true` entries ke liye maani rakhta hai. */
+const SETUP_CACHE_TTL_MS = 60_000;
 
 /** Cache ki max entries - unbounded growth rokne ke liye */
 const SETUP_CACHE_MAX = 1000;
@@ -290,7 +339,21 @@ async function isSecuritySetupComplete(jwt: string): Promise<boolean> {
     complete = false; // unreachable -> fail closed
   }
 
-  // ---- Cache write (bounded) ----
+  // ---- Cache write (SIRF `true` ke liye) ----
+  //
+  // `false` cache karna security gate ka infinite loop create karta hai:
+  // setup complete hone ke baad bhi cached `false` user ko wapas gate par
+  // bhejta rehta hai, har TTL window me. Wajah header comment me poori tarah
+  // documented hai (`WHY NEGATIVE RESULTS ARE *NOT* CACHED`).
+  //
+  // `!complete` par cache se entry DELETE karte hain, taaki agar is process
+  // me koi stale entry pehle se padi ho (ya user pehle complete tha aur ab
+  // kisi admin ne reset kiya ho) wo turant na mile.
+  if (!complete) {
+    setupCache.delete(userId);
+    return false;
+  }
+
   if (setupCache.size >= SETUP_CACHE_MAX) {
     const oldest = setupCache.keys().next().value;
     if (oldest) setupCache.delete(oldest);

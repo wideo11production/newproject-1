@@ -65,3 +65,10 @@ minio/
 .cache/
 .eslintcache
 .stylelintcache
+# Harness output: 
+ode tools/check-*.mjs <url> [shot.png] writes its
+# screenshots to the working directory by default. They are evidence of a run,
+# not source, and a stale screenshot in a diff is worse than no screenshot.
+editor.png
+editor-full.png
+editor-full-light.png

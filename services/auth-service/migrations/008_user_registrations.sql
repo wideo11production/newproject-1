@@ -19,6 +19,8 @@
 -- Hinglish comments: har step ka arth
 -- ============================================================================
 
+BEGIN;
+
 CREATE TABLE user_registrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -47,8 +49,16 @@ CREATE TABLE user_registrations (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Analytics queries in columns par index expect karti hain
-CREATE INDEX idx_user_reg_country  ON user_registrations(country);
+-- Analytics queries in columns par index expect karti hain.
+-- `IF NOT EXISTS` zaroori hai - bina iske dobara chalane par ye fail hoti
+-- hai (relation already exists), aur ye repo me migrations `psql -f` se
+-- manually chalti hain, isliye re-run routine hai.
+CREATE INDEX idx_user_reg_country ON user_registrations(country);
 CREATE INDEX idx_user_reg_continent ON user_registrations(continent);
 CREATE INDEX idx_user_reg_device   ON user_registrations(device_type);
 CREATE INDEX idx_user_reg_created  ON user_registrations(created_at DESC);
+
+-- Table documentation is kept in this migration because the target database
+-- does not support PostgreSQL's COMMENT ON TABLE syntax.
+
+COMMIT;

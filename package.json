@@ -1,35 +1,42 @@
 {
-    "name":  "wideo11-monorepo",
-    "version":  "1.0.0",
-    "private":  true,
-    "description":  "Wideo11 Video Platform - Monorepo with Next.js, Go microservices, and custom observability",
-    "scripts":  {
-                    "dev":  "turbo run dev --parallel",
-                    "build":  "turbo run build",
-                    "lint":  "turbo run lint",
-                    "typecheck":  "turbo run typecheck",
-                    "test":  "turbo run test",
-                    "db:generate":  "turbo run db:generate",
-                    "db:migrate":  "turbo run db:migrate",
-                    "clean":  "turbo run clean \u0026\u0026 rm -rf node_modules .turbo",
-                    "paimana:dev":  "pnpm --filter @wideo11/paimana dev",
-                    "web:dev":  "pnpm --filter @wideo11/web dev",
-                    "dashboard:dev":  "pnpm --filter @wideo11/dashboard-service dev",
-                    "preinstall":  "npx only-allow pnpm"
-                },
-    "devDependencies":  {
-                            "turbo":  "^2.1.2",
-                            "typescript":  "^5.5.4",
-                            "eslint":  "^9.9.0",
-                            "prettier":  "^3.3.3",
-                            "@commitlint/cli":  "^19.4.0",
-                            "@commitlint/config-conventional":  "^19.4.0",
-                            "husky":  "^9.1.4",
-                            "lint-staged":  "^15.2.9"
-                        },
-    "engines":  {
-                    "npm":  "Please use pnpm instead of npm strictly",
-                    "pnpm":  "\u003e=9.0.0"
-                },
-    "packageManager":  "pnpm@9.7.0"
+    "name": "wideo11-monorepo",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Wideo11 Video Platform - Monorepo with Next.js, Go microservices, and custom observability",
+    "scripts": {
+        "dev": "turbo run dev --parallel",
+        "build": "turbo run build",
+        "lint": "turbo run lint",
+        "typecheck": "turbo run typecheck",
+        "test": "turbo run test",
+        "db:generate": "turbo run db:generate",
+        "db:migrate": "turbo run db:migrate",
+        "clean": "turbo run clean && rm -rf node_modules .turbo",
+        "paimana:dev": "pnpm --filter @wideo11/paimana dev",
+        "web:dev": "pnpm --filter @wideo11/web dev",
+        "dashboard:dev": "pnpm --filter @wideo11/dashboard-service dev",
+        "audit:secrets": "node tools/audit-secrets.mjs",
+        "preinstall": "npx only-allow pnpm"
+    },
+    "devDependencies": {
+        "@commitlint/cli": "^19.4.0",
+        "@commitlint/config-conventional": "^19.4.0",
+        "eslint": "^9.9.0",
+        "husky": "^9.1.4",
+        "lint-staged": "^15.2.9",
+        "postcss-import": "^17.0.0",
+        "prettier": "^3.3.3",
+        "turbo": "^2.1.2",
+        "typescript": "^5.5.4"
+    },
+    "//dependencies": "The root manifest is ALSO the hoist target. Every app's Docker image runs `pnpm install` with `shamefully-hoist`, which flattens the whole workspace into this directory's node_modules and lets the FIRST writer win each package name. Without a declared version here the winner is whichever app happened to be installed first, and the image silently builds against a different copy of the dependency than the workspace does.",
+    "//dependencies-lucide-react": "Four apps pin four different lucide-react versions (0.321 / 0.400 / 0.428 / 0.454). The video editor declares ^0.400.0 and must get 0.400.0: an older build resolves different icon internals between the server and browser bundles, which is a hydration mismatch and a console error on every page load. Declaring it here pins the hoisted copy to the version the editor actually declares.",
+    "dependencies": {
+        "lucide-react": "0.400.0"
+    },
+    "engines": {
+        "npm": "Please use pnpm instead of npm strictly",
+        "pnpm": ">=9.0.0"
+    },
+    "packageManager": "pnpm@9.7.0"
 }

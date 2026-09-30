@@ -56,18 +56,22 @@ func Recovery() gin.HandlerFunc {
 }
 
 // CORS returns a middleware that handles CORS options
-func CORS() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
-
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
-
-		c.Next()
-	}
-}
+//
+// REMOVED (Phase A / gap #2): is function ne ye set karta tha -
+//     Access-Control-Allow-Origin:  *
+//     Access-Control-Allow-Credentials: true
+//
+// jo do problems the:
+//  1. Spec ke hisaab se `*` aur credentials saath me allowed NAHI hain, to
+//     Chrome/Firefox credentialed requests REJECT karte the.
+//  2. Wildcard origin + credentials = koi bhi website authenticated request
+//     bhej sakti hai (CSRF ki precondition).
+//
+// Use `NewCORS(CorsConfig{...})` from security.go - wo proper allowlist use
+// karta hai aur allowlisted origin ko reflect karta hai.
+//
+// ---- WHY DELETED, NOT DEPRECATED ----
+// A "deprecated" insecure CORS wrapper is a footgun: it compiles, it looks
+// harmless, and `NewCORS` has an identically-named cousin so the swap is a
+// one-word edit nobody notices. Grep confirmed zero callers, so keeping it
+// bought nothing but a way to silently reintroduce the bug.

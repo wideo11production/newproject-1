@@ -91,6 +91,28 @@ type GetSettingsResponse struct {
 	Accent               string `json:"accent"`
 	Language             string `json:"language"`
 	ContentUploadEnabled bool   `json:"content_upload_enabled"`
+	// ContentUploadAllowed - EFFECTIVE permission, ye `content_upload_enabled`
+	// se alag hai (Phase B2).
+	//
+	// ---- WHY BOTH FIELDS ----
+	// `content_upload_enabled` = "user ne toggle on/off kiya" (intent).
+	// `contentUploadAllowed` = "upload sach me ho sakta hai ya nahi"
+	// (intent + account active + email verified).
+	//
+	// Ye do alag hote hain: ek unverified user ka toggle ON dikhta hai par
+	// upload allowed nahi hai. Agar UI sirf toggle dikhaye to user sochega
+	// "on hai to upload hoga", aur phir 403 khaayega bina samjhe kyun.
+	// Isliye dono bheje jaate hain - toggle intent dikhane ke liye, ye
+	// fields reality dikhane ke liye.
+	ContentUploadAllowed bool `json:"content_upload_allowed"`
+	// ContentUploadReason - effective block ka reason enum
+	// ("allowed" | "disabled_by_user" | "email_unverified" |
+	//  "account_inactive"). Frontend ise switch karke SPECIFIC message
+	// dikhata hai, na ki ek generic "upload failed".
+	//
+	// SECURITY: `ReasonUserNotFound` yahan kabhi nahi aayega (wo server-side
+	// logging ke liye hai). Isliye ye field enum expose karna safe hai.
+	ContentUploadReason  string `json:"content_upload_reason"`
 	SubscriptionsEnabled bool   `json:"subscriptions_enabled"`
 	EmailNotifications   bool   `json:"email_notifications"`
 }

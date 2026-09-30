@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAuthStore } from "./store";
 import { useEffect } from "react";
-import { apiClient } from "@wideo11/api-client";
+import { apiClient } from "wideo11-api-client";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { setLoading, isAuthenticated, accessToken, refreshToken } = useAuthStore();

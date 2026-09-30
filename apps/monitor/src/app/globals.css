@@ -1,3 +1,13 @@
+/* Project-wide ultra-thin scrollbars (2px). Shared file, ek jagah fix = sab
+   jagah fix. Iske bina monitor ka scrollbar default ~15px ka dikhta hai.
+   Firefox ka minimum ~8px hai - wahan standard properties se wahi milta hai.
+   Detail: packages/ui/src/styles/scrollbar.css
+
+   `@import` `@tailwind` se PEHLE hona zaroori hai - CSS spec ke hisaab se
+   ye har doosri statement se pehle aana chahiye. Uske baad rakhne par
+   browser ise drop kar deta hai aur styling chup-chaap apply nahi hoti. */
+@import '@wideo11/ui/src/styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

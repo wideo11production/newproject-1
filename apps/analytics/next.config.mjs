@@ -12,7 +12,14 @@ const nextConfig = {
       { protocol: 'https', hostname: 'avatars.githubusercontent.com' }
     ]
   },
-  transpilePackages: ['@wideo11/ui'],
+  // `wideo11-charts` ships raw TypeScript (its `main` is `src/index.tsx`), so
+  // Next cannot consume it without being told to transpile it. Without this,
+  // the build fails with `Module not found: Can't resolve 'wideo11-charts'` -
+  // an error that points at resolution rather than at the missing transpile
+  // step, which is what makes it slow to diagnose.
+  //
+  // `@wideo11/ui` was already here and also ships raw TSX.
+  transpilePackages: ['@wideo11/ui', 'wideo11-charts'],
 };
 
 export default nextConfig

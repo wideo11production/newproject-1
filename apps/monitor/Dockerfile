@@ -101,6 +101,30 @@ COPY pnpm-lock.yaml ./
 # Copy monitor source code
 COPY apps/monitor ./apps/monitor
 
+# ---- BUG FIX: `node_modules` wapas restore karo ----
+#
+# `COPY apps/monitor ./apps/monitor` upar wala step poora `apps/monitor`
+# directory REPLACE kar deta hai - usme se `node_modules/` bhi mitt jata hai,
+# jo deps stage ne pnpm install ke baad banaya tha.
+#
+# Iska asar sirf workspace PACKAGE links par hota hai. pnpm (bina
+# shamefully-hoist) external deps ko root `/app/node_modules` me hoist kar
+# deta hai, isliye `next`, `react`, `echarts` sab resolve ho jaate hain - aur
+# build lagta hai. Lekin WORKSPACE links (jaise `wideo11-charts`) pnpm
+# app ke apne `node_modules` me rakhta hai, root me nahi.
+#
+# Isliye: dependency add karne se pehle sab theek chalta tha, aur workspace
+# package import karte hi:
+#
+#   Module not found: Can't resolve 'wideo11-charts'
+#
+# (Ye error misleading hai. Package maujood hai, install bhi hua hai - bas
+# upar wale COPY ne symlink delete kar diya tha.)
+#
+# Fix: source copy hone ke BAAD node_modules ko deps stage se wapas laao.
+# Order matter karta hai - pehle source, phir node_modules.
+COPY --from=deps /app/apps/monitor/node_modules ./apps/monitor/node_modules
+
 # Set working directory to the monitor app
 WORKDIR /app/apps/monitor
 

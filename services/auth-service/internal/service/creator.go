@@ -78,8 +78,19 @@ func (s *AuthService) CreateChannel(
 	}
 
 	// ---- Validate display name ----
+	//
+	// NOTE: ye pehle `ErrChannelNotFound` return karta tha - jo do jahan se
+	// galat tha:
+	//   1. Semantics: channel exist hi nahi karta abhi, isiliye "not found"
+	//      bekaar message hai. `ErrDisplayNameInvalid` hi sahi error hai, wo
+	//      pehle se define hai.
+	//   2. `CreateChannel` apna alag error switch use karta hai
+	//      (`writeChannelError` nahi), aur us switch me ye error nahi tha -
+	//      isiliye empty display_name par API **500** deta tha, 400 nahi.
+	//      Client ko apni galti pe 500 dikhta tha, jo server fault imply karta
+	//      hai aur use useless retry loop me daalta hai.
 	if len(displayName) < 1 || len(displayName) > 80 {
-		return nil, model.ErrChannelNotFound // generic-ish; message below clearer
+		return nil, model.ErrDisplayNameInvalid
 	}
 
 	// ---- Description length ----

@@ -1,66 +1,94 @@
 'use client';
 
-import { BarChart3, TrendingUp, Users, DollarSign, Activity, Clock } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
-import { Badge } from '@wideo11/ui/badge';
+// Real overview numbers.
+//
+// ---- WHAT THIS USED TO BE ----
+//
+// A hardcoded array. No fetch, no API, no props:
+//
+//   { label: 'Total Views',     value: '1.2M',   change: '+12.5%' }
+//   { label: 'Active Creators', value: '3.4K',   change: '+8.2%' }
+//   { label: 'Revenue',         value: '$45.2K', change: '+15.3%' }
+//   { label: 'Avg Watch Time',  value: '4m 32s', change: '+2.1%' }
+//
+// and a "Top Performing Videos" list of invented titles credited to "John
+// Doe" and "Jane Smith".
+//
+// None of those quantities are measured by this system. There is no video
+// table, no view counter, no revenue column. The numbers were plausible, the
+// column headers were green, and an operator would have read them as fact.
+//
+// ---- WHAT REPLACED THEM ----
+//
+// Four figures that the database actually holds, and nothing more:
+//
+//   total users, verified, unverified, total registrations
+//
+// Views, watch time and revenue are NOT shown. They are not absent for want of
+// space - they are not instrumented, and rendering a row for them (even as
+// "n/a") would imply a category that exists. They are listed under
+// "Not instrumented" on the page instead.
 
-interface Metric {
-  label: string;
-  value: string;
-  change: string;
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor: string;
-  bgColor: string;
-  borderColor: string;
-}
+import { Activity, CheckCircle2, Clock3, UserPlus, Users } from 'lucide-react';
+import { EmptyState, Panel, Stat, fmtNum } from './ui';
+import type { AnalyticsState } from './use-analytics';
 
-const metrics: Metric[] = [
-  { label: 'Total Views', value: '1.2M', change: '+12.5%', icon: Activity, iconColor: 'text-blue-400', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/20' },
-  { label: 'Active Creators', value: '3.4K', change: '+8.2%', icon: Users, iconColor: 'text-green-400', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/20' },
-  { label: 'Revenue', value: '$45.2K', change: '+15.3%', icon: DollarSign, iconColor: 'text-yellow-400', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/20' },
-  { label: 'Avg Watch Time', value: '4m 32s', change: '+2.1%', icon: Clock, iconColor: 'text-purple-400', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/20' },
-];
+export function OverviewPanel({ state }: { state: AnalyticsState }) {
+  const { data } = state;
+  const o = data?.overview;
 
-export function OverviewPanel() {
   return (
-    <Card className="analytics-panel h-full">
-      <CardHeader className="analytics-panel-header">
-        <CardTitle className="text-lg font-semibold">Overview</CardTitle>
-      </CardHeader>
-      <CardContent className="analytics-panel-content space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {metrics.map((metric, index) => (
-            <Card key={index} className={`bg-card border-border ${metric.bgColor} ${metric.borderColor} p-4`}>
-              <div className="flex items-center justify-between mb-2">
-                <metric.icon className={`h-5 w-5 ${metric.iconColor}`} />
-                <Badge variant="outline" className="text-xs border-border">
-                  {metric.change}
-                </Badge>
-              </div>
-              <div className="text-2xl font-bold text-foreground">{metric.value}</div>
-              <div className="text-xs text-muted-foreground">{metric.label}</div>
-            </Card>
-          ))}
+    <Panel
+      title="Overview"
+      note="Counts straight from Postgres (users, user_registrations). No derived metrics."
+    >
+      {!o ? (
+        <EmptyState why={state.forbidden ? 'Superadmin access required.' : 'Waiting for data.'} />
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <Stat
+            label="Total users"
+            value={fmtNum(o.totalUsers)}
+            tone={o.totalUsers > 0 ? 'good' : 'default'}
+            hint="users table row count"
+          />
+          <Stat label="Verified" value={fmtNum(o.totalVerified)} hint="is_verified = true" />
+          <Stat
+            label="Unverified"
+            value={fmtNum(o.totalUnverified)}
+            tone={o.totalUnverified > 0 ? 'warn' : 'default'}
+            hint="Registered but never confirmed their email"
+          />
+          <Stat label="Registrations" value={fmtNum(o.totalRegistrations)} hint="user_registrations rows - the permanent audit trail" />
         </div>
-        <div className="border-t border-border pt-4">
-          <h4 className="text-sm font-medium text-muted-foreground mb-2">Top Performing Videos</h4>
-          <div className="space-y-2">
-            {[
-              { title: 'How to Edit Like a Pro', views: '245K', creator: 'John Doe' },
-              { title: 'Best Transitions 2024', views: '189K', creator: 'Jane Smith' },
-              { title: 'Color Grading Basics', views: '156K', creator: 'Mike Wilson' },
-            ].map((video, i) => (
-              <div key={i} className="flex items-center justify-between p-2 bg-muted/50 rounded border border-border">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{video.title}</p>
-                  <p className="text-xs text-muted-foreground">{video.creator}</p>
-                </div>
-                <span className="text-sm font-semibold text-primary ml-4">{video.views}</span>
-              </div>
-            ))}
-          </div>
+      )}
+
+      {/* Columns that used to sit here with invented values. */}
+      <div className="mt-3 space-y-1.5 border-t border-gray-800 pt-3 text-[11px] leading-snug text-gray-500">
+        <p className="font-medium text-gray-400">Not instrumented</p>
+        <p>
+          <span className="text-gray-600">Total views, avg watch time, revenue</span> — this system has
+          no video table, view counter or revenue column. The previous version of this panel showed
+          1.2M views, 4m 32s watch time and $45.2K revenue. None of it was measured.
+        </p>
+        <div className="flex flex-wrap gap-3 pt-1 text-gray-600">
+          <span className="inline-flex items-center gap-1">
+            <Activity className="h-3 w-3" /> views
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Clock3 className="h-3 w-3" /> watch time
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Users className="h-3 w-3" /> active creators
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <UserPlus className="h-3 w-3" /> signups/day history
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <CheckCircle2 className="h-3 w-3" /> engagement rate
+          </span>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </Panel>
   );
 }

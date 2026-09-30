@@ -44,6 +44,7 @@ services:
     command: ["-js", "-m", "8222"]
     volumes:
       - nats_data:/data
+    restart: unless-stopped
     healthcheck:
       # nats CLI binary alpine image me installed nahi hai, isliye monitoring
       # port ka /healthz endpoint use karte hain - busybox wget already available hai
@@ -60,10 +61,25 @@ services:
       - "9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Alert rules. Ye mount PEHLE MISSING tha jabki prometheus.yml me
+      # `rule_files: ['/etc/prometheus/rules/*.yml']` likha hua tha. Matlab
+      # Prometheus har start par khud poochta tha, kuch nahi milta tha, aur
+      # chup chap koi rule load nahi karta tha - alert pipeline dikhta to bhi
+      # tha par kabhi kuch trigger nahi hota tha.
+      #
+      # `ro` zaroori hai: Prometheus ko rules likhni nahi chahiye, sirf padhni
+      # hain. Writable mount me ek typo host ke rule file ko overwrite kar
+      # sakta tha.
+      - ./monitoring/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
+    restart: unless-stopped
     command:
+      # `--web.enable-lifecycle` lets a rule change be applied with
+      # `curl -X POST localhost:9090/-/reload` instead of a full restart, which
+      # briefly drops every scrape.
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     healthcheck:
@@ -215,8 +231,13 @@ services:
       retries: 5
       start_period: 20s
 
-  # Bucket auto-provisioning - ek chhuta sa init container jo
-  # 'video' aur 'thumbnails' buckets banata hai + lifecycle rules lagata hai
+  # Bucket auto-provisioning + IAM - ek chhuta init container jo
+  # 'video' / 'thumbnails' / 'avatars' buckets banata hai, avatars par
+  # public-read policy lagata hai, aur auth-service ke liye ek BUCKET-SCOPED
+  # IAM user banata hai (Phase A / gap #1 - root credentials rotate).
+  #
+  # Poori logic infrastructure/storage/init-storage.sh me hai (image ke andar),
+  # inline YAML command nahi - quoting ke teen layers me bug chhupne se bache.
   minio-init:
     build:
       context: ./infrastructure/storage
@@ -231,17 +252,16 @@ services:
       MINIO_ENDPOINT: http://minio:9000
       MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
       MINIO_THUMBNAIL_BUCKET: ${MINIO_THUMBNAIL_BUCKET:-thumbnails}
+      MINIO_AVATAR_BUCKET: ${MINIO_AVATAR_BUCKET:-avatars}
+      # Channel covers - alag bucket (wide banner vs square avatar)
+      MINIO_COVER_BUCKET: ${MINIO_COVER_BUCKET:-covers}
       # HLS chunk lifecycle (days) - SSOT se
       MINIO_HLS_RETENTION_DAYS: ${MINIO_HLS_RETENTION_DAYS:-30}
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local $$MINIO_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
-      mc mb --ignore-existing local/$$MINIO_VIDEO_BUCKET &&
-      mc mb --ignore-existing local/$$MINIO_THUMBNAIL_BUCKET &&
-      echo 'Buckets provisioned successfully' &&
-      mc ls local &&
-      exit 0
-      "
+      # ---- Scoped service account (root NAHI) ----
+      # Ye wahi credentials hain jo auth-service ko diye jaate hain. Policy
+      # sirf `avatars` bucket tak limited hai - policies/auth-avatars.json.
+      MINIO_AUTH_ACCESS_KEY: ${MINIO_AUTH_ACCESS_KEY:?set MINIO_AUTH_ACCESS_KEY in .env - see infrastructure/storage/policies/README.md}
+      MINIO_AUTH_SECRET_KEY: ${MINIO_AUTH_SECRET_KEY:?set MINIO_AUTH_SECRET_KEY in .env - see infrastructure/storage/policies/README.md}
     restart: "no"
 
   # Auth Service (Go) - users, sessions, bcrypt password hashing, JWT
@@ -274,6 +294,20 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
       # Superadmin recovery accounts (2) - main superadmin fail ho to backup access
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-advchashampalup@gmail.com}
+
+      # Master-root ka password. Ye env var set hone par
+      # `bootstrap.DefaultSuperadminPasswordHash` IGNORE ho jata hai aur ye
+      # value use hoti hai.
+      #
+      # KYUN ZAROORI: wo default hash SOURCE me compiled hai. Matlab repository
+      # me koi bhi bcrypt-crack karne wala usse test karke master-root ka
+      # password nikal sakta hai - default password effectively public ho jata
+      # hai. Is var se password source se nikal kar .env (gitignored) me rehta
+      # hai, aur rotate karna code change ke bina ho jaata hai.
+      #
+      # NOTE: ye value logs me kabhi print nahi hoti, aur plaintext kahin store
+      # nahi hota - sirf bcrypt hash DB me jaata hai.
+      SECURITY_SUPERADMIN_PASSWORD: ${SECURITY_SUPERADMIN_PASSWORD:-}
       SUPERADMIN_RECOVERY_1_EMAIL: ${SUPERADMIN_RECOVERY_1_EMAIL:-}
       SUPERADMIN_RECOVERY_1_PASSWORD: ${SUPERADMIN_RECOVERY_1_PASSWORD:-}
       SUPERADMIN_RECOVERY_2_EMAIL: ${SUPERADMIN_RECOVERY_2_EMAIL:-}
@@ -285,6 +319,16 @@ services:
       JWT_ISSUER: wideo11-auth
       JWT_AUDIENCE: wideo11-api
       SERVER_BCRYPT_COST: ${BCRYPT_COST:-12}
+      # ---- SECURITY (Phase A / gap #2) ----
+      # CORS allowlist. `*` NAHI - wildcard + credentials browsers reject
+      # karte hain, aur koi bhi site authenticated request bhej sakti hai.
+      # Naye frontend origin add karne ke liye yahan comma-separated list badlo.
+      SECURITY_ALLOWED_ORIGINS: ${SECURITY_ALLOWED_ORIGINS:-http://localhost:3000}
+      SECURITY_ALLOW_CREDENTIALS: ${SECURITY_ALLOW_CREDENTIALS:-true}
+      # HSTS. Local dev plain HTTP par chalta hai aur HSTS browser cache
+      # atka deta hai, isliye default OFF. Production me 31536000 rakho.
+      SECURITY_HSTS_MAX_AGE: ${SECURITY_HSTS_MAX_AGE:-0}
+      SECURITY_HSTS_INCLUDE_SUBDOMAINS: ${SECURITY_HSTS_INCLUDE_SUBDOMAINS:-false}
       # Verification lifecycle - 30 min TTL + purge worker
       VERIFICATION_TTL_MINUTES: ${VERIFICATION_TTL_MINUTES:-30}
       VERIFICATION_BASE_URL: ${VERIFICATION_BASE_URL:-http://localhost:3000}
@@ -306,17 +350,24 @@ services:
       # browser seedha MinIO me PUT karta hai - file bytes app server par
       # kabhi nahi aate.
       #
-      # NOTE: ye MinIO ke ROOT credentials hain. Production me inhe
-      # rotate karke limited-scope service account banana chahiye.
-      # NOTE: `MINIO_ROOT_USER/PASSWORD` wahi hain jo MinIO container khud
-      # use karta hai (.env me defined). Ye nested `${A:-${B}}` form Compose
-      # me NAHI chalta - isliye direct un vars ko reference kiya hai.
+      # NOTE: ye SCOPED service account hain, root NAHI. Ye account sirf
+      # `avatars` bucket me object padh/lichh sakta hai - `video` bucket tak
+      # pahunch hi nahi sakta, aur naya bucket banana bhi nahi sakta.
+      # Agar ye credentials leak ho jaayein, blast radius sirf avatars hai -
+      # poora storage cluster compromise nahi ho sakta.
+      # Policy: infrastructure/storage/policies/auth-avatars.json
+      # Root credentials sirf provisioning ke liye (minio-init) hain.
       STORAGE_ENABLED: ${STORAGE_ENABLED:-true}
       STORAGE_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
-      STORAGE_ACCESS_KEY: ${MINIO_ROOT_USER:-wideo11admin}
-      STORAGE_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
+      STORAGE_ACCESS_KEY: ${MINIO_AUTH_ACCESS_KEY:-}
+      STORAGE_SECRET_KEY: ${MINIO_AUTH_SECRET_KEY:-}
       STORAGE_AVATAR_BUCKET: ${MINIO_AVATAR_BUCKET:-avatars}
+      STORAGE_COVER_BUCKET: ${MINIO_COVER_BUCKET:-covers}
       STORAGE_PRESIGN_TTL_MINUTES: ${STORAGE_PRESIGN_TTL_MINUTES:-15}
+      # `false` = bucket banao/policy lagao minio-init karega (root ke saath).
+      # Scoped account ke paas `s3:CreateBucket` / `s3:PutBucketPolicy`
+      # deliberately nahi hai - isliye yahan true nahi rakh sakte.
+      STORAGE_MANAGE_BUCKET: "false"
       # NOTE: ye BROWSER ko dikhta hai (image yahan se load hoti hai),
       # isliye container-internal `minio:9000` NAHI - `localhost:9000`
       # hona chahiye.
@@ -338,6 +389,11 @@ services:
       # Postfix ke upar depend karte hain taaki mail service ready ho
       mail:
         condition: service_started
+      # Avatar bucket + scoped IAM user pehle se ready hone chahiye, warna
+      # storage startup par fail ho jayega. `service_completed_successfully`
+      # isliye ki abhaari half-provisioned state me start na ho.
+      minio-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/health"]
       interval: 10s
@@ -456,7 +512,20 @@ services:
     command:
       - --housekeeping_interval=10s
       - --docker_only=true
-      - --store_container_labels=false
+      # NOTE: `store_container_labels` PEHLE `false` tha. Iska matlab tha ki
+      # per-container metrics me `name`/`container` LABEL hi nahi the - sirf
+      # ek `id` label. Par asli problem ye hai ki `docker_only=true` ke saath
+      # ek hi series mil rahi thi (`id=/`, 3.1GB) - yaani poori Docker VM ek
+      # hi "container" ki tarah dikh rahi thi. Per-container CPU/memory/
+      # restart panels isliye "No data" de rahe the.
+      #
+      # `true` karne se cgroup path ka `name` label milta hai, jisse har
+      # container alag series ban jaata hai.
+      #
+      # VERIFY karne ke liye:
+      #   curl -s 'localhost:9090/api/v1/query?query=count(count by(name)(container_memory_working_set_bytes))'
+      # 1 se bada number aana chahiye (25+ expected).
+      - --store_container_labels=true
     restart: always
 
   # MinIO Exporter - REAL bucket/object metrics for Prometheus
@@ -570,7 +639,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # ==========================================================================
   # Monitor Frontend (Next.js) - Port 3001
+  # ==========================================================================
+  # Ye Wideo11 ka apna monitoring dashboard hai - Grafana nahi.
+  #
+  # Grafana ko thoda add kiya gaya tha, par ye project jaan-boojh kar use
+  # nahi karta. Reasons (jo repo me bhi documented hain):
+  #   - `packages/charts` me ECharts wrappers PEHLE SE maujood hain, aur unka
+  #     description literally "Grafana-like dashboards" hai - yaani custom
+  #     dashboard banana is project ka MAANTA hai
+  #   - Grafana ek alag 400MB+ image hai, apna database, apna auth, apni
+  #     provisioning - ye poora system extra sirf isliye ki kuch chart ho
+  #
+  # Is service ko 3006 par shift kiya gaya tha Grafana ke liye; ab wapas 3001.
+  #
+  # NOTE: ye app pehle 5 HARDCODED metrics dikha raha tha (1.2K events/sec,
+  # 245 users, 12ms latency, 12.5m session, 0.01% error) jinme se KOI bhi
+  # real nahi tha - wo seedhe JSX me likhe the. Wo ab `/api/metrics` se
+  # REAL Prometheus values larta hai, aur jahan metric instrument nahi hai
+  # wahan "n/a" dikhata hai. Koi invented number nahi.
+  # Details `apps/monitor/src/app/@telemetry/page.tsx` ke header comment me.
   monitor:
     build:
       context: .
@@ -586,6 +675,250 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+    # ---- Container health ----
+    #
+    # Ye service pehle koi healthcheck ya restart policy NAHI rakhti thi.
+    # Matlab: crash-loop me bhi `docker compose ps` me "Up" dikhta tha, aur
+    # crash hone par koi restart nahi hota tha - app chupke se chali jaati
+    # thi aur kisi ko pata nahi chalta tha.
+    #
+    # `/` hit karna application-layer check hai: sirf "port open hai" nahi,
+    # balki "Next.js ne page serve kiya" confirm hota hai.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3001/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # ==========================================================================
+  # MONITORING EXPORTERS
+  # ==========================================================================
+  # Ye do services isliye zaroori hain kyunki NATS aur disk ke liye
+  # Prometheus-format metrics koi source DETROIT se nahi deta:
+  #
+  #   - NATS ke paas apna koi /metrics endpoint NAHI hai. Port 8222 pe JSON
+  #     deta hai (/varz). Pehle compose me seedha `nats:8222/metrics` scrape
+  #     kar raha tha, jo hamesha 404 deta tha - yaani NATS metrics CHUP CHAP
+  #     gather nahi ho rahe the.
+  #   - Disk metrics node_filesystem_* ke naam se aati hain, aur wo
+  #     node-exporter se hi aati hain. Bina node-exporter ke
+  #     `DiskFillingUp` aur `DiskSpaceCritical` rules PERMANENTLY INERT
+  #     rehte - green dikhte par kabhi fire nahi karte.
+  #
+  # Dono ports PUBLISH nahi kiye - inhe sirf Prometheus internal network pe
+  # chahiye. Ye jaan-boojh kar hai: inke bina koi unhe scrape kar sakta hai.
+
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.15.0
+    container_name: wideo11-nats-exporter
+    command:
+      # NOTE: flag set exporter version 0.15.0 ke saath VERIFIED hai. Teen
+      # galtiyan isse pehle thi, teeno crash-loop laati thi (Go exporter
+      # unknown flag pe usage print karke exit(2) karta hai, aur sahi flag
+      # ke saath bhi galat invocation exit(0) se turant nikal jaata hai):
+      #
+      #   1. `-ldm=18`  - is version me ye flag exist hi nahi karta.
+      #   2. `-subsz`   - sahi naam `-subz` hai (ek 's' kam).
+      #   3. `-addr=http://nats:8222` - YE GALAT THA. `-addr` us exporter ka
+      #      LISTEN host hai (default 0.0.0.0), NATS server ka URL nahi.
+      #
+      # NATS ka monitoring URL is version me POSITIONAL argument hai:
+      #     prometheus-nats-exporter <flags> <nats-monitoring-url>
+      # `-addr` ki jagah URL positional ke roop me LAST me aata hai. Isi liye
+      # abhi tak NATS metrics kabhi nahi aaye - exporter ya mar raha tha ya
+      # khud hi nikal raha tha.
+      #
+      # Image tag upgrade karte waqt ye dobara verify karo:
+      #   docker run --rm natsio/prometheus-nats-exporter:<new-tag> -h
+      - "-varz"        # server state, connections, memory
+      - "-connz"       # per-connection detail
+      - "-routez"      # cluster routing
+      - "-subz"        # subscription counts
+      - "-jsz=all"     # JetStream streams + consumers
+      - "-port=7777"
+      - "http://nats:8222"   # positional: NATS monitoring URL
+    depends_on:
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # NOTE: exporter v0.15.0 me `-healthz` flag maujood hai par `/healthz`
+      # route REGISTER nahi karta - flag ke saath bhi 404 deta hai (v0.15
+      # par verify kiya). Isiliye `/metrics` hi use kiya gaya hai.
+      #
+      # Sirf "200 aaya" check karna KAAM KA nahi: NATS down hone par bhi ye
+      # 200 aur khaali series de deta hai, jisse crash-chasing impossible ho
+      # jaati. Isliye ek ASLI series dhoondhi jaati hai - `gnatsd_varz_` tab
+      # hi aata hai jab exporter NATS monitoring se actually data collect kar
+      # raha hoga. Ye process-alive aur actually-collecting dono alag karta
+      # hai.
+      #
+      # Series prefix `gnatsd_` hai, `nats_` nahi (v0.15 naming).
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7777/metrics | grep -q '^gnatsd_varz_' || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # Host-level metrics: disk, CPU, memory, network, filesystem descriptors.
+  #
+  # `privileged: true` nahi hai, sirf `/` read-only mount chahiye. Ye is
+  # service ko minimum privilege deta hai - wahi reason jisse cadvisor ko
+  # privileged rakha gaya hai, wahan poori host visibility chahiye.
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: wideo11-node-exporter
+    command:
+      - '--path.rootfs=/host'
+      # pseudo-filesystems ko exclude karo, warna usage 100% dikhta hai aur
+      # disk alert hamesha fire karta rehta hai
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      # NOTE: `rslave` YAHAN nahi hai. Docker Desktop on Windows (WSL2
+      # backend) `rslave` accept nahi karta aur container create fail ho jata
+      # hai:
+      #   Error response from daemon: path / is mounted on / but it is not a
+      #   shared or slave mount
+      # Plain `:ro` kaafi hai - node-exporter sirf padhta hai, aur WSL2 pe
+      # `/` already host filesystem hota hai. Linux par `rslave` chahiye ho to
+      # `:ro,rslave` use karo.
+      - /:/host:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:9100/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ==========================================================================
+  # POSTGRES EXPORTER
+  # ==========================================================================
+  # Ye service isliye add ki gayi kyunki Postgres KABHI scrape nahi ho raha
+  # tha. Verify kiya gaya: Prometheus me zero `pg_*` metrics the, aur postgres
+  # koi scrape target hi nahi tha.
+  #
+  # Iska matlab ye 3 alert rules POORI TARAH DEAD thi - kabhi fire nahi ho
+  # sakti thi:
+  #     PostgresDown
+  #     PostgresConnectionsNearMax
+  #     PostgresReplicationLag
+  #
+  # Ye wahi trap hai jo disk alerts me tha (node_exporter ke bina) aur http
+  # alerts me tha (http_* metrics ke bina): rule load ho jaati hai,
+  # `promtool check rules` SUCCESS deta hai, par us expression ka data
+  # source hi nahi hai. Ye DEAD monitoring sabse khatarnaak hoti hai -
+  # sab green dikhta hai jabki kuch check hi nahi ho raha.
+  #
+  # Isliye rule comment out karne ke bajaye SOURCE add kiya gaya hai, taaki
+  # wo alerts sach me kaam karein.
+  #
+  # NOTE: ye exporter READ-ONLY monitoring user se connect hota hai
+  # (`POSTGRES_EXPORTER_USER`). Apna superuser pass karna mat karo - export
+  # karne ke liye sirf `pg_monitor` role chahiye.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: wideo11-postgres-exporter
+    environment:
+      # Ye read-only monitoring user hai. Ye UPLOAD ke baad banaya jaata
+      # hai (postgres-exporter-init), kyunki exporter ko chalne se PEHLE
+      # database me maujood hona chahiye.
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_EXPORTER_USER}:${POSTGRES_EXPORTER_PASSWORD}@postgres:5432/auth_service?sslmode=disable"
+      PG_EXPORTER_WEB_LISTEN_ADDRESS: ":9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9187/metrics || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  # Monitoring user create karta hai. Ye CHALNA zaroori hai - upar wala
+  # exporter connect hi nahi kar paayega bina iske.
+  # `restart: no` kyunki ye ek one-shot task hai (migration + user creation),
+  # service nahi - chalti hai, ban jaati hai, khatam.
+  postgres-exporter-init:
+    image: postgres:16-alpine
+    container_name: wideo11-postgres-exporter-init
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      # `PGPASSWORD` ZAROORI hai, `POSTGRES_PASSWORD` nahi.
+      #
+      # `psql` `POSTGRES_PASSWORD` nahi padhta - wo sirf postgres IMAGE ke
+      # entrypoint script ka variable hai. Bina `PGPASSWORD` ke pscl
+      # interactively password poochta hai, non-interactive container me
+      # uska jawab koi nahi hota, aur ye fail hota hai:
+      #     psql: error: ... FATAL: password authentication failed
+      #     for user "postgres"
+      # jisse monitoring user kabhi banta hi nahi, aur exporter hamesha
+      # `pg_up 0` dikhata rehta hai.
+      PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      EXPORTER_USER: ${POSTGRES_EXPORTER_USER:-wideo_monitor}
+      EXPORTER_PASSWORD: ${POSTGRES_EXPORTER_PASSWORD:-wideo_monitor}
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        echo "waiting for postgres..."
+        until pg_isready -h postgres -U "$${POSTGRES_USER}"; do sleep 1; done
+
+        # ---- WHY NO `DO $$ ... $$;` BLOCK ----
+        #
+        # Pehle idempotency ke liye plpgsql `DO` block use kiya tha. Ye
+        # compose ke andar 3 alag tareeke se toota:
+        #
+        #   1. `$$` compose me ESCAPE hai - container me `DO $ ... $;` banta
+        #      tha: `ERROR: syntax error at or near "$"`
+        #   2. `$$$$` likhne par bhi sahi nahi bana - `DO 1` aaya
+        #
+        # Compose + heredoc + dollar-quoting ka combination ek hi command me
+        # teen layers ka escaping hai. Isse bachne ke liye dollar-quoting
+        # HATAYA gaya hai. Neeche wala approach shell-native hai: ek
+        # existence check, phir conditional create. Same idempotency, zero
+        # escaping, aur debug karne me seedha samajh aata hai.
+        #
+        # NOTE: `PGPASSWORD` env var ka use hota hai, `POSTGRES_PASSWORD` ka
+        # nahi - `psql` sirf PGPASSWORD padhta hai.
+        PSQL="psql -h postgres -U $${POSTGRES_USER} -d postgres -v ON_ERROR_STOP=1"
+
+        # `$$` yahan sirf ek dollar ka matlab hai (shell se env var
+        # passthrough) - ye compose ka documented escape hai, aur plpgsql ke
+        # $$ block se koi lena-dena nahi hai.
+        if ! $${PSQL} -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$${EXPORTER_USER}'" | grep -q 1; then
+          echo "creating monitoring role..."
+          $${PSQL} -c "CREATE ROLE \"$${EXPORTER_USER}\" WITH LOGIN PASSWORD '$${EXPORTER_PASSWORD}'"
+        else
+          echo "monitoring role already exists - reusing it"
+        fi
+
+        # pg_monitor ek BUILT-IN role hai jo pg_* stats padhne ke liye sabse
+        # kam privileges deta hai (Postgres 10+). Purane versions me ise
+        # manually grants dene padte the.
+        echo "granting pg_monitor..."
+        $${PSQL} -c "GRANT pg_monitor TO \"$${EXPORTER_USER}\""
+
+        # Verify karo ki role sach me login kar sakta hai - warna exporter
+        # chupchap se `pg_up 0` dikhata rahega aur koi nahi samjhega ki kyun.
+        echo "verifying monitoring role can connect..."
+        PGPASSWORD="$${EXPORTER_PASSWORD}" psql -h postgres -U "$${EXPORTER_USER}" \
+          -d auth_service -tAc "SELECT 'ok'" | grep -q ok
+
+        echo "monitoring user ready"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
 
   # ==========================================================================
   # web (Next.js Frontend) - REMOVED FROM COMPOSE ON PURPOSE
@@ -639,6 +972,18 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+    # ---- Container health (see the note on `monitor` above for why) ----
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3002/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # Billing Service (Go)
   billing-service:
@@ -695,6 +1040,18 @@ services:
     depends_on:
       billing-service:
         condition: service_healthy
+    # ---- Container health (see the note on `monitor` above for why) ----
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3003/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # Admin Frontend (Next.js) - Port 3004
   admin:
@@ -711,6 +1068,18 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+    # ---- Container health (see the note on `monitor` above for why) ----
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3004/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
   # Analytics Frontend (Next.js) - Port 3005
   analytics:
@@ -727,13 +1096,25 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+    # ---- Container health (see the note on `monitor` above for why) ----
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3005/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
-  # Editor Frontend (Next.js) - Port 3006
 volumes:
   minio_data:
   postgres_data:
   redis_data:
   nats_data:
   prometheus_data:
+  grafana_data:
   alertmanager_data:
   billing_data:

@@ -40,6 +40,11 @@ func (h *AuthHandler) AvatarUploadURL(c *gin.Context) {
 		return
 	}
 
+	// Upload policy gate - BEFORE any URL is minted. See content_policy_gate.go.
+	if !h.requireContentUpload(c) {
+		return
+	}
+
 	var req struct {
 		Filename    string `json:"filename"`
 		ContentType string `json:"contentType"`
@@ -83,6 +88,13 @@ func (h *AuthHandler) AvatarFinalize(c *gin.Context) {
 	uid, ok := userIDFromToken(c)
 	if !ok {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	// Re-checked here, not just in step 1. A presigned URL stays valid for
+	// STORAGE_PRESIGN_TTL_MINUTES, so a user can mint one, flip the toggle
+	// off, and still finalize. Gating only step 1 leaves that window open.
+	if !h.requireContentUpload(c) {
 		return
 	}
 

@@ -325,6 +325,50 @@ export default function SecuritySetupGate({
     }
   }
 
+  // ---- Biometric skip (shared by both branches) ----
+  //
+  // Pehle ye logic inline sirf `!biometricSupported` button ke andar tha.
+  // Upar wale fix ke baad DONO branches me chahiye, aur duplicate karne se
+  // do jagah ka logic diverge hota - jo is bug ki asli wajah hai.
+  //
+  // NOTE: server ka status AUTHORITATIVE hai. Local optimistic update nahi
+  // karte - pichla bug wahi tha (frontend ne `biometric_registered: true`
+  // set kar diya jabki backend ke paas koi credential nahi tha).
+  async function skipBiometric() {
+    setError('');
+    setBusy(true);
+    try {
+      const res = await fetch(`${SECURITY_API}/biometric/skip`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        setError(err.error ?? 'Could not skip biometric setup.');
+        return;
+      }
+
+      const stRes = await fetch(`${SECURITY_API}/setup-status`, {
+        headers: authHeaders,
+        cache: 'no-store',
+      });
+      const final = await stRes.json().catch(() => ({}));
+      setStatus(final);
+
+      if (final.setup_complete) {
+        onComplete();
+      } else {
+        setError(
+          'Setup is still incomplete. Please review the earlier steps.'
+        );
+      }
+    } catch {
+      setError('Could not skip biometric setup. Please try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ---- Step 3 (LAST): Biometric ----
   async function registerBiometric() {
     setError('');
@@ -695,6 +739,48 @@ export default function SecuritySetupGate({
                       'Register biometric'
                     )}
                   </Button>
+
+                  {/* ---- ESCAPE HATCH: EVEN WHEN SUPPORT IS REPORTED ----
+                      Ye button pehle SIRF `!biometricSupported` branch me
+                      render hota tha. Usi wajah se kuch users PERMANENTLY
+                      gate me phanse rehte the:
+
+                        browser bolta hai  "biometrics available"  (capable=true)
+                        user ka sensor      chalta hi nahi, ya
+                        OS dialog           cancel ho jata hai, ya
+                        user ne             Touch ID face-enroll karna hi nahi kiya
+
+                      Tab `biometricSupported === true` hone ki wajah se
+                      skip button RENDER hi nahi hota tha. User ke paas
+                      koi raasta nahi bacha - gate par khada, dashboard
+                      tak pahunch nahi sakta, koi error bhi nahi dikhta.
+                      Ye wo loop hai jo report hua: har reload par wahi
+                      biometric step.
+
+                      Ab skip button DONO branches me hai. Support hone par
+                      bhi, secondary styling me - wo primary action nahi,
+                      par escape zaroor hai.
+
+                      SECURITY: skip karne se biometric ENROLL nahi hota.
+                      Backend `biometric/skip` sirf user ke decision ko
+                      persist karta hai (`security_profiles.biometric_opted_out`),
+                      aur completion rule use "satisfied" maanti hai. User
+                      ka PIN aur security questions phir bhi mandatory
+                      hain - isiliye account un-enrolled biometric ke saath
+                      bhi poori tarah protected rehta hai.
+
+                      Ye koi weakening nahi hai: pehle bhi skip ka raasta
+                      tha, bas wo sirf un devices par dikhta tha jahan
+                      support REPORT hi nahi hota tha - yaani asli problem
+                      wahi jagah thi jahan zaroorat thi. */}
+                  <button
+                    type="button"
+                    onClick={skipBiometric}
+                    disabled={busy}
+                    className="w-full text-center text-xs text-gray-500 underline underline-offset-2 transition-colors hover:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50"
+                  >
+                    {busy ? 'Skipping...' : "This isn't working — skip biometric"}
+                  </button>
                 </>
               ) : (
                 /* DEVICE SENSOR NAHI HAI - ALTERNATE RECOVERY PATH.
@@ -752,48 +838,8 @@ export default function SecuritySetupGate({
                       </p>
                     </div>
                   <Button
-                    onClick={async () => {
-                      // ---- EXPLICIT SKIP (biometric/skip) ----
-                      // Pehle yahan `biometric/complete` call hota tha, jo
-                      // sirf recompute karta tha - koi credential create
-                      // nahi karta. Capable device par isse bioCount=0
-                      // rehta tha, complete=false hota tha, aur user
-                      // dashboard <-> security-setup ke beech LOOP me
-                      // fas jata tha.
-                      //
-                      // Ab dedicated skip endpoint use karte hain jo user
-                      // ke decision ko PERSIST karta hai, aur completion
-                      // rule usko "satisfied" maanti hai.
-                      setBusy(true);
-                      try {
-                        const res = await fetch(`${SECURITY_API}/biometric/skip`, {
-                          method: 'POST',
-                          headers: authHeaders,
-                        });
-                        const payload = await res.json().catch(() => ({}));
-
-                        // Server ka ASLI status authoritative hai - local
-                        // optimistic update nahi karte (pichla bug wahi tha).
-                        const stRes = await fetch(`${SECURITY_API}/setup-status`, {
-                          headers: authHeaders,
-                          cache: 'no-store',
-                        });
-                        const final = await stRes.json().catch(() => ({}));
-                        setStatus(final);
-
-                        if (final.setup_complete) {
-                          onComplete();
-                        } else {
-                          setError(
-                            'Setup is still incomplete. Please review the earlier steps.'
-                          );
-                        }
-                      } catch {
-                        setError('Could not skip biometric setup. Please try again.');
-                      } finally {
-                        setBusy(false);
-                      }
-                    }}
+                    onClick={skipBiometric}
+                    disabled={busy}
                     className="h-11 w-full rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
                   >
                     {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue without biometric'}

@@ -122,7 +122,9 @@ func NewStorageService(cfg *config.StorageConfig) (*StorageService, error) {
 		return nil, fmt.Errorf("storage config is nil")
 	}
 	if cfg.AccessKey == "" || cfg.SecretKey == "" {
-		return nil, fmt.Errorf("storage credentials missing (MINIO_ACCESS_KEY / MINIO_SECRET_KEY)")
+		return nil, fmt.Errorf(
+			"storage credentials missing (STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY)",
+		)
 	}
 
 	creds := credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, "")
@@ -198,6 +200,34 @@ func NewStorageService(cfg *config.StorageConfig) (*StorageService, error) {
 // rehne chahiye kyunki unke paid/tiered hote hain.
 func (s *StorageService) EnsureBucket(ctx context.Context) error {
 	bucket := s.cfg.GetAvatarBucket()
+
+	// ---- Provisioning ownership check ----
+	//
+	// When STORAGE_MANAGE_BUCKET=false, bucket creation and bucket-policy
+	// are the `minio-init` container's job (it holds root). We still want to
+	// FAIL LOUDLY if the bucket genuinely does not exist, because an
+	// unexplained 403 on upload is far harder to debug than an explicit
+	// error here. ListBucket is inside our scoped policy, so this probe works
+	// without root.
+	if !s.cfg.ManageBucket {
+		exists, err := s.client.BucketExists(ctx, bucket)
+		if err != nil {
+			return fmt.Errorf(
+				"avatar bucket %q is not reachable with the configured credentials (%w). "+
+					"It is provisioned by the minio-init container - run `docker compose up minio-init`",
+				bucket, err,
+			)
+		}
+		if !exists {
+			return fmt.Errorf(
+				"avatar bucket %q does not exist. It is provisioned by the "+
+					"minio-init container - run `docker compose up minio-init`",
+				bucket,
+			)
+		}
+		return nil
+	}
+
 	exists, err := s.client.BucketExists(ctx, bucket)
 	if err != nil {
 		return err
@@ -232,6 +262,172 @@ func (s *StorageService) EnsureBucket(ctx context.Context) error {
 	return nil
 }
 
+// ============================================================================
+// SHARED IMAGE-UPLOAD PRIMITIVES  (Phase B1)
+// ============================================================================
+//
+// WHY THESE EXIST: avatar upload (pehle se kaam karta hai) aur channel cover
+// upload (naya) ke validation rules IDENTICAL hone chahiye. Ye code
+// SECURITY-CRITICAL hai - magic-byte check hi wo cheez hai jo `.html` file
+// ko `.png` naam se upload karne se rokta hai.
+//
+// Isliye do alag copies likhne ke bajaye EK implementation hai aur dono call
+// karte hain. Do copies me se ek update bhool jaaye to ek path silently
+// weaker ho jayega - aur wohi exact failure mode jo updatedtodo.md me
+// documented hai (green build, silent hole).
+//
+// Hinglish: security-critical logic ek jagar, do jagah nahi
+
+// validateImageUpload content-type aur extension dono validate karta hai.
+//
+// SECURITY CROSS-CHECK ZAROORI HAI: sirf content-type par bharosa karna risky
+// hai. Attacker `evil.html` ko `image/png` content-type ke saath bhej sakta
+// hai. Isliye extension bhi allowlist me hona chahiye AUR dono ek doosre se
+// MATCH karne chahiye.
+//
+// NOTE: ye SIRF client ke claim check karta hai. Client jhooth bol sakta hai -
+// asli verification `finalizeImageUpload` me MAGIC BYTES se hoti hai, jo bytes
+// par based hai aur jhooth nahi bol sakta.
+//
+// Return: (normalizedContentType, extensionWithDot, error)
+func validateImageUpload(filename, mimeType string) (string, string, error) {
+	// ---- 1. Content-type allowlist ----
+	normalized := strings.ToLower(strings.TrimSpace(mimeType))
+	// Browser kabhi kabhi "image/jpeg; charset=binary" bhej deta hai -
+	// `;` ke baad wala part hata do.
+	if idx := strings.Index(normalized, ";"); idx >= 0 {
+		normalized = strings.TrimSpace(normalized[:idx])
+	}
+	if !config.AllowedImageTypes[normalized] {
+		return "", "", fmt.Errorf(
+			"unsupported image type %q - allowed: png, jpeg, webp, gif",
+			mimeType,
+		)
+	}
+
+	// ---- 2. Extension cross-check ----
+	ext := strings.ToLower(filepath.Ext(filename))
+	expectedType, ok := config.AllowedImageExtensions[ext]
+	if !ok {
+		return "", "", fmt.Errorf(
+			"unsupported file extension %q - allowed: .png, .jpg, .jpeg, .webp, .gif",
+			ext,
+		)
+	}
+	if expectedType != normalized {
+		return "", "", fmt.Errorf(
+			"file extension (%s) does not match content type (%s)",
+			ext, normalized,
+		)
+	}
+
+	return normalized, ext, nil
+}
+
+// buildObjectKey ownership-namespaced, random object key banata hai.
+//
+// KEY = `{userID}/{random}{ext}`
+//   - userID: ownership prefix. Ye do kaam karta hai - finalize ke waqt
+//     ownership check (key ka prefix userID se hona chahiye) aur future me
+//     "is user ke saare objects list karo" ka scope.
+//   - random: har upload naya key, isliye cache-busting bhi ho jaata hai
+//     (same filename = browser cached old image dikha dega).
+//
+// KEY ME USER KA NAAM/EMAIL NAHI HOTA - sirf UUID. Isse PII public URL me
+// leak nahi hota.
+func buildObjectKey(userID uuid.UUID, ext string) (string, error) {
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s/%s%s", userID.String(), hex.EncodeToString(random), ext), nil
+}
+
+// publicObjectURL - browser-facing URL.
+//
+// NOTE: ye URL me credentials NAHI hote - sirf bucket + object key. Isliye ye
+// kisi ke saath share ki ja sakti hai (avatar/cover public dikhna chahiye),
+// bina koi secret leak kiye.
+func (s *StorageService) publicObjectURL(bucket, objectKey string) string {
+	scheme := map[bool]string{true: "s", false: ""}[s.cfg.UseSSL]
+	return fmt.Sprintf("http%s://%s/%s/%s", scheme, s.cfg.GetPublicHost(), bucket, objectKey)
+}
+
+// presignedPutURL - browser-facing presigned PUT URL.
+//
+// NOTE: `minio-go` v7.0.68 ka `PresignedPutObject` sirf 4 args leta hai
+// (ctx, bucket, key, expiry) - Content-Type signature me include nahi kar
+// sakta. Isliye content-type pehle signed nahi ho sakta, to client koi bhi
+// header bhej sakta hai. Ye gap `finalizeImageUpload` me band hota hai - wahan
+// ASLI bytes magic-number se verify hote hain aur content-type server-side
+// force hota hai. Yaani security claim pe nahi, ACTUAL CONTENT pe based hai -
+// jo STRONGER hai.
+//
+// NOTE: presignClient (public host) se generate karte hain, taaki URL
+// browser-purge reachable ho. Server-side operations `s.client` (internal host)
+// se rehte hain.
+func (s *StorageService) presignedPutURL(
+	ctx context.Context, bucket, objectKey string, ttl time.Duration,
+) (string, error) {
+	presigned, err := s.presignClient.PresignedPutObject(ctx, bucket, objectKey, ttl)
+	if err != nil {
+		return "", err
+	}
+	return presigned.String(), nil
+}
+
+// createImageUploadTicket - avatars aur covers dono ke liye shared presign flow.
+//
+// @param bucket       - target bucket
+// @param maxBytes     - size limit client ko batane ke liye (enforcement finalize me)
+// @param ensureBucket - bucket provisioning check chahiye ya nahi
+func (s *StorageService) createImageUploadTicket(
+	ctx context.Context,
+	userID uuid.UUID,
+	filename, mimeType string,
+	bucket string,
+	maxBytes int64,
+	ensureBucket bool,
+) (*UploadTicket, error) {
+	// ---- 1+2. Validation (client claims) ----
+	normalized, ext, err := validateImageUpload(filename, mimeType)
+	if err != nil {
+		return nil, err
+	}
+
+	// ---- 3. Bucket ensure ----
+	if ensureBucket {
+		if err := s.EnsureBucket(ctx); err != nil {
+			return nil, err
+		}
+	}
+
+	// ---- 4. Object key ----
+	// NOTE: bucket key ke andar NAHI hai, URL me alag se lagta hai. (Pehle
+	// dono the, jisse URL me double prefix aata tha: /avatars/avatars/...)
+	objectKey, err := buildObjectKey(userID, ext)
+	if err != nil {
+		return nil, err
+	}
+
+	// ---- 5. Presigned PUT (expiry limited) ----
+	ttl := time.Duration(s.cfg.GetPresignTTL()) * time.Minute
+	uploadURL, err := s.presignedPutURL(ctx, bucket, objectKey, ttl)
+	if err != nil {
+		return nil, err
+	}
+
+	return &UploadTicket{
+		ObjectKey:        objectKey,
+		UploadURL:        uploadURL,
+		PublicURL:        s.publicObjectURL(bucket, objectKey),
+		Method:           "PUT",
+		ExpiresInSeconds: int(ttl.Seconds()),
+		ContentType:      normalized,
+		MaxBytes:         maxBytes,
+	}, nil
+}
+
 // CreateAvatarUploadTicket presigned PUT URL banata hai.
 //
 // @param userID   - uploading user (ownership + key namespace)
@@ -242,111 +438,42 @@ func (s *StorageService) CreateAvatarUploadTicket(
 	userID uuid.UUID,
 	filename, mimeType string,
 ) (*UploadTicket, error) {
-	// ---- 1. Content-type allowlist ----
-	normalized := strings.ToLower(strings.TrimSpace(mimeType))
-	// Browser kabhi kabhi "image/jpeg; charset=binary" bhej deta hai -
-	// `;` ke baad wala part hata do.
-	if idx := strings.Index(normalized, ";"); idx >= 0 {
-		normalized = strings.TrimSpace(normalized[:idx])
-	}
-	if !config.AllowedImageTypes[normalized] {
-		return nil, fmt.Errorf(
-			"unsupported image type %q - allowed: png, jpeg, webp, gif",
-			mimeType,
-		)
-	}
-
-	// ---- 2. Extension cross-check ----
-	// Sirf content-type par bharosa karna risky hai: attacker
-	// `evil.html` ko `image/png` content-type ke saath bhej sakta hai.
-	// Isliye filename ka extension bhi allowlist me hona chahiye, AUR
-	// dono ek doosre se MATCH karne chahiye.
-	ext := strings.ToLower(filepath.Ext(filename))
-	expectedType, ok := config.AllowedImageExtensions[ext]
-	if !ok {
-		return nil, fmt.Errorf(
-			"unsupported file extension %q - allowed: .png, .jpg, .jpeg, .webp, .gif",
-			ext,
-		)
-	}
-	if expectedType != normalized {
-		return nil, fmt.Errorf(
-			"file extension (%s) does not match content type (%s)",
-			ext, normalized,
-		)
-	}
-
-	// ---- 3. Bucket ensure ----
-	if err := s.EnsureBucket(ctx); err != nil {
-		return nil, err
-	}
-
-	// ---- 4. Object key (user ID, koi user text nahi) ----
-	//
-	// KEY = `{userID}/{random}.{ext}`  (bucket NAHI - wo URL me alag se lagta hai)
-	//
-	// NOTE: pehle yahan bucket bhi tha (`avatars/{userID}/...`), jisse URL
-	// me DOUBLE prefix aa jata tha: `.../avatars/avatars/...`. Ab key ke
-	// andar sirf user namespace hai, aur bucket URL me ek baar lagta hai -
-	// dono jagah consistent.
-	random := make([]byte, 16)
-	if _, err := rand.Read(random); err != nil {
-		return nil, err
-	}
-	objectKey := fmt.Sprintf(
-		"%s/%s%s",
-		userID.String(),
-		hex.EncodeToString(random),
-		ext,
+	return s.createImageUploadTicket(
+		ctx, userID, filename, mimeType,
+		s.cfg.GetAvatarBucket(), config.MaxAvatarBytes, true,
 	)
+}
 
-	// ---- 5. Presigned PUT (expiry limited) ----
-	//
-	// NOTE: `minio-go` v7.0.68 ka `PresignedPutObject` sirf 4 args leta hai
-	// (ctx, bucket, key, expiry) - Content-Type signature me include nahi
-	// kar sakta. (Nayi versions me `PutObjectOptions` aata hai, lekin ye
-	// project me 7.0.49/7.0.68 cached hain - offline upgrade nahi hai.)
-	//
-	// ISKA MATLAB: content-type pehle signed nahi ho sakta, to client koi
-	// bhi header bhej sakta hai. Ye gap hum FINALIZE step me band karte hain
-	// (`FinalizeAvatarUpload`): wahan hum file ke ASLI bytes padh kar magic
-	// number se verify karte hain aur server-side Content-Type force karte
-	// hain. Yaani security claim pe nahi, actual content pe based hai -
-	// jo STRONGER hai.
-	ttl := time.Duration(s.cfg.GetPresignTTL()) * time.Minute
-	// NOTE: presignClient (public host) se generate karte hain, taaki URL
-	// browser-purge reachable ho. Server-side operations `s.client`
-	// (internal host) se rehte hain.
-	presigned, err := s.presignClient.PresignedPutObject(
-		ctx, s.cfg.GetAvatarBucket(), objectKey, ttl,
+// CreateCoverUploadTicket channel cover ke liye presigned PUT URL.
+//
+// Same security model as avatars (same validation, same magic-byte finalize,
+// same ownership-namespaced key) - sirf bucket aur size limit alag.
+//
+// @param userID   - uploading user (ownership prefix)
+// @param channelID - cover kis channel ka hai. Ye URL me NAHI aata
+//                   (PII/ID hygiene nahi chahiye), par ownership prefix
+//                   userID se banta hai, to finalize koi aur user ka cover
+//                   finalize nahi kar sakta.
+func (s *StorageService) CreateCoverUploadTicket(
+	ctx context.Context,
+	userID uuid.UUID,
+	filename, mimeType string,
+) (*UploadTicket, error) {
+	// NOTE: ensureBucket=false. Covers bucket `minio-init` banata hai (root ke
+	// saath), aur scoped account ke paas `s3:CreateBucket` jaan-boojh kar nahi
+	// hai. EnsureBucket ManageBucket=false hone par sirf EXISTS check karta
+	// hai jo ListBucket se chal jata hai - par yahan zaroorat hi nahi, kyunki
+	// upload ke waqt (createImageUploadTicket) bucket ka existence pehle se
+	// pata chal jayega finalize par.
+	return s.createImageUploadTicket(
+		ctx, userID, filename, mimeType,
+		s.cfg.GetCoverBucket(), config.MaxCoverBytes, false,
 	)
-	if err != nil {
-		return nil, err
-	}
+}
 
-	// ---- 6. Public URL ----
-	// NOTE: ye URL me credentials NAHI hote - sirf bucket + object key.
-	// Isliye ye kisi ke saath share ki ja sakti hai (jaise avatar public
-	// dikhna chahiye), bina koi secret leak kiye.
-	//
-	// Bucket path me EXPLICITLY lagta hai (objectKey me ab bucket nahi hai).
-	publicURL := fmt.Sprintf(
-		"http%s://%s/%s/%s",
-		map[bool]string{true: "s", false: ""}[s.cfg.UseSSL],
-		s.cfg.GetPublicHost(),
-		s.cfg.GetAvatarBucket(),
-		objectKey,
-	)
-
-	return &UploadTicket{
-		ObjectKey:        objectKey,
-		UploadURL:        presigned.String(),
-		PublicURL:        publicURL,
-		Method:           "PUT",
-		ExpiresInSeconds: int(ttl.Seconds()),
-		ContentType:      normalized,
-		MaxBytes:         config.MaxAvatarBytes,
-	}, nil
+// DeleteCover purana cover hatata hai (best effort).
+func (s *StorageService) DeleteCover(ctx context.Context, publicURL string) {
+	s.deleteObjectAtURL(ctx, publicURL, s.cfg.GetCoverBucket())
 }
 
 // DeleteAvatar object hatata hai (purana avatar replace karte waqt).
@@ -356,43 +483,54 @@ func (s *StorageService) CreateAvatarUploadTicket(
 // ek orphan file reh jayega, user ko koi dikhta nahi. Isliye delete failure
 // par user-facing action fail nahi karna chahiye.
 func (s *StorageService) DeleteAvatar(ctx context.Context, publicURL string) {
-	key := s.objectKeyFromURL(publicURL)
+	s.deleteObjectAtURL(ctx, publicURL, s.cfg.GetAvatarBucket())
+}
+
+// deleteObjectAtURL - public URL se object delete karta hai (best effort).
+//
+// SECURITY: `objectKeyFromURLInBucket` sirf un URLs ke liye kaam karta hai jo
+// humne KHUD banaye hain (apne public host + apne bucket me). Random user
+// input se key banana KABHI allowed nahi - warna koi doosre user ka object
+// delete kar sakta hai. Isliye bucket bhi verify hota hai, URL prefix ke andar.
+func (s *StorageService) deleteObjectAtURL(ctx context.Context, publicURL, bucket string) {
+	key := s.objectKeyFromURLInBucket(publicURL, bucket)
 	if key == "" {
 		return
 	}
-	_ = s.client.RemoveObject(ctx, s.cfg.GetAvatarBucket(), key, minio.RemoveObjectOptions{})
+	_ = s.client.RemoveObject(ctx, bucket, key, minio.RemoveObjectOptions{})
 }
 
-// FinalizeAvatarTicket - upload ke BAAD server-side verification + metadata fix.
+// finalizeImageUpload - upload ke BAAD server-side verification + metadata fix.
 //
 // Yahan hum ye 3 cheezein karte hain, aur yehi wajah hai ki content-type
 // presigned URL me sign na hota, fir bhi security tight rehti hai:
 //
 //  1. OBJECT EXIST karta hai? (browser ne sach me PUT kiya?)
-//  2. SIZE <= 5MB? (declared se zyada bada ho to reject)
+//  2. SIZE <= maxBytes? (over-limit object turant delete)
 //  3. MAGIC BYTES se asli file type verify - client ke claim par bharosa
 //     NAHI. Ek .html file ko "image/png" bhej kar presign lena POSSIBLE
 //     hai; magic bytes us pakad lete hain.
 //
-// Aur phir Content-Type ko SERVER-SIDE force karte hain (CopyObject se).
-// Iska matlab: chahe browser `text/html` bheje, object serve hote waqt
-// `image/png` hi rahega - stored XSS ka raasta band.
+// Aur phir Content-Type ko SERVER-SIDE force karte hain. Iska matlab: chahe
+// browser `text/html` bheje, object serve hote waqt `image/png` hi rahega -
+// stored XSS ka raasta band.
 //
-// SECURITY: ye step skip karna YAAR upload ko usable nahi banata, kyunki
-// public URL sirf tabhi profile me set hoti hai jab finalize success ho.
-func (s *StorageService) FinalizeAvatarUpload(
+// SECURITY: ye step skip karna upload ko usable nahi banata, kyunki public URL
+// sirf tabhi DB me save hoti hai jab finalize success ho.
+//
+// @param maxBytes - is bucket ki limit (avatars ke liye alag, covers ke liye alag)
+func (s *StorageService) finalizeImageUpload(
 	ctx context.Context,
 	userID uuid.UUID,
-	objectKey string,
+	objectKey, bucket string,
+	maxBytes int64,
 ) (string, error) {
-	bucket := s.cfg.GetAvatarBucket()
-
 	// ---- Object key ownership check ----
 	// SECURITY: key BAHAR se aata hai, to har form me validate karna zaroori.
 	// Isse koi user doosre ke namespace me object finalize nahi kar sakta.
 	//
-	// NOTE: key ab `{userID}/{rand}.ext` hai (bucket URL me alag hai), to
-	// prefix check `bucket/userID/` nahi, sirf `userID/` hona chahiye.
+	// NOTE: key `{userID}/{rand}.ext` hai (bucket URL me alag hai), to prefix
+	// check `bucket/userID/` nahi, sirf `userID/` hona chahiye.
 	if objectKey == "" || !strings.HasPrefix(objectKey, userID.String()+"/") {
 		return "", fmt.Errorf("object key does not belong to this user")
 	}
@@ -408,13 +546,13 @@ func (s *StorageService) FinalizeAvatarUpload(
 	}
 
 	// ---- 2. Size limit ----
-	if objInfo.Size > config.MaxAvatarBytes {
+	if objInfo.Size > maxBytes {
 		// Over-limit object turant delete karo taaki storage me garbage na bache
 		_ = s.client.RemoveObject(ctx, bucket, objectKey, minio.RemoveObjectOptions{})
 		return "", fmt.Errorf(
 			"file is too large (%.1f MB). Maximum is %d MB",
 			float64(objInfo.Size)/(1024*1024),
-			config.MaxAvatarBytes/(1024*1024),
+			maxBytes/(1024*1024),
 		)
 	}
 
@@ -471,14 +609,35 @@ func (s *StorageService) FinalizeAvatarUpload(
 		}
 	}
 
-	publicURL := fmt.Sprintf(
-		"http%s://%s/%s/%s",
-		map[bool]string{true: "s", false: ""}[s.cfg.UseSSL],
-		s.cfg.GetPublicHost(),
-		bucket,
-		objectKey,
+	return s.publicObjectURL(bucket, objectKey), nil
+}
+
+// FinalizeAvatarUpload - avatar upload ka server-side verification.
+func (s *StorageService) FinalizeAvatarUpload(
+	ctx context.Context,
+	userID uuid.UUID,
+	objectKey string,
+) (string, error) {
+	return s.finalizeImageUpload(
+		ctx, userID, objectKey,
+		s.cfg.GetAvatarBucket(), config.MaxAvatarBytes,
 	)
-	return publicURL, nil
+}
+
+// FinalizeCoverUpload - channel cover upload ka server-side verification.
+//
+// EXACTLY same security checks as avatars (existence, size, magic bytes,
+// content-type force) - sirf bucket aur size limit alag. Ye jaan-boojh kar
+// ek hi `finalizeImageUpload` call karta hai, taaki do code paths na banein.
+func (s *StorageService) FinalizeCoverUpload(
+	ctx context.Context,
+	userID uuid.UUID,
+	objectKey string,
+) (string, error) {
+	return s.finalizeImageUpload(
+		ctx, userID, objectKey,
+		s.cfg.GetCoverBucket(), config.MaxCoverBytes,
+	)
 }
 
 // sniffImageType magic bytes se image format detect karta hai.
@@ -521,13 +680,32 @@ func sniffImageType(header []byte) (string, bool) {
 	return "", false
 }
 
-// objectKeyFromURL public URL se object key nikalta hai.
+// objectKeyFromURL public URL se BARE object key nikalta hai (bucket ke bina).
+func (s *StorageService) objectKeyFromURL(publicURL string) string {
+	return s.objectKeyFromURLInBucket(publicURL, s.cfg.GetAvatarBucket())
+}
+
+// objectKeyFromURLInBucket - specific bucket ke liye URL parse karta hai.
 //
-// SECURITY: ye sirf un URLs ke liye hai jo humne KHUD banaye hain
+// SECURITY: ye sirf un URLs ke liye kaam karta hai jo humne KHUD banaye hain
 // (apne bucket me). Random user input se key banana KABHI allowed nahi -
 // warna koi doosre user ka object delete kar sakta hai.
-func (s *StorageService) objectKeyFromURL(publicURL string) string {
-	if publicURL == "" {
+//
+// ---- BUG THIS FIXES ----
+// Pehle ye `{bucket}/{userID}/{rand}.ext` RETURN karta tha (bucket prefix
+// strip nahi hota tha), aur `DeleteAvatar` usi key ko bucket ke saath use
+// karta tha:
+//
+//     RemoveObject(ctx, "avatars", "avatars/<uid>/<rand>.png")
+//                          ^^^^^^^^ double prefix
+//
+// Matlab avatar/cover delete HAMESHA se silent no-op tha - MinIO "no such
+// object" return karta aur error ignore ho jata tha. User ko koi dikhta nahi
+// (best-effort design sahi hai), par storage me har replaced image ka orphan
+// permanently jama hota raha. Ab bucket prefix strip hota hai, to key
+// `{userID}/{rand}.ext` hai aur delete actually kaam karta hai.
+func (s *StorageService) objectKeyFromURLInBucket(publicURL, bucket string) string {
+	if publicURL == "" || bucket == "" {
 		return ""
 	}
 	prefix := fmt.Sprintf(
@@ -538,13 +716,17 @@ func (s *StorageService) objectKeyFromURL(publicURL string) string {
 	if !strings.HasPrefix(publicURL, prefix) {
 		return ""
 	}
-	key := strings.TrimPrefix(publicURL, prefix)
-	// Extra safety: key hamare bucket ke andar hona chahiye
-	if !strings.HasPrefix(key, s.cfg.GetAvatarBucket()+"/") {
+
+	// Bucket prefix hatao - baaki me sirf `{userID}/{rand}.ext` bache.
+	rest := strings.TrimPrefix(publicURL, prefix)
+	bucketPrefix := bucket + "/"
+	if !strings.HasPrefix(rest, bucketPrefix) {
 		return ""
 	}
-	// `..` path traversal check
-	if strings.Contains(key, "..") {
+	key := strings.TrimPrefix(rest, bucketPrefix)
+
+	// Safety: key khali nahi, aur `..` path traversal nahi.
+	if key == "" || strings.Contains(key, "..") {
 		return ""
 	}
 	return key

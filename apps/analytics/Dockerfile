@@ -98,8 +98,27 @@ COPY pnpm-workspace.yaml ./
 COPY package.json ./
 COPY pnpm-lock.yaml ./
 
-# Copy analytics source code
-COPY apps/analytics ./apps/analytics
+  # Copy analytics source code
+  COPY apps/analytics ./apps/analytics
+
+  # ---- Restore the app's own node_modules ----
+  #
+  # `COPY apps/analytics ./apps/analytics` REPLACES the whole directory,
+  # including the `node_modules` that `pnpm install` created in the deps stage.
+  #
+  # That is survivable for external dependencies (pnpm hoists them to the root
+  # `/app/node_modules`), but NOT for workspace links: pnpm keeps
+  # `wideo11-charts` and `@wideo11/ui` symlinked inside the app's own
+  # `node_modules`. Clobbering that directory makes the imports unresolvable
+  # and the build fails with:
+  #
+  #   Module not found: Can't resolve 'wideo11-charts'
+  #
+  # The error names resolution, not the COPY, so it reads like a missing
+  # dependency. Restoring node_modules AFTER the source copy fixes it. Order
+  # matters - source first, then node_modules.
+  COPY --from=deps /app/apps/analytics/node_modules ./apps/analytics/node_modules
+
 
 # Set working directory to the analytics app
 WORKDIR /app/apps/analytics

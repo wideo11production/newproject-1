@@ -187,6 +187,20 @@ func (s *AuthService) GetSettingsResponse(ctx context.Context, userID uuid.UUID)
 		EmailNotifications:   settings.EmailNotifications,
 	}
 
+	// ---- Effective upload capability (Phase B2) ----
+	//
+	// Toggle (intent) aur actual allowed state alag ho sakte hain - unverified
+	// ya inactive account ka toggle ON dikhta hai par upload allowed nahi.
+	// Frontend ko dono chahiye warna user ko bina samjhe 403 milega.
+	//
+	// NOTE: error par `resp` ke defaults (false / "") rehne dete hain. Ye
+	// FAIL-CLOSED hai - settings page dikhna zaroori hai, aur agar policy
+	// evaluate na ho payi to "allowed = false" hi dikhana safe hai.
+	if decision, dErr := s.IsContentUploadAllowed(ctx, userID); dErr == nil {
+		resp.ContentUploadAllowed = decision.Allowed
+		resp.ContentUploadReason = string(decision.Reason)
+	}
+
 	// Identity alag se - agar user row mile to bhar do, warna identity fields
 	// khali chhod do (settings phir bhi kaam karengi).
 	if user, uErr := s.userRepo.GetByID(ctx, userID); uErr == nil {

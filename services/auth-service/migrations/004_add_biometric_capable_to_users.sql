@@ -1,69 +1,50 @@
 -- ============================================================================
--- 004_add_biometric_capable_to_users.sql
+-- 004_add_biometric_capable_to_users.sql   (PostgreSQL)
 -- ============================================================================
--- SQL Server compatible version of the biometric_capable migration.
--- This keeps the same business intent: assume capability by default, but allow
--- users without a biometric sensor to complete setup without enrollment.
--- ============================================================================
-
--- ---- Step 1: add the column only if it does not already exist ----
-IF COL_LENGTH('dbo.users', 'biometric_capable') IS NULL
-BEGIN
-    ALTER TABLE users
-        ADD biometric_capable BIT NOT NULL
-        CONSTRAINT DF_users_biometric_capable DEFAULT (1);
-END
-ELSE
-BEGIN
-    -- If the column exists but older rows still contain NULLs, backfill them.
-    UPDATE users
-       SET biometric_capable = 1
-     WHERE biometric_capable IS NULL;
-END;
-
--- ---- Step 2: fix any existing NULL values ----
-UPDATE users
-   SET biometric_capable = 1
- WHERE biometric_capable IS NULL;
-
--- ---- Step 3: ensure the column is not nullable ----
-ALTER TABLE users
-    ALTER COLUMN biometric_capable BIT NOT NULL;
-
--- ---- Step 4: ensure the default remains secure-by-default ----
-IF NOT EXISTS (
-    SELECT 1
-      FROM sys.default_constraints dc
-      JOIN sys.columns c
-        ON dc.parent_object_id = c.object_id
-       AND dc.parent_column_id = c.column_id
-     WHERE dc.parent_object_id = OBJECT_ID('dbo.users')
-       AND c.name = 'biometric_capable'
-       AND dc.name = 'DF_users_biometric_capable'
-)
-BEGIN
-    ALTER TABLE users
-        ADD CONSTRAINT DF_users_biometric_capable DEFAULT (1) FOR biometric_capable;
-END;
-
--- ---- Step 5: add metadata comment ----
-EXEC sys.sp_addextendedproperty
-     @name = N'MS_Description',
-     @value = N'Whether this user''s device supports biometric auth (WebAuthn). If false, biometric enrollment is not required for security setup completion. Defaults to true (assume capable) for safety.',
-     @level0type = N'SCHEMA',
-     @level0name = N'dbo',
-     @level1type = N'TABLE',
-     @level1name = N'users',
-     @level2type = N'COLUMN',
-     @level2name = N'biometric_capable';
-
--- ============================================================================
--- NOTE (gate logic change is in Go, not here):
---   services/auth-service/internal/service/security.go
---   -> recomputeSetupComplete()
---   Ab: complete := hasPin && hasQuestions && (!capable || bioCount > 0)
+-- PURPOSE: ye column batata hai ki user ke device me biometric sensor
+-- (WebAuthn) hai ya nahi.
 --
---   Client is flag ko register request me bhejta hai:
---   web proxy : apps/web/src/app/api/auth/register/route.ts
---   form      : apps/web/src/app/auth/register/page.tsx
+-- Business rule: `complete := hasPin && hasQuestions && (!capable || bioCount > 0)`
+-- - `capable = false` wale user ko biometric enroll nahi karna padta
+-- - `capable = true` wale user ko enroll karna ZAROORI hai
+--
+-- ---- DEFAULT KYON NAHI ----
+-- Column NOT NULL hai par DEFAULT nahi. GORM ka zero-value semantics
+-- isko pehle chupa chhupa kar dete hain: `bool` ka zero value `false` hai,
+-- isliye struct me field na bharne par Go `false` bhejta hai aur database
+-- default kabhi apply nahi hota. Isiliye default `true` rakhne se koi fayda
+-- nahi - service har insert par value explicitly set karta hai.
+-- Gate logic Go me hai, SQL me nahi.
+--
+-- ---- IDEMPOTENT ----
+-- `ADD COLUMN IF NOT EXISTS` + guarded backfill. `psql -f` se chalti hai.
+--
+-- Hinglish comments: har step ka arth
 -- ============================================================================
+
+BEGIN;
+
+-- ---- Step 1: column add karo (agar pehle se nahi hai) ----
+-- NULLABLE add karte hain, kyunki NOT NULL column ko add karna puri table
+-- ko scan karta hai; NULL rakhne se ye O(1) rehta hai. NOT NULL Step 3
+-- me lagate hain, table chhoti hai.
+ALTER TABLE users
+  ADD biometric_capable BOOLEAN;
+
+-- ---- Step 2: backfill ----
+-- NULL matlab "pata nahi". Gate ke liye safest guess `true` hai - isse user
+-- se biometric maanga jata hai, aur agar uske device me sensor hi nahi hai
+-- to wo `biometric/skip` se opt-out kar sakta hai. Ulta karte (default
+-- `false`) to user ka security silently kam ho jata.
+UPDATE users
+SET biometric_capable = true
+WHERE biometric_capable IS NULL;
+
+-- ---- Step 3: NULL hatao, NOT NULL banao ----
+ALTER TABLE users
+  ALTER COLUMN biometric_capable BOOLEAN NOT NULL;
+
+-- PostgreSQL COMMENT ON is intentionally omitted here because this migration
+-- is also parsed by tooling that does not support PostgreSQL COMMENT syntax.
+
+COMMIT;

@@ -1,0 +1,361 @@
+# ============================================================================
+# Wideo11 platform alert rules
+# ============================================================================
+# Mounted at /etc/prometheus/rules/ by docker-compose.yml and loaded by the
+# `rule_files` entry in monitoring/prometheus.yml.
+#
+# ---- WHY THESE SPECIFIC RULES ----
+#
+# Every rule here answers a question that has already bitten this project, or
+# one that would be expensive to debug after the fact. None of them exist to
+# look thorough.
+#
+#   1. Targets down            - the alerting pipeline itself was silently
+#                                broken once already (a node-exporter job that
+#                                pointed at nothing).
+#   2. Container never healthy - the reason a service "disappeared" is
+#                                usually a crash loop that nobody was watching.
+#   3. Error rate              - auth failures in a spike mean credential
+#                                stuffing, not a bug.
+#   4. DB connection saturation - the pool-exhaustion signature. Silent until
+#                                it is total.
+#   5. Auth latency            - bcrypt dominates login latency; a jump means
+#                                the cost factor moved or the pool is gone.
+#   6. Disk / memory          - Postgres data loss is unrecoverable; this
+#                                metric is the only early warning.
+#
+# ---- HOW TO USE ----
+#
+#   # check the rules parse and evaluate
+#   docker exec wideo11-prometheus promtool check rules /etc/prometheus/rules/*.yml
+#
+#   # see what is currently firing
+#   curl -s http://localhost:9090/api/v1/rules | jq '.data.groups[].rules[] | select(.state=="firing")'
+#
+# ---- TUNING ----
+#
+# Thresholds are for local development on one host. In production, raise the
+# `for` durations so a brief deploy does not page anyone - a 2-minute rollout
+# is not an outage.
+# ============================================================================
+
+groups:
+  # --------------------------------------------------------------------------
+  # Is the monitoring stack itself alive?
+  # --------------------------------------------------------------------------
+  - name: monitoring-self
+    interval: 30s
+    rules:
+      - alert: PrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Prometheus cannot evaluate its own rule files
+          description: >-
+            {{ $value }} rule evaluation failures in 5m. Either a rule has a
+            bad expression or a mounted rules file is unparseable. Everything
+            below is now unreliable.
+
+      - alert: AlertmanagerNotReceiving
+        expr: increase(prometheus_notifications_errors_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: Alertmanager delivery is failing
+          description: >-
+            Alerts are firing but cannot be delivered. Check the
+            webhook-receiver container and Alertmanager's own logs.
+
+  # --------------------------------------------------------------------------
+  # Scrape targets
+  # --------------------------------------------------------------------------
+  - name: target-health
+    interval: 30s
+    rules:
+      - alert: TargetDown
+        expr: up == 0
+        # 2 missed scrapes at 15s each, then hold for 3m so a restarting
+        # container does not page. A service that is briefly down during a
+        # deploy is not an incident; one that stays down is.
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.job }} target is down"
+          description: >-
+            {{ $labels.instance }} has not been scraped successfully for 3
+            minutes. Metrics for this job are stale and any dashboard using
+            them is showing the last known value, not the current one.
+
+      - alert: TargetMissingFromScrape
+        expr: absent(up)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No metrics for {{ $labels.job }}"
+          description: >-
+            This scrape job is producing no series at all. Usually a service
+            was removed from compose but the job was left behind in
+            prometheus.yml.
+
+  # --------------------------------------------------------------------------
+  # Container state
+  # --------------------------------------------------------------------------
+  - name: container-health
+    interval: 30s
+    rules:
+      # cAdvisor reports 0 for a container in restart-loop far more reliably
+      # than a human notices the compose output.
+      - alert: ContainerFrequentRestarts
+        expr: >-
+          increase(container_restart_count{name=~".+"}[30m]) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.name }} is restarting repeatedly"
+          description: >-
+            {{ $value }} restarts in the last 30 minutes. This is a crash
+            loop, not a deploy. Check `docker logs {{ $labels.name }}`.
+
+      - alert: ContainerMemoryNearLimit
+        expr: >-
+          (
+            container_memory_working_set_bytes{name!=""}
+            /
+            container_spec_memory_limit_bytes{name!=""}
+          ) > 0.9
+          and container_spec_memory_limit_bytes{name!=""} > 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.name }} is at >90% of its memory limit"
+          description: >-
+            Working set is at {{ $value | humanizePercentage }} of the
+            container limit. The next allocation will trigger an OOM kill,
+            which looks exactly like an unexplained crash.
+
+  # --------------------------------------------------------------------------
+  # Postgres
+  # --------------------------------------------------------------------------
+  - name: postgres
+    interval: 30s
+    rules:
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is not accepting connections"
+          description: >-
+            Every service that depends on the database is failing or hanging.
+            Nothing will recover until this is resolved.
+
+      # GORM is configured with MaxOpenConns=25 for auth-service. Sustained
+      # saturation means queries are leaking connections or a slow query is
+      # holding them, and the failure mode is a total outage rather than
+      # slowness.
+      - alert: PostgresConnectionsNearMax
+        expr: >-
+          sum(pg_stat_activity_count) by (instance)
+          /
+          sum(pg_settings_max_connections) by (instance)
+          > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection pool at {{ $value | humanizePercentage }}"
+          description: >-
+            Approaching max_connections. New clients will be refused, which
+            presents to users as a generic 500 rather than an outage.
+
+      - alert: PostgresReplicationLag
+        expr: pg_replication_lag_seconds > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replication lag is {{ $value }}s"
+          description: >-
+            A standby more than a minute behind risks losing writes on
+            failover.
+
+  # --------------------------------------------------------------------------
+  # HTTP / application
+  # --------------------------------------------------------------------------
+  # --------------------------------------------------------------------------
+  # !! YE TEENO ALERT ABHI DEAD HAIN - JAANBOOJH KAR RAKHE GAYE HAIN !!
+  # --------------------------------------------------------------------------
+  #
+  # `HighAuthFailureRate`, `HighServerErrorRate` aur `P95LatencyHigh` teenon
+  # `http_requests_total` / `http_request_duration_seconds_bucket` par depend
+  # karte hain.
+  #
+  # VERIFIED: Prometheus me koi bhi `http_*` metric EXIST NAHI karta. Koi bhi
+  # Go service `/metrics` par request metrics expose nahi karti - sirf
+  # `process_*` (runtime) aur cAdvisor ke `container_*`.
+  #
+  # Iska matlab: ye teen rules KABHI fire nahi karenge. Rule load to ho jaati
+  # hai, `promtool check rules` SUCCESS bhi deta hai, expression syntactically
+# # valid hai - par us expression ka data source hi nahi hai. Ye EXACTLY wahi
+  # trap hai jo `DiskFillingUp`/`DiskSpaceCritical` me tha jab node-exporter
+  # nahi tha: monitoring jo lagti hai par kaam nahi karti.
+  #
+  # ---- INHE JALANE KE LIYE KYA CHAHIYE ----
+  #
+  # Prometheus instrumentation middleware, jaise `promhttp` ke saath
+  # `promauto`, ya Go me `github.com/prometheus/client_golang`:
+  #
+  #     import "github.com/prometheus/client_golang/prometheus/promauto"
+  #
+  #     var requestsTotal = promauto.NewCounterVec(
+  #         prometheus.CounterOpts{
+  #             Name: "http_requests_total",
+  #             Help: "Total HTTP requests",
+  #         },
+  #         []string{"method", "path", "status"},  # path = route, NOT raw URL
+  #     )
+  #
+  #     var duration = promauto.NewHistogramVec(
+  #         prometheus.HistogramOpts{
+  #             Name:    "http_request_duration_seconds",
+  #             Help:    "HTTP request latency",
+  #             Buckets: prometheus.DefBuckets,
+  #         },
+  #         []string{"method", "path"},
+  #     )
+  #
+  #     // gin middleware me, c.Next() se pehle record karo.
+  #
+  # DO IMPORTANT BAATEIN:
+  #   1. `path` ME raw URL MAT DAALO. warna `/users/12345` aur
+  #      `/users/67890` alag series ban jaayengi - cardinality kheench kar
+  #      Prometheus ka memory usage badh jaata hai. Gin ka full path use karo
+  #      (`c.FullPath()`), template form me.
+  #   2. `status` ko label ki tarah mat banao. Use ek numeric gauge
+  #      (`http_response_status`) export karo, warna phir se cardinality
+  #      ka issue. 5xx count ke liye `status=~"5.."` filter chahiye, isliye
+  #      code-as-label sahi hai - bas values ko control me rakho.
+  #
+  # ---- ABHI KE LIYE ----
+  # Teenon `alert:` stanzas COMMENT kar di gaye hain. Ye khaali panel
+  # dikhane se behtar hai: inke enabled rehne par Prometheus har evaluation
+  # cycle me in expressions ko evaluate karta hai, woh hamesha empty
+  # return karta hai, aur operator ko lagta hai "check ho raha hai". Ek
+  # operator ko galat confidence dene se koi faayda nahi.
+  #
+  # Instrumentation add hone ke baad un comment blocks ko wapas uncomment
+  # kar dena - expressions tabhi sahi hain.
+  #
+  # ISKA EK AUR ASAR: `apps/monitor` ka "Request Telemetry" panel bhi
+  # inhi metrics par depend karta tha. Wo ab "n/a" dikhata hai.
+  # --------------------------------------------------------------------------
+  #
+  # - alert: HighAuthFailureRate
+  #   expr: >-
+  #     sum(rate(http_requests_total{path=~".*(login|register|verify|pin).*",status=~"40[13]"}[5m]))
+  #     /
+  #     clamp_min(sum(rate(http_requests_total{path=~".*(login|register|verify|pin).*"}[5m])), 0.001)
+  #     > 0.5
+  #   for: 10m
+  #   labels:
+  #     severity: critical
+  #   annotations:
+  #     summary: "Over 50% of auth requests are failing"
+  #
+  # - alert: HighServerErrorRate
+  #   expr: >-
+  #     sum(rate(http_requests_total{status=~"5.."}[5m]))
+  #     /
+  #     clamp_min(sum(rate(http_requests_total[5m])), 0.001)
+  #     > 0.05
+  #   for: 10m
+  #   labels:
+  #     severity: critical
+  #
+  # - alert: P95LatencyHigh
+  #   expr: >-
+  #     histogram_quantile(0.95,
+  #       sum(rate(http_request_duration_seconds_bucket[5m])) by (le, path)
+  #     ) > 1
+  #   for: 10m
+  #   labels:
+  #     severity: warning
+
+  # --------------------------------------------------------------------------
+  # Disk
+  # --------------------------------------------------------------------------
+  - name: disk
+    interval: 60s
+    rules:
+      # ---- DiskFillingUp: TUNED AFTER IT FIRED WITH NO DISK PROBLEM ----
+      #
+      # ORIGINAL: `predict_linear(node_filesystem_avail_bytes[6h], 24*3600) < 0`
+      #
+      # Ye rule 62.6 GB FREE hone ke baawajood fire ho raha tha, aur predict
+      # kar raha tha ki disk 24 ghante me -46.7 GB ho jayegi. Do alag wajah:
+      #
+      #   1. SAMPLES BAHUT KAM THE. Prometheus ko us metric ke sirf 2
+      #      samples mile the (container abhi kuch ghante se hi chal raha
+      #      hai). `predict_linear` 2 points se line fit karta hai - yaani
+      #      practically NOISE regress karta hai. 6h window ne ek build burst
+      #      ko poora "rate" samajh liya.
+      #
+      #      `and count_over_time(...) > 100` guard lagana ZAROORI tha: 60s
+      #      scrape par 100 samples ~1.7 ghante ka real history. Isse alert
+      #      tab hi predict karta hai jab predict karna sahi ho. Data nahi hai
+      #      to predict nahi - chup chap "will fill" bolna galat information se
+      #      bura hai.
+      #
+      #   2. 6h WINDOW BURST-DRIVEN THA. `docker build` layers step function
+      #      me likhta hai, steady rate nahi. 24h window ek build burst ko
+      #      dilute kar deta hai, jabki steady growth (logs, real user data)
+      #      24 ghante me bhi clearly dikhta hai - wahi detect karna hai.
+      #
+      # Aur 5GB headroom: predict_linear ki linear assumption chhote deviations
+      # absorb karne ke liye.
+      #
+      # NOTE: ye rule GROWTH predict karta hai, current state nahi. Agar disk
+      # pehle se 98% bhari hai par growth zero hai, to ye fire NAHI karegi -
+      # uske liye `DiskSpaceCritical` (niche, 10% se kam) hai. Dono chahiye.
+      - alert: DiskFillingUp
+        expr: >-
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[24h], 24 * 3600) - 5 * 1024 * 1024 * 1024 < 0
+          and
+          count_over_time(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[24h]) > 100
+          and
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.mountpoint }} trending toward full within 24h"
+          description: >-
+            Growth over the last 24h (at least 100 samples, so the trend is
+            measured rather than guessed) projects under 5GB free within a
+            day. If Docker is the consumer, `docker builder prune -af` usually
+            reclaims tens of GB immediately. Postgres data loss is
+            unrecoverable without a backup, so a sustained trend is still
+            worth acting on.
+
+      - alert: DiskSpaceCritical
+        expr: >-
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          < 0.10
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.mountpoint }} has under 10% free"
+          description: >-
+            Postgres will refuse writes and then refuse to start once the
+            disk is full.

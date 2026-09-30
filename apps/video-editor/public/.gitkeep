@@ -1,0 +1,19 @@
+<!--
+  This file exists so the directory survives in git.
+
+  `apps/video-editor/Dockerfile` line ~149 has:
+
+      COPY --from=builder /app/apps/video-editor/public ./public
+
+  A `COPY` of a path that does not exist is a HARD BUILD FAILURE, and this
+  directory did not exist - so any uncached build of video-editor failed with:
+
+      "/app/apps/video-editor/public": not found
+
+  The failure was invisible for a long time purely because the build was
+  cached. The running container was months old, so nobody re-ran the build
+  without a cache miss and nobody saw it. This is the same failure mode as
+  everything else in this app: a cached artifact hiding a broken instruction.
+
+  An empty directory would not be committed, so .gitkeep holds the path.
+-->

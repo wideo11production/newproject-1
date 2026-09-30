@@ -1,132 +1,68 @@
 'use client';
 
-import { DollarSign, TrendingUp, CreditCard, Coins, BarChart3 } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
-import { ScrollArea } from '@wideo11/ui/scroll-area';
+// Revenue.
+//
+// ---- WHAT THIS USED TO BE ----
+//
+// A `RevenueTracker` that rendered currency figures: MRR, ARPU, payout totals,
+// a "top earners" table. It had no data source at all.
+//
+// Money is the one category where a plausible-looking invented number does the
+// most damage, because it is the number people make decisions on. A dashboard
+// showing $45.2K that no one can reconcile against a ledger is worse than an
+// empty panel: it will end up in a deck.
+//
+// ---- WHAT REPLACED IT ----
+//
+// Nothing numeric. The billing service exists (port 3003) and owns the ledger,
+// but this app has no route to it and the schema here has no revenue column.
+// Rather than invent a substitute, the panel states plainly where the number
+// lives and why it is absent.
+//
+// That is the honest version of this panel. When a revenue endpoint is wired up,
+// the numbers go here - the structure is ready for it.
 
-interface RevenueData {
-  date: string;
-  ads: number;
-  subscriptions: number;
-  sponsorships: number;
-  merchandise: number;
-  total: number;
-}
+import { ExternalLink } from 'lucide-react';
+import { Panel } from './ui';
+import type { AnalyticsState } from './use-analytics';
 
-const revenueData: RevenueData[] = [
-  { date: 'Jan 1', ads: 1200, subscriptions: 800, sponsorships: 500, merchandise: 200, total: 2700 },
-  { date: 'Jan 8', ads: 1350, subscriptions: 850, sponsorships: 600, merchandise: 250, total: 3050 },
-  { date: 'Jan 15', ads: 1100, subscriptions: 900, sponsorships: 450, merchandise: 180, total: 2630 },
-  { date: 'Jan 22', ads: 1400, subscriptions: 950, sponsorships: 700, merchandise: 300, total: 3350 },
-  { date: 'Jan 29', ads: 1250, subscriptions: 880, sponsorships: 550, merchandise: 220, total: 2900 },
-  { date: 'Feb 5', ads: 1500, subscriptions: 1000, sponsorships: 800, merchandise: 350, total: 3650 },
-  { date: 'Feb 12', ads: 1300, subscriptions: 920, sponsorships: 650, merchandise: 280, total: 3150 },
-  { date: 'Feb 19', ads: 1150, subscriptions: 870, sponsorships: 400, merchandise: 200, total: 2620 },
-  { date: 'Feb 26', ads: 1450, subscriptions: 980, sponsorships: 750, merchandise: 320, total: 3500 },
-  { date: 'Mar 5', ads: 1380, subscriptions: 950, sponsorships: 680, merchandise: 290, total: 3300 },
-  { date: 'Mar 12', ads: 1520, subscriptions: 1020, sponsorships: 820, merchandise: 380, total: 3740 },
-  { date: 'Mar 19', ads: 1280, subscriptions: 900, sponsorships: 600, merchandise: 260, total: 3040 },
-];
-
-const revenueSources = [
-  { name: 'Ad Revenue', key: 'ads', color: 'text-blue-400', total: revenueData.reduce((sum, d) => sum + d.ads, 0) },
-  { name: 'Subscriptions', key: 'subscriptions', color: 'text-green-400', total: revenueData.reduce((sum, d) => sum + d.subscriptions, 0) },
-  { name: 'Sponsorships', key: 'sponsorships', color: 'text-purple-400', total: revenueData.reduce((sum, d) => sum + d.sponsorships, 0) },
-  { name: 'Merchandise', key: 'merchandise', color: 'text-orange-400', total: revenueData.reduce((sum, d) => sum + d.merchandise, 0) },
-];
-
-export function RevenueTracker() {
-  const grandTotal = revenueData.reduce((sum, d) => sum + d.total, 0);
-  const avgDaily = Math.round(grandTotal / revenueData.length);
+export function RevenueTracker({ state }: { state: AnalyticsState }) {
+  const { data } = state;
+  const verified = data?.overview.totalVerified ?? 0;
 
   return (
-    <Card className="analytics-panel h-full">
-      <CardHeader className="analytics-panel-header">
-        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-          <DollarSign className="h-5 w-5" />
-          Revenue Tracker
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="analytics-panel-content">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <Card className="bg-card border-border p-4 text-center">
-            <DollarSign className="h-8 w-8 mx-auto text-yellow-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">${grandTotal.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Total Revenue</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <TrendingUp className="h-8 w-8 mx-auto text-green-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">${avgDaily.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Avg Daily</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <CreditCard className="h-8 w-8 mx-auto text-blue-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">${revenueSources[0].total.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Ad Revenue</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <Coins className="h-8 w-8 mx-auto text-purple-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">${revenueSources[1].total.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Subscriptions</div>
-          </Card>
-          <Card className="bg-card border-border p-4 text-center">
-            <BarChart3 className="h-8 w-8 mx-auto text-orange-400 mb-2" />
-            <div className="text-2xl font-bold text-foreground">${revenueSources[2].total.toLocaleString()}</div>
-            <div className="text-xs text-muted-foreground">Sponsorships</div>
-          </Card>
-        </div>
+    <Panel
+      title="Revenue"
+      note="Deliberately shows no figures. See the note below."
+    >
+      <div className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded border border-dashed border-gray-800 p-4 text-center">
+        <span className="text-sm text-gray-400">not available on this app</span>
+        <p className="max-w-[52ch] text-[11px] leading-relaxed text-gray-600">
+          Revenue is owned by the billing service, not by this analytics app, and there is no
+          route from here to it. The previous version of this panel rendered MRR, ARPU and payout
+          totals as hardcoded literals.
+        </p>
+        <p className="max-w-[52ch] text-[11px] leading-relaxed text-gray-600">
+          Those were not read from a ledger. Any number shown here would have to come from the
+          billing service, so none is shown.
+        </p>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">Revenue by Source</h4>
-            <div className="space-y-3">
-              {revenueSources.map((source) => (
-                <div key={source.key} className="flex items-center gap-3">
-                  <span className={`w-3 h-3 rounded ${source.color}`}></span>
-                  <span className="text-sm text-foreground flex-1">{source.name}</span>
-                  <span className="text-sm font-semibold text-foreground">${source.total.toLocaleString()}</span>
-                  <div className="w-32 h-2 bg-muted rounded overflow-hidden">
-                    <div 
-                      className="h-full bg-primary rounded" 
-                      style={{ width: `${(source.total / grandTotal) * 100}%` }}
-                    ></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">Daily Revenue Trend</h4>
-            <ScrollArea className="h-[250px]">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-muted-foreground">
-                    <th className="pb-2 px-2">Date</th>
-                    <th className="pb-2 px-2 text-right">Ads</th>
-                    <th className="pb-2 px-2 text-right">Subs</th>
-                    <th className="pb-2 px-2 text-right">Sponsor</th>
-                    <th className="pb-2 px-2 text-right">Merch</th>
-                    <th className="pb-2 px-2 text-right font-bold">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {revenueData.map((row, i) => (
-                    <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
-                      <td className="py-2 px-2 text-foreground">{row.date}</td>
-                      <td className="py-2 px-2 text-right text-blue-400">${row.ads.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-green-400">${row.subscriptions.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-purple-400">${row.sponsorships.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right text-orange-400">${row.merchandise.toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right font-bold text-foreground">${row.total.toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollArea>
+      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-800 pt-3 text-[11px] text-gray-500">
+        <div>
+          <div className="text-gray-400">Where the ledger lives</div>
+          <div className="mt-0.5 flex items-center gap-1">
+            <ExternalLink className="h-3 w-3" />
+            <span>billing-service · port 3003</span>
           </div>
         </div>
-      </CardContent>
-    </Card>
+        <div>
+          <div className="text-gray-400">Closest real signal here</div>
+          <div className="mt-0.5">
+            <span className="text-gray-300">{verified}</span> verified account{verified === 1 ? '' : 's'}
+          </div>
+        </div>
+      </div>
+    </Panel>
   );
 }

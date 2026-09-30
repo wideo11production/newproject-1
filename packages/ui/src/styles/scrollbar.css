@@ -1,0 +1,89 @@
+/* ============================================================================
+ * Ultra-thin scrollbars - project-wide
+ * ============================================================================
+ *
+ * REQUEST: scrollbar "pencil line" jaisa patla - 1-2px, jitna patla ho sake.
+ *
+ * Ye file SHARED hai. Har app me copy-paste nahi ki gayi, kyunki teen
+ * jagah teen alag width hone se design drift hoti hai - koi app update
+ * bhool jaata hai aur UI me ek mota scrollbar aa jata hai. Isko
+ * `@wideo11/ui` se import kiya gaya hai, isliye ek jagah fix = sab jagah fix.
+ *
+ * ---- BROWSER SUPPORT: YE PARTIALLY HONEST HAI ----
+ *
+ * Chromium (Chrome, Edge, Opera, Brave) aur Safari me `::-webkit-scrollbar`
+ * pseudo-elements allow karte hain, aur wahan EXACT 1-2px mil sakta hai.
+ *
+ * Firefox me ye pseudo-elements nahi hain. Firefox ka native minimum
+ * `scrollbar-width: thin` hai, jo ~8-11px deta hai - 1px nahi. Firefox ko
+ * 1px dene ka koi standard tareeka nahi hai; sirf extension ya JS
+ * measurement se possible hai, dono is scope se bahar hain.
+ *
+ * Isliye: Chromium pe pencil-thin milega, Firefox pe Firefox ka `thin`.
+ * Browser chhupane se behtar ye hai ki user ko pata ho.
+ *
+ * ---- WHY `scrollbar-width: thin` IS SET ANYWAY ----
+ *
+ * Ye Firefox ke liye hai. Aur ye koi accident nahi: modern Chrome bhi
+ * ab `scrollbar-width`/`scrollbar-color` padhne lagta hai (Chrome 121+).
+ * Sirf `::-webkit-scrollbar` likhne se un versions me styling POORI tarah
+ * ignore ho jaati thi, kuch browsers me default scrollbar wapas aa jaata.
+ * Dono likhne se har browser me kuch to apply hota hai.
+ *
+ * Hinglish: Chromium me 1px, Firefox me ~8px (Firefox ka limit). Shared
+ *            file hai isliye har app me ek jaisa.
+ */
+
+/* ---- Firefox + modern Chrome (standard properties) ---- */
+html {
+  scrollbar-width: thin;
+  /* Slider ko panel background se halka rakhte hain, thumb se darker.
+     Contrast zaroori hai - bina iske 1px thumb invisible ho jayega. */
+  scrollbar-color: #4b5563 transparent;
+}
+
+/* ---- WebKit (Chromium, Safari) ---- */
+::-webkit-scrollbar {
+  /* 1px, not 2px. This is the thinnest a scrollbar can be and still be
+     clickable, which is the whole point of the request: present but out of
+     the way. Firefox cannot go below ~8px (see above), so Chromium and
+     Firefox differ here by design, not by accident. */
+  width: 1px;
+  height: 1px;
+}
+
+::-webkit-scrollbar-track {
+  /* Track invisible. A visible 1px column next to content reads as a
+     rendering seam rather than a scrollbar. */
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #4b5563; /* gray-600 */
+  border-radius: 9999px;
+}
+
+/* Track pe hover: thumb halka bright hota hai, taaki scrollable area
+   mil jaaye. Bina is signal ke 2px thumb dhoondhna mushkil hota hai. */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #6b7280; /* gray-500 */
+}
+
+/* Scrollbar ko 2px footprint se thoda bada hit area deta hai. Sirf 2px
+   clickable hota to ginna mushkil hota - ek `padding` se visual width
+   nahi badhti lekin clickable area badh jaata hai, kyunki thumb ke
+   margin hit region me count hota hai. */
+::-webkit-scrollbar-thumb:active {
+  background-color: #9ca3af; /* gray-400 */
+}
+
+/* Firefox: thumb ke liye, `scrollbar-color` se */
+::-moz-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 9999px;
+  border: none;
+}
+
+::-moz-scrollbar-track {
+  background: transparent;
+}

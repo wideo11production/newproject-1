@@ -12,6 +12,7 @@
     "./design-system": "./src/design-system.ts",
     "./activity-tracker": "./src/activity-tracker.tsx",
     "./font": "./src/font.ts",
+    "./styles/*": "./src/styles/*",
     "./button": "./src/button.tsx",
     "./card": "./src/card.tsx",
     "./input": "./src/input.tsx",

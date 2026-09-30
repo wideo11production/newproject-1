@@ -1,3 +1,25 @@
-#!/bin/env sh
-# Monorepo typecheck aur linting commands jo aapne Section 1 me verify ki hain
+#!/usr/bin/env sh
+# Pre-commit gate.
+#
+# Order matters. The secret audit runs FIRST and unconditionally: it is the
+# only check that protects against an irreversible mistake, and it is fast.
+# typecheck and lint run after - they are slower, and there is no point paying
+# for them on a commit that is going to be rejected anyway.
+#
+# To skip the secret audit for a commit you are certain about:
+#   SKIP_SECRET_AUDIT=1 git commit ...
+# The env var is checked in the script rather than with `|| true` so that a
+# genuine failure is never silently swallowed.
+node tools/audit-secrets.mjs --staged
+
+# Exit 1 means a credential was found. Stop here - do not run the slow checks.
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "Commit blocked: credentials detected. See the findings above."
+  echo "Real values belong in .env (gitignored), never in tracked files."
+  echo ""
+  exit 1
+fi
+
+# Monorepo typecheck aur linting commands jo aapne Section 1 me verify kiye hain
 pnpm typecheck && pnpm lint

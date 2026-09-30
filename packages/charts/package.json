@@ -2,7 +2,7 @@
   "name": "wideo11-charts",
   "version": "1.0.0",
   "description": "ECharts wrapper components (Grafana-like dashboards)",
-  "main": "src/index.ts",
+  "main": "src/index.tsx",
   "scripts": {
     "build": "tsc",
     "test": "jest"

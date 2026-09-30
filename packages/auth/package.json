@@ -1,24 +1,25 @@
 {
-  "name": "wideo11-auth",
-  "version": "1.0.0",
-  "description": "Authentication hooks, guards, and token management for Wideo11",
-  "main": "src/index.ts",
-  "scripts": {
-    "build": "tsc",
-    "test": "jest"
-  },
-  "dependencies": {
-    "aws-sdk": "catalog:",
-    "bcrypt": "^5.1.0",
-    "jose": "^5.9.3",
-    "jsonwebtoken": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:"
-  },
-  "devDependencies": {
-    "@types/aws-sdk": "catalog:",
-    "@types/bcrypt": "^5.0.0",
-    "@types/jsonwebtoken": "catalog:",
-    "typescript": "catalog:"
-  }
+    "name":  "wideo11-auth",
+    "version":  "1.0.0",
+    "description":  "Authentication hooks, guards, and token management for Wideo11",
+    "main":  "src/index.ts",
+    "scripts":  {
+                    "build":  "tsc",
+                    "test":  "jest"
+                },
+    "dependencies":  {
+                         "aws-sdk":  "catalog:",
+                         "bcrypt":  "^5.1.0",
+                         "jose":  "^5.9.3",
+                         "jsonwebtoken":  "catalog:",
+                         "react":  "catalog:",
+                         "react-dom":  "catalog:",
+                         "wideo11-api-client":  "workspace:*"
+                     },
+    "devDependencies":  {
+                            "@types/aws-sdk":  "catalog:",
+                            "@types/bcrypt":  "^5.0.0",
+                            "@types/jsonwebtoken":  "catalog:",
+                            "typescript":  "catalog:"
+                        }
 }
