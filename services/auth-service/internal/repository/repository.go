@@ -41,6 +41,17 @@ type SessionRepository interface {
 	Revoke(ctx context.Context, id uuid.UUID) error
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) error
+
+	// ---- Phase C7: hard delete ----
+	//
+	// `Revoke` sirf `revoked_at` set karta hai - row bani rehti hai, aur
+	// `DeleteExpired` use tabhi mitaega jab EXPIRY cross kare. Token ki TTL
+	// 24h+ hoti hai, matlab ek logout ke baad authentication material aaj
+	// bhi database me pada rahega.
+	//
+	// `HardDelete` row ko turant mita deta hai. Ye wahi "delete on logout"
+	// hai jo logout button ka seedha matlab hota hai.
+	HardDelete(ctx context.Context, id uuid.UUID) error
 }
 
 type DeviceRepository interface {
@@ -67,6 +78,14 @@ type RefreshTokenRepository interface {
 	Revoke(ctx context.Context, id uuid.UUID) error
 	RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error
 	DeleteExpired(ctx context.Context) error
+
+	// ---- Phase C7: device-scoped hard delete ----
+	//
+	// Ye do methods hi logout ko "sirf is device" banate hain. Pehle sirf
+	// `RevokeAllByUserID` tha, jo user ke SAARE devices ke tokens maar
+	// deta tha - ek phone se logout karna laptop bhi logout kar deta tha.
+	HardDeleteBySessionID(ctx context.Context, sessionID uuid.UUID) (int64, error)
+	CountActiveByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 }
 
 type userRepository struct {
@@ -210,6 +229,26 @@ func (r *sessionRepository) Revoke(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Model(&model.Session{}).Where("id = ?", id).Update("revoked_at", now).Error
 }
 
+// ---- Phase C7: hard delete ----
+//
+// Row TURANT mita di jati hai, `revoked_at` set karne ke bajaye.
+//
+// Kyun: `Revoke` ke baad row bani rehti hai aur `DeleteExpired` use tab
+// mitaega jab expires_at cross kare - jo 24h+ ho sakti hai. Matlab logout ke
+// baad bhi authentication material (token hash) database me pada rehta hai.
+// Delete karne se wo turant hat jaata hai.
+//
+// Ye logout ke liye use hota hai. Token REFRESH ke liye nahi - wahan row ki
+// zaroorat hai taaki rotation ka "purana token consume hua" record bana rahe
+// (reuse detection).
+func (r *sessionRepository) HardDelete(ctx context.Context, id uuid.UUID) error {
+	// `Unscoped()` zaroori hai: GORM default soft-delete karta hai, jo DELETE
+	// ko `UPDATE deleted_at = now()` bana deta hai. Matlab row DIKHATI to
+	// delete hoti, aur `sessions` table me token hash phir se pada rehta -
+	// yaani soft delete ka poora point hi miss ho jata.
+	return r.db.WithContext(ctx).Unscoped().Delete(&model.Session{}, "id = ?", id).Error
+}
+
 func (r *sessionRepository) RevokeAllByUserID(ctx context.Context, userID uuid.UUID) error {
 	now := time.Now()
 	return r.db.WithContext(ctx).Model(&model.Session{}).Where("user_id = ? AND revoked_at IS NULL", userID).Update("revoked_at", now).Error
@@ -347,4 +386,34 @@ func (r *refreshTokenRepository) RevokeAllByUserID(ctx context.Context, userID u
 
 func (r *refreshTokenRepository) DeleteExpired(ctx context.Context) error {
 	return r.db.WithContext(ctx).Where("expires_at < ?", time.Now()).Delete(&model.RefreshToken{}).Error
+}
+
+// ---- Phase C7: device-scoped hard delete ----
+//
+// `WHERE session_id = ?` - yaani SISI device ke tokens, user ke sab nahi.
+//
+// Ye wahi function hai jo `RevokeAllByUserID` ki jagah logout me lagegi.
+// Wo ek phone ke logout se laptop ka session bhi maar deti thi. Ye nahi
+// maarta, kyunki ab token ka session pata hai.
+//
+// `Unscoped()` zaroori: GORM soft-delete karta, jisse row DIKHATI to delete
+// hoti - matlab token hash database me chala jaata. Hard delete me wo hatna
+// chahiye.
+func (r *refreshTokenRepository) HardDeleteBySessionID(ctx context.Context, sessionID uuid.UUID) (int64, error) {
+	res := r.db.WithContext(ctx).Unscoped().
+		Where("session_id = ?", sessionID).
+		Delete(&model.RefreshToken{})
+	return res.RowsAffected, res.Error
+}
+
+// Kitne refresh tokens ABHI ZINDA hain - logout se PEHLE, taaki service layer
+// "maine kitne maare" report kar sake aur handler us number ko response me
+// de sake. Ye wahi number hai jo user ko confirm karta hai ki logout ne sirf
+// usi device ko chhoda, doosre chhede nahi.
+func (r *refreshTokenRepository) CountActiveByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Model(&model.RefreshToken{}).
+		Where("user_id = ? AND revoked_at IS NULL AND expires_at > ?", userID, time.Now()).
+		Count(&n).Error
+	return n, err
 }

@@ -337,24 +337,44 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
+// Logout: ek device ka token delete, aur kitni der laga.
+//
+// ---- RESPONSE ME KYA JATA HAI, AUR KYUN ----
+//
+// `deleted_refresh_tokens` aur `remaining_sessions` sirf decoration nahi hain.
+// Ye DO numbers batate hain ki logout ne SAARE devices to nahi maare:
+//
+//	remaining_sessions > 0  -> doosre device ZINDA hai (sahi)
+//	remaining_sessions == 0 -> har device logout (galat)
+//
+// Pehle yahan `RevokeAllByUserID` chalti thi, to ye number hamesha 0 hota
+// aur koi dekh hi nahi paata tha ki ek device ka logout poore account ko
+// maar raha hai. Ab number dikhta hai, to regression turant nazar aayegi.
 func (h *AuthHandler) Logout(c *gin.Context) {
-	accessToken := c.GetHeader("Authorization")
-	if accessToken == "" {
+	raw := c.GetHeader("Authorization")
+	if raw == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "missing authorization header"})
 		return
 	}
-
-	// Remove "Bearer " prefix if present
-	if len(accessToken) > 7 && accessToken[:7] == "Bearer " {
-		accessToken = accessToken[7:]
+	if len(raw) > 7 && raw[:7] == "Bearer " {
+		raw = raw[7:]
 	}
 
-	if err := h.authService.Logout(c.Request.Context(), accessToken); err != nil {
+	res, err := h.authService.Logout(c.Request.Context(), raw)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "logout failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":                "logged out successfully",
+		"deleted_session":        res.SessionDeleted,
+		"deleted_refresh_tokens": res.RefreshTokensDeleted,
+		"remaining_sessions":     res.OtherSessionsRemaining,
+		// Milliseconds, dbhi ke andar. User ko dikhta hai ki logout instant
+		// tha ya nahi - ek slow logout aksar ek hung connection hota hai.
+		"elapsed_ms": res.ElapsedMS,
+	})
 }
 
 func (h *AuthHandler) SetupPIN(c *gin.Context) {

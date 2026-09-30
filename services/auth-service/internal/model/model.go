@@ -152,7 +152,21 @@ type RefreshToken struct {
 	RevokedAt *time.Time `json:"revoked_at"`
 	CreatedAt time.Time  `json:"created_at"`
 
-	User User `gorm:"foreignKey:UserID" json:"-"`
+	// ---- Session scope (migration 013) ----
+	//
+	// Ye column hi logout ko device-precise banata hai. Pehle refresh token ke
+	// paas sirf user_id tha, to ye PATA hi nahi chalta tha ki wo kis session se
+	// hai - matlab "sirf is device ka token delete karo" database par likha
+	// hi nahi ja sakta tha, aur `RevokeAllByUserID` hi ek available option
+	// bacha tha. Wo user ke SAARE devices logout kar deti thi.
+	//
+	// NULLable hai: migration se pehle ke tokens me ye NULL hai, aur unhe
+	// turant set nahi kiya jaata. Un tokens ke liye behaviour aaj jaisa hi
+	// rehta hai - yaani gradual cutover, big bang nahi.
+	SessionID *uuid.UUID `gorm:"type:uuid;index" json:"session_id"`
+
+	User    User    `gorm:"foreignKey:UserID" json:"-"`
+	Session Session `gorm:"foreignKey:SessionID" json:"-"`
 }
 
 func (RefreshToken) TableName() string {

@@ -56,11 +56,14 @@ import {
   ChevronRight,
   Gauge,
   Timer,
+  MoveHorizontal,
+  Move,
   MonitorUp,
   ScanLine,
   FolderOpen,
 } from 'lucide-react';
 import { MenuBar, ToolbarGroup, type Menu } from './menu-bar';
+import { AuthNav } from './auth-nav';
 import { SUPPORTED_FPS } from '../../lib/engine/frames';
 
 /** The speeds offered. Real time first, because that is the only one most
@@ -122,6 +125,7 @@ export function EditorToolbar({
   markerCount,
   onClearMarkers,
   onMarkerStep,
+  onEdgeEdit,
   onFpsChange,
   fps,
   playbackRate,
@@ -171,6 +175,11 @@ export function EditorToolbar({
   onClearMarkers: () => void;
   /** -1 for the previous marker, +1 for the next. */
   onMarkerStep: (dir: -1 | 1) => void;
+  /** The three frame-accurate edge edits that have no single NLE gesture.
+   *  delta is in FRAMES, so +1 moves exactly one frame at any frame rate.
+   *  These exist as toolbar buttons as well as shortcuts, because a feature
+   *  reachable only from a chord is a feature most users never find. */
+  onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
   onFpsChange: (fps: number) => void;
   /** The rate the timeline is counting in. Changing it rescales the zoom so the
    *  timeline keeps the same apparent size in SECONDS. */
@@ -274,12 +283,30 @@ export function EditorToolbar({
     ],
     [
       {
-        id: 'undo', label: 'Undo', hint: 'Put back the last thing you removed or changed',
-        shortcut: 'Ctrl+Z', Icon: Undo2, onClick: onUndo, disabled: !canUndo,
+        id: 'rippletrim', label: 'Ripple trim', hint: 'Move the selected clip\'s out-edge one frame later and slide EVERYTHING after it left by the same amount, so no gap is left behind',
+        shortcut: 'Shift+Alt+→', Icon: MoveHorizontal, onClick: () => onEdgeEdit('ripple', 1), disabled: selectedCount !== 1,
       },
       {
-        id: 'redo', label: 'Redo', hint: 'Re-apply the change you just undid',
-        shortcut: 'Ctrl+Shift+Z', Icon: Redo2, onClick: onRedo, disabled: !canRedo,
+        id: 'rippletrim-back', label: 'Ripple trim back', hint: 'The same, one frame earlier',
+        shortcut: 'Shift+Alt+←', Icon: MoveHorizontal, onClick: () => onEdgeEdit('ripple', -1), disabled: selectedCount !== 1,
+      },
+      {
+        id: 'slide', label: 'Slide', hint: 'Move the selected clip between its neighbours, which grow and shrink to fill. Nothing outside the clip\'s neighbours moves',
+        shortcut: 'Alt+→', Icon: MoveHorizontal, onClick: () => onEdgeEdit('slide', 1), disabled: selectedCount !== 1,
+      },
+      {
+        id: 'slip', label: 'Slip', hint: 'Slide the SOURCE inside the clip without moving it: same position, same length, same neighbours, different frames of the file',
+        shortcut: 'Alt+Shift+→', Icon: Move, onClick: () => onEdgeEdit('slip', 1), disabled: selectedCount !== 1,
+      },
+    ],
+    [
+      {
+        id: 'prevmarker', label: 'Previous marker', hint: 'Jump to the marker before the playhead',
+        shortcut: ',', Icon: ChevronLeft, onClick: () => onMarkerStep(-1),
+      },
+      {
+        id: 'nextmarker', label: 'Next marker', hint: 'Jump to the marker after the playhead',
+        shortcut: '.', Icon: ChevronRight, onClick: () => onMarkerStep(1),
       },
     ],
     [
@@ -400,8 +427,18 @@ export function EditorToolbar({
       <div
         role="toolbar"
         aria-label="Editing tools"
-        className="flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-edge bg-surface-raised px-1.5"
-      >
+      className="flex h-10 shrink-0 items-center border-b border-edge bg-surface-raised"
+    >
+      {/*
+        Tool groups SCROLL hain (40+ buttons), session indicator NAHI.
+       
+        Pehle ye ek hi `overflow-x-auto` container tha, jisme AuthNav last
+        me tha - matbara content viewport se chhota ho to auth controls
+        viewport ke BAHAR chale jaate the aur user ko "logged in ya out"
+        dikhai hi nahi deta tha. Do region banaye: left scrollable, right
+        fixed.
+      */}
+      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto px-1.5">
         {groups.map((group, gi) => (
           <ToolbarGroup key={gi} title={group[0].label + ' tools'}>
             {group.map((b) => (
@@ -472,15 +509,32 @@ export function EditorToolbar({
           </label>
         </ToolbarGroup>
 
-        <span className="ml-2 shrink-0 truncate px-2 text-[10px] text-fg-secondary" title={projectName}>
-          {projectName}
-          <span className={dirty ? 'ml-1 text-amber-400' : 'ml-1 text-fg-muted'}>
-            {dirty ? '● unsaved' : savedAt ? '● saved' : '○ new'}
+      </div>
+        {/*
+          The right-hand group.
+
+          `ml-auto` + `shrink-0` EK SAATH nahi ho sakte jab toolbar
+          `overflow-x-auto` ho: content viewport se chhota ho to scroll hota
+          hai, aur `ml-auto` wale items viewport ke BAHAR chale jaate hain.
+          Isi liye auth controls ek alag `shrink-0` group me hain - unhe
+          kabhi scroll nahi hona chahiye, kyunki "main logged in hoon ya nahi"
+          ek aisi baat hai jo user ko HAMESHA dikhni chahiye.
+
+          Left side ko hi scroll hone diya jaata hai: aapne 40+ buttons open
+          kar liye to tools hat jaate hain, session indicator nahi.
+        */}
+        <div className="ml-3 flex shrink-0 items-center gap-2 border-l border-edge pl-3">
+          <span className="truncate text-[10px] text-fg-secondary" title={projectName}>
+            {projectName}
+            <span className={dirty ? 'ml-1 text-amber-400' : 'ml-1 text-fg-muted'}>
+              {dirty ? '● unsaved' : savedAt ? '● saved' : '○ new'}
+            </span>
           </span>
-        </span>
-        {savedAt ? (
-          <span className="ml-auto shrink-0 font-mono text-[10px] text-fg-muted">{new Date(savedAt).toLocaleTimeString()}</span>
-        ) : null}
+          {savedAt && (
+            <span className="font-mono text-[10px] text-fg-muted">{new Date(savedAt).toLocaleTimeString()}</span>
+          )}
+          <AuthNav />
+        </div>
       </div>
     </>
   );

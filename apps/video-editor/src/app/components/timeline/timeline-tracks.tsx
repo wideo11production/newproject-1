@@ -216,7 +216,12 @@ export function TrackHeaders({
                 const startY = e.clientY;
                 const startH = height;
                 const move = (ev: PointerEvent) => {
-                  onTrackHeight(track.id, Math.max(MIN_TRACK_HEIGHT, Math.min(MAX_TRACK_HEIGHT, startH + ev.clientY - startY)));
+                  // The handle sits on the header's TOP edge, so dragging it UP
+                  // grows the lane. A plain `startH + dy` would shrink it - which
+                  // feels like the lane is fighting you, and is invisible until
+                  // you notice the header is taller than the lane it labels.
+                  const next = startH - (ev.clientY - startY);
+                  onTrackHeight(track.id, Math.max(MIN_TRACK_HEIGHT, Math.min(MAX_TRACK_HEIGHT, next)));
                 };
                 const up = () => {
                   window.removeEventListener('pointermove', move);
@@ -381,8 +386,6 @@ export interface SnapOptionsProp {
   toTimelineEnds: boolean;
   thresholdPx: number;
   playheadFrame: number;
-  /** Announced to the user when something snapped. */
-  onSnap: (label: string | null) => void;
 }
 
 export function TimelineTracks({
@@ -472,6 +475,18 @@ export function TimelineTracks({
    * The threshold is converted from pixels to frames ONCE per drag, because it
    * is a distance on screen and the zoom is fixed for the duration of a gesture.
    */
+  /**
+   * Snap a candidate frame against every enabled target.
+   *
+   * Every dependency here is a PRIMITIVE or a stable callback, and that is
+   * deliberate. The trim and roll listeners attach once when the gesture starts
+   * and are torn down when it ends; if this callback were rebuilt on every
+   * render, each `pointermove` would tear the listener down and put it back,
+   * and the events arriving in that gap would be dropped. A trim that loses
+   * one pointermove in three looks exactly like a trim that stutters - and it
+   * does so only when snapping is on, which is the worst possible place for a
+   * bug that only appears when the feature is enabled.
+   */
   const snapTargets = useCallback((): SnapTarget[] => {
     if (!snapOptions.enabled) return [];
     return collectSnapTargets({
@@ -487,8 +502,24 @@ export function TimelineTracks({
       markers,
       transitions,
       durationFrames: totalFrames,
+      tracks,
     });
-  }, [snapOptions, fps, pxPerFrame, markers, transitions, totalFrames]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    fps,
+    snapOptions.enabled,
+    snapOptions.toPlayhead,
+    snapOptions.toClips,
+    snapOptions.toMarkers,
+    snapOptions.toTimelineEnds,
+    snapOptions.thresholdPx,
+    snapOptions.playheadFrame,
+    pxPerFrame,
+    markers,
+    transitions,
+    totalFrames,
+    tracks,
+  ]);
 
   const snapFrame = useCallback(
     (frame: number, edges: number[], excludeClipId: string | null) => {
@@ -524,19 +555,29 @@ export function TimelineTracks({
       if (!t) return;
       const deltaFrames = Math.round((e.clientX - t.startClientX) / pxPerFrame);
       if (t.edge === 'in') {
-        // The in-edge cannot pass the out-edge: the floor is the out point minus
-        // the minimum length, in FRAMES, which is the only place that bound is
-        // expressed correctly.
+        // The in-edge cannot pass the out-edge. The bound is expressed in
+        // FRAMES, which is the only place it is correct: in seconds the same
+        // bound is a different number at every frame rate.
         const maxShift = t.startLength - MIN_CLIP_FRAMES;
         const raw = Math.max(-t.startStartFrame, Math.min(deltaFrames, maxShift));
         const res = snapFrame(t.startStartFrame + raw, [t.startStartFrame + raw], t.clipId);
-        const next = Math.max(-t.startStartFrame, Math.min(res.frame - t.startStartFrame, maxShift));
-        onTrimClip(t.clipId, 'in', next);
+        // The snapper returns the corrected position; the shell wants the
+        // DELTA from where the edge started. Converting here rather than
+        // passing a correction is the difference between a trim that follows
+        // the pointer and a trim that only ever moves by the snapping error.
+        onTrimClip(t.clipId, 'in', res.frame - t.startStartFrame);
       } else {
-        const raw = Math.max(MIN_CLIP_FRAMES - t.startLength, deltaFrames);
-        const end = t.startStartFrame + t.startLength + raw;
+        // The out-edge. The raw frame delta is passed straight through and the
+        // SHELL clamps it, because only the shell knows the source file's real
+        // length - a clamp here could only guard against the minimum, and would
+        // silently let a clip grow past the end of its own footage.
+        const end = t.startStartFrame + t.startLength + deltaFrames;
         const res = snapFrame(end, [end], t.clipId);
-        onTrimClip(t.clipId, 'out', Math.max(MIN_CLIP_FRAMES, res.frame - (t.startStartFrame + t.startLength)));
+        // Measured from the ORIGINAL end, not from `end`. Passing
+        // `res.frame - end` would pass the snapping CORRECTION, which is zero
+        // on every drag that does not snap - which is to say, on almost all of
+        // them.
+        onTrimClip(t.clipId, 'out', res.frame - (t.startStartFrame + t.startLength));
       }
     };
     const up = () => {
@@ -661,10 +702,13 @@ export function TimelineTracks({
       // Both edges are offered to the snapper, because a user lining a clip up
       // with a playhead means whichever end happens to be nearer, and deciding
       // for them would make the gesture feel wrong half the time.
-      const startOnly = snapFrame(Math.max(0, raw), [Math.max(0, raw), Math.max(0, raw) + len], clip.id);
-      finalFrame = Math.max(0, startOnly.frame);
-      const snappedStart = startOnly.snappedEdges[0];
-      finalFrame = snappedStart;
+      //
+      // `snappedEdges[0]` is the START edge after snapping - when nothing
+      // snapped it is simply the candidate, which is what makes this correct
+      // both with and without a snap nearby.
+      const candidate = Math.max(0, raw);
+      const res = snapFrame(candidate, [candidate, candidate + len], clip.id);
+      finalFrame = Math.max(0, res.snappedEdges[0]);
 
       if (!started) {
         // A threshold before committing, so a plain click does not nudge the
@@ -963,7 +1007,12 @@ export function TimelineTracks({
                         onPointerDown={(e) => beginTrim(e, clip, 'in')}
                         title={`Trim start — frames ${startFrame} to ${startFrame}\nDrag, or Alt-drag to ripple everything after it.`}
                         className={[
-                          'absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize flex items-center justify-center',
+                          // z-45, ABOVE the transition badge's z-40. The two
+                          // both live on the boundary, and whichever is on top
+                          // wins the click - so the handle has to be, or a
+                          // transition makes the outgoing clip's trim handle
+                          // unreachable exactly where a user wants it.
+                          'absolute inset-y-0 left-0 z-45 w-2 cursor-ew-resize flex items-center justify-center',
                           selected ? 'opacity-100' : 'opacity-0 hover:opacity-100',
                           'transition-opacity',
                         ].join(' ')}
@@ -979,7 +1028,7 @@ export function TimelineTracks({
                           onPointerDown={(e) => beginTrim(e, clip, 'out')}
                           title={`Trim end — frames ${startFrame + lengthFrames} to ${startFrame + lengthFrames}\nDrag, or Alt-drag to ripple everything after it.`}
                           className={[
-                            'absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize flex items-center justify-center',
+                            'absolute inset-y-0 right-0 z-45 w-2 cursor-ew-resize flex items-center justify-center',
                             selected ? 'opacity-100' : 'opacity-0 hover:opacity-100',
                             'transition-opacity',
                           ].join(' ')}
@@ -1126,10 +1175,19 @@ export function TimelineTracks({
                     // z-40: a transition is the join BETWEEN two clips, so it
                     // has to read as sitting on top of both - and it matters
                     // most exactly when clips already overlap.
+                    //
+                    // The fill is OPAQUE, not a translucent amber. Over a clip
+                    // (which is always dark) a 40%-opacity amber reads as a
+                    // pale wash and the glyph inside it disappears.
                     'absolute top-1/2 z-40 flex -translate-y-1/2 items-center justify-center overflow-hidden rounded border',
-                    selected ? 'border-sky-300 bg-sky-500/60 ring-2 ring-sky-300' : 'border-amber-300/60 bg-amber-500/40 hover:bg-amber-500/60',
+                    selected
+                      ? 'border-sky-300 bg-sky-600 ring-2 ring-sky-300'
+                      : 'border-amber-300/70 bg-amber-500 hover:bg-amber-400',
                   ].join(' ')}
-                  style={{ left: Math.round(tr.atTime * fps) * pxPerFrame - 7, width: Math.max(w, 14), height: 22 }}
+                  // The badge SPANS the transition - it represents the overlap,
+                  // not the cut - so its centre is the middle of the blend and
+                  // its width is the overlap you will actually see.
+                  style={{ left: Math.round(tr.atTime * fps) * pxPerFrame, width: Math.max(w, 14), height: 22 }}
                 >
                   {selected && (
                     <>
@@ -1252,17 +1310,32 @@ const TRACK_STYLE: Record<
   TrackType,
   { chip: string; clip: string; border: string; Icon: typeof Film; label: string }
 > = {
-  video: { chip: 'bg-sky-500/15 text-sky-300', clip: 'bg-sky-500/25 border-sky-400/60', border: 'border-sky-500/30', Icon: Film, label: 'Video' },
-  audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-violet-500/25 border-violet-400/60', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
-  text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-amber-500/25 border-amber-400/60', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
-  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-emerald-500/25 border-emerald-400/60', border: 'border-emerald-500/30', Icon: ImageIcon, label: 'Image' },
+  // The clip fill comes from a TOKEN, not a translucent Tailwind colour, and
+  // that is the whole fix for unreadable clip names in light mode.
+  //
+  // `bg-sky-500/25` is 25% sky painted over whatever is behind it: dark in the
+  // dark theme, near-white in the light theme. The name is `text-white`. So the
+  // dark theme worked and the light theme lost every clip label, frame count and
+  // icon - and it looked like the light theme had simply not been styled.
+  //
+  // The tokens are defined in `:root` and deliberately NOT overridden in
+  // `.light`: a clip is MEDIA, not chrome. Resolve and Premiere both keep clips
+  // dark in a light UI for the same reason.
+  video: { chip: 'bg-sky-500/15 text-sky-300', clip: 'bg-[color:var(--ve-clip-video)] border-sky-400/60', border: 'border-sky-500/30', Icon: Film, label: 'Video' },
+  audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-[color:var(--ve-clip-audio)] border-violet-400/60', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
+  text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-[color:var(--ve-clip-text)] border-amber-400/60', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
+  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)] border-emerald-400/60', border: 'border-emerald-500/30', Icon: ImageIcon, label: 'Image' },
 };
 
-/** The clip / transition / marker count strip, below the lanes.
+/**
+ * The single status strip under the timeline.
  *
- *  Rendered by the shell rather than by the lanes so it can sit OUTSIDE the
- *  horizontal scroll: a readout that scrolls away with the timeline is a
- *  readout nobody reads. */
+ * There used to be TWO bars here: one from the lanes (clip and transition
+ * counts) and one below it (timecode, frame rate, project name). Two bars for
+ * one piece of information is a bar the user has to look past, and the second
+ * one cost 20px of timeline height for nothing. They are one strip now, with
+ * the counts on the right and the position on the left.
+ */
 export function TimelineFooter({
   currentFrame,
   duration,
@@ -1270,7 +1343,13 @@ export function TimelineFooter({
   tracks,
   transitions,
   markers,
-  renderedClips,
+  drawnClips,
+  selectedCount,
+  projectName,
+  dirty,
+  snapEnabled,
+  measure,
+  playbackRate,
 }: {
   currentFrame: number;
   duration: number;
@@ -1278,24 +1357,64 @@ export function TimelineFooter({
   tracks: TimelineTrack[];
   transitions: Transition[];
   markers: Marker[];
-  /** How many clips are in the model, including any outside the visible window. */
-  renderedClips: number;
+  /** Clips actually drawn in the DOM; the model may hold more, virtualised. */
+  drawnClips: number;
+  /** How many clips are selected. Shown so a multi-select is visible in the
+   *  read-out as well as in the lane. */
+  selectedCount: number;
+  projectName: string;
+  dirty: boolean;
+  snapEnabled: boolean;
+  /** The ruler measurement, in frames. -1 when nothing is measured. */
+  measure: { start: number; end: number };
+  playbackRate: number;
 }) {
   const total = tracks.reduce((n, t) => n + t.clips.length, 0);
+  const totalFrames = Math.max(1, Math.round(duration * fps));
+  const measureLen = measure.start >= 0 && measure.end > measure.start ? measure.end - measure.start : 0;
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-surface px-3 text-[11px] text-fg-secondary">
-      <span>
-        {frameToTimecode(currentFrame, fps)} / {frameToTimecode(Math.round(duration * fps), fps)}
-        <span className="ml-2 font-mono text-[10px] text-fg-muted">
-          frame {currentFrame} · {timecodeCompact(currentFrame, fps)}
+    <div className="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-surface px-3 font-mono text-[10px]">
+      <div className="flex items-center gap-3 text-fg-secondary">
+        <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
+        <span className="text-fg-muted/40">|</span>
+        <span title="Frame number, and the frame rate it is counted in">
+          FRAME {currentFrame}/{totalFrames} @ {fps}fps
         </span>
-      </span>
-      <span className="font-mono text-[10px] text-fg-muted">
-        {total} clip{total === 1 ? '' : 's'}
-        {total > renderedClips && ` (${renderedClips} drawn)`}
-        {markers.length > 0 && ` · ${markers.length} marker${markers.length === 1 ? '' : 's'}`}
-        {transitions.length > 0 && ` · ${transitions.length} transition${transitions.length === 1 ? '' : 's'}`}
-      </span>
+        {measureLen > 0 && (
+          <>
+            <span className="text-fg-muted/40">|</span>
+            <span className="text-sky-400" title="The selection measured on the ruler">
+              MEASURE {measureLen}f · {(measureLen / fps).toFixed(3)}s
+            </span>
+          </>
+        )}
+        {playbackRate !== 1 && (
+          <>
+            <span className="text-fg-muted/40">|</span>
+            <span className="text-amber-400">{playbackRate}× playback</span>
+          </>
+        )}
+        <span className="text-fg-muted/40">|</span>
+        <span className={snapEnabled ? 'text-sky-400' : 'text-fg-muted'} title="Snapping (N)">
+          {snapEnabled ? 'SNAP' : 'NO SNAP'}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 text-fg-muted">
+        <span className="truncate max-w-[28ch]" title={projectName}>
+          {projectName}
+          <span className={dirty ? 'ml-1 text-amber-400' : 'ml-1'}>
+            {dirty ? '●' : '○'}
+          </span>
+        </span>
+        <span className="text-fg-muted/40">|</span>
+        <span title="Clips in the project; the count in brackets is how many are drawn right now, because the lanes are virtualised">
+          {total} clip{total === 1 ? '' : 's'}
+          {total > drawnClips ? ` (${drawnClips} drawn)` : ''}
+          {selectedCount > 0 && <span className="text-sky-400"> · {selectedCount} selected</span>}
+        </span>
+        {markers.length > 0 && <span>{markers.length} marker{markers.length === 1 ? '' : 's'}</span>}
+        {transitions.length > 0 && <span>{transitions.length} transition{transitions.length === 1 ? '' : 's'}</span>}
+      </div>
     </div>
   );
 }

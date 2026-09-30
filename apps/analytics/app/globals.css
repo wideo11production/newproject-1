@@ -47,23 +47,36 @@
   }
 }
 
-/* Grafana-like scrollbar */
+/* Grafana-like scrollbar - 4px.
+ *
+ * Ye block shared file ke baad aata hai, isliye ye WAHI jeetta. Matlab shared
+ * file me kitna bhi likho, analytics app ke andar iske baad ka rule apply hota
+ * hai - aur pehle yahan 8px tha, jo poore project ka scrollbar 8px kar deta
+ * tha jabki shared file 1px bol rahi thi.
+ *
+ * Ab dono 4px hain, aur dono ek hi token use karte hain (#2c3235) - isliye
+ * scrollbar app ka hissa nahi lagta, poore product ka ek hissa hai.
+ *
+ * Hinglish: shared rule ke baad ka rule jeetta hai - isliye dono ek hi value. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
-::-webkit-scrollbar-track {
-  background: hsl(217.2 32.6% 17.5%);
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: hsl(217.2 32.6% 25%);
-  border-radius: 4px;
+  background-color: #2c3235;
+  border-radius: 9999px;
+  /* Border/padding dono width me add hote hain - 4px ko 6px bana denge. */
+  border: none;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(217.2 32.6% 35%);
+  background-color: #4c5459;
 }
 
 /* Analytics panel styles */

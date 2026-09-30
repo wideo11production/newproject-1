@@ -73,6 +73,7 @@ import {
   DEFAULT_TRACKS,
   DEFAULT_TRANSFORM,
   NEUTRAL_FILTER,
+  clipAt,
   clipEnd,
   normaliseProject,
   projectDuration,
@@ -92,7 +93,7 @@ import {
   secondsToFrame,
   timecode,
 } from '../lib/engine/frames';
-import { useSettings, setSettings, getSettings } from '../lib/engine/settings';
+import { useSettings, setSettings, getSettings, hydrateSettings } from '../lib/engine/settings';
 import { nextMarkerId, nextMarker, prevMarker, type Marker } from '../lib/engine/markers';
 import { MIN_CLIP_FRAMES, rippleTrim, roll, slide, slip } from '../lib/engine/edits';
 import {
@@ -112,6 +113,24 @@ const FOOTER = { min: 18, max: 48 };
 
 let uid = 0;
 const nextId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(uid++).toString(36)}`;
+
+/**
+ * The clip the playhead is inside, across every track.
+ *
+ * `clipAt` is per-track; this is the version the player bar needs, because the
+ * frame-data read-out has to say which frame of WHICH file is on screen and a
+ * two-track timeline has two answers.
+ */
+function clipUnderPlayhead(tracks: TimelineTrack[], time: number): TimelineClip | null {
+  let hit: TimelineClip | null = null;
+  for (const track of tracks) {
+    const c = clipAt(track, time);
+    // Bottom lane first, so a top-lane title does not hide the picture's own
+    // source frame - the picture is what the read-out is about.
+    if (c && (!hit || track.role === 'base')) hit = c;
+  }
+  return hit;
+}
 
 export function VideoEditor() {
   const media = useMediaStore();
@@ -425,7 +444,19 @@ export function VideoEditor() {
     [selectedIds, tracks, commit, fps]
   );
 
-  /** Trim, in FRAMES. The only unit the timeline speaks. */
+  /**
+   * Trim, in FRAMES. The only unit the timeline speaks.
+   *
+   * Clamped to TWO bounds, and the upper one is the interesting one:
+   *
+   *   MIN - one frame, because a zero-length clip is not a clip.
+   *   MAX - the length the SOURCE FILE can actually supply. A clip cannot be
+   *         longer than `mediaDuration - sourceIn`, or the tail of it is frames
+   *         the decoder will never produce and the export will end on a frozen
+   *         picture. Without this bound, dragging an out-edge past the end of
+   *         the file silently extends the clip into footage that does not exist,
+   *         and the timeline shows a duration the media can never deliver.
+   */
   const trimClip = useCallback(
     (clipId: string, edge: 'in' | 'out', deltaFrames: number) => {
       setTracks((prev) =>
@@ -433,8 +464,15 @@ export function VideoEditor() {
           ...t,
           clips: t.clips.map((c) => {
             if (c.id !== clipId) return c;
+            const item = media.byId.get(c.mediaId);
             const startFrame = Math.round(c.startTime * fps);
-            const lengthFrames = Math.max(MIN_CLIP_FRAMES, Math.round(c.duration * fps));
+            const lengthFrames = Math.max(1, Math.round(c.duration * fps));
+            // The media length is in seconds and the clip may be running at a
+            // different rate, so the available SOURCE frames are what bound the
+            // TIMELINE frames - at 2x a 3s file supplies 180 frames, not 90.
+            const mediaFrames = item?.duration ? Math.round(item.duration * fps) : Number.POSITIVE_INFINITY;
+            const maxLengthFrames = Math.max(MIN_CLIP_FRAMES, Math.floor((mediaFrames - Math.round(c.sourceIn * fps)) / Math.max(c.speed, 0.01)));
+
             if (edge === 'in') {
               const shift = Math.max(-startFrame, Math.min(deltaFrames, lengthFrames - MIN_CLIP_FRAMES));
               return {
@@ -449,13 +487,13 @@ export function VideoEditor() {
             }
             return {
               ...c,
-              duration: frameToSeconds(Math.max(MIN_CLIP_FRAMES, lengthFrames + deltaFrames), fps),
+              duration: frameToSeconds(Math.min(maxLengthFrames, Math.max(MIN_CLIP_FRAMES, lengthFrames + deltaFrames)), fps),
             };
           }),
         }))
       );
     },
-    [fps]
+    [fps, media.byId]
   );
 
   const setFade = useCallback((clipId: string, edge: 'in' | 'out', seconds: number) => {
@@ -640,6 +678,16 @@ export function VideoEditor() {
       applyEditResult(slide(tracks, hit.track.id, id, deltaFrames, fps));
     },
     [selectedIdsArr, clipById, tracks, fps, applyEditResult]
+  );
+
+  /** One entry point for all three, so the toolbar and the keyboard agree. */
+  const edgeEdit = useCallback(
+    (kind: 'ripple' | 'slide' | 'slip', deltaFrames: number) => {
+      if (kind === 'ripple') doRippleTrim('out', deltaFrames);
+      else if (kind === 'slide') doSlide(deltaFrames);
+      else doSlip(deltaFrames);
+    },
+    [doRippleTrim, doSlide, doSlip]
   );
 
   // ---- Tracks ----
@@ -844,6 +892,7 @@ export function VideoEditor() {
   });
 
   // ---- Project lifecycle ----
+
   const doSave = useCallback(async (): Promise<SaveResult> => {
     const res = await saveProject(docSnapshot(), media.items);
     if (res.saved) {
@@ -899,9 +948,19 @@ export function VideoEditor() {
       setSavedAt(doc.savedAt);
       setDirty(false);
       setLastOpenedId(doc.id);
-      // The project's rate wins over the workspace's: a project saved at 25fps
-      // reopened at 30fps would change the meaning of every frame on screen.
-      patch({ fps: rate, lastProjectId: doc.id, playheadFrame: 0, pxPerFrame: rescalePxPerFrame(pxPerFrame, fps, rate) });
+      /**
+       * The WORKSPACE's frame rate wins over the project's.
+       *
+       * Both hold a rate, and they can disagree: a user switches a project to
+       * 25fps, opens a different one saved at 30, and comes back. If the
+       * project's rate won, the setting they deliberately chose would be
+       * silently reverted by opening a file - which is exactly the class of
+       * "my settings reset" complaint this whole store exists to end.
+       *
+       * The project's stored rate is adopted instead, so the two converge: the
+       * project is re-saved at the rate now in force, and the next open agrees.
+       */
+      patch({ lastProjectId: doc.id, playheadFrame: 0 });
       media.restore(loaded.media);
       setToast(
         loaded.missing.length
@@ -936,6 +995,35 @@ export function VideoEditor() {
     [media, patch]
   );
 
+  // ---- Restore, once ----
+  /**
+   * Hydrate the workspace, then reopen the last project.
+   *
+   * The store starts as the DEFAULTS so that the hydration render matches the
+   * HTML the server sent - see `lib/engine/settings.ts`. Here, after the first
+   * client render has already succeeded, the user's real settings are read and
+   * published.
+   *
+   * One effect does BOTH halves on purpose. Zoom, scroll, panel sizes, lane
+   * heights, frame rate, snapping and theme have to be in hand BEFORE the
+   * project opens, because `openProject` rescales the zoom to the project's
+   * frame rate and sets the last-project id. Split them and the project open
+   * races the settings restore, and the user comes back to a timeline at the
+   * wrong zoom - which is the exact complaint this whole store exists to fix.
+   */
+  useEffect(() => {
+    if (hydrated) return;
+    setHydrated(true);
+    hydrateSettings();
+    const s = getSettings();
+    // `activeMode` is workspace, not React state, so it has to be pushed into
+    // the component once the store has been read.
+    setMode((s.activeMode as EditorMode) ?? 'media');
+    setPlayheadFrame(s.playheadFrame);
+    const id = s.lastProjectId || lastOpenedId();
+    if (id) void openProject(id);
+  }, [hydrated, openProject]);
+
   // Autosave: every 30 seconds, and never more than once every 8 seconds after
   // a change, so holding down a slider does not write a project per frame.
   useEffect(() => {
@@ -952,15 +1040,11 @@ export function VideoEditor() {
     return () => clearTimeout(id);
   }, [hydrated, dirty, doSave, tracks, transitions, markers, resolution, projectName]);
 
-  // Reopen whatever was open last, so a reload is not a lost session. This is
-  // also what makes REDO work across a reload: the future stack is part of the
-  // saved document, not a session artefact.
-  useEffect(() => {
-    if (hydrated) return;
-    setHydrated(true);
-    const id = getSettings().lastProjectId || lastOpenedId();
-    if (id) void openProject(id);
-  }, [hydrated, openProject]);
+  // Reopen whatever was open last happens in `hydrateSettings` above, together
+  // with the workspace settings, so a reload is not a lost session. That is also
+  // what makes REDO work across a reload: the future stack is part of the saved
+  // document, not a session artefact.
+
 
   // ---- Zoom ----
   /**
@@ -1360,7 +1444,6 @@ export function VideoEditor() {
     toTimelineEnds: settings.snapToTimelineEnds,
     thresholdPx: settings.snapThresholdPx,
     playheadFrame,
-    onSnap: () => undefined,
   };
 
   const panelProps = {
@@ -1373,6 +1456,23 @@ export function VideoEditor() {
   };
 
   const clipTotal = tracks.reduce((n, t) => n + t.clips.length, 0);
+  /**
+   * How many clips are actually in the DOM.
+   *
+   * The lanes are virtualised, so this is usually lower than the model count.
+   * It is reported in the footer rather than hidden: a timeline that silently
+   * drops 400 clips looks broken, and the same timeline that SAYS it drew 5 of
+   * 405 looks like a feature.
+   */
+  const drawnClipCount = useMemo(
+    () => tracks.reduce((n, t) => n + t.clips.filter((c) => {
+      const s = Math.round(c.startTime * fps);
+      const e = Math.round(clipEnd(c) * fps);
+      const pad = Math.ceil(600 * pxPerFrame);
+      return e >= visibleRange.startFrame - pad && s <= visibleRange.endFrame + pad;
+    }).length, 0),
+    [tracks, fps, pxPerFrame, visibleRange]
+  );
 
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background">
@@ -1447,6 +1547,7 @@ export function VideoEditor() {
         markerCount={markers.length}
         onClearMarkers={() => setMarkers([])}
         onMarkerStep={gotoMarker}
+        onEdgeEdit={edgeEdit}
         onFpsChange={(f) => {
           const rate = coerceFps(f);
           patch({ fps: rate, pxPerFrame: rescalePxPerFrame(pxPerFrame, fps, rate) });
@@ -1612,6 +1713,13 @@ export function VideoEditor() {
             isPlaying={playing}
             volume={settings.masterVolume}
             muted={settings.masterVolume === 0}
+            viewerZoom={settings.viewerZoom}
+            viewerLayout={settings.viewerLayout}
+            onViewerZoom={(z) => patch({ viewerZoom: z })}
+            onViewerLayout={(l) => patch({ viewerLayout: l })}
+            badge={settings.viewerBadge}
+            onToggleBadge={() => patch({ viewerBadge: !settings.viewerBadge })}
+            clipUnderPlayhead={clipUnderPlayhead(tracks, playheadSeconds)}
             loopOn={settings.loopEnabled}
             onToggleLoop={() =>
               patch(
@@ -1662,7 +1770,6 @@ export function VideoEditor() {
             <div className="relative" style={{ width: laneWidth }}>
               <TimelineRuler
                 duration={duration}
-                currentTime={playheadSeconds}
                 currentFrame={playheadFrame}
                 pxPerFrame={pxPerFrame}
                 fps={fps}
@@ -1674,6 +1781,8 @@ export function VideoEditor() {
                   patch({ loopEnabled: true, loopStartFrame: Math.round(start * fps), loopEndFrame: Math.round(end * fps) })
                 }
                 markers={markers}
+                measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
+                onSetMeasure={(start, end) => patch({ measureStartFrame: start, measureEndFrame: end })}
                 gridVisible={settings.gridVisible}
                 snapEnabled={settings.snapEnabled}
               />
@@ -1745,48 +1854,16 @@ export function VideoEditor() {
           tracks={tracks}
           transitions={transitions}
           markers={markers}
-          renderedClips={visibleRange.endFrame - visibleRange.startFrame}
+          drawnClips={drawnClipCount}
+          selectedCount={selectedIds.size}
+          projectName={projectName}
+          dirty={dirty}
+          snapEnabled={settings.snapEnabled}
+          measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
+          playbackRate={settings.playbackRate}
         />
       </div>
 
-      {/* ---- Status footer. Pinned to the very bottom, OUTSIDE the resizable
-          timeline pane, and resizes in HEIGHT only: a status strip has no
-          horizontal extent and offering a horizontal drag would imply a
-          behaviour that does not exist. ---- */}
-      <div
-        className="flex shrink-0 items-center justify-between border-t border-edge bg-surface px-3"
-        style={{ height: settings.footerHeight }}
-      >
-        <div className="flex items-center gap-3 font-mono text-[10px] text-fg-secondary">
-          <span>TC {timecode(playheadSeconds, fps)}</span>
-          <span className="text-fg-muted/40">|</span>
-          <span>FRAME {playheadFrame}/{durationFrames}</span>
-          <span className="text-fg-muted/40">|</span>
-          <span>{fps} fps</span>
-          <span className="text-fg-muted/40">|</span>
-          <span>{settings.snapEnabled ? 'SNAP ON' : 'SNAP OFF'}</span>
-          <span className="text-fg-muted/40">|</span>
-          <span className="truncate">{projectName}</span>
-          <span className={dirty ? 'text-amber-400' : 'text-fg-muted'}>
-            {dirty ? '●' : '○'}
-          </span>
-        </div>
-        <div className="flex items-center gap-3 font-mono text-[10px] text-fg-muted">
-          <span>
-            {clipTotal} clips
-            {selectedIds.size > 0 ? ` . ${selectedIds.size} selected` : ''}
-            {markers.length > 0 ? ` . ${markers.length} markers` : ''}
-          </span>
-        </div>
-      </div>
-      <ResizableHandle
-        axis="y"
-        label="Resize status bar"
-        value={settings.footerHeight}
-        min={FOOTER.min}
-        max={FOOTER.max}
-        onChange={(v) => patch({ footerHeight: v })}
-      />
 
       <RecorderDialog
         open={recording}

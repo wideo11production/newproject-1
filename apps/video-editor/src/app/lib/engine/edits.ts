@@ -31,9 +31,18 @@
 
 import { clipEnd, type TimelineClip, type TimelineTrack } from './types';
 
-/** A clip must keep at least this many frames. Two is the honest floor: a
- *  one-frame clip cannot be grabbed, trimmed, or rolled. */
-export const MIN_CLIP_FRAMES = 2;
+/**
+ * A clip must keep at least ONE frame.
+ *
+ * One, not two. A two-frame floor is a nicer theory - "a one-frame clip cannot
+ * be grabbed" - and it is also a lie the user pays for: it silently refuses
+ * edits that leave exactly one frame, which is a legitimate single-frame cut
+ * that Resolve and Premiere both make. The real answer to "a one-frame clip is
+ * hard to grab" is to keep the trim handles visible on narrow clips, which is
+ * what the lanes do; refusing the edit would be solving the wrong problem by
+ * removing the feature.
+ */
+export const MIN_CLIP_FRAMES = 1;
 
 export interface EditResult {
   tracks: TimelineTrack[];

@@ -99,12 +99,15 @@ export interface EditorSettings {
   inspectorWidth: number;
 
   /** ---- playback ---- */
-  /** Playback rate, 0.25 - 4. 1 = real time. */
+  /** Playback rate, 0.25 - 4.  1 = real time. */
   playbackRate: number;
   /** Loop the region marked on the ruler. */
   loopEnabled: boolean;
   loopStartFrame: number;
   loopEndFrame: number;
+  /** The ruler's measurement selection, in FRAMES. -1 when nothing is measured. */
+  measureStartFrame: number;
+  measureEndFrame: number;
   masterVolume: number;
 
   /** ---- preferences ---- */
@@ -148,6 +151,8 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   loopEnabled: false,
   loopStartFrame: 0,
   loopEndFrame: 0,
+  measureStartFrame: -1,
+  measureEndFrame: -1,
   masterVolume: 1,
 
   theme: 'dark',
@@ -318,16 +323,26 @@ export function subscribeSettings(listener: () => void): () => void {
 /**
  * Read and write ONE setting.
  *
- * `useSyncExternalStore` guarantees the value read during render is the one the
- * store holds, so a component cannot paint a stale zoom and then correct it.
+ * `useSyncExternalStore` is given a SERVER snapshot explicitly. Without it React
+ * would call `getSettings` on the server too - where there is no localStorage
+ * and no user - and the client would then render different values from the HTML
+ * it is hydrating. Passing the same object as the server snapshot makes the two
+ * renders provably identical, so hydration cannot fail for a reason that lives
+ * in the user's browser.
  */
 export function useSetting<K extends keyof EditorSettings>(key: K): EditorSettings[K] {
   const readValue = useCallback(() => current[key], [key]);
-  return useSyncExternalStore(subscribeSettings, readValue);
+  const serverValue = useCallback(() => DEFAULT_SETTINGS[key], [key]);
+  return useSyncExternalStore(subscribeSettings, readValue, serverValue);
 }
 
-/** Read and write a whole settings object. For a component that genuinely
- *  needs most of them - the editor shell, the ruler, the lanes. */
+/**
+ * Read and write a whole settings object. For a component that genuinely needs
+ * most of them - the editor shell, the ruler, the lanes.
+ *
+ * Both snapshots are the same `getSettings`, which is the defaults until
+ * `hydrateSettings` runs. Same reasoning as `useSetting`.
+ */
 export function useSettings(): [EditorSettings, (patch: SettingsPatch) => void] {
   const value = useSyncExternalStore(subscribeSettings, getSettings, getSettings);
   return [value, setSettings];

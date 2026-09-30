@@ -14,6 +14,15 @@ services:
       # Alag-alag service databases pehli baar create ho jaati hain
       # Ye script empty data directory par hi chalti hai (pehli baar)
       - ./infrastructure/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -28,6 +37,15 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -100,6 +118,15 @@ services:
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:9093/-/healthy"]
       interval: 10s
@@ -135,6 +162,15 @@ services:
         condition: service_healthy
       nats:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
@@ -394,6 +430,15 @@ services:
       # isliye ki abhaari half-provisioned state me start na ho.
       minio-init:
         condition: service_completed_successfully
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/health"]
       interval: 10s
@@ -440,6 +485,15 @@ services:
         limits:
           cpus: "2.0"
           memory: 2G
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8083/health"]
       interval: 15s
@@ -482,6 +536,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8086/health"]
       interval: 15s
@@ -552,6 +615,15 @@ services:
     depends_on:
       minio:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9100/health"]
       interval: 15s
@@ -575,6 +647,15 @@ services:
     depends_on:
       currency-service:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3007/ || exit 1"]
       interval: 30s
@@ -601,6 +682,15 @@ services:
     depends_on:
       auth-service:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3008/ || exit 1"]
       interval: 30s
@@ -633,6 +723,15 @@ services:
         condition: service_healthy
       dashboard-service:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8081/health"]
       interval: 10s
@@ -968,6 +1067,22 @@ services:
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      # ---- Navbar session awareness ----
+      #
+      # AuthNav session POOCHTA hai, token padhta nahi - session ek httpOnly
+      # cookie hai (wideo11_session) jo cross-origin JS ko dikhti hi nahi.
+      #
+      # http://auth-service:8085 sirf compose network ke andar resolve hota
+      # hai; browser use nahi chhoon sakta. Isliye HOST-mapped port diya gaya
+      # hai (compose me 8085:8085 published hai).
+      NEXT_PUBLIC_AUTH_API_URL: http://localhost:8085
+      # Web app container me nahi, host pe pnpm dev se chalti hai - ye upar
+      # comment me bhi likha hai. Isliye login/register/dashboard URLs env se
+      # aate hain: web kabhi 3006 pe chali gayi to editor ko ek line
+      # badalna padega, code me nahi.
+      NEXT_PUBLIC_LOGIN_URL: http://localhost:3000/auth/login
+      NEXT_PUBLIC_REGISTER_URL: http://localhost:3000/auth/register
+      NEXT_PUBLIC_DASHBOARD_URL: http://localhost:3000/dashboard
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -1019,6 +1134,15 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # ---- Restart policy ----
+    #
+    # Ye service pehle bina restart policy ke thi. Matlab ek transient
+    # stop (host sleep, Docker restart, koi compose down) usko silently
+    # CHOR DE TA tha - aur crash hone par koi log bhi nahi banta, sirf exit 0.
+    # Alertmanager aur webhook-receiver isi wajah se 7 ghante tak mare rahe aur
+    # poora alert pipeline chupke se dead tha jabki dashboard "monitoring on"
+    # dikha raha tha.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8082/health"]
       interval: 10s

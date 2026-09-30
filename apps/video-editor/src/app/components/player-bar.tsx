@@ -12,8 +12,24 @@
 // unambiguously in either terms.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Play, Pause, SkipBack, SkipForward, Maximize2, Minimize2, Volume2, VolumeX, Repeat } from 'lucide-react';
-import { frameToTimecode } from '../lib/engine/frames';
+import {
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Maximize2,
+  Minimize2,
+  Volume2,
+  VolumeX,
+  Repeat,
+  Columns2,
+  PictureInPicture2,
+  Square,
+  Tag,
+} from 'lucide-react';
+import { frameToTimecode, clampPxPerFrame } from '../lib/engine/frames';
+import type { TimelineClip } from '../lib/engine/types';
+import { sourceTimeAt } from '../lib/engine/types';
 
 export function PlayerBar({
   currentFrame,
@@ -28,8 +44,15 @@ export function PlayerBar({
   onTogglePlay,
   onSeek,
   onFullscreenChange,
+  viewerZoom,
+  viewerLayout,
+  onViewerZoom,
+  onViewerLayout,
+  badge,
+  onToggleBadge,
+  /** The clip under the playhead, for the source-frame read-out. */
+  clipUnderPlayhead,
 }: {
-  /** Playhead, as a FRAME. */
   currentFrame: number;
   durationFrames: number;
   fps: number;
@@ -42,6 +65,14 @@ export function PlayerBar({
   onTogglePlay: () => void;
   onSeek: (frame: number) => void;
   onFullscreenChange?: (fullscreen: boolean) => void;
+  /** Picture zoom. 1 = fit. */
+  viewerZoom?: number;
+  viewerLayout?: 'single' | 'side-by-side' | 'picture-in-picture';
+  onViewerZoom?: (z: number) => void;
+  onViewerLayout?: (l: 'single' | 'side-by-side' | 'picture-in-picture') => void;
+  badge?: boolean;
+  onToggleBadge?: () => void;
+  clipUnderPlayhead?: TimelineClip | null;
 }) {
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -65,8 +96,28 @@ export function PlayerBar({
     void navigator.clipboard?.writeText(`${tc} (frame ${currentFrame})`).catch(() => {});
   }, [currentFrame, fps]);
 
+  // ---- Frame data.
+  //
+  // Three numbers, because they answer three different questions and none of
+  // them implies the others:
+  //   timeline frame - where the playhead is in the edit
+  //   source frame   - which frame of WHICH FILE is on screen right now
+  //   timecode       - the same position in a form a human reads aloud
+  //
+  // At 2x speed the timeline and source frames diverge by design, and a
+  // cut list that mixes them up is how a sync error survives review.
+  const sourceFrame = clipUnderPlayhead
+    ? Math.max(0, Math.round(sourceTimeAt(clipUnderPlayhead, currentFrame / fps) * fps))
+    : null;
+
+  const layouts = [
+    { id: 'single', Icon: Square, label: 'Single viewer', hint: 'One picture, as large as it fits' },
+    { id: 'side-by-side', Icon: Columns2, label: 'Side by side', hint: 'Half width, so two clips can be compared against each other' },
+    { id: 'picture-in-picture', Icon: PictureInPicture2, label: 'Picture in picture', hint: 'Corner inset over the timeline picture - the layout the Overlays panel sets up' },
+  ] as const;
+
   return (
-    <div className="flex h-10 shrink-0 items-center gap-3 border-t border-edge bg-surface px-3">
+    <div className="flex h-10 shrink-0 items-center gap-2 border-t border-edge bg-surface px-3">
       <button type="button" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={`${isPlaying ? 'Pause' : 'Play'} (Space)`} className="flex h-7 w-7 items-center justify-center rounded bg-sky-600 text-white hover:bg-sky-500">
         {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
       </button>
@@ -89,11 +140,16 @@ export function PlayerBar({
       >
         {frameToTimecode(currentFrame, fps)}
       </button>
-      <span className="font-mono text-[10px] text-fg-muted">
-        f{currentFrame} / {durationFrames}
-      </span>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center gap-2 font-mono text-[10px] text-fg-muted" title="Frame data: where the playhead is, which frame of the source file is on screen, and the same position as a readable timecode">
+        <span className="text-fg-secondary">TL {currentFrame}</span>
+        <span className="text-fg-muted/40">/</span>
+        <span className="text-fg-secondary">SRC {sourceFrame ?? '—'}</span>
+        <span className="text-fg-muted/40">/</span>
+        <span>{durationFrames}f</span>
+      </div>
+
+      <div className="ml-auto flex items-center gap-1.5">
         <button
           type="button"
           onClick={onToggleLoop}
@@ -104,6 +160,48 @@ export function PlayerBar({
           aria-pressed={loopOn}
         >
           <Repeat className="h-3.5 w-3.5" />
+        </button>
+
+        {/* Viewer layout and zoom. Persisted, because "which layout I like" is
+            a preference and re-choosing it after every refresh is the kind of
+            small friction that makes an editor feel amateur. */}
+        <div className="flex items-center gap-0.5" role="group" aria-label="Viewer layout">
+          {layouts.map(({ id, Icon, label, hint }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => onViewerLayout?.(id)}
+              aria-pressed={viewerLayout === id}
+              aria-label={label}
+              title={hint}
+              className={[btn, viewerLayout === id ? 'bg-sky-600 text-white' : ''].join(' ')}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </button>
+          ))}
+        </div>
+
+        <input
+          type="range"
+          min={100}
+          max={300}
+          step={5}
+          value={Math.round((viewerZoom ?? 1) * 100)}
+          onChange={(e) => onViewerZoom?.(clampPxPerFrame(Number(e.target.value) / 100))}
+          aria-label="Viewer zoom"
+          title={`Viewer zoom: ${Math.round((viewerZoom ?? 1) * 100)}%`}
+          className="h-1 w-16 cursor-pointer accent-sky-500"
+        />
+
+        <button
+          type="button"
+          onClick={onToggleBadge}
+          aria-pressed={badge}
+          aria-label="Toggle the frame data badge"
+          title="Show the resolution, frame rate and frame number over the picture"
+          className={[btn, badge ? 'bg-sky-600 text-white' : ''].join(' ')}
+        >
+          <Tag className="h-3.5 w-3.5" />
         </button>
 
         <div className="flex items-center gap-1">
@@ -125,7 +223,7 @@ export function PlayerBar({
             onChange={(e) => onVolume?.(Number(e.target.value))}
             aria-label="Master volume"
             title="Master volume — after every clip, fade and track fader"
-            className="h-1 w-20 cursor-pointer accent-sky-500"
+            className="h-1 w-16 cursor-pointer accent-sky-500"
           />
         </div>
 

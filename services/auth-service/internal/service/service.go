@@ -87,6 +87,19 @@ type AuthService struct {
 	// bhejta hai - jisse registration ka ~5s wait nikal jata hai.
 	// Nil ho to synchronous path chalta hai (slow, par kaam karta hai).
 	emailQueue verificationEmailQueuer
+	// ---- Phase C7: optional Redis denylist ----
+	//
+	// OPTIONAL hai, isliye pointer: nil ho to bhi service chalti hai. Ye Redis
+	// me ek FAST PATH hai logout ka - Postgres me row hard-delete hona hi
+	// AUTHORITY hai (har authenticated request wahan session dhoondta hai).
+	//
+	// Redis sirf ye add karta hai: logout ke turant baad aaye request ko
+	// DB round-trip ke bina 401. Redis down ho to logout POORA kaam karta hai.
+	//
+	// Memory bounded hai: Revoke TTL ko 24h par clamp karta hai, yaani ye
+	// list kabhi unbounded nahi ho sakti - isi liye isko mount karna memory
+	// regression nahi hai.
+	revocationStore SessionRevocator
 	// db raw GORM handle - creator dashboard operations (channels, avatar,
 	// sessions) ke liye. Repositories sirf `users`/`sessions` ke narrow
 	// surface cover karte hain; nayi entities (channels) ke liye direct db
@@ -316,9 +329,29 @@ func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, 
 	// Store refresh token hash
 	hashedRefreshToken := password.HashToken(refreshToken)
 
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// Token ko us DEVICE se jodna hi Phase C7 ka poora point hai.
+	// `session` abhi Create ho chuka hai, isliye usme ID populated hai.
+	sessionID := session.ID
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: hashedRefreshToken,
+		SessionID: &sessionID,
 		ExpiresAt: time.Now().Add(time.Duration(s.cfg.JWT.RefreshTokenTTL) * 24 * time.Hour),
 	}
 
@@ -472,9 +505,29 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	// Store refresh token hash
 	hashedRefreshToken := password.HashToken(refreshToken)
 
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// Token ko us DEVICE se jodna hi Phase C7 ka poora point hai.
+	// `session` abhi Create ho chuka hai, isliye usme ID populated hai.
+	sessionID := session.ID
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: hashedRefreshToken,
+		SessionID: &sessionID,
 		ExpiresAt: time.Now().Add(time.Duration(s.cfg.JWT.RefreshTokenTTL) * 24 * time.Hour),
 	}
 
@@ -585,9 +638,29 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 	// Store new refresh token hash
 	hashedRefreshToken := password.HashToken(newRefreshToken)
 
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// SessionID ZAROORI hai (migration 013). Iske bina logout ko pata hi
+	// nahi chalta ki ye token kis device ka hai - matlab "sirf is device
+	// par logout karo" database par likha hi nahi ja sakta tha, aur broad
+	// `RevokeAllByUserID` hi ek available option bacha tha.
+	//
+	// Pointer kyunki column NULLable hai: migration se PEHLE ke tokens me
+	// ye NULL hai aur unhe retroactively set nahi kiya jaata (unki
+	// session pata hi nahi). Naye tokens precise path par jaate hain.
+	// Token ko us DEVICE se jodna hi Phase C7 ka poora point hai.
+	// `newSession` abhi Create ho chuka hai, isliye usme ID populated hai.
+	sessionID := newSession.ID
 	refreshTokenModel := &model.RefreshToken{
 		UserID:    user.ID,
 		TokenHash: hashedRefreshToken,
+		SessionID: &sessionID,
 		ExpiresAt: time.Now().Add(time.Duration(s.cfg.JWT.RefreshTokenTTL) * 24 * time.Hour),
 	}
 
@@ -605,24 +678,163 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenR
 	return tokenPair, nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, accessToken string) error {
+// LogoutResult batata hai logout ne EXACTLY kya kiya - aur kitni der lagi.
+//
+// Ye reporting nahi hai, ye verification hai. User ko dikhta hai ki logout ne
+// uski kitni sessions bachayi: ek device par logout karna aur saare devices
+// se nikalna bilkul alag outcome hai, aur pehle yahi galti thi.
+// SetRevocationStore OPTIONAL Redis denylist inject karta hai.
+//
+// Interface ke through jaata hai, concrete Redis client ke through nahi, taaki
+// logout ka behaviour Redis ke bina bhi test ho sake - jo zaroori hai, kyunki
+// yeh wahi behaviour hai jo regression ka shikar hai (cross-device logout).
+func (s *AuthService) SetRevocationStore(r SessionRevocator) {
+	s.revocationStore = r
+}
+
+// SessionRevocator logout ka OPTIONAL fast path hai (Phase C7).
+//
+// Interface isliye hai taaki service package Redis client ki implementation
+// ko import na kare - `redisx` already middleware me hai, aur service ko
+// usse couple karne ka koi reason nahi. Test me stub daal kar logout ka
+// behaviour Redis ke bina bhi assert kiya ja sakta hai.
+type SessionRevocator interface {
+	Revoke(ctx context.Context, sessionID uuid.UUID)
+	IsRevoked(ctx context.Context, sessionID uuid.UUID) bool
+}
+
+type LogoutResult struct {
+	// Ye device. Ab is row par koi token nahi hai.
+	SessionDeleted bool
+	// Is device ke refresh tokens, jo turant delete hue.
+	RefreshTokensDeleted int64
+	// Ye token user ke SAARE devices par chal raha tha. Ye number kam hona
+	// chahiye - agar barabar hai, to broad revoke chal raha hai aur humein
+	// pata chal gaya.
+	RefreshTokensBefore int64
+	RefreshTokensAfter  int64
+	// User ke doosre devices ki active sessions - chhue nahi gayi.
+	OtherSessionsRemaining int64
+	// Logout ke andar wall-clock milliseconds.
+	ElapsedMS float64
+}
+
+// Logout: SIRF is device ka token delete karo.
+//
+// ---- PEHLE KYA HOTA THA (aur kyun galat tha) ----
+//
+//	sessionRepo.Revoke(session.ID)               // ye session soft-revoke
+//	tokenRepo.RevokeAllByUserID(session.UserID) // user ke SAARE devices
+//
+// Doosri line saare devices ke refresh tokens ek saath maar deti thi. User
+// apne phone se logout karta aur laptop bhi logout ho jata - bina uske kuch
+// kiye. Ye "logout everywhere" hai, jabki button sirf "logout HERE" kehta
+// hai. Multi-device users ke liye ye kaam karna hi band kar deta tha.
+//
+// ---- AB KYA HOTA HAI ----
+//
+//  1. Is session ka refresh-token count, logout se PEHLE.
+//  2. Is SESSION ke refresh tokens hard-delete (session_id scoped).
+//  3. Is session ki row hard-delete.
+//  4. Is session ke tokens ka count, logout ke BAAD.
+//  5. User ke bache hue active tokens - confirm karne ke liye ki doosre
+//     devices ZINDA hain.
+//
+// Step 5 isliye hai kyunki "humne sirf ye delete kiya" claim karne ke liye
+// proof chahiye. Count same rahe to broad revoke chal raha hai - ye check
+// usi bug ko dobara lautne se rokta hai.
+//
+// ---- PURANE TOKENS (session_id IS NULL) ----
+//
+// Migration 013 se PEHLE banay gaye tokens me session_id NULL hai. Un tokens
+// ko hum kisi session se jod nahi sakte (data nahi hai), isliye unke liye
+// `RevokeAllByUserID` chalta hai - yaani EXACTLY purana behaviour. Iska
+// matlab: un tokens ke liye logout abhi bhi cross-device hai, aur ye
+// jaanbujh kar chhoda gaya hai. Naye tokens (session_id set) precise path par
+// jaate hain, aur purane tokens apni TTL par expire hokar hat jaate hain.
+func (s *AuthService) Logout(ctx context.Context, accessToken string) (LogoutResult, error) {
+	started := time.Now()
+	var res LogoutResult
+	defer func() { res.ElapsedMS = float64(time.Since(started).Microseconds()) / 1000.0 }()
+
 	session, err := s.sessionRepo.GetByAccessToken(ctx, accessToken)
 	if err != nil {
 		if errors.Is(err, repository.ErrSessionNotFound) {
-			return nil // Already logged out
+			// Already logged out. Ye ek ERROR nahi hai - logout idempotent hona
+			// chahiye, warna dobara click karne par user ko galti ka message
+			// milega jabki sab theek hai.
+			return res, nil
 		}
-		return err
+		return res, err
 	}
 
-	if err := s.sessionRepo.Revoke(ctx, session.ID); err != nil {
-		return err
+	// ---- Step 1: is user ke kitne token zinda the ----
+	res.RefreshTokensBefore, err = s.tokenRepo.CountActiveByUserID(ctx, session.UserID)
+	if err != nil {
+		return res, err
 	}
 
-	if err := s.tokenRepo.RevokeAllByUserID(ctx, session.UserID); err != nil {
-		return err
+	// ---- Step 2: sirf ISI session ke refresh tokens ----
+	//
+	// `WHERE session_id = ?` - ek device, ek query, ek delete.
+	//
+	// ---- YE WOHI JAGAH HAI JAHAN CROSS-DEVICE BUG AATA THA ----
+	//
+	// Yahan PEHLE ye tha:
+	//
+	//     s.tokenRepo.RevokeAllByUserID(ctx, session.UserID)
+	//
+	// jo user ke SAARE devices ke tokens maarta tha. Phone se logout karna
+	// laptop bhi logout kar deta tha. Wo line ab HATA di gayi hai - koi
+	// fallback nahi rakha, kyunki "purane tokens" ke liye device-scope
+	// banana IMPOSSIBLE hai (unki session_id NULL hai, yaani unhe kis device
+	// se joda jaye hi nahi - ye data nahi hai).
+	//
+	// ---- TRADE-OFF, JO CHHIPAYA NAHI JA RAHA ----
+	//
+	// Migration 013 se PEHLE banay gaye tokens (session_id IS NULL) logout ke
+	// baad apni TTL tak valid reh sakte hain - kyunki unhe kisi device se
+	// jod kar delete karna possible nahi, aur unhe jodne ka sahi tareeka
+	// (broad revoke) hi woh bug hai jo hum theek kar rahe hain.
+	//
+	// Ye gap BOUNDED hai aur chhota hai:
+	//   - sirf PRE-migration tokens affect hote hain
+	//   - unka RefreshTokenTTL expire hone tak chalte hain
+	//   - access token to waise bhi `sessions` row se validate hota hai, aur
+	//     woh row logout par HARD DELETE ho jati hai - yaani logged-out device
+	//     ka ACCESS token turant dead hai chahe refresh token NULL ho
+	//
+	// Yaani asymmetric raha hai: ek device ka ACCESS turant mar jaata hai,
+	// sirf ek legacy REFRESH token TTL tak valid reh sakta hai, aur usse naya
+	// access token milne ke liye login chahiye - jo password mangega.
+	res.RefreshTokensDeleted, err = s.tokenRepo.HardDeleteBySessionID(ctx, session.ID)
+	if err != nil {
+		return res, err
 	}
 
-	return nil
+	if err := s.sessionRepo.HardDelete(ctx, session.ID); err != nil {
+		return res, err
+	}
+	res.SessionDeleted = true
+
+	// ---- Step 4 + 5: verify ----
+	res.RefreshTokensAfter, err = s.tokenRepo.CountActiveByUserID(ctx, session.UserID)
+	if err != nil {
+		return res, err
+	}
+	res.OtherSessionsRemaining = res.RefreshTokensAfter
+
+	// ---- Redis denylist entry ----
+	//
+	// Ye OPTIONAL fast path hai, authority Postgres ke paas hai. Agar Redis
+	// down ho to bhi logout kaam karta hai - bas thoda slow. Fail-closed
+	// nahi: ek logout ka fail hone se user logged in rehna behtar hai
+	// (wo chala jaayega) isse (wo logged out na ho, attack ho).
+	if s.revocationStore != nil {
+		s.revocationStore.Revoke(ctx, session.ID)
+	}
+
+	return res, nil
 }
 
 func (s *AuthService) SetupPIN(ctx context.Context, userID uuid.UUID, req *model.PINSetupRequest) error {

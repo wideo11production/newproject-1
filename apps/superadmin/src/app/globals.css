@@ -26,9 +26,16 @@ body {
 }
 
 /* Scrollbar styling - dark theme */
+/* 4px - shared file ke saath match karta hai.
+ *
+ * Ye block shared file ke BAAD aata hai, isliye ye jeetta. Pehle yahan 8px
+ * tha, jo poore project ko 8px scrollbar deta tha jabki shared file kuch aur
+ * bol rahi thi. Ab dono 4px hain.
+ *
+ * Hinglish: shared rule ke baad ka rule jeetta hai - isliye dono ek hi value. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {

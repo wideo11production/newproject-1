@@ -51,6 +51,10 @@ export interface SnapOptions {
   /** The clip being dragged, so it is not snapped to its own edges. */
   excludeClipId?: string | null;
   durationFrames: number;
+  /** Every track, so a clip can snap to an edge on a lane it is not on. That
+   *  cross-lane snapping is the point of a timeline rather than a stack of
+   *  unrelated strips. */
+  tracks: TimelineTrack[];
 }
 
 /**
@@ -77,7 +81,7 @@ export function collectSnapTargets(o: SnapOptions): SnapTarget[] {
     for (const m of o.markers) push(m.frame, 'marker', `Marker “${m.label || 'Untitled'}”`);
   }
   if (o.toClips) {
-    for (const track of tracksOf(o)) {
+    for (const track of o.tracks) {
       for (const c of track.clips) {
         if (c.id === o.excludeClipId) continue;
         push(Math.round(c.startTime * o.fps), 'clip', `Start of “${c.mediaName}”`);
@@ -121,16 +125,6 @@ export function findSnap(
   if (!best) return { frame, target: null, snappedEdges: edges };
   const snappedEdges = edges.map((e) => e + (best.frame - frame));
   return { frame: best.frame, target: best.target, snappedEdges };
-}
-
-/** Track list is threaded in so this module stays free of editor state. */
-function tracksOf(o: SnapOptions): TimelineTrack[] {
-  return (o as SnapOptions & { tracks?: TimelineTrack[] }).tracks ?? [];
-}
-
-/** Attach the tracks without widening the public options shape. */
-export function withTracks(o: SnapOptions, tracks: TimelineTrack[]): SnapOptions {
-  return Object.assign(o, { tracks });
 }
 
 /** Pixel threshold to frame threshold, with a one-frame floor. */

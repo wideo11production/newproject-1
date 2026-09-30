@@ -275,6 +275,24 @@ func main() {
 	r.Use(middleware.NoStore())
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
+	// ---- Phase C7: revocation store ----
+	// RevocationStore ek hi Redis client use karta hai jo rate limiter
+	// use karta hai (edisx.Client ka doc comment hi yeh kehta hai).
+	// Alag pool isliye NAHI banaya: rate limiting aur revocation ke
+	// failure requirements ULAT hain - limiter ke bursts ki starvation
+	// revocation checks ko slow karti hai, jo theek nahi lagta kuch alag
+	// fault hai.
+	// Nil ho sakta hai (Redis down par boot). Chain us case me
+	// CheckRevoked se guzar jata hai - degrade, crash nahi.
+	revocationStore := middleware.NewRevocationStore(redisClient)
+	if revocationStore != nil {
+		// Service layer ko bhi chahiye: logout ke andar Redis entry likhni hoti
+		// hai. Ye interface ke through jaata hai, concrete Redis client ke
+		// through nahi - test me stub daal kar logout Redis ke bina test ho
+		// sakta hai.
+		authService.SetRevocationStore(revocationStore)
+	}
+
 	r.Use(middleware.NewCORS(middleware.CorsConfig{
 		AllowedOrigins:   cfg.Security.GetAllowedOrigins(),
 		AllowCredentials: cfg.Security.AllowCredentials,
@@ -404,7 +422,20 @@ func main() {
 		// hai. Yahan dobara register karne se gin panic karta tha:
 		//   panic: handlers are already registered for path
 		//   '/api/v1/auth/resend-verification'
-		auth.POST("/logout", authHandler.AuthMiddleware(), authHandler.Logout)
+		// Logout + AuthMiddleware + CheckRevoked.
+		//
+		// TEENO lagane ka order matter karta hai:
+		//   AuthMiddleware   - signature verify + `sessions` me token hash
+		//                      dhoondta hai aur `session_id` context me
+		//                      daalta hai
+		//   CheckRevoked     - usi `session_id` ko Redis se check karta hai
+		//
+		// Order ulta hua to CheckRevoked ko `session_id` hi nahi milta
+		// (context verify hone se pehle khali hota hai) aur wo HAR request
+		// par chupchap pass ho jata - matlab mounted hone ke bawajood kuch
+		// nahi hota. Ye wahi class of bug hai jisli wajah se ye file pehle
+		// DEAD CODE thi: likhi hui thi, chain me nahi lagi thi.
+		auth.POST("/logout", authHandler.AuthMiddleware(), middleware.CheckRevoked(revocationStore), authHandler.Logout)
 		// ---- Creator dashboard: active devices ----
 		// "Aap kis device par logged in hain" - token se user_id lekar
 		// scoped query chalata hai (cross-user leak nahi).
@@ -413,6 +444,11 @@ func main() {
 		// Protected routes
 		protected := auth.Group("")
 		protected.Use(authHandler.AuthMiddleware())
+		// Sab PROTECTED routes par bhi. Ye ek Redis EXISTS call hai -
+		// logout ke turant baad aaye request ko 401 milta hai bina Postgres
+		// round-trip ke. Redis down ho to ye `false` return karta hai aur
+		// AuthMiddleware ka DB check Authoritatively reject karta hai.
+		protected.Use(middleware.CheckRevoked(revocationStore))
 		{
 			protected.GET("/profile", authHandler.GetProfile)
 			protected.GET("/pin/setup", authHandler.SetupPIN)

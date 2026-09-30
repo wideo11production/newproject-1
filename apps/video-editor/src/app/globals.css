@@ -1,83 +1,43 @@
-
-/* Project-wide ultra-thin scrollbars (2px). Shared file - ek jagah fix = sab
-   jagah fix. Detail: packages/ui/src/styles/scrollbar.css
-
-   @import @tailwind se PEHLE hona zaroori hai - CSS spec ke hisaab se ye
-   har doosri statement se pehle aana chahiye. Uske baad rakhne par browser
-   ise drop kar deta hai aur styling chup-chaap apply nahi hoti. */
 @import '@wideo11/ui/src/styles/scrollbar.css';
+
+/* Project-wide scrollbar thickness, colour and hover behaviour:
+   `packages/ui/src/styles/scrollbar.css` — 4px, transparent track, Grafana
+   neutral-4 thumb. Ek jagah fix = sab jagah fix.
+
+   Isi file me app-scoped rules bhi hain, neeche dekho. */
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* ==========================================================================
-   * Scrollbars: 1px
-   * ==========================================================================
-   *
-   * Requested as a pencil line: 1px, present but out of the way.
-   *
-   * Scoped to THIS app rather than changed in the shared file, because the
-   * shared file is imported by every app in the monorepo and a request about
-   * this editor's scrollbars is not a request about the rest of the product.
-   *
-   * It is written here rather than trusted from the shared import because the
-   * shared rules demonstrably do not reach the panels: measured in a real
-   * browser, the media bin's scroller rendered a 15px bar - Chrome's DEFAULT -
-   * while the stylesheet claimed 1px. A style that says one thing and renders
-   * another is worse than no style, so the editor pins its own rule and
-   * `tools/check-video-editor.mjs` asserts the RENDERED thickness
-   * (`offsetWidth - clientWidth`) on every run rather than reading the CSS.
-   *
-   * `scrollbar-width` is the standard property and Chrome 121+ reads it in
-   * preference to the webkit pseudo-elements, so it is set on every element as
-   * well as the root. Firefox has no 1px option at all - its thinnest standard
-   * is `thin`, around 8px - and pretending otherwise would just be a lie in the
-   * CSS.
-   */
-  :root {
-    scrollbar-width: thin;
-  }
-
-  ::-webkit-scrollbar {
-    width: 1px;
-    height: 1px;
-  }
-
-  ::-webkit-scrollbar-track,
-  ::-webkit-scrollbar-corner {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background-color: rgb(var(--ve-text-muted) / 0.55);
-    border-radius: 9999px;
-    /* No border and no padding: both ADD to the rendered width, which would
-     * turn "1px" into 3px and defeat the entire rule. */
-    border: none;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(var(--ve-text-muted));
-  }
-
-  ::-webkit-scrollbar-thumb:active {
-    background-color: rgb(var(--ve-text-primary) / 0.7);
-  }
-
-  ::-moz-scrollbar-thumb {
-    background-color: rgb(var(--ve-text-muted) / 0.55);
-    border-radius: 9999px;
-    border: none;
-  }
-
-  ::-moz-scrollbar-track,
-  ::-moz-scrollbar-corner {
-    background: transparent;
-  }
-}
-
+/* ============================================================================
+ * DESIGN TOKENS
+ * ============================================================================
+ *
+ * Paanch surface roles - workspace, raised panel, overlay, sunken, border -
+ * aur teen text roles. Har component inhi par likha hai, isliye light theme
+ * ek variable swap hai aur doosri component tree nahi.
+ *
+ * ---- YE `:root` BLOCK KABHI MAT HATAO ----
+ *
+ * Ek baar is block ko galti se delete kar diya gaya tha (ek line-splice ne
+ * 14 se 95 tak ka range utha diya). Result: `--ve-surface` undefined ho gaya,
+ * `rgb(var(--ve-surface))` invalid CSS ban gaya, aur browser ne wo property
+ * chhod di. Light theme "kaam" kar raha tha sirf is liye ki panels TRANSPARENT
+ * ho kar white page dikha rahe the - tokens bilkul use nahi ho rahe the.
+ *
+ * Isliye yahan har token ka comment me likha hai ki wo KYA hai, aur ek
+ * harness check light theme me surfaces ko MEASURE karta hai (sirf class
+ * dekhkar nahi) - taaki ye dobara silent na ho sake.
+ *
+ * ---- `--ve-` PREFIX KYUN ----
+ *
+ * Shared theme ke tokens HSL channel triples hain aur `hsl(var(--x))` se
+ * consume hote hain. Inhe `rgb(var(--x))` me daal do to browser `rgb(217.2
+ * 32.6% 17.5%)` jaisa VALID colour parse karta hai - galat rang, koi error
+ * nahi. Isliye hamare tokens alag namespace me hain aur RGB channel triples
+ * hain, jo opacity modifier ke saath kaam karte hain (`bg-surface-raised/60`).
+ */
 @layer base {
   :root {
     --background: 222.2 84% 4.9%;
@@ -101,81 +61,105 @@
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
 
-    /* ---- The editor's own five surface roles, in the dark theme ----
-
-       Named `--ve-*` on purpose. The shared tokens above are HSL channel
-       triples used as `hsl(var(--x))`; feeding one of them to `rgb(var(--x))`
-       is not a missing variable, it is a VALID colour of the wrong kind -
-       `rgb(217.2 32.6% 17.5%)` parses, clamps and paints a dark red, so every
-       border in the editor came out rose with no error anywhere.
-
-       These are RGB channel triples for `rgb(var(--ve-*))`, and the values are
-       the exact slate shades the panels used before they were tokenised, so
-       the dark theme is unchanged. */
-    --ve-surface: 2 6 23;
-    --ve-surface-raised: 15 23 42;
-    --ve-surface-overlay: 30 41 59;
-    --ve-surface-sunken: 51 65 85;
+    /* ---- The editor's own surfaces (dark theme) ---- */
+    --ve-surface: 2 6 23; /* workspace: sabse peeche wala layer */
+    --ve-surface-raised: 15 23 42; /* panels: ruler, lanes, headers */
+    --ve-surface-overlay: 30 41 59; /* menu, dropdown, popover */
+    --ve-surface-sunken: 51 65 85; /* pressed / inset surfaces */
     --ve-text-primary: 241 245 249;
     --ve-text-secondary: 148 163 184;
     --ve-text-muted: 100 116 139;
-    --ve-edge: 30 41 59;
+    --ve-edge: 30 41 59; /* hairline borders */
     --ve-edge-strong: 51 65 85;
+
+    /* ---- Clip tiles: DARK in BOTH themes, deliberately ----
+
+       Ye editor ka sabse visible light-mode bug tha. Clip ka background
+       `bg-sky-500/25` tha - ek TRANSLUCENT accent - aur uska text `text-white`.
+       Dark theme me: 25% sky over dark = dark tile, white text padhne layak.
+       Light theme me: 25% sky over WHITE = pale tile, white text uske upar
+       invisible. Naam, frame count aur icons sab gayab ho gaye.
+
+       Do options the:
+
+         A) Text ko `text-fg` banana, taaki light me dark text aaye.
+            Problem: clip accent se apni lane pe distinguish hota hai, aur
+            pale tile + dark text dark theme se visibly alag padega.
+
+         B) Clip ko HAMESHA dark rakhna. Resolve aur Premiere dono ye karte
+            hain: clip ek MEDIA hai, workspace se alag cheez, aur picture ki
+            tarah inhe theme nahi badalni chahiye.
+
+       B chuna. Ye tokens `:root` me hain, `.light` me NAHI - yaani dono
+       themes me bilkul SAME. Ye OPAQUE dark tints hain, translucent nahi,
+       isliye inke upar white text hamesha padhne layak rehta hai.
+
+       Hinglish: clip dono theme me dark - wo media hai, theme nahi. Pehle
+                  ye translucent the, to light mode me saare naam gayab. */
+    --ve-clip-video: rgb(7 47 73);
+    --ve-clip-audio: rgb(46 16 101);
+    --ve-clip-text: rgb(69 39 5);
+    --ve-clip-image: rgb(4 47 36);
   }
 
+  /* ==========================================================================
+   * LIGHT THEME
+   * ==========================================================================
+   *
+   * ---- YE VALUES HSL HAIN, RGB NAHI ----
+   *
+   * `packages/ui/src/enterprise-theme.ts` in tokens ko `hsl(var(--x))` se
+   * consume karta hai:
+   *
+   *     background: 'hsl(var(--background))',
+   *     foreground: 'hsl(var(--foreground))',
+   *
+   * Matlab `--background: 222.2 84% 4.9%` - percentage aur degree wala
+   * channel triple. RGB triple daal do (`--background: 246 247 249`) to
+   * `hsl(246 247 249)` ban jata hai, jo VALID NAHI hai. Browser use
+   * "invalid at computed-value time" maankar property CHHOD deta hai:
+   * `background-color` transparent ho jati hai, aur `bg-primary` /
+   * `text-primary` / `border-input` chupke se gayab ho jaate hain.
+   *
+   * Ye wahi class of bug hai jisne light mode ko "kaam nahi kar raha" banaya:
+   * tokens the, class lagi thi, par har utility invalid thi. Ek baar
+   * `hsl(246 247 249)` likha gaya tha aur poora light theme invisible ho gaya.
+   *
+   * Hamare `--ve-*` tokens alag hain: wo RGB channel triples HAIN aur
+   * `rgb(var(--ve-*) / <alpha>)` se consume hote hain, kyunki unke saath
+   * opacity modifier chahiye (`bg-surface-raised/60`). Do alag conventions, do
+   * alag prefixes - jaanbujh kar.
+   *
+   * Ek editing workspace LIGHT surface hai dark text ke saath - chrome ko
+   * picture ke peeche hatana chahiye. Lekin video area BLACK rahega: frame ka
+   * apna background nahi hota, aur frame ke aas-paas safed page uske black
+   * level ko jhoon-ta hai.
+   *
+   * Hinglish: panels halke, text gehra. Video ka area black - kyunki picture
+   *            ka background hota hi nahi hai. */
   .light {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 240 6% 97%;
+    --foreground: 222 47% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-  }
-}
+    --popover-foreground: 222 47% 11%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 204 93% 94%;
+    --accent-foreground: 199 89% 48%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 215 16% 47%;
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
-  }
-}
-
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-
-  /* ---- The editor's own surfaces, in the light theme ----
-
-     An editing workspace is a LIGHT surface with dark text, not the reverse:
-     the panels, rulers and lanes are chrome, and chrome should recede behind
-     the picture. The video area itself stays black - a frame has no
-     background, and a white surround changes how its own black level reads.
-
-     These five roles are what `bg-surface`, `bg-surface-raised`,
-     `bg-surface-overlay`, `text-fg` and `text-fg-muted` resolve to, so the
-     light theme is a variable swap rather than a second component tree. */
-  .light {
+    /* Chrome inverts. Clip tiles NAHI - wo upar jaanbujh kar `:root` me hi
+       chhod diye gaye hain, kyunki wo media hain. */
     --ve-surface: 255 255 255;
     --ve-surface-raised: 248 250 252;
     --ve-surface-overlay: 238 242 248;
@@ -186,4 +170,83 @@
     --ve-edge: 214 222 233;
     --ve-edge-strong: 203 213 225;
   }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* ============================================================================
+ * SCROLLBARS: 4px
+ * ============================================================================
+ *
+ * Asli rule `packages/ui/src/styles/scrollbar.css` me hai (4px, transparent
+ * track, Grafana neutral-4 thumb), jo har app import karti hai.
+ *
+ * Ye app-scoped portion EK wajah se hai, aur wo likhne layak hai:
+ *
+ * Shared file pehle `html` par `scrollbar-color` set karta tha (Firefox ke
+ * liye). Chrome 121+ bhi ye padhta hai - aur jab `scrollbar-color` MOJOOD ho,
+ * Chrome document ki SAARI `::-webkit-scrollbar` rules ignore kar deta hai aur
+ * apna 15px scrollbar draw karta hai. Real browser me measure kiya gaya:
+ *
+ *     getComputedStyle(el, "::-webkit-scrollbar").width  ->  "1px"  (rule)
+ *     el.offsetWidth - el.clientWidth                     ->  15     (jo render hua)
+ *
+ * Yaani rule likhi thi, apply hoti thi, phir bhi discard ho jati thi.
+ * Standard property ko `auto` par reset karna hi wo hai jo webkit
+ * pseudo-elements ko apply hone par majboor karta hai.
+ *
+ * UNLAYERED ON PURPOSE. Shared file `@import`ed hai, aur `@import`ed
+ * stylesheet UNLAYERED hota hai - unlayered rules har cascade layer ko
+ * harte hain. Isliye ye `@layer base` me nahi, bilkul bahar likha hai.
+ *
+ * Hinglish: scrollbar 4px. Shared file me `html` par `scrollbar-color` tha, jo
+ *           Chrome ko saari webkit rules ignore karne par majboor karta tha -
+ *           isliye rule likhi thi, apply hoti thi, aur phir bhi gayab ho
+ *           jati thi.
+ */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  /* Grafana ka neutral-4 token - repo ka design language. */
+  background-color: #2c3235;
+  border-radius: 9999px;
+  /* Border ya padding NAHI: dono rendered width me ADD hote hain, jo "4px" ko
+     6px bana dete aur poora rule bekaar kar dete. */
+  border: none;
+}
+
+/* 4px itna patla hai ki bina hover ke thumb dhoondhna mushkil hota hai -
+   isliye normal state quiet, hover par bright. */
+::-webkit-scrollbar-thumb:hover {
+  background-color: #4c5459;
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: #6c7680;
+}
+
+::-moz-scrollbar-thumb {
+  background-color: #2c3235;
+  border-radius: 9999px;
+  border: none;
+}
+
+::-moz-scrollbar-track,
+::-moz-scrollbar-corner {
+  background: transparent;
 }

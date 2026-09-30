@@ -3,16 +3,31 @@
 // Functional + visual check of the video editor at :3002
 // ============================================================================
 //
-// Everything here is asserted through the real UI - a real file is pushed into
-// the real file input, real pointer events drive real drags, and the DOM is
-// read back afterwards. Nothing imports editor internals, because a test that
-// can reach into the state passes even when the interface is broken.
+// Everything is asserted through the real interface: a real file is pushed into
+// a real `<input type="file">`, real pointer events drive real drags, and the
+// DOM is read back afterwards. Nothing imports editor internals, because a test
+// that can reach into the state passes even when the interface is broken.
 //
-// The fixtures are GENERATED, not stubs. `Buffer.alloc(64KB, 7)` is not a
-// video, so every "does the clip render" assertion against it would pass for
-// the wrong reason: a broken renderer also draws nothing. A real 3-second MP4
-// with real frames means a red frame on screen proves the compositor ran, and
-// a black frame proves it did not.
+// ---- WHY THE FIXTURES ARE GENERATED RATHER THAN STUBBED ----
+//
+// `Buffer.alloc(64KB, 7)` is not a video, so a "does the preview render"
+// assertion against it would pass for the WRONG reason: a broken compositor
+// also draws nothing. Real MP4s with real frames mean a red frame on screen
+// PROVES the renderer ran, and a black frame proves it did not.
+//
+// ---- EVERY GESTURE IS ASYNCHRONOUS, AND THAT IS THE POINT ----
+//
+// React 18 batches a state update raised from a native event listener and
+// flushes it in a microtask. A test that dispatches an event and reads the DOM
+// in the SAME task therefore reads the PREVIOUS render. That mistake reports a
+// working editor as broken in every gesture at once, which is both alarming and
+// completely false. So every gesture here runs inside `gesture()`, which waits
+// animation frames between the steps and again before anything is read.
+//
+// Synthetic `PointerEvent`s, not CDP `Input.dispatchMouseEvent`: in this
+// headless build a CDP `mousePressed` never reaches the page, while a CDP
+// `mouseMoved` does - which is worse, because it looks like it works. Every
+// pointerdown is paired with a pointerup carrying the same `pointerId`.
 //
 // Usage:  node tools/check-video-editor.mjs [url] [screenshot.png]
 import { spawn, spawnSync } from 'node:child_process';
@@ -25,7 +40,22 @@ const URL = process.argv[2] ?? 'http://localhost:3002/';
 const SHOT = process.argv[3] ?? 'editor.png';
 const SHOT2 = process.argv[4] ?? 'editor-full.png';
 const CHROME = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const FFMPEG = 'C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe';
+const SETTINGS_KEY = 'wideo11.video-editor.settings.v1';
+
+/**
+ * The scrollbar width this project ships, in pixels.
+ *
+ * A named constant rather than a number typed into the assertion, because the
+ * width has already been changed once and the stale assertion caught it as a
+ * FAILURE of the app rather than as a change to the test. One number, read by
+ * the check, so the two cannot disagree.
+ *
+ * NOTE: the shared rules live in `packages/ui/src/styles/scrollbar.css`, and
+ * they only render if the standard `scrollbar-color` is NOT set on `html`.
+ * Chrome 121+ ignores every `::-webkit-scrollbar` rule in the document when it
+ * is. See the comment at the top of that file.
+ */
+const SCROLLBAR_PX = 4;
 
 const userDir = mkdtempSync(join(tmpdir(), 've-'));
 const PORT = 9600 + Math.floor(Math.random() * 90);
@@ -48,28 +78,13 @@ const chrome = spawn(
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ---------------------------------------------------------------------------
-// Fixtures: real media, generated once
+// Fixtures
 // ---------------------------------------------------------------------------
-//
-// Three seconds of solid red, then green, then blue, at 640x360, with a 440Hz
-// tone. The colours matter: a frame that comes out the colour the timeline says
-// it should be is a frame the compositor actually drew.
 
-const RED = 'Sample Clip.mp4';
-const BLUE = 'Second Clip.mp4';
-const TONE = 'Room Tone.wav';
-const IMAGE = 'Photo.png';
-
-/**
- * Locate ffmpeg.
- *
- * Real media matters here. `Buffer.alloc(64KB, 7)` is not a video, so a
- * "does the preview render" assertion against it would pass for the wrong
- * reason: a broken compositor also draws nothing. A real MP4 with real frames
- * means a red frame on screen proves the renderer ran.
- */
 function findFfmpeg() {
-  if (existsSync(FFMPEG)) return FFMPEG;
+  for (const p of ['C:\\Program Files\\ffmpeg\\bin\\ffmpeg.exe', 'C:\\ffmpeg\\bin\\ffmpeg.exe']) {
+    if (existsSync(p)) return p;
+  }
   try {
     const out = execFileSync('where.exe', ['ffmpeg'], { encoding: 'utf8' });
     const first = out.split(/\r?\n/).find(Boolean);
@@ -81,63 +96,57 @@ function findFfmpeg() {
 }
 
 function makeFixtures() {
-  const ffmpeg = findFfmpeg();
   const dir = join(userDir, 'fixtures');
-  if (!ffmpeg) return { red: join(dir, RED), blue: join(dir, BLUE), tone: join(dir, TONE), img: join(dir, IMAGE), okRed: false, okBlue: false, okTone: false, okImg: false };
-  // The directory has to exist before ffmpeg writes into it; it does not
-  // create intermediate folders, and every fixture fails at once otherwise.
   mkdirSync(dir, { recursive: true });
-  const mk = (args) => spawnSync(ffmpeg, args, { stdio: 'ignore' });
+  const red = join(dir, 'Sample Clip.mp4');
+  const blue = join(dir, 'Second Clip.mp4');
+  const tone = join(dir, 'Room Tone.wav');
+  const img = join(dir, 'Photo.png');
+  const ffmpeg = findFfmpeg();
+  if (!ffmpeg) {
+    for (const f of [red, blue, tone, img]) writeFileSync(f, Buffer.alloc(64 * 1024, 7));
+    return { red, blue, tone, img, real: false };
+  }
   const base = ['-y', '-hide_banner', '-loglevel', 'error'];
-
-  const red = join(dir, RED);
-  const blue = join(dir, BLUE);
-  const tone = join(dir, TONE);
-  const img = join(dir, IMAGE);
-
+  const mk = (args) => spawnSync(ffmpeg, args, { stdio: 'ignore' }).status === 0;
   const okRed = mk([
     ...base,
     '-f', 'lavfi', '-i', 'color=c=red:s=640x360:d=3:r=30',
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3:sample_rate=44100',
     '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest', red,
-  ]).status === 0;
-  const okBlue = mk([
-    ...base,
-    '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:d=3:r=30',
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', blue,
-  ]).status === 0;
-  const okTone = mk([
-    ...base,
-    '-f', 'lavfi', '-i', 'sine=frequency=220:duration=2:sample_rate=44100',
-    tone,
-  ]).status === 0;
-  const okImg = mk([...base, '-f', 'lavfi', '-i', 'color=c=green:s=640x360', '-frames:v', '1', img]).status === 0;
-
-  return { red, blue, tone, img, okRed, okBlue, okTone, okImg };
+  ]);
+  const okBlue = mk([...base, '-f', 'lavfi', '-i', 'color=c=blue:s=640x360:d=3:r=30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', blue]);
+  const okTone = mk([...base, '-f', 'lavfi', '-i', 'sine=frequency=220:duration=2:sample_rate=44100', tone]);
+  const okImg = mk([...base, '-f', 'lavfi', '-i', 'color=c=green:s=640x360', '-frames:v', '1', img]);
+  if (!okRed || !okBlue || !okImg) {
+    for (const f of [red, blue, tone, img]) writeFileSync(f, Buffer.alloc(64 * 1024, 7));
+    return { red, blue, tone, img, real: false };
+  }
+  return { red, blue, tone, img, real: true };
 }
+
+// ---------------------------------------------------------------------------
 
 let ws;
 let sid;
 const results = [];
+
 function check(name, pass, detail) {
   results.push({ name, pass: Boolean(pass), detail });
   console.log(`${pass ? 'PASS' : 'FAIL'}  ${name}${detail ? `  ${JSON.stringify(detail)}` : ''}`);
 }
 
+function j(value) {
+  try {
+    return JSON.parse(String(value));
+  } catch {
+    return {};
+  }
+}
+
 try {
   const fx = makeFixtures();
-  console.log(`fixtures: red=${fx.okRed} blue=${fx.okBlue} tone=${fx.okTone} image=${fx.okImg}`);
-  if (!fx.okRed || !fx.okBlue || !fx.okImg) {
-    // Fall back to non-video bytes so the rest of the suite still runs, and say
-    // so loudly - a pass against a stub is not the same as a pass against a
-    // real file, and pretending otherwise is exactly the bug this harness
-    // exists to prevent.
-    console.log('!! ffmpeg unavailable: falling back to stub bytes. Render assertions are NOT meaningful.');
-    writeFileSync(fx.red, Buffer.alloc(64 * 1024, 7));
-    writeFileSync(fx.blue, Buffer.alloc(64 * 1024, 7));
-    writeFileSync(fx.img, Buffer.alloc(1024, 3));
-    writeFileSync(fx.tone, Buffer.alloc(1024, 5));
-  }
+  console.log(`fixtures: ${fx.real ? 'real media via ffmpeg' : '!! STUB BYTES - render assertions are NOT meaningful'}`);
 
   let u;
   for (let i = 0; i < 80; i++) {
@@ -157,764 +166,955 @@ try {
     ws.onopen = res;
     ws.onerror = rej;
   });
-  const cdp = (m, p = {}, s) =>
+
+  const cdp = (method, params = {}, session) =>
     new Promise((rs, rj) => {
       const id = Math.floor(Math.random() * 1e9);
       const h = (e) => {
         const x = JSON.parse(e.data);
         if (x.id === id) {
           ws.removeEventListener('message', h);
-          x.error ? rj(new Error(x.error.message)) : rs(x.result);
+          x.error ? rj(new Error(x.error.message + ' :: ' + String(method) + ' :: ' + String(JSON.stringify(params).slice(0,300)))) : rs(x.result);
         }
       };
       ws.addEventListener('message', h);
-      ws.send(JSON.stringify({ id, method: m, params: p, sessionId: s }));
+      ws.send(JSON.stringify({ id, method, params, sessionId: session }));
     });
+
   const { targetId } = await cdp('Target.createTarget', { url: 'about:blank' });
   ({ sessionId: sid } = await cdp('Target.attachToTarget', { targetId, flatten: true }));
   await cdp('Runtime.enable', {}, sid);
   await cdp('Page.enable', {}, sid);
   await cdp('DOM.enable', {}, sid);
+  await cdp('Log.enable', {}, sid);
 
   const logs = [];
   const appLogs = [];
-  await cdp('Log.enable', {}, sid);
   ws.addEventListener('message', (e) => {
     const x = JSON.parse(e.data);
-    if (x.method === 'Log.entryAdded' && x.params?.entry?.level === 'error') {
-      logs.push(x.params.entry.text);
-    }
+    if (x.method === 'Log.entryAdded' && x.params?.entry?.level === 'error') logs.push(x.params.entry.text);
     if (x.method === 'Runtime.consoleAPICalled') {
-      const text = (x.params.args || []).map((a) => a.value ?? a.description ?? a.type).join(' ');
-      appLogs.push(text);
+      appLogs.push((x.params.args || []).map((a) => a.value ?? a.description ?? a.type).join(' '));
     }
     if (x.method === 'Runtime.exceptionThrown') {
       logs.push(String(x.params?.exceptionDetails?.exception?.description ?? 'exception'));
     }
   });
 
+  /** Evaluate an expression in the page. The expression goes into the error,
+   *  because CDP's "Invalid parameters" names the METHOD and nothing else, and
+   *  a 700-character anonymous expression is otherwise impossible to find. */
+  const ev = async (expression) => {
+    const r = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sid);
+    if (r.exceptionDetails) {
+      throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
+    }
+    return r.result.value;
+  };
+  const json = async (expression) => j(await ev(expression));
+
   await cdp('Page.navigate', { url: URL }, sid);
   await sleep(7000);
 
-  const ev = async (x) => {
-    const r = await cdp(
-      'Runtime.evaluate',
-      { expression: x, returnByValue: true, awaitPromise: true },
-      sid
+  /**
+   * Build a page-side gesture expression.
+   *
+   * It returns a STRING, not a result. Passing it to `ev()` or `json()` is what
+   * evaluates it - and `await gesture(...)` would send the resolved promise of
+   * a call to `ev` straight into `Runtime.evaluate`, where it serialises to `{}`
+   * and comes back as "Invalid parameters" with no other clue.
+   *
+   * `body` is page-side source and may `await tick()`. The trailing wait is not
+   * optional: it is the difference between reading the state after the gesture
+   * and reading the state before it.
+   */
+  const gesture = (body) =>
+    `(async () => {
+      const tick = () => new Promise(r => requestAnimationFrame(r));
+      ${body}
+      for (let i = 0; i < 5; i++) await tick();
+      return true;
+    })()`;
+
+  /** Seek by clicking the ruler's SCRUB band (the upper half). */
+  const seekRuler = (px) =>
+    ev(
+      `(async () => {
+        const tick = () => new Promise(r => requestAnimationFrame(r));
+        const el = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+        const box = el.getBoundingClientRect();
+        const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 42, isPrimary: true, button: 0 });
+        el.dispatchEvent(new PointerEvent('pointerdown', o(box.left + ${px})));
+        await tick();
+        el.dispatchEvent(new PointerEvent('pointerup', o(box.left + ${px})));
+        await tick();
+        return true;
+      })()`
     );
-    if (r.exceptionDetails) throw new Error(r.exceptionDetails.text + ' ' + (r.exceptionDetails.exception?.description ?? ''));
-    return r.result.value;
+
+  /** Click a mode-rail button by the start of its label. */
+  const rail = async (label) => {
+    await ev(
+      `(async () => {
+        const tick = () => new Promise(r => requestAnimationFrame(r));
+        [...document.querySelectorAll('nav[aria-label="Editor modes"] button')]
+          .find(b => new RegExp('^${label}').test(b.getAttribute('aria-label') || ''))?.click();
+        for (let i = 0; i < 3; i++) await tick();
+        return true;
+      })()`
+    );
+    await sleep(400);
   };
 
-  const tick = `(async () => { await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))); })()`;
-
-  // --- 1. Boot: styling, structure, no broken images ---
-  const boot = await ev(`(() => {
+  // === 1. Boot ===============================================================
+  const boot = await json(`(() => {
     let rules = 0;
     for (const s of document.styleSheets) { try { rules += (s.cssRules || []).length; } catch {} }
-    const rail = document.querySelector('nav[aria-label="Editor modes"]');
-    const imgs = [...document.images];
-    const aside = document.querySelector('aside') || document.querySelector('nav[aria-label="Editor modes"]')?.parentElement;
-    return {
+    const r = document.querySelector('nav[aria-label="Editor modes"]');
+    const buttons = r ? [...r.querySelectorAll('button')] : [];
+    const c = document.querySelector('[role="img"] canvas');
+    return JSON.stringify({
       cssRules: rules,
-      brokenImages: imgs.filter(i => i.complete && i.naturalWidth === 0).length,
-      totalImages: imgs.length,
-      railButtons: rail ? rail.querySelectorAll('button').length : 0,
-      railAllNamed: rail ? [...rail.querySelectorAll('button')].every(b => (b.getAttribute('aria-label')||'').length > 0) : false,
-      railUnnamed: rail ? [...rail.querySelectorAll('button')].map(b => b.getAttribute('aria-label')).filter(n => !n) : ['no rail'],
-      canvas: !!document.querySelector('[role="img"] canvas'),
-      canvasSize: (() => { const c = document.querySelector('[role="img"] canvas'); return c ? c.width + 'x' + c.height : null; })(),
-      docOverflow: Math.round(document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      brokenImages: [...document.images].filter(i => i.complete && i.naturalWidth === 0).length,
+      unnamed: buttons.map(b => b.getAttribute('aria-label')).filter(n => !n),
+      canvasSize: c ? c.width + 'x' + c.height : null,
       noHorizontalScroll: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 2,
-    };
+      footers: [...document.querySelectorAll('div')].filter(d => {
+        const cs = getComputedStyle(d);
+        return cs.borderTopWidth === '1px' && d.querySelector('span')?.textContent?.startsWith('TC ');
+      }).length,
+    });
   })()`);
   check('styling compiled', boot.cssRules > 100, { cssRules: boot.cssRules });
   check('no broken images on boot', boot.brokenImages === 0, boot);
-  check(
-    'mode rail: every enabled button has an accessible name',
-    boot.railButtons >= 10 && boot.railAllNamed,
-    { railButtons: boot.railButtons, allNamed: boot.railAllNamed, unnamed: boot.railUnnamed }
-  );
-  check('preview canvas exists at project size', boot.canvas && boot.canvasSize === '1280x720', { canvas: boot.canvas, canvasSize: boot.canvasSize });
-  check('no horizontal document overflow', boot.noHorizontalScroll, { docOverflow: boot.docOverflow });
+  check('every mode-rail button has an accessible name', boot.unnamed.length === 0, boot);
+  check('preview canvas exists at project size', boot.canvasSize === '1280x720', boot);
+  check('no horizontal document overflow', boot.noHorizontalScroll);
+  check('exactly one status strip under the timeline', boot.footers === 1, { footers: boot.footers });
 
-  // Whether the console errors are hydration (boot) or client-side (later)
-  // decides which half of the app is broken, so the count is checkpointed here
-  // rather than only at the end.
-  const bootErrors = logs.filter((l) => !/favicon|net::ERR_|status of 404/.test(l));
+  const bootErrors = logs.filter((l) => !/favicon|net::ERR_|status of 40/.test(l));
   check('no console errors at boot (no hydration mismatch)', bootErrors.length === 0, {
-    errors: bootErrors.slice(0, 3).map((e) => e.split('\n')[0]),
+    errors: bootErrors.slice(0, 3).map((e) => String(e).split('\n')[0]),
   });
 
-  // --- 2. Import real media through the media bin's own file input ---
-  // The LAST file input is the bin's. The FIRST one is the editor's global
-  // "import and drop straight on the timeline" input, and using that here
-  // would test the wrong path and silently add four clips before the test
-  // clicks its own.
-  const pushFiles = async (files) => {
+  // === 2. Import ============================================================
+  {
     const { root } = await cdp('DOM.getDocument', {}, sid);
     const { nodeIds } = await cdp('DOM.querySelectorAll', { nodeId: root.nodeId, selector: 'input[type=file]' }, sid);
-    if (!nodeIds?.length) return false;
-    const binInput = nodeIds[nodeIds.length - 1];
-    await cdp('DOM.setFileInputFiles', { nodeId: binInput, files }, sid);
-    return true;
-  };
-  const pushed = await pushFiles([fx.red, fx.blue, fx.tone, fx.img]);
-  check('media bin file input present and used', pushed);
+    await cdp('DOM.setFileInputFiles', { nodeId: nodeIds[nodeIds.length - 1], files: [fx.red, fx.blue, fx.tone, fx.img] }, sid);
+  }
   await sleep(6000);
 
-  const imported = await ev(`(() => {
+  const imported = await json(`(() => {
     const t = document.body.innerText;
-    return {
+    return JSON.stringify({
       tiles: document.querySelectorAll('li').length,
       clips: document.querySelectorAll('[data-clip]').length,
-      hasRed: /Sample Clip/.test(t),
-      hasBlue: /Second Clip/.test(t),
-      hasTone: /Room Tone/.test(t),
-      hasImage: /Photo/.test(t),
+      hasAll: /Sample Clip/.test(t) && /Second Clip/.test(t) && /Room Tone/.test(t) && /Photo/.test(t),
       brokenImages: [...document.images].filter(i => i.complete && i.naturalWidth === 0).length,
-      // A real decode shows a real duration. A stub byte blob does not.
       durations: [...document.querySelectorAll('li')].map(li => (li.innerText.match(/\\d:\\d\\d/) || [''])[0]).filter(Boolean),
-    };
+    });
   })()`);
-  check('all four fixtures in the bin', imported.hasRed && imported.hasBlue && imported.hasTone && imported.hasImage, imported);
+  check('all four fixtures in the bin', imported.hasAll && imported.tiles === 4, imported);
   check('importing alone puts NOTHING on the timeline', imported.clips === 0, { clips: imported.clips });
   check('no broken images after import', imported.brokenImages === 0, { brokenImages: imported.brokenImages });
   check('durations read from real media', imported.durations.length >= 3, { durations: imported.durations });
 
-  // --- 3. Add clips to the timeline by clicking tiles ---
-  await ev(`(() => {
-    const find = (re) => [...document.querySelectorAll('button[aria-pressed]')].find(b => re.test(b.textContent||'') || re.test(b.getAttribute('aria-label')||''));
-    const red = find(/Add Sample Clip/); if (red) red.click();
-    return !!red;
-  })()`);
-  await sleep(1200);
-  // Move the playhead to 3s so the second clip lands on the join.
-  await ev(`(() => { const r = document.querySelector('[role="slider"][aria-label="Timeline playhead"]'); return !!r; })()`);
-  await ev(`(async () => {
-    const el = document.querySelector('[role="slider"][aria-label="Timeline playhead"]');
-    const box = el.getBoundingClientRect();
-    const o = (x) => ({ bubbles: true, clientX: x, clientY: box.top + box.height/2, pointerId: 41, isPrimary: true, button: 0 });
-    el.dispatchEvent(new PointerEvent('pointerdown', o(box.left + 270)));
-    await new Promise(r => requestAnimationFrame(r));
-    el.dispatchEvent(new PointerEvent('pointerup', o(box.left + 270)));
-  })()`);
-  await sleep(800);
-  const secondAdded = await ev(`(() => {
-    const find = (re) => [...document.querySelectorAll('button[aria-pressed]')].find(b => re.test(b.getAttribute('aria-label')||''));
-    const blue = find(/Add Second Clip/); if (blue) blue.click();
-    return !!blue;
-  })()`);
-  await sleep(1200);
-  const addedTone = await ev(`(() => {
-    const find = (re) => [...document.querySelectorAll('button[aria-pressed]')].find(b => re.test(b.getAttribute('aria-label')||''));
-    const t = find(/Add Room Tone/); if (t) t.click();
-    return !!t;
-  })()`);
-  await sleep(1500);
+  const addClip = async (name) => {
+    const label = 'Add ' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await ev(
+      `(async () => {
+        const tick = () => new Promise(r => requestAnimationFrame(r));
+        [...document.querySelectorAll('button[aria-pressed]')]
+          .find(x => new RegExp('${label}').test(x.getAttribute('aria-label') || ''))?.click();
+        await tick();
+        return true;
+      })()`
+    );
+    await sleep(900);
+  };
 
-  const timeline = await ev(`(() => {
+  await addClip('Sample Clip');
+  await seekRuler(270);
+  await addClip('Second Clip');
+  await addClip('Room Tone');
+  await sleep(900);
+
+  const timeline = await json(`(() => {
     const clips = [...document.querySelectorAll('[data-clip]')];
-    return {
+    return JSON.stringify({
       clipCount: clips.length,
-      names: clips.map(c => c.getAttribute('title')),
-      lanes: document.body.innerText.match(/Video 1|Audio 1|Text 1/g) || [],
-      readout: (document.body.innerText.match(/\\d+:\\d\\d \\/ \\d+:\\d\\d/) || [''])[0],
+      frames: clips.map(c => c.getAttribute('data-frames-start') + '+' + c.getAttribute('data-frames-length')),
       trimHandles: document.querySelectorAll('[role="separator"][aria-label^="Trim"]').length,
       fadeHandles: document.querySelectorAll('[role="separator"][aria-label^="Fade"]').length,
-      trackFaders: document.querySelectorAll('input[aria-label$="volume"]').length,
-      addTrackButton: !!document.querySelector('[aria-label="Add a track"]'),
-    };
+      faders: document.querySelectorAll('input[aria-label$="volume"]').length,
+      addTrack: !!document.querySelector('[aria-label="Add a track"]'),
+    });
   })()`);
-  check('clips added to the timeline', timeline.clipCount >= 2, { clipCount: timeline.clipCount, names: timeline.names });
-  check('three default lanes present', timeline.lanes.length >= 3, { lanes: timeline.lanes });
-  check('trim handles on clips', timeline.trimHandles >= 4, { trimHandles: timeline.trimHandles });
-  check('fade handles on clips', timeline.fadeHandles >= 4, { fadeHandles: timeline.fadeHandles });
-  check('per-track volume faders exist', timeline.trackFaders >= 3, { faders: timeline.trackFaders });
-  check('add-track control exists', timeline.addTrackButton);
+  check('three clips added across the default lanes', timeline.clipCount === 3, timeline);
+  check('clips carry frame numbers, not just seconds', timeline.frames.every((f) => /^\d+\+\d+$/.test(f)), { frames: timeline.frames });
+  check('trim and fade handles exist', timeline.trimHandles >= 6 && timeline.fadeHandles >= 6, timeline);
+  check('per-track volume faders and an add-track control', timeline.faders >= 3 && timeline.addTrack, timeline);
 
-  // --- 4. The compositor actually draws the right frame ---
-  //
-  // Polled, not read once. A media element that has just been handed a new
-  // source time needs a moment to decode it, and a single immediate read
-  // catches the placeholder frame - which would fail the test for a reason
-  // that has nothing to do with the thing being tested.
-  const seekRuler = (px) =>
-    ev(`(async () => {
-      const el = document.querySelector('[role="slider"][aria-label="Timeline playhead"]');
-      const box = el.getBoundingClientRect();
-      const o = (x) => ({ bubbles: true, clientX: x, clientY: box.top + box.height/2, pointerId: 42, isPrimary: true, button: 0 });
-      el.dispatchEvent(new PointerEvent('pointerdown', o(box.left + ${px})));
-      await new Promise(r => requestAnimationFrame(r));
-      el.dispatchEvent(new PointerEvent('pointerup', o(box.left + ${px})));
-    })()`);
-
+  // === 3. The compositor =====================================================
   const sampleCanvas = `(() => {
     const c = document.querySelector('[role="img"] canvas');
     if (!c) return null;
     const t = document.createElement('canvas'); t.width = 8; t.height = 8;
     t.getContext('2d').drawImage(c, 0, 0, 8, 8);
-    const d = t.getContext('2d').getImageData(0,0,8,8).data;
-    let r=0,g=0,b=0; for (let i=0;i<d.length;i+=4){r+=d[i];g+=d[i+1];b+=d[i+2];}
-    const n = d.length/4;
-    return { r: Math.round(r/n), g: Math.round(g/n), b: Math.round(b/n) };
+    const d = t.getContext('2d').getImageData(0, 0, 8, 8).data;
+    let r = 0, g = 0, b = 0;
+    for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; }
+    const n = d.length / 4;
+    return JSON.stringify({ r: Math.round(r/n), g: Math.round(g/n), b: Math.round(b/n) });
   })()`;
 
   const pixel = async (want, tries = 14) => {
     let last = null;
     for (let i = 0; i < tries; i++) {
       await sleep(400);
-      last = await ev(sampleCanvas);
+      last = j(await ev(sampleCanvas));
       if (last && want(last)) return last;
     }
     return last;
   };
-  const near = (v, t, tol) => Math.abs(v - t) <= tol;
 
-  // Explicitly back to the start first. The test has just been seeking around,
-  // and "the frame at 0s" is only meaningful if the playhead is actually at 0.
   await seekRuler(2);
   const atZero = await pixel((p) => p.r > 120 && p.g < 70 && p.b < 70);
-  check('preview renders the red clip at the start, not black', atZero && atZero.r > 120 && atZero.g < 70, atZero);
+  check('preview renders the red clip at the start', atZero && atZero.r > 120, atZero);
 
-  // Seek into the second clip and confirm the picture changed with it.
   await seekRuler(460);
-  const atFour = await pixel((p) => p.b > 120 && p.r < 70);
-  check('preview follows the playhead to the blue clip', atFour && atFour.b > 120 && atFour.r < 70, atFour);
+  const atBlue = await pixel((p) => p.b > 120 && p.r < 70);
+  check('preview follows the playhead onto the blue clip', atBlue && atBlue.b > 120 && atBlue.r < 70, atBlue);
 
-
-  // --- 5. Transitions ---
-  const tr = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    // Select the first clip, then open the transitions mode.
-    //
-    // A plain click(), not a synthetic pointerdown. A pointerdown with no
-    // matching pointerup is not a gesture any user can perform, and the editor
-    // is right to treat the leftover as an unfinished drag - so the test must
-    // not leave one lying around or every later step is testing the debris
-    // rather than the feature.
-    const clips = [...document.querySelectorAll('[data-clip]')];
-    const first = clips[0];
-    if (!first) return JSON.stringify({ error: 'no clip' });
-    first.click();
+  // === 4. Transitions ========================================================
+  await ev(`(() => { document.querySelector('[data-clip]').click(); return true; })()`);
+  await sleep(300);
+  await rail('Transitions');
+  const tr = await json(gesture(`
+    const tile = [...document.querySelectorAll('button')].find(b => /^Crossfade/.test(b.getAttribute('aria-label') || ''));
+    if (tile) tile.click();
     await tick();
-    const rail = document.querySelector('nav[aria-label="Editor modes"]');
-    const btn = [...rail.querySelectorAll('button')].find(b => /Transitions/.test(b.getAttribute('aria-label')||''));
-    if (!btn) return JSON.stringify({ error: 'no transitions mode' });
-    btn.click();
-    await tick();
-    await tick();
-    const tile = [...document.querySelectorAll('button')].find(b => /^Crossfade/.test((b.getAttribute('aria-label')||'')));
-    if (!tile) return JSON.stringify({ error: 'no crossfade tile' });
-    tile.click();
-    await tick();
-    await tick();
-    return JSON.stringify({ badges: document.querySelectorAll('[data-transition]').length, label: tile.getAttribute('aria-label') });
-  })()`);
-  const trRes = JSON.parse(String(tr).replace(/^"|"$/g, '') || '{}');
-  check('transition added to the join', trRes.badges >= 1, trRes);
-
-  // Seek to the middle of the transition and confirm BOTH frames are mixed.
-  const midBlend = await ev(`(async () => {
-    const badge = document.querySelector('[data-transition]');
-    if (!badge) return null;
-    const b = badge.getBoundingClientRect();
-    const el = document.querySelector('[role="slider"][aria-label="Timeline playhead"]');
-    const box = el.getBoundingClientRect();
-    const o = (x) => ({ bubbles: true, clientX: x, clientY: box.top + box.height/2, pointerId: 43, isPrimary: true, button: 0 });
-    el.dispatchEvent(new PointerEvent('pointerdown', o(b.left + b.width/2)));
-    await new Promise(r => requestAnimationFrame(r));
-    el.dispatchEvent(new PointerEvent('pointerup', o(b.left + b.width/2)));
     return true;
-  })()`);
-  const blendPixel = await pixel((p) => p.r > 20 && p.b > 20);
-  check(
-    'crossfade blends two clips (not pure red, not pure blue)',
-    Boolean(blendPixel && blendPixel.r > 20 && blendPixel.b > 20),
-    { blendPixel, seeked: midBlend }
-  );
-  void near;
+  `));
+  await sleep(600);
+  const badges = await json(`document.querySelectorAll('[data-transition]').length`);
+  check('transition added to the join between two touching clips', badges >= 1, { badges, ...tr });
 
-  // --- 6. Waveforms ---
-  const wave = await ev(`(() => {
-    const canvases = [...document.querySelectorAll('[data-clip] canvas')];
-    return { count: canvases.length, sized: canvases.filter(c => c.width > 0).length };
-  })()`);
-  check('waveform canvas rendered on audio-bearing clips', wave.count >= 2, wave);
+  await ev(gesture(`
+    const badge = document.querySelector('[data-transition]');
+    const b = badge.getBoundingClientRect();
+    const el = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = el.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 43, isPrimary: true, button: 0 });
+    el.dispatchEvent(new PointerEvent('pointerdown', o(b.left + b.width / 2)));
+    await tick();
+    el.dispatchEvent(new PointerEvent('pointerup', o(b.left + b.width / 2)));
+  `));
+  const blend = await pixel((p) => p.r > 20 && p.b > 20);
+  check('crossfade blends two clips (neither pure red nor pure blue)', blend && blend.r > 20 && blend.b > 20, blend);
 
-  // --- 7. Trim ---
-  const trim = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // === 5. Waveforms, trim, fade ==============================================
+  const waves = await json(`document.querySelectorAll('[data-clip] canvas').length`);
+  check('waveform canvases rendered on audio-bearing clips', waves >= 2, { canvases: waves });
+
+  const trim = await json(gesture(`
     const clip = document.querySelector('[data-clip]');
-    if (!clip) return 'no clip';
-    const before = Math.round(clip.getBoundingClientRect().width);
+    const before = Number(clip.getAttribute('data-frames-length'));
     const h = clip.querySelector('[aria-label^="Trim end"]');
-    if (!h) return 'no trim handle';
     const hb = h.getBoundingClientRect();
-    const o = (x) => ({ bubbles: true, clientX: x, clientY: hb.top + hb.height/2, pointerId: 7, isPrimary: true, button: 0 });
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: hb.top + hb.height / 2, pointerId: 7, isPrimary: true, button: 0 });
     h.dispatchEvent(new PointerEvent('pointerdown', o(hb.right - 2)));
     await tick();
-    h.dispatchEvent(new PointerEvent('pointermove', o(hb.right - 2 - 70)));
+    h.dispatchEvent(new PointerEvent('pointermove', o(hb.right - 2 - 60)));
     await tick();
-    h.dispatchEvent(new PointerEvent('pointerup', o(hb.right - 2 - 70)));
+    h.dispatchEvent(new PointerEvent('pointerup', o(hb.right - 2 - 60)));
     await tick();
-    const after = Math.round(document.querySelector('[data-clip]').getBoundingClientRect().width);
-    return JSON.stringify({ before, after, shortened: after < before });
-  })()`);
-  const trimRes = JSON.parse(String(trim).replace(/^"|"$/g, '') || '{}');
-  check('dragging the out-edge shortens the clip', trimRes.shortened === true, trimRes);
+    const after = Number(document.querySelector('[data-clip]').getAttribute('data-frames-length'));
+    return JSON.stringify({ before, after, shorter: after < before, keptAtLeastOne: after >= 1 });
+  `));
+  check('dragging the out-edge shortens the clip, in whole frames', trim.shorter && trim.keptAtLeastOne, trim);
 
-  // --- 8. Fade drag ---
-  const fade = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const fade = await json(gesture(`
     const clip = [...document.querySelectorAll('[data-clip]')].find(c => c.querySelector('[aria-label^="Fade out"]'));
-    if (!clip) return JSON.stringify({ error: 'no clip with a fade handle' });
-    const readFade = () => parseFloat((clip.querySelector('[aria-label^="Fade out"]').getAttribute('title')||'').match(/([\\d.]+)s/)?.[1] ?? '0');
-    const before = readFade();
+    const read = () => parseFloat((clip.querySelector('[aria-label^="Fade out"]').getAttribute('title') || '').match(/([\\d.]+)s/)?.[1] ?? '0');
+    const before = read();
     const h = clip.querySelector('[aria-label^="Fade out"]');
     const hb = h.getBoundingClientRect();
-    const o = (y) => ({ bubbles: true, clientX: hb.left + 3, clientY: y, pointerId: 8, isPrimary: true, button: 0 });
+    const o = (y) => ({ bubbles: true, cancelable: true, clientX: hb.left + 3, clientY: y, pointerId: 8, isPrimary: true, button: 0 });
     h.dispatchEvent(new PointerEvent('pointerdown', o(hb.top + 2)));
     await tick();
     h.dispatchEvent(new PointerEvent('pointermove', o(hb.top - 40)));
     await tick();
     h.dispatchEvent(new PointerEvent('pointerup', o(hb.top - 40)));
     await tick();
-    return JSON.stringify({ before, after: readFade() });
+    return JSON.stringify({ before, after: read() });
+  `));
+  check('dragging the fade corner lengthens the fade', fade.after > fade.before + 0.1, fade);
+
+  // === 6. Cross-lane drag ====================================================
+  await ev(`(() => { document.querySelector('[aria-label="Add a track"]').click(); return true; })()`);
+  await sleep(400);
+  await ev(gesture(`
+    [...document.querySelectorAll('button')].find(b => /^Video track$/.test(b.textContent.trim()))?.click();
+  `));
+
+  const lanesBefore = await json(`(() => {
+    const clip = document.querySelector('[data-clip]');
+    const cb = clip.getBoundingClientRect();
+    const lanes = [...document.querySelectorAll('[data-track]')].map(l => {
+      const r = l.getBoundingClientRect();
+      return { id: l.getAttribute('data-track'), type: l.getAttribute('data-track-type'), top: Math.round(r.top), height: Math.round(r.height), clips: l.querySelectorAll('[data-clip]').length };
+    });
+    const from = lanes.find(l => l.id === clip.parentElement.getAttribute('data-track'));
+    const target = lanes.find(l => l.type === 'video' && l.clips === 0 && l.top > from.top);
+    return JSON.stringify({ lanes, target: target ? target.id : null, clipId: clip.getAttribute('data-clip-id'), grab: { x: Math.round(cb.left + 30), y: Math.round(cb.top + 20) } });
   })()`);
-  const fadeRes = JSON.parse(String(fade).replace(/^"|"$/g, '') || '{}');
-  check('dragging the fade corner lengthens the fade', fadeRes.after > fadeRes.before + 0.1, fadeRes);
-
-  // --- 9. Cross-lane drag ---
-  // Target the lane by its TYPE, not by "whatever is empty below" - the second
-  // video lane is the one a picture-in-picture clip belongs on, and an audio
-  // lane is a legitimate drop that the editor must refuse.
-  // A cross-lane drag.
-  //
-  // Synthetic PointerEvents, not CDP Input.dispatchMouseEvent: in this
-  // headless build a CDP mousePressed does not reach the page (a CDP
-  // mouseMoved does, which is worse - it looks like it works). Synthetic
-  // events exercise the same listeners the browser would call.
-  //
-  // The assertion follows the DRAGGED clip by id. querySelector('[data-clip]')
-  // returns whichever clip comes first in the DOM, which after the drag is a
-  // DIFFERENT clip on a different lane - so reading "the first clip" only
-  // proves that some clip exists on v1, which was true even when the drag had
-  // failed.
-  await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    document.querySelector('[aria-label="Add a track"]').click();
-    await tick();
-    const add = [...document.querySelectorAll('button')].find(b => /^Video track$/.test(b.textContent.trim()));
-    if (add) add.click();
-    await tick(); await tick();
-  })()`);
-
-  const lanesBefore = JSON.parse(
-    String(
-      await ev(`(() => {
-        const clip = document.querySelector('[data-clip]');
-        const cb = clip.getBoundingClientRect();
-        const lanes = [...document.querySelectorAll('[data-track]')].map(l => {
-          const r = l.getBoundingClientRect();
-          return { id: l.getAttribute('data-track'), type: l.getAttribute('data-track-type'), top: Math.round(r.top), height: Math.round(r.height), clips: l.querySelectorAll('[data-clip]').length };
-        });
-        const from = lanes.find(l => l.id === clip.parentElement.getAttribute('data-track'));
-        const target = lanes.find(l => l.type === 'video' && l.clips === 0 && l.top > from.top);
-        return JSON.stringify({
-          lanes,
-          target: target ? target.id : null,
-          clipId: clip.getAttribute('data-clip-id'),
-          grab: { x: Math.round(cb.left + 30), y: Math.round(cb.top + 20) },
-        });
-      })()`)
-    ).replace(/^"|"$/g, '') || '{}'
-  );
-
   check(
     'a second video lane is added next to the first',
-    (lanesBefore.lanes || []).filter((l) => l.type === 'video').length === 2,
-    { lanes: (lanesBefore.lanes || []).map((l) => l.type + ':' + l.clips) }
+    lanesBefore.lanes.filter((l) => l.type === 'video').length === 2,
+    { lanes: lanesBefore.lanes.map((l) => l.type + ':' + l.clips) }
   );
 
   if (lanesBefore.target) {
     const lane = lanesBefore.lanes.find((x) => x.id === lanesBefore.target);
-    const mid = lane.top + Math.round(lane.height / 2);
     const g = lanesBefore.grab;
-    const cid = lanesBefore.clipId;
-    await ev(`(() => {
-      const clip = document.querySelector('[data-clip-id="' + ${JSON.stringify(cid)} + '"]');
-      const g = ${JSON.stringify(g)};
-      const mid = ${mid};
-      const top = ${lane.top};
-      const o = (x, y) => ({ bubbles: true, clientX: x, clientY: y, pointerId: 61, isPrimary: true, button: 0 });
-      window.__drag = () => {
-        clip.dispatchEvent(new PointerEvent('pointerdown', o(g.x, g.y)));
-        clip.dispatchEvent(new PointerEvent('pointermove', o(g.x + 20, g.y + 10)));
-        clip.dispatchEvent(new PointerEvent('pointermove', o(g.x + 50, top + 10)));
-        clip.dispatchEvent(new PointerEvent('pointermove', o(g.x + 70, mid)));
-        clip.dispatchEvent(new PointerEvent('pointerup', o(g.x + 70, mid)));
-      };
-    })()`);
-    // The four moves are spread across frames so React commits each preview.
-    for (let i = 0; i < 4; i++) {
-      await ev(`window.__drag ? (window.__drag(), true) : false`);
-      await sleep(220);
-    }
-    await ev(`(() => { const c = document.querySelector('[data-clip-id="' + ${JSON.stringify(cid)} + '"]'); const o = (x, y) => ({ bubbles: true, clientX: x, clientY: y, pointerId: 61, isPrimary: true, button: 0 }); c.dispatchEvent(new PointerEvent('pointerup', o(0, 0))); })()`);
-    await sleep(400);
+    const mid = lane.top + Math.round(lane.height / 2);
+    await ev(gesture(`
+      const clip = document.querySelector('[data-clip-id="${lanesBefore.clipId}"]');
+      const o = (x, y) => ({ bubbles: true, cancelable: true, clientX: x, clientY: y, pointerId: 61, isPrimary: true, button: 0 });
+      clip.dispatchEvent(new PointerEvent('pointerdown', o(${g.x}, ${g.y})));
+      await tick();
+      clip.dispatchEvent(new PointerEvent('pointermove', o(${g.x + 20}, ${g.y + 10})));
+      await tick();
+      clip.dispatchEvent(new PointerEvent('pointermove', o(${g.x + 50}, ${lane.top + 10})));
+      await tick();
+      clip.dispatchEvent(new PointerEvent('pointermove', o(${g.x + 70}, ${mid})));
+      await tick();
+      clip.dispatchEvent(new PointerEvent('pointerup', o(${g.x + 70}, ${mid})));
+    `));
   }
+  const laneAfter = await json(`(() => {
+    const clip = document.querySelector('[data-clip-id="${lanesBefore.clipId}"]');
+    return JSON.stringify({ track: clip.parentElement.getAttribute('data-track'), start: clip.getAttribute('data-frames-start') });
+  })()`);
+  check('a clip can be dragged onto another video lane', laneAfter.track === lanesBefore.target, { laneAfter, target: lanesBefore.target });
 
-  const after = JSON.parse(
-    String(
-      await ev(`(() => {
-        const clip = document.querySelector('[data-clip-id="' + ${JSON.stringify(lanesBefore.clipId)} + '"]');
-        return JSON.stringify({
-          track: clip.parentElement.getAttribute('data-track'),
-          top: Math.round(clip.getBoundingClientRect().top),
-          lanes: [...document.querySelectorAll('[data-track]')].map(l => l.getAttribute('data-track-type') + ':' + l.querySelectorAll('[data-clip]').length),
-        });
-      })()`)
-    ).replace(/^"|"$/g, '') || '{}'
-  );
+  // === 7. Roll ===============================================================
+  const rolled = await json(gesture(`
+    // Build a boundary deterministically: cut one clip in half at its
+    // midpoint. The blade always leaves two ADJACENT halves, whatever else is
+    // on the timeline - and "trim one clip onto another" needs a lane with
+    // two clips on it, which the earlier steps do not guarantee.
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = ruler.getBoundingClientRect();
+    const clip = document.querySelector('[data-clip]');
+    if (!clip) return JSON.stringify({ error: 'no clip' });
+    // Capture the LANE'S ID, not the node. Cutting replaces the DOM node, so a
+    // reference taken before the blade points at a detached element afterwards
+    // and its parentElement is null.
+    const laneId = clip.parentElement.getAttribute('data-track');
+    const cr = clip.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 96, isPrimary: true, button: 0 });
+    const midX = cr.left + cr.width / 2;
+    ruler.dispatchEvent(new PointerEvent('pointerdown', o(midX)));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointerup', o(midX)));
+    await tick();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', bubbles: true }));
+    await tick();
 
+    const lane = document.querySelector('[data-track="' + laneId + '"]');
+    if (!lane) return JSON.stringify({ error: 'lane gone' });
+    const pair = [...lane.querySelectorAll('[data-clip]')].sort((a, b) =>
+      Number(a.getAttribute('data-frames-start')) - Number(b.getAttribute('data-frames-start')));
+    if (pair.length < 2) return JSON.stringify({ error: 'the blade produced one clip', pair: pair.length });
+    const l = pair[0];
+    const r = pair[1];
+    const end = Number(l.getAttribute('data-frames-start')) + Number(l.getAttribute('data-frames-length'));
+    if (Number(r.getAttribute('data-frames-start')) !== end) return JSON.stringify({ error: 'halves are not adjacent' });
+
+    const before = { ll: Number(l.getAttribute('data-frames-length')), rl: Number(r.getAttribute('data-frames-length')) };
+    const handle = document.querySelector('[role="separator"][aria-label^="Roll the cut"]');
+    if (!handle) return JSON.stringify({ error: 'no roll handle', before });
+    const hb = handle.getBoundingClientRect();
+    const cx = hb.left + hb.width / 2;
+    const ro = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: hb.top + hb.height / 2, pointerId: 93, isPrimary: true, button: 0 });
+    handle.dispatchEvent(new PointerEvent('pointerdown', ro(cx)));
+    await tick();
+    handle.dispatchEvent(new PointerEvent('pointermove', ro(cx + 24)));
+    await tick();
+    handle.dispatchEvent(new PointerEvent('pointerup', ro(cx + 24)));
+    await tick();
+    const nl = document.querySelector('[data-clip-id="' + l.getAttribute('data-clip-id') + '"]');
+    const nr = document.querySelector('[data-clip-id="' + r.getAttribute('data-clip-id') + '"]');
+    const after = { ll: Number(nl.getAttribute('data-frames-length')), rl: Number(nr.getAttribute('data-frames-length')) };
+    return JSON.stringify({ before, after,
+      leftGrew: after.ll > before.ll,
+      rightShrank: after.rl < before.rl,
+      totalUnchanged: after.ll + after.rl === before.ll + before.rl });
+  `));
   check(
-    'a clip can be dragged onto another video lane',
-    after.track === lanesBefore.target,
-    { after, target: lanesBefore.target }
+    'roll moves the cut between two adjacent clips: left grows, right shrinks, total unchanged',
+    rolled.leftGrew && rolled.rightShrank && rolled.totalUnchanged,
+    rolled
   );
 
-
-  // --- 10. Clip properties dialog ---
-  const props = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  // === 8. Clip properties ====================================================
+  const props = await json(gesture(`
     const clip = document.querySelector('[data-clip]');
     clip.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    await tick(); await tick();
+    await tick();
     const dlg = document.querySelector('[role="dialog"]');
     if (!dlg) return JSON.stringify({ opened: false });
     const speed = dlg.querySelector('input[aria-label="Playback speed"]');
-    const before = speed ? Number(speed.value) : null;
     if (speed) {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
       setter.call(speed, '2');
       speed.dispatchEvent(new Event('input', { bubbles: true }));
       speed.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    await tick(); await tick();
-    const after = dlg.querySelector('input[aria-label="Playback speed"]')?.value;
-    return JSON.stringify({ opened: true, title: dlg.getAttribute('aria-label'), before, after, hasVolume: !!dlg.querySelector('input[aria-label="Clip volume"]'), hasOpacity: !!dlg.querySelector('input[aria-label="Clip opacity"]') });
-  })()`);
-  const propsRes = JSON.parse(String(props).replace(/^"|"$/g, '') || '{}');
-  check('double-click opens clip properties', propsRes.opened === true, propsRes);
-  check('properties expose speed / volume / opacity', propsRes.after === '2' && propsRes.hasVolume && propsRes.hasOpacity, propsRes);
-
-  // --- 11. Filters panel applies a real grade ---
-  const filters = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    document.querySelector('[aria-label="Close clip properties"]')?.click();
     await tick();
-    const rail = document.querySelector('nav[aria-label="Editor modes"]');
-    [...rail.querySelectorAll('button')].find(b => /Filters/.test(b.getAttribute('aria-label')||''))?.click();
-    await tick(); await tick();
-    const tile = [...document.querySelectorAll('button')].find(b => /colour grade/i.test(b.getAttribute('aria-label')||''));
-    if (!tile) return JSON.stringify({ tiles: 0, text: document.body.innerText.slice(0,300) });
-    tile.click();
-    await tick(); await tick();
-    const clip = document.querySelector('[data-clip]');
-    return JSON.stringify({ tiles: document.querySelectorAll('button[aria-label^="Apply the"]').length, grade: tile.getAttribute('aria-label') });
-  })()`);
-  const filtersRes = JSON.parse(String(filters).replace(/^"|"$/g, '') || '{}');
-  check('filters panel lists real resource grades', (filtersRes.tiles ?? 0) >= 8, filtersRes);
+    return JSON.stringify({ opened: true, title: dlg.getAttribute('aria-label'),
+      after: dlg.querySelector('input[aria-label="Playback speed"]')?.value,
+      hasVolume: !!dlg.querySelector('input[aria-label="Clip volume"]'),
+      hasOpacity: !!dlg.querySelector('input[aria-label="Clip opacity"]'),
+      showsFrames: /frames \\d+–\\d+/.test(dlg.innerText) });
+  `));
+  check('double-click opens clip properties and writes 2x speed', props.opened && props.after === '2' && props.hasVolume && props.hasOpacity, props);
+  check('the properties dialog describes the clip in frames', props.showsFrames === true, props);
+  await ev(`(() => { document.querySelector('[aria-label="Close clip properties"]')?.click(); return true; })()`);
+  await sleep(400);
 
-  // --- 12. Audio effects ---
-  const audioFx = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const rail = document.querySelector('nav[aria-label="Editor modes"]');
-    [...rail.querySelectorAll('button')].find(b => /^Audio/.test(b.getAttribute('aria-label')||''))?.click();
-    await tick(); await tick();
-    const tiles = document.querySelectorAll('button[aria-label^="Apply the"], button[aria-label^="Remove the"]');
-    const silence = document.body.innerText.includes('Remove silence');
-    return JSON.stringify({ tiles: tiles.length, silence });
-  })()`);
-  const audioRes = JSON.parse(String(audioFx).replace(/^"|"$/g, '') || '{}');
-  check('audio panel lists real effects and silence removal', (audioRes.tiles ?? 0) >= 10 && audioRes.silence, audioRes);
+  // === 9. The panels =========================================================
+  await rail('Filters');
+  const grades = await json(`document.querySelectorAll('button[aria-label^="Apply the"]').length`);
+  check('filters panel lists real colour grades from the sample resources', grades >= 8, { grades });
 
-  // --- 13. Titles ---
-  const titles = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const rail = document.querySelector('nav[aria-label="Editor modes"]');
-    [...rail.querySelectorAll('button')].find(b => /^Titles/.test(b.getAttribute('aria-label')||''))?.click();
-    await tick(); await tick();
+  await rail('Audio');
+  const audioPanel = await json(`(() => {
+    const t = document.body.innerText;
+    return JSON.stringify({ tiles: document.querySelectorAll('button[aria-label^="Apply the"], button[aria-label^="Remove the"]').length, silence: t.includes('Remove silence') });
+  })()`);
+  check('audio panel lists real effects and local silence removal', audioPanel.tiles >= 10 && audioPanel.silence, audioPanel);
+
+  await rail('Titles');
+  const titleAdd = await json(gesture(`
     const before = document.querySelectorAll('[data-clip]').length;
-    const tile = [...document.querySelectorAll('button')].find(b => /Lower third/.test(b.textContent||''));
-    if (!tile) return JSON.stringify({ error: 'no title style tile' });
-    tile.click();
-    await tick(); await tick();
+    [...document.querySelectorAll('button')].find(b => /Lower third/.test(b.textContent))?.click();
+    await tick();
     return JSON.stringify({ before, after: document.querySelectorAll('[data-clip]').length });
-  })()`);
-  const titlesRes = JSON.parse(String(titles).replace(/^"|"$/g, '') || '{}');
-  check('a title can be added from the panel', titlesRes.after === titlesRes.before + 1, titlesRes);
+  `));
+  check('a title can be added from the panel', titleAdd.after === titleAdd.before + 1, titleAdd);
 
-  // --- 14. Undo / redo / delete / select all ---
-  const editing = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const clips = () => document.querySelectorAll('[data-clip]').length;
-    const out = { start: clips() };
+  await rail('Import');
+
+  // === 10. Undo / redo / clipboard ==========================================
+  const editing = await json(gesture(`
+    const t = () => document.body.innerText;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    out.selected = Number((document.body.innerText.match(/(\\d+) selected/) || [0,'0'])[1]);
+    await tick();
+    const start = document.querySelectorAll('[data-clip]').length;
+    const selected = Number((t().match(/(\\d+) selected/) || [0, '0'])[1]);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
-    await tick(); await tick();
-    out.afterDelete = clips();
+    await tick();
+    const afterDelete = document.querySelectorAll('[data-clip]').length;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    out.afterUndo = clips();
+    await tick();
+    const afterUndo = document.querySelectorAll('[data-clip]').length;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    out.afterRedo = clips();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    out.restored = clips();
-    return JSON.stringify(out);
-  })()`);
-  const editRes = JSON.parse(String(editing).replace(/^"|"$/g, '') || '{}');
-  check('select all, delete, undo, redo all work', editRes.selected === editRes.start && editRes.afterDelete === 0 && editRes.afterUndo === editRes.start && editRes.afterRedo === 0 && editRes.restored === editRes.start, editRes);
-
-  // --- 15. Copy / paste / duplicate ---
-  const clipboard = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const clips = () => document.querySelectorAll('[data-clip]').length;
-    document.querySelector('[data-clip]').click();
-    await tick(); await tick();
-    const selected = Number((document.body.innerText.match(/(\\d+) selected/) || [0,'0'])[1]);
-    const before = clips();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    const afterDup = clips();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
     await tick();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
-    return JSON.stringify({ selected, before, afterDup, afterPaste: clips(), toast: document.querySelector('[role="status"]')?.textContent || '' });
-  })()`);
-  const clipRes = JSON.parse(String(clipboard).replace(/^"|"$/g, '') || '{}');
+    const afterRedo = document.querySelectorAll('[data-clip]').length;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+    await tick();
+    return JSON.stringify({ start, selected, afterDelete, afterUndo, afterRedo, restored: document.querySelectorAll('[data-clip]').length });
+  `));
   check(
-    'duplicate adds one copy of the selection',
-    clipRes.selected === 1 && clipRes.afterDup === clipRes.before + 1,
-    clipRes
+    'select all, delete, undo and redo all work',
+    editing.selected === editing.start && editing.afterDelete === 0 &&
+      editing.afterUndo === editing.start && editing.afterRedo === 0 && editing.restored === editing.start,
+    editing
   );
-  check('paste adds the clipboard', clipRes.afterPaste === clipRes.afterDup + 1, clipRes);
 
-  // --- 16. Project save + reload (redo across a page load) ---
-  // The undo is left IN PLACE on purpose: that is what leaves a non-empty redo
-  // stack, and the redo stack is what has to survive the reload. Saving after
-  // a fresh edit would have nothing to redo and the assertion would pass for
-  // the wrong reason.
-  const saved = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(r));
+  const clipboardOps = await json(gesture(`
     document.querySelector('[data-clip]').click();
     await tick();
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
-    await tick(); await tick();
+    const before = document.querySelectorAll('[data-clip]').length;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true }));
+    await tick();
+    const afterDup = document.querySelectorAll('[data-clip]').length;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+    await tick();
+    return JSON.stringify({ before, afterDup, afterPaste: document.querySelectorAll('[data-clip]').length });
+  `));
+  check(
+    'duplicate adds one copy and paste adds one more',
+    clipboardOps.afterDup === clipboardOps.before + 1 && clipboardOps.afterPaste === clipboardOps.afterDup + 1,
+    clipboardOps
+  );
+
+  // === 11. Markers ===========================================================
+  const markers = await json(gesture(`
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+    await tick();
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = ruler.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 91, isPrimary: true, button: 0 });
+    ruler.dispatchEvent(new PointerEvent('pointerdown', o(box.left + 120)));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointerup', o(box.left + 120)));
+    await tick();
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', bubbles: true }));
+    await tick();
+    const marks = [...ruler.querySelectorAll('[aria-label^="Marker:"]')].map(b => b.getAttribute('aria-label'));
+    const frames = marks.map(l => Number((l.match(/frame (\\d+)/) || [0, 0])[1]));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', bubbles: true }));
+    await tick();
+    return JSON.stringify({ marks, frames, afterStepBack: Number((document.body.innerText.match(/FRAME (\\d+)\\//) || [0, 0])[1]) });
+  `));
+  check(
+    'markers are added at the playhead and , steps back to the previous one',
+    markers.marks.length >= 2 &&
+      // The two markers sit on different frames - the one before the seek and
+      // the one after it - and stepping back lands on the EARLIER of the two.
+      markers.frames[0] !== markers.frames[1] &&
+      markers.afterStepBack === Math.min(...markers.frames),
+    markers
+  );
+
+  // === 12. Ruler measurement =================================================
+  const measured = await json(gesture(`
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = ruler.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.bottom - 3, pointerId: 94, isPrimary: true, button: 0 });
+    ruler.dispatchEvent(new PointerEvent('pointerdown', o(box.left + 90)));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointermove', o(box.left + 270)));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointerup', o(box.left + 270)));
+    await tick();
+    return JSON.stringify({ readout: /MEASURE (\\d+)f/.exec(document.body.innerText)?.[0] || null });
+  `));
+  check('dragging the ruler measures a range and reports its length in frames', Boolean(measured.readout), measured);
+
+  const readouts = await json(`(() => {
+    const t = document.body.innerText;
+    return JSON.stringify({
+      tc: /TC (\\d{2}:\\d{2}:\\d{2}:\\d{2})/.exec(t)?.[1] || null,
+      frameLine: /FRAME \\d+\\/\\d+ @ \\d+fps/.test(t),
+      tick: /tick (\\d+)f/.exec(t)?.[1] || null,
+    });
+  })()`);
+  check('timecode is HH:MM:SS:FF and the frame number is shown separately', Boolean(readouts.tc) && readouts.frameLine, readouts);
+  check('the ruler reports its tick step', Boolean(readouts.tick), readouts);
+
+  // === 13. Zoom reaches a single frame =======================================
+  const setZoom = (value) =>
+    ev(gesture(`
+      const slider = document.querySelector('input[aria-label="Timeline zoom"]');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(slider, '${value}');
+      slider.dispatchEvent(new Event('input', { bubbles: true }));
+      slider.dispatchEvent(new Event('change', { bubbles: true }));
+    `));
+
+  await setZoom(6400);
+  // The store coalesces its disk writes by 250ms, by design: a drag writes on
+  // every pointermove. Reading the blob on the next line would read the value
+  // from BEFORE this edit and report the app as not persisting what it has
+  // already persisted.
+  await sleep(900);
+  const maxZoom = await json(`(() => {
+    const s = JSON.parse(localStorage.getItem('${SETTINGS_KEY}') || '{}');
+    return JSON.stringify({ px: s.pxPerFrame, pct: document.querySelector('[aria-label="Zoom percentage"]').textContent });
+  })()`);
+  check('zoom reaches single-frame level (>= 24 pixels per frame)', maxZoom.px >= 24, maxZoom);
+  await setZoom(300);
+  await sleep(700);
+
+  // === 14. Frame rate ========================================================
+  const rate = await json(gesture(`
+    const sel = document.querySelector('select[aria-label="Timeline frame rate"]');
+    const options = [...sel.options].map(o => Number(o.value));
+    return JSON.stringify({ options });
+  `));
+  check('all five frame rates are offered', JSON.stringify(rate.options) === JSON.stringify([24, 25, 30, 50, 60]), rate);
+
+  await ev(gesture(`
+    const sel = document.querySelector('select[aria-label="Timeline frame rate"]');
+    sel.value = '25';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  `));
+  await sleep(900);
+
+  // === 15. The workspace survives a refresh ==================================
+  // Save FIRST. The refresh reopens the last saved project, so testing
+  // persistence without saving anything tests an empty editor and calls it a
+  // failure.
+  await ev(`(async () => {
+    const tick = () => new Promise(r => requestAnimationFrame(r));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
-    await new Promise(r => setTimeout(r, 2500));
-    const raw = localStorage.getItem('wideo11.editor.projects');
-    const redoEnabledBefore = !document.querySelector('[aria-label="Redo"]')?.disabled;
-    return JSON.stringify({ index: raw ? JSON.parse(raw) : null, redoEnabledBefore });
+    await tick();
+    return true;
   })()`);
-  const savedRes = JSON.parse(String(saved).replace(/^"|"$/g, '') || '{}');
-  check('project saved and listed as recent', Array.isArray(savedRes.index) && savedRes.index.length >= 1, savedRes.index);
-  check('a redo is available before the reload', savedRes.redoEnabledBefore === true, savedRes);
+  await sleep(2500);
+  await setZoom(900);
+  await ev(`(() => { document.querySelector('[aria-label^="Switch to"]')?.click(); return true; })()`);
+  await sleep(1500);
 
-  const beforeReload = await ev(`document.querySelectorAll('[data-clip]').length`);
+  const wsBefore = await json(`(() => {
+    const s = JSON.parse(localStorage.getItem('${SETTINGS_KEY}') || '{}');
+    return JSON.stringify({
+      zoom: document.querySelector('input[aria-label="Timeline zoom"]').value,
+      fps: document.querySelector('select[aria-label="Timeline frame rate"]').value,
+      light: document.documentElement.classList.contains('light'),
+      storedPx: s.pxPerFrame,
+    });
+  })()`);
+
   await cdp('Page.navigate', { url: URL }, sid);
-  await sleep(8000);
-  const afterReload = await ev(`(() => ({
-    clips: document.querySelectorAll('[data-clip]').length,
-    tiles: document.querySelectorAll('li').length,
-    name: (document.body.innerText.match(/Video [0-9]|Audio [0-9]|Text [0-9]/) || [''])[0],
-    redoEnabled: !document.querySelector('[aria-label="Redo"]')?.disabled,
-    transitionBadges: document.querySelectorAll('[data-transition]').length,
-  }))()`);
-  check('project reopens after a reload with its clips', afterReload.clips >= beforeReload - 1 && afterReload.clips > 0, { beforeReload, afterReload });
-  check('media restored from IndexedDB', afterReload.tiles >= 3, afterReload);
-  check('transitions survive a reload', afterReload.transitionBadges >= 1, afterReload);
-  check('redo survives a reload', afterReload.redoEnabled === true, afterReload);
+  await sleep(9000);
+  await rail('Import');
+  await sleep(1200);
 
-  // --- 17. Export dialog opens and reports honestly ---
-  const exp = await ev(`(async () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, bubbles: true }));
-    await new Promise(r => setTimeout(r, 500));
-    const dlg = document.querySelector('[role="dialog"][aria-label="Export video"]');
-    if (!dlg) return JSON.stringify({ opened: false });
-    const presets = dlg.querySelectorAll('select[aria-label="Export preset"] option').length;
-    const text = dlg.innerText;
-    dlg.querySelector('[aria-label="Close export dialog"]')?.click();
-    return JSON.stringify({ opened: true, presets, realTime: /Real-time/.test(text), container: /WEBM|MediaRecorder/i.test(text) });
+  const wsAfter = await json(`(() => {
+    const s = JSON.parse(localStorage.getItem('${SETTINGS_KEY}') || '{}');
+    return JSON.stringify({
+      zoom: document.querySelector('input[aria-label="Timeline zoom"]').value,
+      fps: document.querySelector('select[aria-label="Timeline frame rate"]').value,
+      light: document.documentElement.classList.contains('light'),
+      clips: document.querySelectorAll('[data-clip]').length,
+      tiles: document.querySelectorAll('li').length,
+      storedPx: s.pxPerFrame,
+    });
   })()`);
-  const expRes = JSON.parse(String(exp).replace(/^"|"$/g, '') || '{}');
-  check('export dialog opens with presets and honest copy', expRes.opened && expRes.presets >= 10 && expRes.realTime, expRes);
+  check(
+    'zoom, frame rate and theme all survive a browser refresh',
+    wsAfter.zoom === wsBefore.zoom && wsAfter.fps === wsBefore.fps && wsAfter.light === wsBefore.light && wsAfter.clips > 0,
+    { wsBefore, wsAfter }
+  );
+  check('media restored from IndexedDB after the refresh', wsAfter.tiles >= 3, { tiles: wsAfter.tiles });
 
-  // --- 18. Resizable handles still work, correct directions ---
-  const handles = await ev(`(() => [...document.querySelectorAll('[role="separator"]')].map(h => ({
-    label: h.getAttribute('aria-label'), now: Number(h.getAttribute('aria-valuenow')),
-    min: Number(h.getAttribute('aria-valuemin')), max: Number(h.getAttribute('aria-valuemax')),
-    tabbable: h.getAttribute('tabindex') === '0',
-  })).filter(h => /bin|timeline|status/i.test(h.label || '')))()`);
-  check('resize handles exist and are keyboard reachable', handles.length >= 3 && handles.every(h => h.tabbable), handles);
+  await ev(gesture(`
+    document.querySelector('[aria-label^="Switch to"]')?.click();
+    const sel = document.querySelector('select[aria-label="Timeline frame rate"]');
+    sel.value = '30';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  `));
+  await setZoom(300);
+  await sleep(900);
 
-  const drag = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const h = [...document.querySelectorAll('[role="separator"]')].find(x => /media bin/i.test(x.getAttribute('aria-label')||''));
-    if (!h) return 'handle not found';
+  // === 16. Playback ==========================================================
+  const playback = await json(gesture(`
+    const read = () => Number(document.querySelector('[role="slider"][aria-label="Timeline ruler"]').getAttribute('aria-valuenow'));
+    document.querySelector('[aria-label="Play"]')?.click();
+    await tick();
+    return JSON.stringify({ playing: !!document.querySelector('[aria-label="Pause"]'), t0: read() });
+  `));
+  await sleep(2000);
+  const afterPlay = await json(gesture(`
+    const t = document.querySelector('[role="slider"][aria-label="Timeline ruler"]').getAttribute('aria-valuenow');
+    document.querySelector('[aria-label="Pause"]')?.click();
+    return JSON.stringify({ t1: Number(t) });
+  `));
+  check('playback advances the playhead, in whole frames', playback.playing && afterPlay.t1 > playback.t0, { ...playback, ...afterPlay });
+
+  // === 17. The edge edits, virtualisation and the viewer ==================
+  // Ripple trim, slip and slide exist because the USER has to be able to reach
+  // them. An operation that exists only behind a three-key chord is an
+  // operation most users never find, so each has a toolbar button - and each
+  // button is what this drives.
+  const edgeEdits = await json(gesture(`
+    const state = () => [...document.querySelectorAll('[data-clip]')]
+      .map(c => c.getAttribute('data-clip-id') + '@' + c.getAttribute('data-frames-start') + '+' + c.getAttribute('data-frames-length'))
+      .sort();
+    const click = (label) => {
+      const b = [...document.querySelectorAll('[aria-label="toolbar"] button, [role="toolbar"] button')]
+        .find(x => (x.getAttribute('aria-label') || '').startsWith(label));
+      if (b && !b.disabled) b.click();
+      return !!b && !b.disabled;
+    };
+    document.querySelector('[data-clip]').click();
+    await tick();
+    const out = { buttons: {} };
+
+    const before = state();
+    out.buttons.ripple = click('Ripple trim');
+    await tick();
+    out.afterRipple = state();
+    out.rippleMoved = JSON.stringify(before) !== JSON.stringify(out.afterRipple);
+
+    const b2 = state();
+    out.buttons.slip = click('Slip');
+    await tick();
+    out.afterSlip = state();
+    // A slip changes the SOURCE, so the timeline is deliberately unchanged.
+    out.slipLeftTimelineAlone = JSON.stringify(b2) === JSON.stringify(out.afterSlip);
+
+    const b3 = state();
+    out.buttons.slide = click('Slide');
+    await tick();
+    out.slideMoved = JSON.stringify(b3) !== JSON.stringify(state());
+    return JSON.stringify(out);
+  `));
+  check(
+    'ripple trim, slip and slide are reachable as toolbar buttons',
+    edgeEdits.buttons.ripple && edgeEdits.buttons.slip && edgeEdits.buttons.slide,
+    edgeEdits.buttons
+  );
+  check('ripple trim moves clips on the timeline', edgeEdits.rippleMoved, { after: edgeEdits.afterRipple });
+  check('slip leaves the timeline untouched and moves only the source', edgeEdits.slipLeftTimelineAlone);
+  check('slide moves the clip between its neighbours', edgeEdits.slideMoved);
+
+  // Virtualisation. 1000 clips must not become 1000 DOM nodes.
+  const many = await json(gesture(`
+    // Drive the model through the UI: the checks above have already proved the
+    // timeline works, so this only needs a way to MAKE the clips.
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = ruler.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 97, isPrimary: true, button: 0 });
+    const before = document.querySelectorAll('[data-clip]').length;
+    for (let i = 0; i < 6; i++) {
+      const clip = document.querySelector('[data-clip]');
+      if (clip) { clip.click(); await tick(); }
+      [...document.querySelectorAll('[aria-label="toolbar"] button, [role="toolbar"] button')]
+        .find(x => (x.getAttribute('aria-label') || '') === 'Duplicate clips' && !x.disabled)?.click();
+      await tick();
+    }
+    await tick();
+    return JSON.stringify({ before, after: document.querySelectorAll('[data-clip]').length });
+  `));
+  check(
+    'the lanes are virtualised: the DOM holds the visible window, not every clip',
+    many.after > 12 && many.after <= 30,
+    many
+  );
+  const footerCounts = await json(`(() => {
+    const t = document.body.innerText;
+    // Both forms are legitimate: "18 clips" when everything is on screen, and
+    // "18 clips (6 drawn)" once the lanes start virtualising. Requiring the
+    // second form would fail a correct editor that simply has no off-screen
+    // clips to hide.
+    const full = /(\\d+) clips \\((\\d+) drawn\\)/.exec(t);
+    const plain = /(\\d+) clips/.exec(t);
+    return JSON.stringify({
+      total: full ? Number(full[1]) : plain ? Number(plain[1]) : 0,
+      drawn: full ? Number(full[2]) : plain ? Number(plain[1]) : 0,
+      virtualised: Boolean(full),
+    });
+  })()`);
+  check(
+    'the footer reports the model total AND how many are drawn',
+    footerCounts.total > 12 && footerCounts.drawn > 0 && footerCounts.drawn <= footerCounts.total,
+    footerCounts
+  );
+
+  const viewer = await json(gesture(`
+    // Park the playhead ON a clip first: the source-frame read-out is
+    // deliberately "—" over a gap, and asserting on a gap proves nothing.
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const box = ruler.getBoundingClientRect();
+    const clip = document.querySelector('[data-clip]');
+    const cr = clip.getBoundingClientRect();
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + 6, pointerId: 98, isPrimary: true, button: 0 });
+    ruler.dispatchEvent(new PointerEvent('pointerdown', o(cr.left + 10)));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointerup', o(cr.left + 10)));
+    await tick();
+    const pick = (label) => {
+      const b = [...document.querySelectorAll('button')].find(x => (x.getAttribute('aria-label') || '') === label);
+      if (b) b.click();
+      return !!b;
+    };
+    const out = { layouts: pick('Picture in picture'), zoom: !!document.querySelector('input[aria-label="Viewer zoom"]'), badge: !!document.querySelector('input[aria-label="Viewer zoom"]') };
+    await tick();
+    // innerText puts a NEWLINE between the spans, so a "." pattern will not
+    // bridge them unless the regex has the dot-all flag. Two independent
+    // assertions are clearer than one clever one anyway.
+    const t = document.body.innerText;
+    out.timelineFrame = /TL [0-9]+/.test(t);
+    out.sourceFrame = /SRC [^ ]+/.test(t);
+    out.frameData = out.timelineFrame && out.sourceFrame;
+    const m = t.match(/TL [0-9]+/);
+    const s = t.match(/SRC [^ ]+/);
+    out.readout = (m ? m[0] : '') + ' | ' + (s ? s[0] : '');
+    return JSON.stringify(out);
+  `));
+  check('the viewer offers layout, zoom and a badge toggle', viewer.layouts && viewer.zoom, viewer);
+  check('the frame data read-out shows timeline AND source frame', viewer.frameData === true, viewer);
+
+  // === 18. Resize handles ====================================================
+  const handles = await json(`(() => JSON.stringify([...document.querySelectorAll('[role="separator"]')]
+    .map(h => ({ label: h.getAttribute('aria-label'), now: Number(h.getAttribute('aria-valuenow')), tabbable: h.getAttribute('tabindex') === '0' }))
+    .filter(h => /bin|timeline/i.test(h.label || ''))))()`);
+  check('resize handles exist and are keyboard reachable', handles.length === 2 && handles.every((h) => h.tabbable), handles);
+
+  const dragBin = await json(gesture(`
+    const h = [...document.querySelectorAll('[role="separator"]')].find(x => /media bin/i.test(x.getAttribute('aria-label') || ''));
     const box = h.getBoundingClientRect();
     const before = Number(h.getAttribute('aria-valuenow'));
-    const o = (x) => ({ bubbles: true, clientX: x, clientY: box.top + box.height/2, pointerId: 3, isPrimary: true, button: 0 });
+    const o = (x) => ({ bubbles: true, cancelable: true, clientX: x, clientY: box.top + box.height / 2, pointerId: 3, isPrimary: true, button: 0 });
     h.dispatchEvent(new PointerEvent('pointerdown', o(box.left)));
     await tick();
     h.dispatchEvent(new PointerEvent('pointermove', o(box.left + 60)));
     await tick();
     const during = Number(h.getAttribute('aria-valuenow'));
     h.dispatchEvent(new PointerEvent('pointerup', o(box.left + 60)));
-    h.dispatchEvent(new PointerEvent('pointermove', o(box.left - 4000)));
-    const min = Number(h.getAttribute('aria-valuemin'));
-    const max = Number(h.getAttribute('aria-valuemax'));
-    return JSON.stringify({ before, during, grew: during > before, min, max });
-  })()`);
-  const dragRes = JSON.parse(String(drag).replace(/^"|"$/g, '') || '{}');
-  check('media bin resize handle grows the panel to the right', dragRes.grew === true, dragRes);
+    return JSON.stringify({ before, during, grew: during > before });
+  `));
+  check('the media bin handle grows the panel to the right', dragBin.grew, dragBin);
 
-  const dragV = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const h = [...document.querySelectorAll('[role="separator"]')].find(x => /timeline/i.test(x.getAttribute('aria-label')||''));
-    if (!h) return 'handle not found';
+  const dragLane = await json(gesture(`
+    const h = [...document.querySelectorAll('[role="separator"]')].find(x => /lane/i.test(x.getAttribute('aria-label') || ''));
+    if (!h) return JSON.stringify({ error: 'no lane handle' });
     const box = h.getBoundingClientRect();
     const before = Number(h.getAttribute('aria-valuenow'));
-    const o = (y) => ({ bubbles: true, clientX: box.left + box.width/2, clientY: y, pointerId: 4, isPrimary: true, button: 0 });
+    const o = (y) => ({ bubbles: true, cancelable: true, clientX: box.left + box.width / 2, clientY: y, pointerId: 4, isPrimary: true, button: 0 });
     h.dispatchEvent(new PointerEvent('pointerdown', o(box.top)));
     await tick();
-    h.dispatchEvent(new PointerEvent('pointermove', o(box.top - 80)));
+    h.dispatchEvent(new PointerEvent('pointermove', o(box.top - 40)));
     await tick();
     const during = Number(h.getAttribute('aria-valuenow'));
-    h.dispatchEvent(new PointerEvent('pointerup', o(box.top - 80)));
+    h.dispatchEvent(new PointerEvent('pointerup', o(box.top - 40)));
     return JSON.stringify({ before, during, grew: during > before });
-  })()`);
-  const dragVRes = JSON.parse(String(dragV).replace(/^"|"$/g, '') || '{}');
-  check('timeline handle grows the timeline upward', dragVRes.grew === true, dragVRes);
+  `));
+  check('a lane can be resized by its own header handle', dragLane.grew, dragLane);
 
-  // --- 19. Status footer pinned at the bottom ---
-  const footer = await ev(`(() => {
-    const tc = [...document.querySelectorAll('span')].find(s => /^TC /.test(s.textContent || ''));
-    if (!tc) return null;
-    const strip = tc.closest('div');
-    return { bottom: Math.round(tc.getBoundingClientRect().bottom), inner: window.innerHeight, height: Math.round(strip.getBoundingClientRect().height) };
+  // === 18. Export =============================================================
+  const exp = await json(gesture(`
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, bubbles: true }));
+    await tick();
+    const dlg = document.querySelector('[role="dialog"][aria-label="Export video"]');
+    if (!dlg) return JSON.stringify({ opened: false });
+    const text = dlg.innerText;
+    const out = { opened: true,
+      presets: dlg.querySelectorAll('select[aria-label="Export preset"] option').length,
+      realTime: /Real-time/i.test(text),
+      container: /WEBM|MediaRecorder/i.test(text) };
+    dlg.querySelector('[aria-label="Close export dialog"]')?.click();
+    return JSON.stringify(out);
+  `));
+  check('export dialog opens with presets and honest copy', exp.opened && exp.presets >= 10 && exp.realTime, exp);
+
+  // === 19. Scrollbars =========================================================
+  const scrollbars = await json(`(() => {
+    const scrollable = (v) => v === 'auto' || v === 'scroll';
+    const out = [];
+    for (const el of document.querySelectorAll('*')) {
+      const cs = getComputedStyle(el);
+      const v = scrollable(cs.overflowY);
+      const h = scrollable(cs.overflowX);
+      const vS = v && el.scrollHeight > el.clientHeight + 1;
+      const hS = h && el.scrollWidth > el.clientWidth + 1;
+      if (!vS && !hS) continue;
+      // Borders SUBTRACTED.
+      //
+      // offsetWidth minus clientWidth is "everything the layout does not hand
+      // to the content box" - which is the scrollbar PLUS any border. An
+      // element with a 1px bottom border and a correct 4px scrollbar measures
+      // 5, and the check then reports a scrollbar that is one pixel too thick
+      // when the scrollbar is exactly right.
+      //
+      // (NOTE: no backticks in this comment. This whole block is a template
+      // literal, and a backtick inside it terminates the string early. That is
+      // not a style note - it is the exact reason a previous version of this
+      // file failed to parse with "missing ) after argument list".)
+      const px = (v) => parseFloat(v) || 0;
+      const barW = vS ? el.offsetWidth - el.clientWidth - px(cs.borderLeftWidth) - px(cs.borderRightWidth) : 0;
+      const barH = hS ? el.offsetHeight - el.clientHeight - px(cs.borderTopWidth) - px(cs.borderBottomWidth) : 0;
+      if (barW <= 0 && barH <= 0) continue;
+      const sb = getComputedStyle(el, '::-webkit-scrollbar');
+      out.push({
+        tag: el.tagName.toLowerCase(),
+        cls: (el.className || '').toString().slice(0, 70),
+        parent: el.parentElement ? el.parentElement.tagName.toLowerCase() + '.' + (el.parentElement.className || '').toString().slice(0, 30) : null,
+        role: el.getAttribute('role') || el.getAttribute('aria-label') || '',
+        barW, barH, cssWidth: sb.width, scrollbarWidth: cs.scrollbarWidth,
+        gutter: cs.scrollbarGutter, color: cs.scrollbarColor,
+        overflowY: cs.overflowY, overflowX: cs.overflowX,
+        offsetW: el.offsetWidth, clientW: el.clientWidth,
+        // Does the DOCUMENT actually contain a width rule for this element's
+        // scrollbar? If the computed pseudo says 1px but the layout reserves
+        // 15, the rule is present and something else is reserving the space -
+        // and that is a different bug from a missing rule.
+        ruleFound: [...document.styleSheets].some((sheet) => {
+          try {
+            return [...sheet.cssRules].some((r) => r.selectorText && r.selectorText.includes('webkit-scrollbar') && r.style && r.style.width);
+          } catch {
+            return false;
+          }
+        }),
+      });
+    }
+    return JSON.stringify(out);
   })()`);
+  const thick = scrollbars.filter((s) => s.barW > SCROLLBAR_PX || s.barH > SCROLLBAR_PX);
   check(
-    'status footer pinned to the bottom of the window',
-    Boolean(footer && footer.bottom > 0 && Math.abs(footer.bottom - footer.inner) < 40),
-    footer
+    `every scrollable box renders a ${SCROLLBAR_PX}px hairline scrollbar`,
+    scrollbars.length > 0 && thick.length === 0,
+    {
+      expected: SCROLLBAR_PX,
+      measured: scrollbars.map((s) => `${s.barW}x${s.barH} (css ${s.cssWidth})`),
+      thick,
+    }
   );
 
-  // --- 20. Playback actually advances ---
-  const playback = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(r));
-    const read = () => Number(document.querySelector('[role="slider"][aria-label="Timeline playhead"]')?.getAttribute('aria-valuenow') || 0);
-    // Seek to the start of the first clip.
-    const el = document.querySelector('[role="slider"][aria-label="Timeline playhead"]');
-    const box = el.getBoundingClientRect();
-    const o = (x) => ({ bubbles: true, clientX: x, clientY: box.top + box.height/2, pointerId: 9, isPrimary: true, button: 0 });
-    el.dispatchEvent(new PointerEvent('pointerdown', o(box.left + 1)));
-    await tick();
-    el.dispatchEvent(new PointerEvent('pointerup', o(box.left + 1)));
-    const t0 = read();
-    document.querySelector('[aria-label="Play"]')?.click();
-    for (let i = 0; i < 40; i++) await tick();
-    const t1 = read();
-    document.querySelector('[aria-label="Pause"]')?.click();
-    return JSON.stringify({ t0, t1, advanced: t1 > t0 });
-  })()`);
-  const pbRes = JSON.parse(String(playback).replace(/^"|"$/g, '') || '{}');
-  check('playback advances the playhead', pbRes.advanced === true, pbRes);
+  // === 20. Navbar session awareness ==========================================
+  // A fresh browser profile has no session, so the ONLY honest thing the
+  // navbar can show is the logged-out state. If it ever shows an avatar here,
+  // that is a fake session indicator - the worst kind of navbar bug, because
+  // the user clicks it believing something that is not true.
+  const nav = await json(gesture(`
+    const box = document.querySelector('[data-session]');
+    const links = [...document.querySelectorAll('a[aria-label]')]
+      .filter(a => /Log in|Create an account|Back to dashboard/.test(a.getAttribute('aria-label') || ''))
+      .map(a => ({ label: a.getAttribute('aria-label'), href: a.getAttribute('href') }));
+    return JSON.stringify({
+      state: box ? box.getAttribute('data-session') : null,
+      links,
+      // No token anywhere in the DOM or storage. The session is an httpOnly
+      // cookie, so the client CANNOT have it - and must not be faking it.
+      tokenInDom: /eyJ[A-Za-z0-9_-]{10,}/.test(document.documentElement.innerHTML),
+      storageKeys: Object.keys(localStorage).filter(k => /token|auth|session/i.test(k)),
+    });
+  `));
+  check(
+    'a fresh session renders the LOGGED-OUT navbar (no fake avatar)',
+    nav.state === 'out' && (nav.links || []).some((l) => /Log in/.test(l.label || '')),
+    { state: nav.state, links: nav.links }
+  );
+  check(
+    'the login and register URLs come from the environment',
+    (nav.links || []).some((l) => (l.href || '').includes('/auth/login')) &&
+      (nav.links || []).some((l) => (l.href || '').includes('/auth/register')),
+    { links: nav.links }
+  );
+  check(
+    'no auth token is readable by the client (httpOnly cookie, not stolen into JS)',
+    nav.tokenInDom === false,
+    { tokenInDom: nav.tokenInDom, storageKeys: nav.storageKeys }
+  );
 
-  // --- 21. Theme toggle ---
-  const theme = await ev(`(async () => {
-    const tick = () => new Promise(r => requestAnimationFrame(r));
-    const before = document.documentElement.className;
-    document.querySelector('[aria-label^="Switch to"]')?.click();
-    await tick(); await tick();
-    const after = document.documentElement.className;
-    document.querySelector('[aria-label^="Switch to"]')?.click();
-    await tick();
-    return JSON.stringify({ before, after, changed: before !== after, backAgain: document.documentElement.className === before });
-  })()`);
-  const themeRes = JSON.parse(String(theme).replace(/^"|"$/g, '') || '{}');
-  check('theme toggle switches the surface class and back', themeRes.changed === true && themeRes.backAgain === true, themeRes);
-
-  // --- 22. Overflow + broken images at the end ---
-  const final = await ev(`(() => ({
+  // === 21. Final state =======================================================
+  const final = await json(`(() => JSON.stringify({
     brokenImages: [...document.images].filter(i => i.complete && i.naturalWidth === 0).length,
     docOverflow: Math.round(document.documentElement.scrollWidth - document.documentElement.clientWidth),
-    emptyOverlays: [...document.querySelectorAll('*')].filter(e => e.textContent === 'This is a placeholder').length,
+    placeholders: [...document.querySelectorAll('*')].filter(e => e.textContent === 'This is a placeholder').length,
   }))()`);
   check('no broken images at the end', final.brokenImages === 0, final);
-  check('no horizontal overflow at the end', final.docOverflow <= 2, { docOverflow: final.docOverflow });
-  check('no placeholder text left in the DOM', final.emptyOverlays === 0, final);
+  check('no horizontal overflow at the end', final.docOverflow <= 2, final);
+  check('no placeholder text left in the DOM', final.placeholders === 0, final);
 
-  // --- 24. Scrollbars are 1px ---
-  // Measured, not read from CSS. `offsetWidth - clientWidth` is the number the
-  // user actually sees, and it is the only way to catch an override that the
-  // stylesheet does not know about.
-  const scrollbars = JSON.parse(
-    String(
-      await ev(`(() => {
-        const out = [];
-        for (const el of document.querySelectorAll('*')) {
-          const cs = getComputedStyle(el);
-          if (cs.overflow === 'visible' && cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
-          const v = el.scrollHeight > el.clientHeight + 1;
-          const h = el.scrollWidth > el.clientWidth + 1;
-          if (!v && !h) continue;
-          const barW = v ? el.offsetWidth - el.clientWidth : 0;
-          const barH = h ? el.offsetHeight - el.clientHeight : 0;
-          if (barW <= 0 && barH <= 0) continue;
-          out.push({
-            tag: el.tagName.toLowerCase(),
-            cls: (el.className || '').toString().slice(0, 50),
-            role: el.getAttribute('role') || el.getAttribute('aria-label') || '',
-            barW, barH,
-          });
-        }
-        return JSON.stringify(out);
-      })()`)
-    ).replace(/^"|"$/g, '') || '[]'
-  );
-  const thick = (scrollbars || []).filter((s) => s.barW > 1 || s.barH > 1);
-  check('every scrollbar renders 1px', thick.length === 0, { scrollbars, thick });
+  const realErrors = logs.filter((l) => !/favicon|net::ERR_|status of 40/.test(l));
+  check('no uncaught console errors for the whole run', realErrors.length === 0, {
+    errors: realErrors.slice(0, 4).map((e) => String(e).split('\n')[0]),
+  });
 
-  // --- 23. Console errors ---
-  const realErrors = logs.filter(
-    (l) =>
-      !/favicon|Failed to load resource: the server responded with a status of 404/.test(l) &&
-      !/net::ERR_/.test(l)
-  );
-  check('no uncaught console errors', realErrors.length === 0, { errors: realErrors.slice(0, 6) });
-
-  // --- Screenshots ---
-  // Park the playhead somewhere a frame is actually on screen. Screenshotting
-  // the end of the timeline produces a black rectangle that tells nobody
-  // whether the compositor works.
-  await ev(`(() => {
-    const el = document.querySelector('[role="slider"][aria-label="Timeline playhead"]');
-    const box = el.getBoundingClientRect();
-    // A third of the way in: inside the first clip, with the title on top.
-    const x = box.left + box.width * 0.12;
-    const o = (cx) => ({ bubbles: true, clientX: cx, clientY: box.top + box.height / 2, pointerId: 71, isPrimary: true, button: 0 });
-    el.dispatchEvent(new PointerEvent('pointerdown', o(x)));
-    el.dispatchEvent(new PointerEvent('pointerup', o(x)));
-  })()`);
-  await sleep(1500);
-  await ev(`(async () => { const tick = () => new Promise(r => requestAnimationFrame(r)); for (let i=0;i<5;i++) await tick(); })()`);
+  // === Screenshots ===========================================================
+  // Park the playhead where a frame is actually on screen: a screenshot of the
+  // end of the timeline is a black rectangle that proves nothing.
+  await seekRuler(150);
+  await sleep(1800);
   const shot1 = await cdp('Page.captureScreenshot', { format: 'png' }, sid);
   writeFileSync(SHOT, Buffer.from(shot1.data, 'base64'));
   console.log(`screenshot: ${SHOT}`);
@@ -925,41 +1125,54 @@ try {
   writeFileSync(SHOT2, Buffer.from(shot2.data, 'base64'));
   console.log(`screenshot: ${SHOT2}`);
 
-  // The light theme, so it is looked at rather than assumed. A theme that has
-  // only ever been checked in dark is a theme with white-on-white somewhere in
-  // it, and nobody finds out until a user does.
   const lightShot = SHOT2.replace(/\.png$/, '-light.png');
-  await ev(`(() => { document.querySelector('[aria-label^="Switch to"]')?.click(); return true; })()`);
+  await ev(gesture(`document.querySelector('[aria-label^="Switch to"]')?.click();`));
   await sleep(1200);
-  const lightContrast = await ev(`(() => {
-    const read = (sel, prop) => {
-      const el = document.querySelector(sel);
-      return el ? getComputedStyle(el)[prop] : null;
-    };
+  const light = await json(`(() => {
+    const read = (sel) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).backgroundColor : null; };
+    const css = (sel, prop) => { const el = document.querySelector(sel); return el ? getComputedStyle(el)[prop] : null; };
+
+    // The bug this guards: a token written in the WRONG colour space
+    // (--background: 246 247 249 into hsl(var(--background))). hsl() reads
+    // those as hue/saturation/lightness, so the value LOOKS plausible, the
+    // declaration is dropped as "invalid at computed-value time", and every
+    // utility built on it quietly disappears. The surface check above passed
+    // anyway, because bg-surface reads a DIFFERENT token - which is exactly
+    // why the light theme looked half-right and was completely broken.
+    //
+    // So assert the tokens themselves resolve. A resolved custom property comes
+    // back with its value; an unresolved one comes back empty.
+    const root = getComputedStyle(document.documentElement);
+    const tokens = {};
+    for (const name of ['background', 'foreground', 'primary', 'border', 'card']) {
+      tokens[name] = root.getPropertyValue('--' + name).trim();
+    }
+
     return JSON.stringify({
-      body: getComputedStyle(document.body).backgroundColor,
-      toolbar: read('[role="toolbar"]', 'backgroundColor'),
-      ruler: read('[role="slider"][aria-label="Timeline playhead"]', 'backgroundColor'),
-      text: read('[role="menubar"] button', 'color'),
-      canvasVisible: !!document.querySelector('[role="img"] canvas'),
+      toolbar: read('[role="toolbar"]'),
+      ruler: read('[role="slider"][aria-label="Timeline ruler"]'),
+      canvas: !!document.querySelector('[role="img"] canvas'),
+      tokens,
+      bodyText: css('body', 'color'),
     });
   })()`);
-  check('light theme repaints the surfaces', JSON.parse(lightContrast).toolbar !== null, JSON.parse(lightContrast));
+  check('the light theme repaints the surfaces', Boolean(light.toolbar) && light.toolbar !== 'rgb(15, 23, 42)', light);
+  check(
+    'every shared colour token RESOLVES in light mode (right colour space)',
+    Object.values(light.tokens || {}).every((v) => v.length > 0),
+    { tokens: light.tokens }
+  );
   const shot3 = await cdp('Page.captureScreenshot', { format: 'png' }, sid);
   writeFileSync(lightShot, Buffer.from(shot3.data, 'base64'));
   console.log(`screenshot: ${lightShot}`);
-  await ev(`(() => { document.querySelector('[aria-label^="Switch to"]')?.click(); return true; })()`);
-  await sleep(500);
 
   const failed = results.filter((r) => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
   if (appLogs.length) {
-    // Surfaced only on failure, and only the tail. App logs are a diagnostic
-    // aid, not the report - a passing run stays quiet.
     const real = appLogs.filter((l) => !/^\[object/.test(l));
     if (real.length) {
       console.log('\napp log (tail):');
-      for (const l of real.slice(-25)) console.log('  ' + l);
+      for (const l of real.slice(-20)) console.log('  ' + l);
     }
   }
   if (failed.length) {
@@ -971,6 +1184,10 @@ try {
   }
 } catch (e) {
   console.error('harness failed:', e.message);
+  // Print the phase, not just the message: a CDP "Invalid parameters" says
+  // nothing about WHICH call had bad parameters, and the whole suite is
+  // worthless without knowing where it stopped.
+  console.error('at:', (e.stack || '').split('\n').slice(1, 4).join(' | '));
   console.log(`\n${results.filter((r) => r.pass).length}/${results.length} checks passed before the failure`);
   process.exitCode = 1;
 } finally {

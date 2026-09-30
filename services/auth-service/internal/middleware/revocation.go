@@ -59,21 +59,41 @@ package middleware
 // nahi hai - uska apna token hai.
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"github.com/wideo11/auth-service/internal/redisx"
-	"github.com/wideo11/auth-service/internal/token"
 )
 
 // denylistPrefix namespaces the keys so they cannot collide with rate
 // limiter keys ("rl:") or anything else that lands in this Redis.
-const denylistPrefix = "revoked:jti:"
+const denylistPrefix = "revoked:session:"
+
+// maxTTL is the hard ceiling on a denylist entry's lifetime.
+//
+// This is the answer to "does the denylist accumulate garbage": it cannot.
+// Every entry is written with a TTL, and that TTL is clamped HERE, once,
+// rather than trusted from each call site. An entry that outlives its token
+// pins Redis memory forever, and Redis OOM is an auth outage.
+const maxTTL = 24 * time.Hour
 
 // RevocationStore wraps Redis with the denylist helpers.
+//
+// ---- WHY THIS IS MOUNTED NOW (Phase C7) ----
+//
+// Pehle ye DEAD CODE thi: `NewRevocationStore` aur `CheckRevoked` ke koi call
+// site nahi the. Likhi gayi thi (comments sahi the), bas chain me lagayi nahi
+// gayi. Ab logout DB row HARD-DELETE karta hai, aur ye Redis entry uske turant
+// baad aane wale request ko bina DB round-trip ke 401 deta hai.
+//
+// Authority hamesha Postgres hai: `AuthMiddleware` har authenticated request
+// par `sessions` me token hash dhoondta hai. Ye sirf wo ek round-trip hata
+// deta hai. Redis down ho to system thoda slow hota hai, galat nahi.
 type RevocationStore struct {
 	rc *redisx.Client
 }
@@ -82,97 +102,69 @@ func NewRevocationStore(rc *redisx.Client) *RevocationStore {
 	return &RevocationStore{rc: rc}
 }
 
-// Revoke records a token id as revoked until it would have expired anyway.
+// Revoke records a session id as revoked, for at most `maxTTL`.
 //
-// remaining is the token's live time left. Passing a non-positive or
-// absurdly large value is handled here rather than at each call site: an
-// entry that outlives its token pins memory forever, and one with a
-// non-positive TTL would be written already-expired and silently not work.
-func (r *RevocationStore) Revoke(c *gin.Context, jti string, issuedAt, expiresAt time.Time) {
-	if r == nil || r.rc == nil || jti == "" {
+// `context.Context` rather than `*gin.Context`: ye service layer se bhi
+// call hota hai (logout), aur service ko gin dependency nahi chahiye.
+// Revocation gRPC/HTTP ke andar ka concern nahi, business logic ka hai.
+func (r *RevocationStore) Revoke(ctx context.Context, sessionID uuid.UUID) {
+	if r == nil || r.rc == nil || sessionID == uuid.Nil {
 		return
 	}
-
-	// Default cap: 24h. A token cannot legitimately outlive this, and the cap
-	// bounds the damage if a caller ever computes a nonsense expiry.
-	const maxTTL = 24 * time.Hour
-	ttl := time.Until(expiresAt)
-	if ttl <= 0 {
-		// Already expired: nothing to revoke, the signature check will
-		// reject it anyway.
-		return
-	}
-	if ttl > maxTTL {
-		ttl = maxTTL
-	}
-
-	if err := r.rc.Set(c.Request.Context(), denylistPrefix+jti, "1", ttl); err != nil {
-		// FAIL OPEN, same policy as the rate limiter. The DB session check in
-		// AuthMiddleware still rejects a revoked session, so losing this
-		// write degrades us to the slower (but correct) path rather than
-		// leaving a revoked token usable.
-		log.Warn().Err(err).Str("jti", jti).
-			Msg("failed to write JWT denylist entry; DB session check remains authoritative")
+	if err := r.rc.Set(ctx, denylistPrefix+sessionID.String(), "1", maxTTL); err != nil {
+		// FAIL OPEN. The DB hard-delete is authoritative and already done -
+		// losing this write costs one DB round-trip, not security.
+		log.Warn().Err(err).Str("session", sessionID.String()).
+			Msg("failed to write session denylist entry; DB hard-delete remains authoritative")
 	}
 }
 
-// IsRevoked reports whether a token id is denylisted.
+// IsRevoked reports whether a session id is denylisted.
 //
-// Error is swallowed deliberately: see above. A Redis failure must not reject
-// a legitimate request, because the authoritative check (sessions.revoked_at)
-// has already run by this point.
-func (r *RevocationStore) IsRevoked(c *gin.Context, jti string) bool {
-	if r == nil || r.rc == nil || jti == "" {
+// Error is swallowed deliberately - see above. By the time this runs the
+// authoritative DB check has already passed.
+func (r *RevocationStore) IsRevoked(ctx context.Context, sessionID uuid.UUID) bool {
+	if r == nil || r.rc == nil || sessionID == uuid.Nil {
 		return false
 	}
-	found, err := r.rc.Exists(c.Request.Context(), denylistPrefix+jti)
+	found, err := r.rc.Exists(ctx, denylistPrefix+sessionID.String())
 	if err != nil {
-		log.Warn().Err(err).Str("jti", jti).
-			Msg("JWT denylist lookup failed; relying on DB session check")
+		log.Warn().Err(err).Str("session", sessionID.String()).
+			Msg("session denylist lookup failed; relying on the DB session lookup")
 		return false
 	}
 	return found
 }
 
 // CheckRevoked is Gin middleware. Place it AFTER AuthMiddleware has verified
-// the signature - checking an unverified token's jti would let an attacker
-// probe which ids are denylisted.
-func CheckRevoked(store *RevocationStore, validate func(string) (*token.Claims, error)) gin.HandlerFunc {
+// the signature and resolved the session - it reads the session id straight
+// from the context, so an unverified caller can never probe which ids are
+// denylisted.
+func CheckRevoked(store *RevocationStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if store == nil {
 			c.Next()
 			return
 		}
-
-		raw := bearerToken(c.GetHeader("Authorization"))
+		raw := c.GetString("session_id")
 		if raw == "" {
 			c.Next()
 			return
 		}
-
-		// Re-validating rather than trusting a claim from context: this
-		// middleware is a standalone unit and must be safe to mount on its
-		// own. Validation is pure CPU (HMAC), no I/O.
-		claims, err := validate(raw)
+		sessionID, err := uuid.Parse(raw)
 		if err != nil {
-			// Bad or expired token - not this middleware's business. Let
-			// AuthMiddleware produce the response so the client gets one
-			// consistent error shape.
+			// Unparseable: let AuthMiddleware produce the response so the
+			// client sees one consistent error shape.
 			c.Next()
 			return
 		}
-
-		if store.IsRevoked(c, claims.ID) {
-			// 401 with a distinct error so a client can tell "your token
-			// expired, refresh it" apart from "your token was revoked, stop
-			// using it" - the correct client action differs.
+		if store.IsRevoked(c.Request.Context(), sessionID) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error":   "token_revoked",
-				"message": "This token has been revoked. Please sign in again.",
+				"message": "This session has been logged out. Please sign in again.",
 			})
 			return
 		}
-
 		c.Next()
 	}
 }
