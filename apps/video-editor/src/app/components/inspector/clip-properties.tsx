@@ -69,8 +69,8 @@ export function ClipProperties({
       <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-edge-strong bg-surface-raised shadow-2xl">
         <header className="flex items-center justify-between border-b border-edge px-4 py-2.5">
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-medium text-fg">{clip.mediaName}</h2>
-            <p className="font-mono text-[10px] text-fg-muted">
+            <h2 className="truncate text-[10px] font-medium text-fg">{clip.mediaName}</h2>
+            <p className="font-mono text-[8px] text-fg-muted">
               {clip.type} · frames {Math.round(clip.startTime * fps)}–{Math.round((clip.startTime + clip.duration) * fps)} ·{' '}
               {Math.round(clip.duration * fps)}f at {fps}fps
               {clip.sourceIn > 0 && ` · source in ${Math.round(clip.sourceIn * fps)}f`}
@@ -82,7 +82,7 @@ export function ClipProperties({
             aria-label="Close clip properties"
             className="rounded p-1 text-fg-muted hover:bg-surface-overlay hover:text-fg"
           >
-            <X className="h-4 w-4" />
+            <X className="h-2 w-2" />
           </button>
         </header>
 
@@ -130,7 +130,7 @@ export function ClipProperties({
                     onChange={(n) => onPatch({ speed: n })}
                   />
                 </Field>
-                <p className="text-[10px] leading-snug text-fg-muted">
+                <p className="text-[8px] leading-snug text-fg-muted">
                   Speed changes how fast the source plays. The preview seeks the underlying media to
                   the matching offset every frame, and the exporter does the same, so 2x here is 2x in
                   the file you export.
@@ -171,7 +171,7 @@ export function ClipProperties({
                     hint="Silences the clip without touching the track fader"
                   />
                   <Button variant="outline" onClick={() => onPatch({ volume: 1, fadeIn: 0, fadeOut: 0, muted: false })}>
-                    <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Volume2 className="h-2 w-2" aria-hidden="true" />
                     Reset audio
                   </Button>
                 </div>
@@ -180,8 +180,8 @@ export function ClipProperties({
 
             {clip.linkedId && (
               <PanelSection title="Linked clip">
-                <p className="mb-2 flex items-start gap-1.5 text-[11px] text-fg-secondary">
-                  <Link2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                <p className="mb-2 flex items-start gap-1.5 text-[8px] text-fg-secondary">
+                  <Link2 className="mt-0.5 h-2 w-2 shrink-0 text-emerald-400" aria-hidden="true" />
                   {linkedClip ? `Linked to “${linkedClip.mediaName}”. Moving one moves the other.` : 'The clip this was linked to has been removed.'}
                 </p>
                 <Button variant="danger" onClick={onUnlink}>
@@ -247,11 +247,11 @@ export function ClipProperties({
                   )}
                   <div className="flex gap-1.5">
                     <Button variant="outline" onClick={onOpenLayouts}>
-                      <Move className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Move className="h-2 w-2" aria-hidden="true" />
                       Layouts
                     </Button>
                     <Button variant="outline" onClick={onOpenFilters}>
-                      <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                      <Sparkles className="h-2 w-2" aria-hidden="true" />
                       Filters
                     </Button>
                   </div>
@@ -264,7 +264,7 @@ export function ClipProperties({
                 title="Colour"
                 action={
                   <Button variant="outline" onClick={() => onPatch({ filter: { ...NEUTRAL_FILTER } })}>
-                    <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                    <RotateCcw className="h-2 w-2" aria-hidden="true" />
                     Reset
                   </Button>
                 }
@@ -326,11 +326,11 @@ export function ClipProperties({
 
             <PanelSection title="Reset">
               <Button variant="outline" onClick={onReset}>
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                <RotateCcw className="h-2 w-2" aria-hidden="true" />
                 Reset every property on this clip
               </Button>
-              <p className="mt-1.5 flex items-start gap-1.5 text-[10px] leading-snug text-fg-muted">
-                <TypeIcon className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              <p className="mt-1.5 flex items-start gap-1.5 text-[8px] leading-snug text-fg-muted">
+                <TypeIcon className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
                 Position, size and duration are left alone — resetting those would move the clip, and
                 a button that quietly re-arranges your edit is not a reset.
               </p>
@@ -339,8 +339,8 @@ export function ClipProperties({
         </div>
 
         <footer className="flex items-center justify-between border-t border-edge px-4 py-2.5">
-          <span className="flex items-center gap-1.5 text-[10px] text-fg-muted">
-            <Gauge className="h-3 w-3" aria-hidden="true" />
+          <span className="flex items-center gap-1.5 text-[8px] text-fg-muted">
+            <Gauge className="h-2 w-2" aria-hidden="true" />
             Changes apply to this clip only, and Ctrl+Z brings them back.
           </span>
           <Button onClick={onClose}>Done</Button>

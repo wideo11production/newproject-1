@@ -28,8 +28,84 @@ import {
   Tag,
 } from 'lucide-react';
 import { frameToTimecode, clampPxPerFrame } from '../lib/engine/frames';
+import { levelBands } from '../lib/engine/audio-graph';
 import type { TimelineClip } from '../lib/engine/types';
 import { sourceTimeAt } from '../lib/engine/types';
+
+/**
+ * The voice meter.
+ *
+ * Twelve bars that light up with what is ACTUALLY coming out of the master bus,
+ * read from the same AnalyserNode the sound passes through.
+ *
+ * ---- WHY IT IS NOT A CSS ANIMATION ----
+ *
+ * A meter that animates on a timer is a lie: it moves when nothing is playing
+ * and sits still when something is. This one reads `levelBands()` from the
+ * graph in a rAF loop, so it is a MEASUREMENT. If the audio is broken it goes
+ * flat, which is the most useful thing a meter can tell you.
+ *
+ * The colour is the level: green under -12dB, amber to -3, red above. That is
+ * a gain-stage convention rather than a personal preference, so "amber" means
+ * "getting hot" to anyone who has mixed anything.
+ */
+function LevelMeter({ playing }: { playing: boolean }) {
+  const [bands, setBands] = useState<number[]>(() => new Array(12).fill(0));
+
+  useEffect(() => {
+    if (!playing) {
+      // Decay to rest rather than freezing mid-bar, which would leave a meter
+      // showing a level the moment it stopped producing one.
+      let raf = 0;
+      const settle = () => {
+        setBands((b) => {
+          const next = b.map((v) => v * 0.8);
+          return next.some((v) => v > 0.01) ? next : new Array(12).fill(0);
+        });
+        raf = requestAnimationFrame(settle);
+      };
+      raf = requestAnimationFrame(settle);
+      return () => cancelAnimationFrame(raf);
+    }
+    let raf = 0;
+    const tick = () => {
+      setBands(levelBands(12));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
+
+  return (
+    <div
+      role="meter"
+      aria-label="Output level"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(Math.max(0, ...bands) * 100)}
+      title="Live output level, measured at the master bus"
+      className="flex h-4 items-end gap-px"
+    >
+      {bands.map((v, i) => {
+        const lit = v > 0.02;
+        const colour = v > 0.89 ? '#f87171' : v > 0.62 ? '#fbbf24' : '#34d399';
+        return (
+          <span
+            key={i}
+            className="w-0.5 rounded-sm transition-[height,background-color] duration-75"
+            style={{
+              // A floor of 1px, so the meter reads as a row of bars at rest
+              // instead of vanishing and leaving a mystery gap in the toolbar.
+              height: `${Math.max(1, Math.round(v * 16))}px`,
+              background: lit ? colour : 'rgb(var(--ve-edge))',
+              opacity: lit ? 1 : 0.5,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 export function PlayerBar({
   currentFrame,
@@ -89,6 +165,19 @@ export function PlayerBar({
 
   const btn = 'flex h-7 w-7 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
 
+  /**
+   * The ACTIVE state, and why it is not a filled button.
+   *
+   * These controls used to be `bg-sky-600 text-white`, and three filled blue
+   * squares in a 40px strip out-shouted the play button next to them. An active
+   * control only needs to read as active; a saturated fill at this size does not
+   * read as active, it reads as three more primary actions.
+   *
+   * A 12% tint plus the sky text colour says the same thing in a third of the
+   * ink, and it leaves the play button the only solid thing in the strip.
+   */
+  const on = 'bg-sky-500/12 text-sky-300 hover:bg-sky-500/20';
+
   // Clicking the timecode copies it. A timecode you cannot paste into a note
   // or a report is only half a feature.
   const copyTimecode = useCallback(() => {
@@ -119,15 +208,15 @@ export function PlayerBar({
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-t border-edge bg-surface px-3">
       <button type="button" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={`${isPlaying ? 'Pause' : 'Play'} (Space)`} className="flex h-7 w-7 items-center justify-center rounded bg-sky-600 text-white hover:bg-sky-500">
-        {isPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+        {isPlaying ? <Pause className="h-2 w-2" /> : <Play className="h-3.5 w-3.5" />}
       </button>
 
       <div className="flex items-center gap-0.5">
         <button type="button" onClick={() => onSeek(Math.max(0, currentFrame - 1))} className={btn} aria-label="Previous frame" title="Previous frame ( ← )">
-          <SkipBack className="h-3.5 w-3.5" />
+          <SkipBack className="h-2 w-2" />
         </button>
         <button type="button" onClick={() => onSeek(Math.min(durationFrames, currentFrame + 1))} className={btn} aria-label="Next frame" title="Next frame ( → )">
-          <SkipForward className="h-3.5 w-3.5" />
+          <SkipForward className="h-2 w-2" />
         </button>
       </div>
 
@@ -136,12 +225,12 @@ export function PlayerBar({
         onClick={copyTimecode}
         aria-label="Copy the timecode"
         title={`${frameToTimecode(currentFrame, fps)}\nFrame ${currentFrame} of ${durationFrames} at ${fps}fps.\nClick to copy.`}
-        className="rounded px-2 py-0.5 font-mono text-sm tabular-nums text-fg transition-colors hover:bg-surface-overlay"
+        className="rounded px-2 py-0.5 font-mono text-[8px] tabular-nums text-fg transition-colors hover:bg-surface-overlay"
       >
         {frameToTimecode(currentFrame, fps)}
       </button>
 
-      <div className="flex items-center gap-2 font-mono text-[10px] text-fg-muted" title="Frame data: where the playhead is, which frame of the source file is on screen, and the same position as a readable timecode">
+      <div className="flex items-center gap-2 font-mono text-[8px] text-fg-muted" title="Frame data: where the playhead is, which frame of the source file is on screen, and the same position as a readable timecode">
         <span className="text-fg-secondary">TL {currentFrame}</span>
         <span className="text-fg-muted/40">/</span>
         <span className="text-fg-secondary">SRC {sourceFrame ?? '—'}</span>
@@ -159,12 +248,15 @@ export function PlayerBar({
           aria-label="Loop playback"
           aria-pressed={loopOn}
         >
-          <Repeat className="h-3.5 w-3.5" />
+          <Repeat className="h-2 w-2" />
         </button>
 
         {/* Viewer layout and zoom. Persisted, because "which layout I like" is
             a preference and re-choosing it after every refresh is the kind of
             small friction that makes an editor feel amateur. */}
+        {/* The viewer layout switcher. Three small ghost buttons, not three
+            primary ones - it is a preference, and preferences do not get the
+            loudest treatment on the screen. */}
         <div className="flex items-center gap-0.5" role="group" aria-label="Viewer layout">
           {layouts.map(({ id, Icon, label, hint }) => (
             <button
@@ -174,9 +266,9 @@ export function PlayerBar({
               aria-pressed={viewerLayout === id}
               aria-label={label}
               title={hint}
-              className={[btn, viewerLayout === id ? 'bg-sky-600 text-white' : ''].join(' ')}
+              className={[btn, viewerLayout === id ? on : ''].join(' ')}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className="h-2 w-2" />
             </button>
           ))}
         </div>
@@ -190,7 +282,7 @@ export function PlayerBar({
           onChange={(e) => onViewerZoom?.(clampPxPerFrame(Number(e.target.value) / 100))}
           aria-label="Viewer zoom"
           title={`Viewer zoom: ${Math.round((viewerZoom ?? 1) * 100)}%`}
-          className="h-1 w-16 cursor-pointer accent-sky-500"
+          className="ve-fader h-1 w-12 cursor-pointer"
         />
 
         <button
@@ -199,9 +291,9 @@ export function PlayerBar({
           aria-pressed={badge}
           aria-label="Toggle the frame data badge"
           title="Show the resolution, frame rate and frame number over the picture"
-          className={[btn, badge ? 'bg-sky-600 text-white' : ''].join(' ')}
+          className={[btn, badge ? on : ''].join(' ')}
         >
-          <Tag className="h-3.5 w-3.5" />
+          <Tag className="h-2 w-2" />
         </button>
 
         <div className="flex items-center gap-1">
@@ -212,7 +304,7 @@ export function PlayerBar({
             title={muted || volume === 0 ? 'Unmute' : 'Mute'}
             aria-label={muted || volume === 0 ? 'Unmute' : 'Mute'}
           >
-            {muted || volume === 0 ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {muted || volume === 0 ? <VolumeX className="h-2 w-2" /> : <Volume2 className="h-3.5 w-3.5" />}
           </button>
           <input
             type="range"
@@ -223,11 +315,15 @@ export function PlayerBar({
             onChange={(e) => onVolume?.(Number(e.target.value))}
             aria-label="Master volume"
             title="Master volume — after every clip, fade and track fader"
-            className="h-1 w-16 cursor-pointer accent-sky-500"
+            // `ve-fader`, NOT a bare range input. A default range in a 40px strip
+            // draws a big round thumb, and that thumb was the single loudest
+            // thing next to the play button.
+            className="ve-fader h-1 w-20 cursor-pointer"
           />
         </div>
 
-        {fullscreen ? <Minimize2 className="h-3.5 w-3.5 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5 text-fg-muted" aria-hidden="true" />}
+
+        {fullscreen ? <Minimize2 className="h-2 w-2 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5 text-fg-muted" aria-hidden="true" />}
       </div>
     </div>
   );

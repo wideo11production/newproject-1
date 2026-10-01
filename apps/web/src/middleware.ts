@@ -55,6 +55,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 import { authRateLimitMiddleware } from '@/lib/rate-limiter';
+import { safeNext, DEFAULT_NEXT } from '@/lib/safe-next';
 
 /**
  * SESSION COOKIE NAME
@@ -240,7 +241,10 @@ const SESSION_ONLY_API_PREFIXES = [
  * `true` cache hone se completed users par koi staleness nahi hoti - setup
  * kabhi un-complete nahi hota.
  */
-const setupCache = new Map<string, { complete: boolean; expiresAt: number }>();
+const setupCache = new Map<
+  string,
+  { complete: boolean; emailVerified: boolean; expiresAt: number }
+>();
 
 /** Cache TTL - milliseconds. Sirf `true` entries ke liye maani rakhta hai. */
 const SETUP_CACHE_TTL_MS = 60_000;
@@ -298,7 +302,35 @@ async function isValidSession(jwt: string | null): Promise<boolean> {
  * hai - yaani service down par app BLOCKED rehta hai. Fail-open nahi, kyunki
  * security gate bypass karna hi fail-open hota hai.
  */
-async function isSecuritySetupComplete(jwt: string): Promise<boolean> {
+/**
+ * Gate state: kya user ne email verify kiya, aur kya security setup poora hai.
+ *
+ * ---- KYUN EK SAATH DONO CHAHIYE ----
+ *
+ * Pehle ye function sirf `setup_complete` return karta tha. Usse middleware
+ * ko ye PATA HI NAHI CHALTA tha ki user ne email verify ki hai ya nahi.
+ *
+ * Neeche jo bug report hua - "register karte hi 6-digit PIN form khul jaata
+ * hai, email verify kiye bina" - uski wajah yahi thi:
+ *
+ *   1. Register ke baad auth-service ek valid (future `exp` wala) session
+ *      token deta hai. Toh `isValidSession` PASS ho jata hai.
+ *   2. `setup_complete` abhi `false` hai (naya account) -> middleware
+ *      `/auth/security-setup` par bhej deti thi.
+ *   3. Wo page 6-digit PIN wala form render karti hai.
+ *
+ * Yaani unverified user ko security setup par jaane diya gaya, jabki SPEC order
+ * ye hai: EMAIL VERIFY -> SECURITY SETUP -> app. Verification step poora skip.
+ *
+ * Ab dono ek hi network call se aate hain (auth-service ka `setup-status` dono
+ * fields bhejta hai), to extra latency nahi badhti.
+ */
+interface GateState {
+  emailVerified: boolean;
+  setupComplete: boolean;
+}
+
+async function getGateState(jwt: string): Promise<GateState> {
   // ---- User id nikalo (cache key) ----
   let userId: string;
   try {
@@ -308,18 +340,21 @@ async function isSecuritySetupComplete(jwt: string): Promise<boolean> {
     });
     userId = String(payload.user_id ?? payload.sub ?? '');
   } catch {
-    return false; // token invalid - pehle wala check pakad lega
+    // Token invalid - pehle wala `isValidSession` check pakad lega.
+    // Fail CLOSED: dono false.
+    return { emailVerified: false, setupComplete: false };
   }
-  if (!userId) return false;
+  if (!userId) return { emailVerified: false, setupComplete: false };
 
   // ---- Cache hit? ----
   const now = Date.now();
   const cached = setupCache.get(userId);
   if (cached && cached.expiresAt > now) {
-    return cached.complete;
+    return { emailVerified: cached.emailVerified, setupComplete: cached.complete };
   }
 
   // ---- Auth-service call ----
+  let emailVerified = false;
   let complete = false;
   try {
     const res = await fetch(
@@ -333,34 +368,40 @@ async function isSecuritySetupComplete(jwt: string): Promise<boolean> {
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       complete = data?.setup_complete === true;
+      // `email_verified` auth-service se naya aata hai. Purane service par
+      // `undefined` milega, aur `=== true` false de dega - yaani fail-closed,
+      // jisse ek stale deploy bhi verified user ko gate par nahi chhodega.
+      emailVerified = data?.email_verified === true;
     }
-    // !res.ok -> complete stays false (fail closed)
+    // !res.ok -> dono false (fail closed)
   } catch {
-    complete = false; // unreachable -> fail closed
+    emailVerified = false; // unreachable -> fail closed
+    complete = false;
   }
 
-  // ---- Cache write (SIRF `true` ke liye) ----
+  // ---- Cache write (SIRF tab jab DONO true ho) ----
   //
-  // `false` cache karna security gate ka infinite loop create karta hai:
-  // setup complete hone ke baad bhi cached `false` user ko wapas gate par
-  // bhejta rehta hai, har TTL window me. Wajah header comment me poori tarah
-  // documented hai (`WHY NEGATIVE RESULTS ARE *NOT* CACHED`).
+  // "Sirf `true` cache karo" wala rule ab tighten hai: cache tabhi likhte hain
+  // jab user VERIFIED bhi ho aur setup COMPLETE bhi. Agar hum `email_verified:
+  // false` cache kar dete, to user verification link click karne ke turant baad
+  // bhi TTL tak `/auth/verify` par atka rehta - yaani bilkul wahi loop jo
+  // `setup_complete: false` caching se pehle hota tha, sirf verification step
+  // par shifted.
   //
-  // `!complete` par cache se entry DELETE karte hain, taaki agar is process
-  // me koi stale entry pehle se padi ho (ya user pehle complete tha aur ab
-  // kisi admin ne reset kiya ho) wo turant na mile.
-  if (!complete) {
+  // Isi liye koi bhi negative result cache NAHI hota, aur stale entry turant
+  // delete ho jaati hai.
+  if (!emailVerified || !complete) {
     setupCache.delete(userId);
-    return false;
+    return { emailVerified, setupComplete: complete };
   }
 
   if (setupCache.size >= SETUP_CACHE_MAX) {
     const oldest = setupCache.keys().next().value;
     if (oldest) setupCache.delete(oldest);
   }
-  setupCache.set(userId, { complete, expiresAt: now + SETUP_CACHE_TTL_MS });
+  setupCache.set(userId, { complete, emailVerified, expiresAt: now + SETUP_CACHE_TTL_MS });
 
-  return complete;
+  return { emailVerified, setupComplete: complete };
 }
 
 export async function middleware(request: NextRequest) {
@@ -427,10 +468,78 @@ if (!authenticated) {
   }
 
   // Page request: stale cookie saaf karo (agar koi partial/bad hai)
-  const res = NextResponse.redirect(new URL('/auth/login', request.url));
+  //
+  // ---- `next` PRESERVE KARO ----
+  //
+  // Pehle yahan plain `new URL('/auth/login', request.url)` tha, jisse query
+  // string (aur usme `next`) DROP ho jati thi. Toh video-editor gate se aaya
+  // user `/auth/login?next=/` par pahunchta tha jahan `next` gayab tha - login
+  // karne ke baad usse apni destination yaad hi nahi rehti thi.
+  //
+  // Ab destination ko aage `?next=` me bhejte hain. `safeNext()` se guzarte hain
+  // taake user-supplied `next` open-redirect na ban sake (absolute URL /
+  // protocol-relative `//host` reject).
+  const loginUrl = new URL('/auth/login', request.url);
+  const wanted = safeNext(request.nextUrl.searchParams.get('next'));
+  // Sirf tab set karo jab caller ne kuch bheja tha - warna har redirect par ek
+  // bekaar `?next=/dashboard` lag jayega.
+  if (request.nextUrl.searchParams.has('next') && wanted !== DEFAULT_NEXT) {
+    loginUrl.searchParams.set('next', wanted);
+  }
+
+  const res = NextResponse.redirect(loginUrl);
   res.cookies.delete(SESSION_COOKIE);
   return res;
 }
+
+  // ==========================================================================
+  // GATE ORDER: EMAIL VERIFY PEHLE, SECURITY SETUP BAAD ME
+  // ==========================================================================
+  //
+  // ---- YE BUG THA JO REPORT HUA ----
+  // "Register form submit karte hi seedha 6-digit PIN form khul jaata hai,
+  //  email verify kiye bina."
+  //
+  // Wajah: register ke baad auth-service ek valid session token deta hai (uska
+  // `exp` future me hota hai), to upar ka JWT check PASS ho jata tha. Uske
+  // baad middleware sirf `setup_complete` dekhti thi. Naye account par wo
+  // `false` hota hai -> user `/auth/security-setup` par bhej diya jaata ->
+  // wo page 6-digit PIN form render karti hai. Email verification ka step
+  // poora SKIP ho gaya.
+  //
+  // SPEC order ye hai: EMAIL VERIFY -> SECURITY SETUP -> app.
+  //
+  // ---- FIX ----
+  // Dono signals ek saath maange jaate hain, aur verification ko pehle check
+  // kiya jaata hai. Ye check SESSION-ONLY APIs par bhi chalti hai (gate ke
+  // neeche wali list), warna unverified user sidha `POST /api/auth/security/pin`
+  // call karke PIN set kar sakta tha - yaani API se verification bypass.
+  //
+  // `/auth/verify` PUBLIC page hai, isliye yahan redirect karne se loop nahi
+  // banta (uske baad middleware us request par early-return kar deti hai).
+
+  const gate = await getGateState(token!);
+
+  if (!gate.emailVerified) {
+    if (isApiRequest) {
+      return NextResponse.json(
+        {
+          error: 'email_verification_required',
+          message:
+            'Verify your email address before continuing. Use the link we sent you, or request a new one.',
+        },
+        { status: 403 }
+      );
+    }
+
+    // Page request -> verification page, with `next` preserved.
+    const verifyUrl = new URL('/auth/verify', request.url);
+    const wanted = safeNext(request.nextUrl.searchParams.get('next'));
+    if (request.nextUrl.searchParams.has('next') && wanted !== DEFAULT_NEXT) {
+      verifyUrl.searchParams.set('next', wanted);
+    }
+    return NextResponse.redirect(verifyUrl);
+  }
 
   // ==========================================================================
   // AUTHENTICATED - ab mandatory security setup check
@@ -448,27 +557,23 @@ if (!authenticated) {
   // EXCEPTION: session-only APIs (security setup wale) is check se guzarte
   // hain, warna setup complete hi nahi ho paayega (deadlock - upar dekho).
 
-  if (!isSessionOnlyApi) {
-    const setupDone = await isSecuritySetupComplete(token!);
-
-    if (!setupDone) {
-      // API request pe redirect nahi - JSON chahiye
-      if (isApiRequest) {
-        return NextResponse.json(
-          {
-            error: 'security_setup_required',
-            message:
-              'Complete your mandatory security setup (PIN, biometric, security questions) before using this endpoint.',
-          },
-          { status: 403 }
-        );
-      }
-
-      // Page request -> security setup gate page
-      return NextResponse.redirect(
-        new URL('/auth/security-setup', request.url)
+  if (!isSessionOnlyApi && !gate.setupComplete) {
+    // API request pe redirect nahi - JSON chahiye
+    if (isApiRequest) {
+      return NextResponse.json(
+        {
+          error: 'security_setup_required',
+          message:
+            'Complete your mandatory security setup (PIN, biometric, security questions) before using this endpoint.',
+        },
+        { status: 403 }
       );
     }
+
+    // Page request -> security setup gate page
+    return NextResponse.redirect(
+      new URL('/auth/security-setup', request.url)
+    );
   }
 
   // ==========================================================================

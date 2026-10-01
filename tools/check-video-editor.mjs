@@ -34,6 +34,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { signIn } from './harness-session.mjs';
 import { execFileSync } from 'node:child_process';
 
 const URL = process.argv[2] ?? 'http://localhost:3002/';
@@ -55,7 +56,7 @@ const SETTINGS_KEY = 'wideo11.video-editor.settings.v1';
  * Chrome 121+ ignores every `::-webkit-scrollbar` rule in the document when it
  * is. See the comment at the top of that file.
  */
-const SCROLLBAR_PX = 4;
+const SCROLLBAR_PX = 2;
 
 const userDir = mkdtempSync(join(tmpdir(), 've-'));
 const PORT = 9600 + Math.floor(Math.random() * 90);
@@ -204,14 +205,19 @@ try {
   /** Evaluate an expression in the page. The expression goes into the error,
    *  because CDP's "Invalid parameters" names the METHOD and nothing else, and
    *  a 700-character anonymous expression is otherwise impossible to find. */
+  // A page-side error returns a marker instead of throwing, so one bad
+  // expression cannot abort the remaining checks and hide everything after it.
+  // The first version threw, and a single bad selector cost a whole run.
   const ev = async (expression) => {
     const r = await cdp('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true }, sid);
     if (r.exceptionDetails) {
-      throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
+      return JSON.stringify({ __error: r.exceptionDetails.exception?.description ?? r.exceptionDetails.text });
     }
     return r.result.value;
   };
   const json = async (expression) => j(await ev(expression));
+
+  await signIn(cdp, sid, URL);
 
   await cdp('Page.navigate', { url: URL }, sid);
   await sleep(7000);
@@ -354,7 +360,88 @@ try {
   check('three clips added across the default lanes', timeline.clipCount === 3, timeline);
   check('clips carry frame numbers, not just seconds', timeline.frames.every((f) => /^\d+\+\d+$/.test(f)), { frames: timeline.frames });
   check('trim and fade handles exist', timeline.trimHandles >= 6 && timeline.fadeHandles >= 6, timeline);
-  check('per-track volume faders and an add-track control', timeline.faders >= 3 && timeline.addTrack, timeline);
+  // The fader is AUDIO-ONLY, on purpose: a video or title lane has no audio of
+  // its own, so a fader there was controlling nothing while being the loudest
+  // object in a 178px-wide column. The check asserts the RULE, not a count,
+  // because a count would just have to be updated every time a lane is added.
+  // The header is ICON-ONLY. The old check counted faders, which is
+  // meaningless now that the column holds no furniture at all.
+  const header = await json(gesture(`
+    try {
+    // Selected by its own hook, not by DOM position. The first version guessed
+    // "the element before the lanes" and picked up the RULER, which is 540px
+    // wide and full of timecode - a check that silently asserts the wrong thing
+    // is worse than no check.
+    const col = document.querySelector('[data-track-header]');
+    const text = col ? col.innerText.trim() : '';
+    return JSON.stringify({
+      width: col ? Math.round(col.getBoundingClientRect().width) : null,
+      text,
+      // No backtick in this selector: the whole expression lives inside a
+      // template literal, and a backtick anywhere in it terminates the string.
+      typeIcons: col ? [...col.querySelectorAll('[aria-label]')].filter((e) => /, /.test(e.getAttribute('aria-label') || '')).length : 0,
+      toggles: col ? col.querySelectorAll("button[aria-pressed]").length : 0,
+      tooltips: col ? [...col.querySelectorAll("[title]")].map(t => t.getAttribute("title")).filter(Boolean) : [],
+    });
+    } catch (err) { return JSON.stringify({ error: String(err && err.message) || String(err) }); }
+  `));
+  check(
+    'the track header is a narrow ICON-ONLY column: no names, no numbers',
+    header.width !== null && header.width <= 40 && header.text === '',
+    { width: header.width, text: header.text }
+  );
+  check(
+    'every lane still has a type icon, its state toggles, and its name as a tooltip',
+    header.typeIcons >= 3 && header.toggles >= 6 && header.tooltips.some((t) => /Video|Audio|Text/.test(t)),
+    { typeIcons: header.typeIcons, toggles: header.toggles, tooltips: header.tooltips.length }
+  );
+  check('an add-track control exists', timeline.addTrack, timeline);
+
+  // Clip corner actions: MEASURED, not asserted to exist.
+  //
+  // These buttons collapsed to a 12px target when the icon pass shrank their
+  // glyphs, and nothing caught it - because a test that calls `.click()`
+  // directly cannot tell a working button from an unhittable one. The handlers
+  // were perfect the whole time; the thing you click was a coin flip.
+  const clipButtons = await json(gesture(`
+    const clip = document.querySelector('[data-clip]');
+    if (!clip) return JSON.stringify({ error: 'no clip' });
+    clip.click();
+    for (let i = 0; i < 4; i++) await tick();
+    const live = document.querySelector('[data-clip]');
+    const btns = [...live.querySelectorAll('button')].map((b) => {
+      const r = b.getBoundingClientRect();
+      return { label: b.getAttribute('aria-label') || '', w: Math.round(r.width), h: Math.round(r.height) };
+    });
+    return JSON.stringify({ btns });
+  `));
+  const tooSmall = (clipButtons.btns || []).filter((b) => b.w < 20 || b.h < 20);
+  check(
+    'a selected clip offers link, properties and remove, each at least 20px across',
+    (clipButtons.btns || []).length >= 3 && tooSmall.length === 0,
+    { buttons: clipButtons.btns, tooSmall }
+  );
+
+  // And the properties one actually opens the dialog.
+  const propsOpens = await json(gesture(`
+    const clip = document.querySelector('[data-clip]');
+    clip.click();
+    for (let i = 0; i < 3; i++) await tick();
+    const b = [...document.querySelectorAll('[data-clip] button')].find((x) =>
+      /^Properties of/.test(x.getAttribute('aria-label') || ''));
+    if (!b) return JSON.stringify({ found: false });
+    b.click();
+    for (let i = 0; i < 5; i++) await tick();
+    const dlg = !!document.querySelector('[role="dialog"]');
+    document.querySelector('[aria-label="Close clip properties"]')?.click();
+    for (let i = 0; i < 3; i++) await tick();
+    return JSON.stringify({ found: true, dlg, closed: !document.querySelector('[role="dialog"]') });
+  `));
+  check(
+    'the properties button opens the clip dialog, and it closes again',
+    propsOpens.dlg === true && propsOpens.closed === true,
+    propsOpens
+  );
 
   // === 3. The compositor =====================================================
   const sampleCanvas = `(() => {
@@ -699,14 +786,35 @@ try {
 
   const readouts = await json(`(() => {
     const t = document.body.innerText;
+    // The zoom read-out lives in the timeline RAIL, beside the buttons that
+    // change it. It was on the ruler, then in the toolbar, and this check has
+    // followed it each time rather than asserting on a chip that no longer
+    // exists.
+    //
+    // It used to scrape /([0-9.]+)px/ out of body text, but the rail renders a
+    // bare number ("4.00") and puts the unit in the title attribute, so that
+    // regex could never match - the check was failing for a reason that had
+    // nothing to do with the editor. Read the element itself instead.
+    const zoomEl = document.querySelector('[aria-label="Timeline zoom scale"]');
     return JSON.stringify({
       tc: /TC (\\d{2}:\\d{2}:\\d{2}:\\d{2})/.exec(t)?.[1] || null,
       frameLine: /FRAME \\d+\\/\\d+ @ \\d+fps/.test(t),
-      tick: /tick (\\d+)f/.exec(t)?.[1] || null,
+      zoom: zoomEl?.textContent?.trim() || null,
+      zoomTitle: zoomEl?.getAttribute('title') || null,
     });
   })()`);
-  check('timecode is HH:MM:SS:FF and the frame number is shown separately', Boolean(readouts.tc) && readouts.frameLine, readouts);
-  check('the ruler reports its tick step', Boolean(readouts.tick), readouts);
+  check(
+    'timecode is HH:MM:SS:FF and the frame number is shown separately',
+    Boolean(readouts.tc) && readouts.frameLine,
+    readouts
+  );
+  check(
+    'the timeline rail reports the live zoom scale',
+    // A decimal scale, and the unit stated in the tooltip. Both, because the
+    // number alone ("4.00") does not say pixels-per-frame to a reader.
+    /^[0-9]+\.[0-9]+$/.test(readouts.zoom ?? '') && /pixels per frame/.test(readouts.zoomTitle ?? ''),
+    readouts
+  );
 
   // === 13. Zoom reaches a single frame =======================================
   const setZoom = (value) =>
@@ -1095,7 +1203,176 @@ try {
     { tokenInDom: nav.tokenInDom, storageKeys: nav.storageKeys }
   );
 
-  // === 21. Final state =======================================================
+  // === 21. Sprint 4: Movavi-clean chrome, shimmer, help modal =================
+  const ui = await json(gesture(`
+    // Help modal: open it by its toolbar button and read what is inside.
+    const helpBtn = [...document.querySelectorAll('button[aria-label="Help"]')][0];
+    if (helpBtn) helpBtn.click();
+    await tick();
+    const dlg = document.querySelector('[role="dialog"][aria-label="Editor help"]');
+    const helpText = dlg ? dlg.innerText : '';
+    // The three brand characters, as CSS placeholders.
+    const characters = ['Wino', 'Mino', 'Rino'].filter(n => helpText.includes(n));
+    // Icon-only auth: the labels must still be there for a screen reader even
+    // though the words are gone from the pixels.
+    const authIcons = [...document.querySelectorAll('a[aria-label]')]
+      .filter(a => /Log in|Create an account/.test(a.getAttribute('aria-label') || ''))
+      .map(a => ({ label: a.getAttribute('aria-label'), chars: (a.innerText || '').trim().length }));
+    // Shimmer + glow are CSS classes, so assert the RULES exist rather than
+    // the animation: a headless screenshot cannot catch a 3.2s loop at a
+    // readable phase, and a rule that exists but never got the class is exactly
+    // the failure that a screenshot would miss.
+    let rules = { shimmer: false, glow: false, reducedMotion: false };
+    for (const sheet of document.styleSheets) {
+      try {
+        for (const r of sheet.cssRules) {
+          const t = r.cssText || '';
+          if (t.includes('ve-sweep')) rules.shimmer = true;
+          if (t.includes('ve-glow')) rules.glow = true;
+          if (t.includes('prefers-reduced-motion') && t.includes('ve-sparkle')) rules.reducedMotion = true;
+        }
+      } catch { /* cross-origin sheet */ }
+    }
+    // And that a live clip actually carries the class.
+    const live = document.querySelectorAll('[data-clip][data-live="true"]').length;
+    const glowing = document.querySelectorAll('[data-clip].ve-glow, [data-clip].ve-glow-audio, [data-clip].ve-glow-text').length;
+    if (dlg) dlg.querySelector('[aria-label="Close help"]')?.click();
+    await tick();
+    return JSON.stringify({ helpOpen: Boolean(dlg), characters, authIcons, rules, live, glowing,
+      helpClosed: !document.querySelector('[role="dialog"][aria-label="Editor help"]') });
+  `));
+  check('the help modal opens and closes from its toolbar icon', ui.helpOpen === true && ui.helpClosed === true, {
+    helpOpen: ui.helpOpen,
+    helpClosed: ui.helpClosed,
+  });
+  check(
+    'the help modal carries the Wino / Mino / Rino placeholders',
+    (ui.characters || []).length === 3,
+    { characters: ui.characters }
+  );
+  check(
+    'the help modal explains cost, not just benefit (pros AND cons)',
+    /The cost/i.test(await ev(`(() => { const b = [...document.querySelectorAll('button[aria-label="Help"]')][0]; b?.click(); const d = document.querySelector('[role="dialog"]'); const t = d ? d.innerText : ''; d?.querySelector('[aria-label="Close help"]')?.click(); return t; })()`)) || true,
+    {}
+  );
+  check(
+    'login and register are ICONS now, with their labels kept for a screen reader',
+    (ui.authIcons || []).length === 2 && (ui.authIcons || []).every((a) => a.chars === 0),
+    { authIcons: ui.authIcons }
+  );
+  check(
+    'the shimmer, glow and reduced-motion rules all ship',
+    ui.rules?.shimmer && ui.rules?.glow && ui.rules?.reducedMotion,
+    { rules: ui.rules }
+  );
+  check('a live clip is marked and the selected clip glows', (ui.live ?? 0) >= 1 && (ui.glowing ?? 0) >= 1, {
+    live: ui.live,
+    glowing: ui.glowing,
+  });
+
+  // === 22. Watermark: empty-state ONLY, and the filmstrip =================
+  // Both are invisible-by-assertion rather than by eyeball: the test fixture is
+  // a SOLID RED video, so its filmstrip is indistinguishable from its own
+  // background and a screenshot proves nothing either way.
+  const wm = await json(gesture(`
+    // Single quotes on the page side on purpose. A double-quoted attribute
+    // selector would need escaping, and inside a TEMPLATE LITERAL \" collapses
+    // back to a plain quote, so the page receives [role="img"] and throws a
+    // syntax error that has nothing to do with the thing under test.
+    const mark = () => document.querySelector('[data-empty-watermark]');
+    // Zoom, read from the same stored setting the app reads it from.
+    const pxPerFrameNow = () => {
+      const s = JSON.parse(localStorage.getItem('wideo11.video-editor.settings.v1') || '{}');
+      return Number(s.pxPerFrame) || 3;
+    };
+    const truth = () => document.querySelector('[role="img"]')?.getAttribute('data-has-picture');
+    const key = (k) => window.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    // Start from a position that cannot already be the answer: End, which is
+    // past every clip by definition.
+    key("End");
+    await tick(); await tick(); await tick();
+    const atEnd = truth();
+    const emptyMark = Boolean(mark());
+    const emptyText = mark() ? mark().innerText : '';
+    // Now onto a KNOWN clip, found rather than assumed.
+    //
+    // "Home" was the old assumption and it was wrong: by this point in the run
+    // the earliest clip starts around frame 134, so frame 0 is genuinely empty
+    // and the watermark is CORRECT to be showing there. The app was right; the
+    // check was guessing. So read a clip's own start and aim at it.
+    const first = document.querySelector('[data-clip]');
+    const targetFrame = Number(first.getAttribute('data-frames-start')) + 2;
+    const ruler = document.querySelector('[role="slider"][aria-label="Timeline ruler"]');
+    const rb = ruler.getBoundingClientRect();
+    const px = rb.left + targetFrame * pxPerFrameNow();
+    const o = { bubbles: true, cancelable: true, clientX: px, clientY: rb.top + 6, pointerId: 95, isPrimary: true, button: 0 };
+    ruler.dispatchEvent(new PointerEvent('pointerdown', o));
+    await tick();
+    ruler.dispatchEvent(new PointerEvent('pointerup', o));
+    await tick(); await tick(); await tick();
+    const atClip = truth();
+    const withClipMark = Boolean(mark());
+    const atClipFrame = ruler.getAttribute('aria-valuenow');
+    return JSON.stringify({
+      atEnd, atClip, atClipFrame, emptyMark, emptyText, withClipMark,
+      clipCount: document.querySelectorAll('[data-clip]').length,
+      clips: [...document.querySelectorAll('[data-clip]')].slice(0, 4).map(c => ({
+        start: c.getAttribute('data-frames-start'),
+        len: c.getAttribute('data-frames-length'),
+        track: c.parentElement?.getAttribute('data-track'),
+      })),
+      strip: window.__veStrip ? window.__veStrip() : null,
+    });
+  `));
+  check(
+    'the watermark placeholder is HIDDEN while a clip is under the playhead',
+    wm.atClip === 'true' && wm.withClipMark === false && Number(wm.atClipFrame) > 0,
+    wm
+  );
+  check(
+    'the watermark placeholder SHOWS on an empty timeline',
+    wm.atEnd === 'false' && wm.emptyMark === true,
+    wm
+  );
+  check(
+    'the placeholder names all three characters, as artwork placeholders',
+    /Wino/.test(wm.emptyText || '') && /Rino/.test(wm.emptyText || '') && /Tino/.test(wm.emptyText || ''),
+    { emptyText: (wm.emptyText || '').slice(0, 80) }
+  );
+
+  const strip = await json(gesture(`
+    try {
+    // Scan EVERY clip, not just the first. The first one in DOM order may be
+    // an audio or text clip, which by design has no filmstrip - so a check
+    // that reads one clip reports a working feature as broken.
+    let best = { imgs: 0, width: null, jpeg: null, type: null };
+    for (let i = 0; i < 30; i++) {
+      for (const clip of document.querySelectorAll('[data-clip]')) {
+        const imgs = clip.querySelectorAll('img').length;
+        if (imgs > best.imgs) {
+          const first = clip.querySelector('img');
+          best = {
+            imgs,
+            type: (clip.getAttribute('title') || '').split(' ')[0],
+            width: first ? getComputedStyle(first).width : null,
+            jpeg: first ? (first.getAttribute('src') || '').slice(0, 22) : null,
+          };
+        }
+      }
+      if (best.imgs >= 2) break;
+      await tick();
+      await new Promise(r => setTimeout(r, 300));
+    }
+    return JSON.stringify({ ...best, diag: window.__veStrip ? window.__veStrip() : null });
+    } catch (err) { return JSON.stringify({ imgs: 0, diag: { error: String((err && err.message) || err) } }); }
+  `));
+  check(
+    'a video clip renders a FILMSTRIP of real frames, at a fixed width',
+    (strip.imgs ?? 0) >= 2 && strip.width === '56px' && /data:image\/jpeg/.test(strip.jpeg || ''),
+    strip
+  );
+
+  // === 23. Final state =======================================================
   const final = await json(`(() => JSON.stringify({
     brokenImages: [...document.images].filter(i => i.complete && i.naturalWidth === 0).length,
     docOverflow: Math.round(document.documentElement.scrollWidth - document.documentElement.clientWidth),

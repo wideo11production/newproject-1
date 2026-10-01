@@ -5,6 +5,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { signIn } from './harness-session.mjs';
 import { execFileSync } from 'node:child_process';
 
 const URL = process.argv[2] ?? 'http://localhost:3002/';
@@ -58,6 +59,9 @@ try {
     if (r.exceptionDetails) return 'THREW: ' + (r.exceptionDetails.exception?.description || '').split('\n')[0];
     return r.result.value;
   };
+
+  await signIn(cdp, sid, URL);
+
 
   await cdp('Page.navigate', { url: URL }, sid);
   await sleep(7000);
@@ -146,6 +150,16 @@ try {
     });
     return JSON.stringify(out, null, 1);
   })()`));
+
+  // Screenshot the dark theme on a clean page so the timeline can be inspected
+  // without a dialog covering it.
+  await sleep(600);
+  {
+    const shot = await cdp('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }, sid);
+    const { writeFileSync } = await import('node:fs');
+    writeFileSync('timeline-probe.png', Buffer.from(shot.data, 'base64'));
+    console.log('screenshot: timeline-probe.png');
+  }
 
   // Read the ACTUAL rendered pixels.
   //

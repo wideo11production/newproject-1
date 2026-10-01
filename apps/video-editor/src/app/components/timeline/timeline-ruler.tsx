@@ -41,6 +41,18 @@ import { clampPxPerFrame, frameToTimecode, zoomPercent, DEFAULT_PX_PER_FRAME } f
 import { MARKER_COLOURS, type Marker } from '../../lib/engine/markers';
 
 /**
+ * Ruler height, in px.
+ *
+ * Exported because the track header's column-header row has to be EXACTLY this
+ * tall, or every lane sits 8px above its own header row. Measured, not
+ * eyeballed: with the ruler at 40 and the header at 32, all three lanes were
+ * off by exactly 8 - so clicking a lane's controls landed on the neighbour.
+ *
+ * One constant, so the two cannot drift apart again.
+ */
+export const RULER_HEIGHT = 40;
+
+/**
  * Label spacing, in pixels. A label is about 5 characters at every zoom, so the
  * rule is: pick the smallest step from the ladder whose rendered gap clears
  * this. Measuring the gap instead of counting ticks is what stops the labels
@@ -275,8 +287,8 @@ export function TimelineRuler({
       aria-valuetext={`${frameToTimecode(currentFrame, fps)}, frame ${currentFrame} of ${totalFrames}`}
       onPointerDown={beginScrub}
       onKeyDown={onKey}
-      style={{ width: laneWidth }}
-      className="group relative h-10 shrink-0 cursor-ew-resize select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500"
+      style={{ width: laneWidth, height: RULER_HEIGHT }}
+      className="group relative shrink-0 cursor-ew-resize select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500"
     >
       {/* ---- The baseline. A hard edge along the bottom is what makes a strip
            of dashes read as a ruler rather than as a broken border. ---- */}
@@ -299,7 +311,7 @@ export function TimelineRuler({
             neither readable.
           */}
           <div
-            className="pointer-events-none absolute bottom-0 left-1 rounded bg-surface-overlay px-1 font-mono text-[9px] whitespace-nowrap text-fg-secondary"
+            className="pointer-events-none absolute bottom-0 left-1 rounded bg-surface-overlay px-1 font-mono text-[8px] whitespace-nowrap text-fg-secondary"
             style={{ left: (measure.start + measureLen / 2) * pxPerFrame }}
           >
             {measureLen}f · {(measureLen / fps).toFixed(3)}s · {frameToTimecode(measureLen, fps)}
@@ -415,7 +427,7 @@ export function TimelineRuler({
       {labelList.map((f) => (
         <span
           key={`l${f}`}
-          className="pointer-events-none absolute left-0 top-0.5 select-none whitespace-nowrap font-mono text-[9px] text-fg-muted"
+          className="pointer-events-none absolute left-0 top-0.5 select-none whitespace-nowrap font-mono text-[8px] text-fg-muted"
           style={{ left: f * pxPerFrame + 3 }}
         >
           {labelFor(f, fps, pxPerFrame)}
@@ -453,7 +465,7 @@ export function TimelineRuler({
           style={{ left: hoverFrame * pxPerFrame }}
           aria-hidden="true"
         >
-          <span className="absolute -top-px left-1 whitespace-nowrap rounded bg-slate-950/90 px-1 font-mono text-[9px] text-slate-200">
+          <span className="absolute -top-px left-1 whitespace-nowrap rounded bg-slate-950/90 px-1 font-mono text-[8px] text-slate-200">
             f{hoverFrame} · {frameToTimecode(hoverFrame, fps)}
           </span>
         </div>
@@ -478,11 +490,15 @@ export function TimelineRuler({
         The bottom band is the measure band, and this element is
         `pointer-events-none`, so it cannot steal a measurement drag.
       */}
-      <div className="pointer-events-none absolute bottom-0.5 right-1 flex items-center gap-1 rounded bg-surface-overlay px-1 font-mono text-[9px] text-fg-secondary">
-        {snapEnabled && <Magnet className="h-2.5 w-2.5" aria-hidden="true" />}
-        <RulerIcon className="h-2.5 w-2.5" aria-hidden="true" />
-        {pxPerFrame.toFixed(2)}px/f · tick {rung.frames}f
-      </div>
+      {/*
+        NO zoom read-out on the ruler.
+
+        It carried a "3.00px/f - tick 30f" chip in its corner, which was in
+        the wrong place twice over: it is a ZOOM control, and zoom already
+        lives in the toolbar with a slider and a live percentage. On the ruler
+        it was a second, smaller copy of a number visible on every glance, and
+        it sat on top of the tick labels. Gone from here, still in the toolbar.
+      */}
     </div>
   );
 }
@@ -507,7 +523,7 @@ export function TimelineZoom({
   return (
     <div className="flex items-center gap-0.5" role="group" aria-label="Timeline zoom">
       <button type="button" onClick={() => onZoom(clampPxPerFrame(pxPerFrame / 1.4))} aria-label="Zoom out" title="Show more of the timeline ( - )" className={btn}>
-        <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
+        <ZoomOut className="h-2 w-2" aria-hidden="true" />
       </button>
       <input
         type="range"
@@ -524,14 +540,14 @@ export function TimelineZoom({
         title={`Timeline zoom: ${zoomPercent(pxPerFrame)}% — ${pxPerFrame.toFixed(2)} pixels per frame\nDrag to zoom, or Alt+scroll anywhere on the ruler.`}
         className="h-1 w-12 cursor-pointer accent-sky-500"
       />
-      <span className="w-8 text-center font-mono text-[10px] text-fg-secondary" aria-label="Zoom percentage">
+      <span className="w-8 text-center font-mono text-[8px] text-fg-secondary" aria-label="Zoom percentage">
         {zoomPercent(pxPerFrame)}%
       </span>
       <button type="button" onClick={() => onZoom(clampPxPerFrame(pxPerFrame * 1.4))} aria-label="Zoom in" title="Zoom in, until a single frame is clearly visible ( + )" className={btn}>
-        <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
+        <ZoomIn className="h-2 w-2" aria-hidden="true" />
       </button>
       <button type="button" onClick={onFit} aria-label="Reset zoom" title={`Back to 100% — ${DEFAULT_PX_PER_FRAME} pixels per frame ( 0 )`} className={btn}>
-        <Minus className="h-3.5 w-3.5" aria-hidden="true" />
+        <Minus className="h-2 w-2" aria-hidden="true" />
       </button>
     </div>
   );

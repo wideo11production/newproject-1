@@ -26,6 +26,7 @@ import { Input } from '@wideo11/ui/input';
 import { AlertCircle, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
 
 import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+import { nextFromLocation } from '@/lib/safe-next';
 import SecuritySetupGate from '@/components/security/security-setup-gate';
 
 import {
@@ -138,7 +139,17 @@ export default function LoginPage() {
           return;
         }
 
-        window.location.href = '/dashboard';
+        // `?next=` ko yahan pehle se resolve kar lo, taaki dono success paths
+        // (normal login aur security-gate ke baad) SAME destination use karein.
+        //
+        // Pehle dono jagah hardcoded `/dashboard` tha. Video-editor ka gate
+        // `?next=/` bhejkar user ko yahan bhejta hai, aur login ke baad user
+        // apni destination bhool jaata tha - gate se aane ka matlab hi gaya.
+        //
+        // `nextFromLocation()` `safeNext()` se guzarta hai, isliye absolute URL
+        // ya `//evil.com` jaisa `next` open-redirect nahi ban sakta.
+        const destination = nextFromLocation();
+        window.location.href = destination;
         return;
       }
 
@@ -330,7 +341,11 @@ export default function LoginPage() {
         accessToken={accessToken}
         onComplete={() => {
           setSecurityRequired(false);
-          window.location.href = '/dashboard';
+          // Same `next` handling as the normal login path above. Ye path tab
+          // chalti hai jab setup abhi poora hua hai - user login ke baad yahin
+          // pause karta hai, isliye yahan bhi destination drop karna usko
+          // editor/dashboard se door le jaata.
+          window.location.href = nextFromLocation();
         }}
       />
     );

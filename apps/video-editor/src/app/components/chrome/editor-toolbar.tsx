@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 
 // ============================================================================
 // Editor toolbar
@@ -56,6 +57,7 @@ import {
   ChevronRight,
   Gauge,
   Timer,
+  HelpCircle,
   MoveHorizontal,
   Move,
   MonitorUp,
@@ -64,7 +66,8 @@ import {
 } from 'lucide-react';
 import { MenuBar, ToolbarGroup, type Menu } from './menu-bar';
 import { AuthNav } from './auth-nav';
-import { SUPPORTED_FPS } from '../../lib/engine/frames';
+import { HelpTip, useToolbarHelp } from './help-tip';
+import { SUPPORTED_FPS, clampPxPerFrame } from '../../lib/engine/frames';
 
 /** The speeds offered. Real time first, because that is the only one most
  *  projects are cut at, and a list that starts at 0.5 implies otherwise. */
@@ -111,6 +114,8 @@ export function EditorToolbar({
   snapping,
   onToggleRipple,
   onZoom,
+  onZoomTo,
+  pxPerFrame,
   onFit,
   onFullscreen,
   onOpenBin,
@@ -160,6 +165,10 @@ export function EditorToolbar({
   snapping: boolean;
   onToggleRipple: () => void;
   onZoom: (delta: number) => void;
+  /** Absolute zoom, in PIXELS PER FRAME. For the slider; the buttons step. */
+  onZoomTo: (pxPerFrame: number) => void;
+  /** Current zoom, so the slider can show a live percentage. */
+  pxPerFrame: number;
   onFit: () => void;
   onFullscreen: () => void;
   onOpenBin: () => void;
@@ -187,6 +196,10 @@ export function EditorToolbar({
   playbackRate: number;
   onPlaybackRate: (rate: number) => void;
 }) {
+  // Help modal state. Local to the toolbar because the toolbar OWNS the
+  // trigger - lifting it would put a boolean in the editor shell for one
+  // dialog.
+
   const menus: Menu[] = [
     {
       id: 'file',
@@ -421,9 +434,31 @@ export function EditorToolbar({
     ],
   ];
 
+  // The zoom SLIDER.
+  //
+  // It used to live in the track header, which was fine at 178px and
+  // impossible at 30px - it rendered clipped and unreadable, and when the
+  // header became icon-only it disappeared entirely. It belongs beside the
+  // zoom buttons it complements: the buttons jump by a step, the slider is for
+  // finding the exact zoom you want, and a control you can only step is no use
+  // when you are looking for 6.4 pixels per frame.
+  const zoomPct = Math.round((pxPerFrame / 3) * 100);
+
   return (
     <>
-      <MenuBar menus={menus} />
+      <MenuBar menus={menus}>
+        {/*
+          Help and the session controls, BOTH on the top strip.
+
+          Help was a toolbar button and it was wrong there: the toolbar is
+          forty editing tools, and a button that explains the toolbar does not
+          belong inside it. It also looked like a tool, so people used it
+          instead of learning the tools. On the top line it reads as what it
+          is - a way into the documentation.
+        */}
+        <HelpTip />
+        <AuthNav />
+      </MenuBar>
       <div
         role="toolbar"
         aria-label="Editing tools"
@@ -455,7 +490,7 @@ export function EditorToolbar({
                   b.disabled
                     ? 'cursor-not-allowed text-fg-muted'
                     : b.active
-                      ? 'bg-sky-600 text-white'
+                      ? 'bg-sky-500/12 text-sky-300 ring-1 ring-inset ring-sky-500/30'
                       : 'text-fg-secondary hover:bg-surface-sunken hover:text-white',
                 ].join(' ')}
               >
@@ -464,6 +499,28 @@ export function EditorToolbar({
             ))}
           </ToolbarGroup>
         ))}
+        <ToolbarGroup title="Timeline zoom">
+          {/*
+            The slider. 1 to 64 pixels per frame, which is the range
+            `clampPxPerFrame` allows - a slider whose range stops short of what
+            the app allows is a control that lies about its own limits.
+          */}
+          <input
+            type="range"
+            min={1}
+            max={6400}
+            step={1}
+            value={Math.round(pxPerFrame * 100)}
+            onChange={(e) => onZoomTo(clampPxPerFrame(Number(e.target.value) / 100))}
+            aria-label="Timeline zoom"
+            title={`Timeline zoom: ${zoomPct}% — ${pxPerFrame.toFixed(2)} pixels per frame\nDrag to zoom, or Alt+scroll on the ruler. Above 24px a single frame is plainly visible.`}
+            className="ve-fader mx-1 h-1 w-16 cursor-pointer"
+          />
+          <span className="w-8 shrink-0 font-mono text-[8px] tabular-nums text-fg-muted" aria-label="Zoom percentage">
+            {zoomPct}%
+          </span>
+        </ToolbarGroup>
+
         <ToolbarGroup title="Frame rate and playback speed">
           {/*
             The two numbers that decide what every other number on screen
@@ -475,12 +532,12 @@ export function EditorToolbar({
             className="flex items-center gap-1 px-1"
             title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
           >
-            <Gauge className="h-3 w-3 text-fg-muted" aria-hidden="true" />
+            <Gauge className="h-2 w-2 text-fg-muted" aria-hidden="true" />
             <select
               value={String(fps)}
               onChange={(e) => onFpsChange(Number(e.target.value))}
               aria-label="Timeline frame rate"
-              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[10px] text-fg focus:border-sky-500 focus:outline-none"
+              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
             >
               {SUPPORTED_FPS.map((f) => (
                 <option key={f} value={f}>
@@ -493,12 +550,12 @@ export function EditorToolbar({
             className="flex items-center gap-1 px-1"
             title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
           >
-            <Timer className="h-3 w-3 text-fg-muted" aria-hidden="true" />
+            <Timer className="h-2 w-2 text-fg-muted" aria-hidden="true" />
             <select
               value={String(playbackRate)}
               onChange={(e) => onPlaybackRate(Number(e.target.value))}
               aria-label="Playback speed"
-              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[10px] text-fg focus:border-sky-500 focus:outline-none"
+              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
             >
               {PLAYBACK_RATES.map((r) => (
                 <option key={r} value={r}>
@@ -523,17 +580,16 @@ export function EditorToolbar({
           Left side ko hi scroll hone diya jaata hai: aapne 40+ buttons open
           kar liye to tools hat jaate hain, session indicator nahi.
         */}
-        <div className="ml-3 flex shrink-0 items-center gap-2 border-l border-edge pl-3">
-          <span className="truncate text-[10px] text-fg-secondary" title={projectName}>
+        <div className="ml-3 flex shrink-0 items-center gap-1 border-l border-edge pl-2">
+          <span className="truncate text-[8px] text-fg-secondary" title={projectName}>
             {projectName}
             <span className={dirty ? 'ml-1 text-amber-400' : 'ml-1 text-fg-muted'}>
               {dirty ? '● unsaved' : savedAt ? '● saved' : '○ new'}
             </span>
           </span>
           {savedAt && (
-            <span className="font-mono text-[10px] text-fg-muted">{new Date(savedAt).toLocaleTimeString()}</span>
+            <span className="font-mono text-[8px] text-fg-muted">{new Date(savedAt).toLocaleTimeString()}</span>
           )}
-          <AuthNav />
         </div>
       </div>
     </>

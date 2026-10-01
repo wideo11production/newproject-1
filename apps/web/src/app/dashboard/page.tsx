@@ -27,6 +27,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+
+/**
+ * Where the video editor lives.
+ *
+ * The editor is a SEPARATE app on its own port, not a route in this one, so
+ * this has to be an absolute URL. The default matches the published compose
+ * port; an env var is here so a deployment does not have to edit source.
+ */
+const VIDEO_EDITOR_URL = process.env.NEXT_PUBLIC_VIDEO_EDITOR_URL ?? 'http://localhost:3002';
 import {
   Camera,
   Check,
@@ -408,6 +417,28 @@ export default function CreatorDashboard() {
                 Browse
               </Button>
             </Link>
+
+            {/*
+              Video editor.
+
+              The editor runs as its OWN app on its own port, not as a route in
+              this one - so the link is absolute and carries the origin
+              explicitly. A relative `/editor` here would 404, and the app it
+              belongs to is not part of this bundle.
+
+              Hidden on small screens because the header is already carrying the
+              identity, Browse and the overflow menu at that width.
+            */}
+            <a href={VIDEO_EDITOR_URL} target="_blank" rel="noreferrer">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden text-[#9fa7b3] hover:text-[#d8d9da] sm:inline-flex"
+                title="Open the video editor"
+              >
+                Video editor
+              </Button>
+            </a>
             {/* ---- 3-dot overflow menu (Chrome-style) ----
                 Isme: Install app (QR bhi), Console, Browse, Log out. */}
             <OverflowMenu label="Dashboard menu" items={menuItems} />

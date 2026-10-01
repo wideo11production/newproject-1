@@ -109,12 +109,12 @@ export function TransitionsPanel({
                 title="Back to the list"
                 className="rounded p-0.5 text-fg-muted hover:bg-surface-overlay hover:text-fg"
               >
-                <X className="h-3 w-3" />
+                <X className="h-2 w-2" />
               </button>
             }
           >
-            <p className="mb-2 flex items-center gap-1.5 text-[11px] text-fg-secondary">
-              <Clock className="h-3 w-3" aria-hidden="true" />
+            <p className="mb-2 flex items-center gap-1.5 text-[8px] text-fg-secondary">
+              <Clock className="h-2 w-2" aria-hidden="true" />
               At {selected.atTime.toFixed(2)}s on {tracks.find((t) => t.id === selected.trackId)?.name ?? 'a track'}
             </p>
             <TileGrid>
@@ -153,8 +153,8 @@ export function TransitionsPanel({
           <PanelSection title="Transitions" hint="Pick one to drop it on the join at the end of the selected clip.">
             {target && clip ? (
               <>
-                <p className="mb-2 flex items-center gap-1.5 rounded border border-edge bg-surface-raised/60 px-2 py-1 text-[10px] text-fg-secondary">
-                  <Shuffle className="h-3 w-3 shrink-0 text-sky-400" aria-hidden="true" />
+                <p className="mb-2 flex items-center gap-1.5 rounded border border-edge bg-surface-raised/60 px-2 py-1 text-[8px] text-fg-secondary">
+                  <Shuffle className="h-2 w-2 shrink-0 text-sky-400" aria-hidden="true" />
                   <span className="truncate">
                     {clip.mediaName} → next clip, at {target.atTime.toFixed(2)}s
                   </span>
@@ -198,7 +198,7 @@ export function TransitionsPanel({
                               onSelectTransition(existing?.id ?? null);
                             }
                           }}
-                          className="w-full truncate rounded border border-edge px-2 py-1 text-left text-[10px] text-fg-secondary hover:border-edge-strong hover:text-fg"
+                          className="w-full truncate rounded border border-edge px-2 py-1 text-left text-[8px] text-fg-secondary hover:border-edge-strong hover:text-fg"
                           title={j.label}
                         >
                           {j.label} · {j.atTime.toFixed(2)}s
@@ -213,7 +213,7 @@ export function TransitionsPanel({
         </>
       )}
 
-      <p className="text-[10px] leading-snug text-fg-muted">
+      <p className="text-[8px] leading-snug text-fg-muted">
         A transition overlaps the two clips for its length. The outgoing clip is held past the cut and
         the incoming one is drawn over it, so applying or removing one never moves a single frame of
         the edit underneath. Default length {DEFAULT_TRANSITION_DURATION}s, maximum {MAX_TRANSITION}s.

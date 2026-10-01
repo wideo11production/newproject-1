@@ -68,14 +68,33 @@ import { frameToTimecode, timecodeCompact } from '../../lib/engine/frames';
 import { clipEnd, type TimelineClip, type TimelineTrack, type TrackType, type Transition } from '../../lib/engine/types';
 import { TRANSITION_BY_ID } from '../../lib/engine/transitions';
 import { MIN_CLIP_FRAMES } from '../../lib/engine/edits';
+import { useFilmstrip, THUMB_WIDTH } from '../../lib/engine/filmstrip';
 import { MARKER_COLOURS, type Marker } from '../../lib/engine/markers';
 import { collectSnapTargets, findSnap, thresholdFrames, type SnapTarget } from '../../lib/engine/snap';
-import { TimelineZoom } from './timeline-ruler';
+import { RULER_HEIGHT } from './timeline-ruler';
+import { TimelineContextMenu, type ContextAction } from './context-menu';
 
 export type { TimelineClip, TimelineTrack, TrackType, Transition } from '../../lib/engine/types';
 export { DEFAULT_TRACKS } from '../../lib/engine/types';
 
-const TRACK_HEADER_W = 178;
+/**
+ * Track header column width.
+ *
+ * 178px was generous enough that the header column became a second sidebar:
+ * a name, four icons, a fader and a delete button, all floating in a column as
+ * wide as the media bin. 132px fits all of it, and the difference is a lane
+ * that reads as part of the timeline rather than as a panel bolted to its left.
+ */
+/**
+ * Track header column width: ICON-ONLY.
+ *
+ * It was 178px, which is wider than the media bin - so the lanes read as
+ * belonging to a second panel rather than to the timeline. Movavi's is a narrow
+ * strip: the lane's colour and an 8px icon identify it, and the name is a
+ * tooltip. 30px fits the spine, the type icon and four state toggles, and
+ * nothing else.
+ */
+const TRACK_HEADER_W = 30;
 const DEFAULT_TRACK_HEIGHT = 56;
 
 /** Minimum lane height. Below this the fader and the name cannot coexist. */
@@ -140,68 +159,171 @@ export function TrackHeaders({
   }, [menuOpen]);
 
   return (
-    <div style={{ width: TRACK_HEADER_W }} className="shrink-0 overflow-hidden border-r border-edge bg-surface">
-      <div className="flex h-8 items-center justify-between border-b border-edge px-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wide text-fg-muted">Tracks</span>
-        <div className="flex items-center gap-0.5">
-          <TimelineZoom pxPerFrame={pxPerFrame} onZoom={onZoom} onFit={onFit} />
-          <div className="relative">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setMenuOpen((o) => !o);
-              }}
-              aria-label="Add a track"
-              title="Add a track\nA second video lane is how picture-in-picture works."
-              className="rounded p-0.5 text-fg-muted hover:bg-surface-overlay hover:text-fg"
-            >
-              {menuOpen ? <ChevronDown className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
-            </button>
-            {menuOpen && (
-              <div
-                onPointerDown={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full z-40 mt-1 w-40 rounded-md border border-edge-strong bg-surface-raised py-1 shadow-xl"
-              >
-                {(['video', 'audio', 'text', 'image'] as TrackType[]).map((t) => {
-                  const { Icon, label } = TRACK_STYLE[t];
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => {
-                        onAddTrack(t);
-                        setMenuOpen(false);
-                      }}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-fg hover:bg-sky-600 hover:text-white"
-                    >
-                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                      {t === 'text' ? 'Text / title track' : `${label} track`}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+    <div
+      data-track-header=""
+      style={{ width: TRACK_HEADER_W }}
+      className="shrink-0 overflow-hidden border-r border-edge bg-surface"
+    >
+      {/*
+        Only the add-track button lives here.
+
+        The zoom control used to sit in this column, which was fine when the
+        column was 178px and wrong the moment it became 30px: a slider, a
+        percentage and three buttons do not fit in 30 pixels, so it rendered
+        clipped and unreadable. Zoom is a TIMELINE control and it already lives
+        in the toolbar with Zoom In, Zoom Out and Fit - a second copy here was
+        always going to be a second thing to keep in sync.
+      */}
+      {/*
+        EXACTLY the ruler's height, exported from the ruler itself.
+
+        These two numbers are the same number. When they drifted - ruler at 40,
+        this row at 32 - MEASURED, every lane sat 8px above its own header row,
+        so clicking a lane's controls landed on the neighbour below it. One
+        constant, imported from the component that owns the other half.
+      */}
+      <div
+        style={{ height: RULER_HEIGHT }}
+        className="flex items-center justify-center border-b border-edge"
+      >
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((o) => !o);
+          }}
+          aria-label="Add a track"
+          title={`Add a track\nA second video lane is how picture-in-picture works.`}
+          className="flex h-5 w-5 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+        >
+          <Plus className="h-2 w-2" aria-hidden="true" />
+        </button>
+        {menuOpen && (
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute left-7 top-6 z-40 w-40 rounded-md border border-edge-strong bg-surface-raised py-1 shadow-xl"
+          >
+            {(['video', 'audio', 'text', 'image'] as TrackType[]).map((t) => {
+              const { Icon: TIcon, label } = TRACK_STYLE[t];
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => {
+                    onAddTrack(t);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[8px] text-fg hover:bg-sky-600 hover:text-white"
+                >
+                  <TIcon className="h-2 w-2" style={{ color: TRACK_TINT[t] }} aria-hidden="true" />
+                  {t === 'text' ? 'Text / title track' : `${label} track`}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        )}
       </div>
 
       {tracks.map((track) => {
         const { Icon } = TRACK_STYLE[track.type];
         const height = trackHeights[track.id] ?? DEFAULT_TRACK_HEIGHT;
+        const clips = track.clips.length;
+        // ONE tooltip for the whole column: name, type, level, how many clips.
+        // Everything the header used to print permanently, available on demand.
+        const summary = [
+          track.name,
+          TRACK_STYLE[track.type].label,
+          track.type === 'audio' ? `level ${Math.round((track.muted ? 0 : track.volume) * 100)}%` : null,
+          `${clips} clip${clips === 1 ? '' : 's'}`,
+          track.locked ? 'locked' : null,
+          track.visible ? null : 'hidden',
+        ]
+          .filter(Boolean)
+          .join(' · ');
+
         return (
           <div
             key={track.id}
             style={{ height }}
+            title={summary}
             className={[
-              'group flex flex-col justify-center gap-0.5 border-b border-edge px-2',
-              track.visible ? '' : 'opacity-50',
+              'group relative flex flex-col items-center justify-center gap-0.5 border-b border-edge',
+              track.visible ? '' : 'opacity-40',
             ].join(' ')}
           >
-            {/* Lane height. A drag on the header's bottom edge resizes the
-                lane, and the value is persisted - a timeline that forgets how
-                tall you made its lanes every refresh is a timeline you rebuild
-                every refresh. */}
+            {/* A 2px colour spine: the lane's identity at a glance, and the
+                same hue the clips use, so a clip and its lane are obviously
+                related. */}
+            <span
+              className={`absolute left-0 top-1 bottom-1 w-0.5 rounded-full ${
+                track.visible ? 'opacity-70' : 'opacity-30'
+              }`}
+              style={{ background: TRACK_TINT[track.type] }}
+              aria-hidden="true"
+            />
+
+            {/* The type icon IS the lane's name. 10px rather than 8px: this is
+                the one glyph that identifies the lane, and at 8px it stops
+                being readable enough to tell Video from Image. */}
+            <Icon className="h-2 w-2" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
+
+            <div className="flex items-center gap-0.5">
+              {track.type === 'audio' && (
+                <>
+                  <IconToggle
+                    label={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
+                    active={track.muted}
+                    onClick={() => onToggleTrack(track.id, 'muted')}
+                    icon={track.muted ? VolumeX : Volume2}
+                    tint="text-amber-400"
+                  />
+                  <IconToggle
+                    label={track.solo ? `Unsolo ${track.name}` : `Solo ${track.name}`}
+                    active={track.solo}
+                    onClick={() => onToggleTrack(track.id, 'solo')}
+                    icon={Headphones}
+                    tint="text-emerald-400"
+                  />
+                </>
+              )}
+              <IconToggle
+                label={track.visible ? `Hide ${track.name}` : `Show ${track.name}`}
+                active={!track.visible}
+                onClick={() => onToggleTrack(track.id, 'visible')}
+                icon={track.visible ? Eye : EyeOff}
+                tint="text-sky-400"
+              />
+              <IconToggle
+                label={track.locked ? `Unlock ${track.name}` : `Lock ${track.name}`}
+                active={track.locked}
+                onClick={() => onToggleTrack(track.id, 'locked')}
+                icon={track.locked ? Lock : Unlock}
+                tint="text-amber-300"
+              />
+            </div>
+
+            {/* Remove, on hover. It is destructive and rare, so it does not get
+                permanent space. */}
+            <button
+              type="button"
+              onClick={() => onRemoveTrack(track.id)}
+              aria-label={`Remove ${track.name}`}
+              title={`Remove ${track.name} and the clips on it`}
+              className="absolute right-0.5 top-0.5 rounded p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
+            >
+              <Trash2 className="h-2 w-2" />
+            </button>
+
+            {/*
+              Lane height.
+
+              It was a 1px hairline with no visible affordance, which is not a
+              control - it is a pixel. A 10px band that highlights on hover gives
+              the pointer somewhere to land, and the highlighted state is what
+              tells you the lane is resizable at all.
+
+              The band sits UNDER the lane, so dragging it up grows the lane.
+            */}
             <div
               role="separator"
               aria-label={`Resize ${track.name} lane`}
@@ -216,12 +338,10 @@ export function TrackHeaders({
                 const startY = e.clientY;
                 const startH = height;
                 const move = (ev: PointerEvent) => {
-                  // The handle sits on the header's TOP edge, so dragging it UP
-                  // grows the lane. A plain `startH + dy` would shrink it - which
-                  // feels like the lane is fighting you, and is invisible until
-                  // you notice the header is taller than the lane it labels.
-                  const next = startH - (ev.clientY - startY);
-                  onTrackHeight(track.id, Math.max(MIN_TRACK_HEIGHT, Math.min(MAX_TRACK_HEIGHT, next)));
+                  onTrackHeight(
+                    track.id,
+                    Math.max(MIN_TRACK_HEIGHT, Math.min(MAX_TRACK_HEIGHT, startH - (ev.clientY - startY)))
+                  );
                 };
                 const up = () => {
                   window.removeEventListener('pointermove', move);
@@ -234,100 +354,65 @@ export function TrackHeaders({
                 if (e.key === 'ArrowUp') onTrackHeight(track.id, Math.min(MAX_TRACK_HEIGHT, height + 8));
                 if (e.key === 'ArrowDown') onTrackHeight(track.id, Math.max(MIN_TRACK_HEIGHT, height - 8));
               }}
-              title={`${track.name} lane height — drag or use Up/Down`}
-              className="absolute -mt-1 hidden h-2 w-full cursor-ns-resize group-hover:block"
-            />
-
-            <div className="flex items-center gap-1.5">
-              <Icon className="h-3.5 w-3.5 shrink-0 text-fg-muted" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate text-[11px] text-fg" title={track.name}>
-                {track.name}
-              </span>
-
-              {track.type === 'audio' && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => onToggleTrack(track.id, 'muted')}
-                    aria-label={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
-                    title={track.muted ? `Unmute ${track.name}` : `Mute ${track.name} · click to silence this track`}
-                    className={`rounded p-0.5 ${track.muted ? 'bg-amber-500/20 text-amber-300' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg'}`}
-                  >
-                    {track.muted ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleTrack(track.id, 'solo')}
-                    aria-label={track.solo ? `Unsolo ${track.name}` : `Solo ${track.name}`}
-                    title={
-                      track.solo
-                        ? `Unsolo ${track.name} · every other track is currently silenced`
-                        : `Solo ${track.name} · hear only this track`
-                    }
-                    className={`rounded p-0.5 ${track.solo ? 'bg-emerald-500/20 text-emerald-300' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg'}`}
-                  >
-                    <Headphones className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                onClick={() => onToggleTrack(track.id, 'visible')}
-                aria-label={track.visible ? `Hide ${track.name}` : `Show ${track.name}`}
-                title={track.visible ? `Hide ${track.name}` : `Show ${track.name}`}
-                className="rounded p-0.5 text-fg-muted hover:bg-surface-overlay hover:text-fg"
-              >
-                {track.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => onToggleTrack(track.id, 'locked')}
-                aria-label={track.locked ? `Unlock ${track.name}` : `Lock ${track.name}`}
-                title={track.locked ? `Unlock ${track.name} · this lane rejects clips and drags` : `Lock ${track.name} · clips on this lane cannot be moved or trimmed`}
-                className="rounded p-0.5 text-fg-muted hover:bg-surface-overlay hover:text-fg"
-              >
-                {track.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.01}
-                value={track.muted ? 0 : track.volume}
-                onChange={(e) => onTrackVolume(track.id, Number(e.target.value))}
-                // Wheel over a fader changes the level, which is what a mouse
-                // wheel on a mixer strip has always done, and it must not also
-                // scroll the timeline sideways.
-                onWheel={(e) => {
-                  e.preventDefault();
-                  onTrackVolume(track.id, Math.max(0, Math.min(1, track.volume - e.deltaY * 0.001)));
-                }}
-                aria-label={`${track.name} volume`}
-                title={`${track.name} volume · ${Math.round(track.muted ? 0 : track.volume * 100)}% — scroll on the fader to change it`}
-                className="h-1 min-w-0 flex-1 cursor-pointer accent-sky-500"
-              />
-              <span className="w-7 shrink-0 text-right font-mono text-[9px] text-fg-muted">
-                {Math.round((track.muted ? 0 : track.volume) * 100)}
-              </span>
-              <button
-                type="button"
-                onClick={() => onRemoveTrack(track.id)}
-                aria-label={`Remove track ${track.name}`}
-                title={`Remove ${track.name} and the clips on it`}
-                className="shrink-0 rounded p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
-              >
-                <Trash2 className="h-3 w-3" />
-              </button>
+              title={`${track.name} lane height — drag, or Up/Down`}
+              className="group/lane absolute inset-x-0 -bottom-1 z-10 h-2.5 cursor-ns-resize"
+            >
+              <span className="absolute inset-x-0 bottom-0 h-px bg-transparent transition-colors group-hover/lane:bg-sky-400/60" />
             </div>
           </div>
         );
       })}
+
+      <div className="flex items-center justify-center p-1" />
     </div>
   );
 }
+
+/**
+ * One 8px state toggle.
+ *
+ * Eight pixels is what the whole column is built around, and it is genuinely
+ * small - which is fine, because the hit box around it is 16px and every one of
+ * these is reachable by keyboard with its own accessible name. The active state
+ * is a COLOUR, not a fill: at this size a filled background turns the column
+ * into a stripe of blocks and the state is no longer readable at a glance.
+ */
+function IconToggle({
+  label,
+  active,
+  onClick,
+  icon: Ico,
+  tint,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  icon: typeof Eye;
+  tint: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
+      className={`flex h-4 w-4 items-center justify-center rounded transition-colors ${
+        active ? tint : 'text-fg-muted hover:text-fg'
+      }`}
+    >
+      <Ico className="h-2 w-2" aria-hidden="true" />
+    </button>
+  );
+}
+
+/** The colour each lane's spine and type icon share with its clips. */
+const TRACK_TINT: Record<TrackType, string> = {
+  video: '#38bdf8',
+  audio: '#a78bfa',
+  text: '#fbbf24',
+  image: '#34d399',
+};
 
 // ---------------------------------------------------------------------------
 // Lane rendering
@@ -376,6 +461,13 @@ interface TimelineTracksProps {
   onDropHoverChange: (trackId: string | null) => void;
   selectedClipId?: string | null;
   selectedTransitionId?: string | null;
+  /** How many clips are selected, for the context menu's Ripple delete label. */
+  selectedIdsCount: number;
+  /** Whether the clipboard holds anything, so Paste is offered honestly. */
+  clipboardHasContent: boolean;
+  /** One handler for every context-menu item, so the menu and the toolbar
+   *  and the keyboard can never drift apart into doing different things. */
+  onContextAction: (action: 'cut' | 'copy' | 'paste' | 'ripple' | 'split' | 'attach' | 'mute') => void;
 }
 
 export interface SnapOptionsProp {
@@ -427,6 +519,9 @@ export function TimelineTracks({
   onDropHoverChange,
   selectedClipId,
   selectedTransitionId,
+  selectedIdsCount,
+  clipboardHasContent,
+  onContextAction,
 }: TimelineTracksProps) {
   const laneRef = useRef<HTMLDivElement>(null);
   const laneEls = useRef(new Map<string, HTMLDivElement>());
@@ -799,8 +894,84 @@ export function TimelineTracks({
   const visStart = visibleRange.startFrame - overscanFrames;
   const visEnd = visibleRange.endFrame + overscanFrames;
 
+  /** A lane is drop-enabled for a bin tile. */
+  const acceptsDrag = (e: React.DragEvent) => e.dataTransfer.types.includes('application/x-wideo11-media');
+
+  /**
+   * Right-click menu.
+   *
+   * Two rules keep it from being annoying:
+   *   - the clip under the cursor is SELECTED first, so "Cut" cuts what the
+   *     user pointed at rather than whatever was selected a minute ago;
+   *   - the browser's own menu is suppressed ONLY when the pointer is actually
+   *     over a clip or a lane, so "right-click to inspect" still works on the
+   *     ruler and the status strip.
+   */
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number; clipId: string | null } | null>(null);
+  // Whether the clip under the cursor is ATTACHED, so the menu can say
+  // "Detach" rather than "Attached". The label states the ACTION; a label that
+  // only states the state leaves the user working out which way it toggles.
+  const menuClipAttached = useMemo(() => {
+    if (!menuAt?.clipId) return false;
+    for (const t of tracks) for (const c of t.clips) if (c.id === menuAt.clipId) return Boolean(c.linkedId);
+    return false;
+  }, [menuAt, tracks]);
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    const el = e.target as HTMLElement;
+    const clipEl = el.closest('[data-clip]') as HTMLElement | null;
+    const laneEl = el.closest('[data-track]') as HTMLElement | null;
+    if (!clipEl && !laneEl) return; // let the browser have it
+    e.preventDefault();
+    e.stopPropagation();
+    const clipId = clipEl?.getAttribute('data-clip-id') ?? null;
+    if (clipId && selectedClipId !== clipId) onSelectClip(clipId);
+    setMenuAt({ x: e.clientX, y: e.clientY, clipId });
+  };
+
+  const contextActions = useMemo<ContextAction[]>(() => {
+    const hasClip = Boolean(menuAt?.clipId);
+    const selCount = selectedIdsCount;
+    const attached = Boolean(menuAt?.clipId ? menuClipAttached : false);
+    return [
+      { id: 'cut', label: 'Cut', shortcut: 'Ctrl+X', hint: 'Copy the selected clip to the clipboard and remove it from the timeline', disabled: !hasClip, onRun: () => onContextAction('cut') },
+      { id: 'copy', label: 'Copy', shortcut: 'Ctrl+C', hint: 'Copy the selection without removing it', disabled: !hasClip, onRun: () => onContextAction('copy') },
+      { id: 'paste', label: 'Paste at playhead', shortcut: 'Ctrl+V', hint: 'Drop the clipboard onto the timeline at the playhead', disabled: !clipboardHasContent, onRun: () => onContextAction('paste') },
+      {
+        id: 'ripple',
+        label: selCount > 1 ? `Ripple delete ${selCount} clips` : 'Ripple delete',
+        hint: 'Remove the selected clips and slide everything after them left, closing the gap',
+        disabled: selCount === 0,
+        onRun: () => onContextAction('ripple'),
+      },
+      { id: 'split', label: 'Split at playhead', shortcut: 'S', hint: 'Cut the clip under the playhead in two, leaving everything else exactly where it is', disabled: !hasClip, onRun: () => onContextAction('split') },
+      {
+        // ---- ATTACH / DETACH ----
+        //
+        // The label states the ACTION that will happen, not the state. "Detach"
+        // on an attached clip tells you what clicking does; "Attached" would
+        // only tell you what is, and you would have to remember which way it
+        // toggles.
+        id: 'attach',
+        label: attached ? 'Detach' : 'Attach',
+        hint: attached
+          ? 'Detach: this clip and its partner move, trim and cut independently from now on'
+          : 'Attach to the same file on another lane: from now on they move, cut and fade together',
+        disabled: !hasClip,
+        onRun: () => onContextAction('attach'),
+      },
+      {
+        id: 'mute',
+        label: 'Mute this clip',
+        hint: 'Silence this clip without touching the track fader, so the rest of the lane is unaffected',
+        disabled: !hasClip,
+        onRun: () => onContextAction('mute'),
+      },
+    ];
+  }, [menuAt, menuClipAttached, selectedIdsCount, clipboardHasContent, onContextAction]);
+
   return (
-    <div ref={laneRef} className="relative shrink-0" style={{ width: laneWidth }}>
+    <div ref={laneRef} className="relative shrink-0" style={{ width: laneWidth }} onContextMenu={onContextMenu}>
       {/* Grid, behind the clips. Drawn once for the whole strip rather than
           per lane, because a per-lane grid repeats the same lines N times and
           a 1000-clip project then has a thousand of them. */}
@@ -831,11 +1002,19 @@ export function TimelineTracks({
         const { rows, count } = rowsFor(track);
         const height = trackHeights[track.id] ?? DEFAULT_TRACK_HEIGHT;
         const rowH = Math.max(16, Math.floor((height - 8) / count));
-        const visibleClips = track.clips.filter((c) => {
-          const s = Math.round(c.startTime * fps);
-          const e = Math.round(clipEnd(c) * fps);
-          return e >= visStart && s <= visEnd;
-        });
+            const visibleClips = track.clips.filter((c) => {
+              const s = Math.round(c.startTime * fps);
+              const e = Math.round(clipEnd(c) * fps);
+              return e >= visStart && s <= visEnd;
+            });
+            // Is THIS lane the one the playhead is inside? Only that lane's
+            // clips shimmer, so the animation answers "what is playing" instead
+            // of decorating every clip equally.
+            const laneHasPlayhead =
+              currentFrame >= 0 &&
+              track.clips.some(
+                (c) => currentFrame >= Math.round(c.startTime * fps) && currentFrame < Math.round(clipEnd(c) * fps)
+              );
 
         return (
           <div
@@ -922,8 +1101,8 @@ export function TimelineTracks({
             ].join(' ')}
           >
             {track.clips.length === 0 && (
-              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-fg-muted/60">
-                {track.locked ? 'locked' : 'empty — pick a clip from the media bin'}
+              <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[8px] text-fg-muted/60">
+                {track.locked ? 'locked' : 'empty'}
               </span>
             )}
 
@@ -935,6 +1114,7 @@ export function TimelineTracks({
               const lengthFrames = Math.max(1, Math.round(clip.duration * fps));
               const width = lengthFrames * pxPerFrame;
               const row = rows.get(clip.id) ?? 0;
+              const liveHere = laneHasPlayhead && currentFrame >= startFrame && currentFrame < startFrame + lengthFrames;
               // The clip after this one that starts exactly where it ends, if
               // any: that pair shares a roll handle.
               const neighbour = track.clips.find(
@@ -947,6 +1127,25 @@ export function TimelineTracks({
                   data-clip-id={clip.id}
                   data-frames-start={startFrame}
                   data-frames-length={lengthFrames}
+                  // `data-live` drives the shimmer. ONLY the lane the playhead is
+                  // inside animates: a whole row of clips pulsing at once reads
+                  // as a decoration, and it hides which clip is actually
+                  // playing right now - which is the one thing the animation
+                  // could have been useful for.
+                  data-live={liveHere ? 'true' : 'false'}
+                  style={
+                    {
+                      left: startFrame * pxPerFrame,
+                      width,
+                      top: 4 + row * rowH,
+                      height: rowH,
+                      zIndex: 10 + row,
+                      // Per-clip phase offset, so neighbouring clips are not in
+                      // lockstep and the lane does not read as one single flash.
+                      '--ve-delay': `${-((startFrame * 37) % 55) / 10}s`,
+                      '--ve-lane-w': `${Math.max(width, 200)}px`,
+                    } as React.CSSProperties
+                  }
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectClip(clip.id);
@@ -960,15 +1159,36 @@ export function TimelineTracks({
                   onMouseLeave={() => onHoverClip(null)}
                   title={`${clip.mediaName} · frames ${startFrame}–${startFrame + lengthFrames} (${lengthFrames}f, ${frameToTimecode(lengthFrames, fps)}) — drag to move (lanes included), an edge to trim, the amber corner to fade, double-click for properties`}
                   className={[
-                    'absolute flex items-center gap-1 overflow-hidden rounded border text-left',
-                    moving ? 'z-30 cursor-grabbing select-none opacity-90 shadow-lg ring-2 ring-sky-400' : 'cursor-grab',
+                    // `gap` and `border` pulled back to 1px: at the old density
+                    // every clip carried a visible frame plus a rounded border,
+                    // and a lane of them read as a stack of buttons rather than
+                    // as a timeline.
+                    've-shimmer absolute flex items-center gap-0.5 overflow-hidden rounded-[3px] border text-left',
+                    moving ? 'z-30 cursor-grabbing select-none opacity-90 shadow-lg' : 'cursor-grab',
                     cStyle.clip,
-                    selected ? 'ring-2 ring-white/70' : 'hover:brightness-110',
+                    // Glow replaces the old 2px white ring, so the SELECTED
+                    // state is carried by light rather than by a second line
+                    // the eye has to find.
+                    selected ? `ve-glow ${glowFor(clip.type)}` : 'hover:brightness-110',
                     track.visible ? '' : 'opacity-40',
                   ].join(' ')}
-                  style={{ left: startFrame * pxPerFrame, width, top: 4 + row * rowH, height: rowH, zIndex: 10 + row }}
                 >
-                  {clip.poster && (
+                  {(clip.type === 'audio' || clip.type === 'video') && liveHere && (
+                    // The travelling highlight. One per LIVE clip only, and it
+                    // is 1px tall: it has to register as life, not as content.
+                    <span key="sparkle" className="ve-sparkle" aria-hidden="true" />
+                  )}
+
+                  {/*
+                    The filmstrip: real frames from the clip's own footage, at
+                    a FIXED width so that zooming in reveals more of them
+                    rather than stretching the same few. While it is being
+                    extracted the single poster stands in, so a clip is never
+                    blank.
+                  */}
+                  <ClipFilmstrip clip={clip} rowHeight={rowH} />
+
+                  {clip.poster && !clip.url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={clip.poster} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-45" />
                   )}
@@ -1067,7 +1287,18 @@ export function TimelineTracks({
                   {!clip.poster && !clip.peaks && rowH >= 20 && (
                     <cStyle.Icon className="relative h-3 w-3 shrink-0" aria-hidden="true" />
                   )}
-                  <span className="pointer-events-none relative min-w-0 flex-1 truncate px-0.5 text-[10px] font-medium text-white/90 drop-shadow">
+                  <span
+                    className="pointer-events-none relative min-w-0 flex-1 truncate text-[8px] font-medium text-white/90 drop-shadow"
+                    // Padding to CLEAR the trim handles.
+                    //
+                    // The handles are 8px wide and sit flush against each end
+                    // of the clip. The name used to start at 2px, so on a
+                    // SELECTED clip the handle covered its first characters -
+                    // "red.mp4" rendered as "ed.mp4". It is invisible as a bug
+                    // until you look for it, and it looks like the clip's text
+                    // is rendering wrong rather than like it is being covered.
+                    style={{ paddingLeft: 9, paddingRight: 9 }}
+                  >
                     {clip.mediaName}
                   </span>
                   {pxPerFrame >= 2 && (
@@ -1077,12 +1308,12 @@ export function TimelineTracks({
                   )}
                   {clip.linkedId && (
                     <span className="pointer-events-none relative shrink-0 text-emerald-300" title="Linked to another clip — moving one moves the other">
-                      <Link2 className="h-2.5 w-2.5" />
+                      <Link2 className="h-2 w-2" />
                     </span>
                   )}
                   {clip.effects.length > 0 && (
                     <span className="pointer-events-none relative shrink-0 text-amber-300" title={`${clip.effects.length} effect(s) applied`}>
-                      <Wand2 className="h-2.5 w-2.5" />
+                      <Wand2 className="h-2 w-2" />
                     </span>
                   )}
 
@@ -1104,44 +1335,52 @@ export function TimelineTracks({
                     </span>
                   )}
 
-                  {selected && (
-                    <div className="absolute right-0.5 top-0.5 z-20 flex gap-0.5">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleLink(clip.id);
-                        }}
-                        aria-label={clip.linkedId ? `Unlink ${clip.mediaName}` : `Link ${clip.mediaName}`}
-                        title={clip.linkedId ? 'Unlink — stop moving this clip and its pair together' : 'Link — bind this clip to the same file on another track'}
-                        className={`rounded bg-slate-950/80 p-0.5 ${clip.linkedId ? 'text-emerald-300' : 'text-slate-400 hover:text-emerald-300'}`}
+                  {/*
+                    Clip actions: link, properties, remove.
+
+                    THE HIT BOX IS 20px AND THE ICON IS 12px, AND THAT IS
+                    THE WHOLE FIX.
+
+                    A pass that normalised icon sizes also shrank these buttons,
+                    because each one was just `p-0.5` wrapped around its glyph -
+                    so shrinking the glyph took the target from ~20px to
+                    12x14. Functionally they still worked: the dialog opened and
+                    the clip was deleted. In practice a 12px target is a
+                    coin flip, which is exactly what "these buttons don't work"
+                    means when the code behind them is correct.
+
+                    So: the GLYPH follows the 8/12/16 system, and the TARGET is
+                    always 20px. They are different things and shrinking one is
+                    not permission to shrink the other.
+                  */}
+                  {selected && width >= 64 && (
+                    <div className="absolute right-0 top-0 z-30 flex items-center gap-px rounded-l bg-slate-950/85 px-0.5">
+                      <ClipAction
+                        label={clip.linkedId ? `Unlink ${clip.mediaName}` : `Link ${clip.mediaName}`}
+                        title={
+                          clip.linkedId
+                            ? 'Detach — this clip and its partner move independently from now on'
+                            : 'Attach to the same file on another lane — they then move, cut and fade together'
+                        }
+                        onClick={() => onToggleLink(clip.id)}
                       >
-                        {clip.linkedId ? <Unlink className="h-2.5 w-2.5" /> : <Link2 className="h-2.5 w-2.5" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenInspector(clip.id);
-                        }}
-                        aria-label={`Properties of ${clip.mediaName}`}
-                        title="Properties — speed, volume, fades, filters and position"
-                        className="rounded bg-slate-950/80 p-0.5 text-slate-400 hover:text-white"
+                        {clip.linkedId ? <Unlink className="h-2 w-2" /> : <Link2 className="h-3 w-3" />}
+                      </ClipAction>
+                      <ClipAction
+                        label={`Properties of ${clip.mediaName}`}
+                        title="Speed, volume, fades, colour, position and fit"
+                        onClick={() => onOpenInspector(clip.id)}
                       >
-                        <Wand2 className="h-2.5 w-2.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onRemoveClip(clip.id);
-                        }}
-                        aria-label={`Remove ${clip.mediaName}`}
-                        title={`Remove ${clip.mediaName}`}
-                        className="rounded bg-slate-950/80 p-0.5 text-slate-400 hover:text-rose-400"
+                        <Wand2 className="h-2 w-2" />
+                      </ClipAction>
+                      <ClipAction
+                        label={`Remove ${clip.mediaName}`}
+                        title="Remove this clip from the timeline"
+                        danger
+                        onClick={() => onRemoveClip(clip.id)}
                       >
-                        <Trash2 className="h-2.5 w-2.5" />
-                      </button>
+                        <Trash2 className="h-2 w-2" />
+                      </ClipAction>
                     </div>
                   )}
                 </div>
@@ -1218,7 +1457,7 @@ export function TimelineTracks({
                       ))}
                     </>
                   )}
-                  {w > 22 && <Shuffle className="h-3 w-3 text-white/90" aria-hidden="true" />}
+                  {w > 22 && <Shuffle className="h-2 w-2 text-white/90" aria-hidden="true" />}
                 </div>
               );
             })}
@@ -1245,14 +1484,16 @@ export function TimelineTracks({
           a decoration on it. */}
       {snapLabel && snapOptions.enabled && (
         <div className="pointer-events-none absolute inset-x-0 top-0 z-50 flex items-center gap-1.5 px-2 pt-0.5">
-          <span className="rounded bg-sky-500/90 px-1.5 py-0.5 text-[9px] font-medium text-white">
+          <span className="rounded bg-sky-500/90 px-1.5 py-0.5 text-[8px] font-medium text-white">
             snapped to {snapLabel}
           </span>
         </div>
       )}
 
-      {/* Snap indicator column. Rendered last so it is above the clips. */}
-      {selectedClipId && null}
+      {/* The menu itself. Rendered last so it stacks above the lanes. */}
+      {menuAt && (
+        <TimelineContextMenu x={menuAt.x} y={menuAt.y} actions={contextActions} onClose={() => setMenuAt(null)} />
+      )}
     </div>
   );
 }
@@ -1303,6 +1544,101 @@ function Waveform({
 
   return (
     <canvas ref={ref} width={300} height={40} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-70" />
+  );
+}
+
+/** Which glow a selected clip gets. One per LANE, not one for the whole
+ *  timeline: if every selected clip glowed the same colour, the glow would
+ *  carry no information at all. */
+function glowFor(type: TrackType): string {
+  return type === 'audio' ? 've-glow-audio' : type === 'text' ? 've-glow-text' : '';
+}
+
+/**
+ * A clip's row of frames.
+ *
+ * Rendered as a flex row of FIXED-width thumbnails, clipped by the parent's
+ * `overflow-hidden`. That is the whole trick: a strip sized to the clip would
+ * stretch as you zoom and never get more detailed, which is the same failure as
+ * the single poster it replaced. A fixed strip gets MORE FRAMES as you zoom in.
+ */
+function ClipFilmstrip({ clip, rowHeight }: { clip: TimelineClip; rowHeight: number }) {
+  // Only video. An audio clip has no picture to sample, and asking for frames
+  // of a WAV wastes a decode on every audio clip in the project.
+  const frames = useFilmstrip(clip);
+  if (clip.type !== 'video' || !frames.length) {
+    // Nothing decoded yet. The lane behind the clip is already a visible
+    // surface, so an empty strip reads as "loading" rather than as a broken
+    // image - which is what an `<img src={undefined}>` would have been.
+    return null;
+  }
+  return (
+    <span className="pointer-events-none absolute inset-0 flex overflow-hidden" aria-hidden="true">
+      {frames.map((src, i) => (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${clip.id}-${i}`}
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          // The frame is CAPTURED at 2x and DISPLAYED at 1x, so the browser
+          // downsamples with its own high-quality filter instead of the strip
+          // being a 56px capture stretched to fill. `opacity-70` is what made it
+          // look washed out next to the clean picture in the preview above.
+          style={{ width: THUMB_WIDTH, height: rowHeight }}
+          className="shrink-0 object-cover"
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * One clip action: a 12px glyph in a 20px target.
+ *
+ * The two sizes are deliberately different. The glyph follows the icon system
+ * so the cluster does not shout; the target is 20px because that is the
+ * smallest thing a mouse can hit reliably. Shrinking a glyph is a style
+ * decision. Shrinking what you can click is a bug, and the icon pass made it
+ * one without anyone noticing, because the handlers still worked - a test that
+ * calls `.click()` directly cannot tell a working button from an unhittable one.
+ */
+function ClipAction({
+  label,
+  title,
+  onClick,
+  danger,
+  children,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      onClick={(e) => {
+        // The clip's own pointerdown starts a DRAG, and a drag and a click are
+        // the same gesture until the pointer moves. Stopping the click here
+        // stops the selection changing underneath the user, and `onPointerDown`
+        // is stopped as well so a tap on an action never becomes a one-frame
+        // drag.
+        e.stopPropagation();
+        onClick();
+      }}
+      onPointerDown={(e) => e.stopPropagation()}
+      className={[
+        'flex h-5 w-5 items-center justify-center rounded transition-colors',
+        danger ? 'text-slate-300 hover:bg-rose-600 hover:text-white' : 'text-slate-300 hover:bg-sky-600 hover:text-white',
+      ].join(' ')}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1373,7 +1709,7 @@ export function TimelineFooter({
   const totalFrames = Math.max(1, Math.round(duration * fps));
   const measureLen = measure.start >= 0 && measure.end > measure.start ? measure.end - measure.start : 0;
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-surface px-3 font-mono text-[10px]">
+    <div className="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-surface px-3 font-mono text-[8px]">
       <div className="flex items-center gap-3 text-fg-secondary">
         <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
         <span className="text-fg-muted/40">|</span>

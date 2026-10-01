@@ -44,7 +44,7 @@
 // taaki avatar ka initials dikha sake. Token cookie me hi rehta hai, jahan
 // JS use chhu nahi sakta.
 import { useCallback, useEffect, useState } from 'react';
-import { LogIn, LogOut, LayoutDashboard, Loader2 } from 'lucide-react';
+import { LogIn, LogOut, LayoutDashboard, Loader2, UserPlus } from 'lucide-react';
 
 /**
  * URLs env se, hardcode nahi.
@@ -134,31 +134,43 @@ export function AuthNav() {
   }, []);
 
   const iconBtn =
-    'flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[11px] font-medium text-fg transition-colors hover:bg-surface-overlay';
+    'flex h-8 w-8 items-center justify-center rounded-md border border-edge bg-surface-raised text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
 
   if (session.state === 'loading') {
     return (
       <div className="flex h-8 w-24 items-center justify-center" aria-label="Checking your session">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-fg-muted" aria-hidden="true" />
+        <Loader2 className="h-2 w-2 animate-spin text-fg-muted" aria-hidden="true" />
       </div>
     );
   }
 
   // ---------------------------------------------------------------- logged out
+  //
+  // ICON-ONLY, and that is a deliberate trade rather than a preference.
+  //
+  // The editor's toolbar is a dense row of tools; two text buttons sitting at
+  // the far end of it are the only words in the strip and they pull the eye off
+  // the controls. Icons carry the same meaning at a third of the width, and the
+  // `aria-label` carries it to anyone who cannot see the icon - so nothing is
+  // lost but the visual noise.
   if (session.state === 'out') {
     return (
-      <div className="flex shrink-0 items-center gap-1.5" data-session="out">
-        <a href={LOGIN_URL} className={iconBtn} aria-label="Log in" title={`Log in - ${LOGIN_URL}`}>
-          <LogIn className="h-3.5 w-3.5" aria-hidden="true" />
-          Log in
+      <div className="ve-signin-glow flex shrink-0 items-center gap-1" data-session="out">
+        <a
+          href={LOGIN_URL}
+          className={iconBtn}
+          aria-label="Log in"
+          title={`Log in - ${LOGIN_URL}`}
+        >
+          <LogIn className="h-2 w-2" aria-hidden="true" />
         </a>
         <a
           href={REGISTER_URL}
-          className="flex h-8 items-center gap-1.5 rounded-md bg-sky-600 px-2.5 text-[11px] font-medium text-white transition-colors hover:bg-sky-500"
+          className={`${iconBtn} border-sky-500/50 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25`}
           aria-label="Create an account"
           title={`Create an account - ${REGISTER_URL}`}
         >
-          Register
+          <UserPlus className="h-2 w-2" aria-hidden="true" />
         </a>
       </div>
     );
@@ -166,14 +178,14 @@ export function AuthNav() {
 
   // -------------------------------------------------------------- logged in
   return (
-    <div className="flex shrink-0 items-center gap-1.5" data-session="in">
+    <div className="ve-signin-glow flex shrink-0 items-center gap-1" data-session="in">
       <a
         href={DASHBOARD_URL}
-        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[11px] font-medium text-fg transition-colors hover:bg-surface-overlay"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[8px] font-medium text-fg transition-colors hover:bg-surface-overlay"
         aria-label="Back to dashboard"
         title={`Back to your dashboard - ${DASHBOARD_URL}`}
       >
-        <LayoutDashboard className="h-3.5 w-3.5" aria-hidden="true" />
+        <LayoutDashboard className="h-2 w-2" aria-hidden="true" />
         Dashboard
       </a>
 
@@ -181,14 +193,14 @@ export function AuthNav() {
         type="button"
         onClick={() => void logout()}
         disabled={busy}
-        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[11px] font-medium text-fg transition-colors hover:bg-surface-overlay disabled:opacity-50"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[8px] font-medium text-fg transition-colors hover:bg-surface-overlay disabled:opacity-50"
         aria-label="Log out"
         title="Log out of this device only - your other devices stay signed in"
       >
         {busy ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          <Loader2 className="h-2 w-2 animate-spin" aria-hidden="true" />
         ) : (
-          <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+          <LogOut className="h-2 w-2" aria-hidden="true" />
         )}
         Log out
       </button>
@@ -207,7 +219,7 @@ export function AuthNav() {
         ek static dot ban jata hai - indicator wahi rehta hai, sirf hilna nahi.
       */}
       <span
-        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[11px] font-semibold text-white"
+        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[8px] font-semibold text-white"
         title={`${session.email} (${session.role})`}
         aria-label={`Signed in as ${session.email}`}
         role="img"

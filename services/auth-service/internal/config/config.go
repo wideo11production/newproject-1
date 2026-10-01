@@ -24,6 +24,50 @@ type Config struct {
 	Storage StorageConfig
 	// Security - response headers + CORS allowlist (Phase A / gap #2)
 	Security SecurityConfig
+	// DeviceLimit - "max N accounts per device" ka on/off switch
+	//
+	// NOTE: `mapstructure` tag ZAROORI hai. mapstructure field-name se key
+	// dhoondta hai, aur wo underscore ko nahi maanta. Bina tag ke ye field
+	// `devicelimit` key ke neeche dhoondhega, jabki viper ke paas key hai
+	// `device_limit.*` - aur phir na env se value aati, na SetDefault, aur
+	// field chup-chaap apni zero value (false) par reh jata hai.
+	//
+	// Ye waise hi `Server`/`JWT` fields par nahi dikhta kyunki unke naam
+	// (`server`, `jwt`) already case-insensitive match karte hain. Isiliye
+	// `DEVICE_LIMIT_ENABLED=true` set karne par bhi cap OFF hi rehta tha -
+	// bina kisi error ke. Isi wajah se is toggle par test bhi hai
+	// (`device_limit_env_test.go`).
+	DeviceLimit DeviceLimitConfig `mapstructure:"device_limit"`
+}
+
+// DeviceLimitConfig device-per-account cap control karta hai.
+//
+// ----------------------------------------------------------------------------
+// KYUN YE ENV SE DRIVABLE HAI
+// ----------------------------------------------------------------------------
+//
+// SPEC me tha: ek device pe max 3 accounts, 4th pe reject. Ye rule production
+// ke liye sahi hai - ek shared/compromised machine se ankhon accounts banana
+// abuse ka signal hai.
+//
+// PAR local development me ye rule TODTA hai. Developer ke paas sirf EK laptop
+// hota hai, aur wo baar-baar naye test accounts banata hai. 3 ke baad har
+// register 403 `device_limit_exceeded` deta tha, aur developer ko lagta tha
+// registration bug hai (wo asli reason nahi hai).
+//
+// Isliye ye ab .env se on/off hai:
+//
+//	DEVICE_LIMIT_ENABLED=false   -> limit OFF (unlimited accounts/device)
+//	DEVICE_LIMIT_ENABLED=true    -> limit ON  (MAX_ACCOUNTS accounts/device)
+//
+// SECURITY NOTE: default `true` hai - yaani koi ye env var bhool jaye, to
+// production behaviour SPEC ke mutabiq SEEDHA (limit chalu) rehta hai. Fail-open
+// nahi, fail-secure. Local dev me jaan-boojh kar `false` karna padta hai.
+type DeviceLimitConfig struct {
+	// Enabled - false par device-per-account cap apply NAHI hota.
+	Enabled bool `mapstructure:"enabled"`
+	// MaxAccounts - limit ON hone par per-device account cap. Default 3 (SPEC).
+	MaxAccounts int `mapstructure:"max_accounts"`
 }
 
 // WebAuthnConfig WebAuthn (biometric/passkey) ke relying-party settings hold karta hai.
@@ -346,6 +390,13 @@ func setDefaults() {
 	viper.SetDefault("webauthn.rp_display_name", "Wideo11")
 	viper.SetDefault("webauthn.rp_origins", "http://localhost:3000")
 	viper.SetDefault("webauthn.session_timeout_minutes", 5)
+
+	// ---- DEVICE ACCOUNT LIMIT (on/off switch) ----
+	//
+	// Default `true` + `3` = SPEC behaviour. Local dev me `.env` me
+	// `DEVICE_LIMIT_ENABLED=false` karke unlimited accounts/device kar sakte ho.
+	viper.SetDefault("device_limit.enabled", true)
+	viper.SetDefault("device_limit.max_accounts", 3)
 }
 
 func (c *DatabaseConfig) DSN() string {

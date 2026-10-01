@@ -1,0 +1,273 @@
+/* ============================================================================
+ * TIMELINE SHIMMER, GLOW, MICRO-SPARKLE AND THE TRACK FADER
+ * ============================================================================
+ *
+ * The clips should look alive and premium, not decorated. The hard rule this
+ * file follows: ANIMATION MAY NOT CARRY INFORMATION.
+ *
+ * If the only way to tell a selected clip from an unselected one is a
+ * shimmer, the timeline is broken - because a 1.5s loop cannot be relied on to
+ * be at a readable phase when you glance at it. So the glow, the selection
+ * ring and the transition badge are all STATIC; the shimmer is texture on top
+ * of a state you can already read at a glance.
+ *
+ * Three parts:
+ *   .ve-shimmer   a slow diagonal light sweep across the clip's top edge
+ *   .ve-glow      a soft outer glow, static, on the SELECTED clip only
+ *   .ve-sparkle   one small travelling highlight, slow enough to be calm
+ *
+ * EVERY animation here respects `prefers-reduced-motion`. A pulsing timeline
+ * is an accessibility problem for some people, not a taste question, and the
+ * static ring that carries the same information is still there.
+ */
+
+/* -------------------------------------------------------------- shimmer --- */
+
+@keyframes ve-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.ve-shimmer {
+  position: relative;
+  overflow: hidden;
+  /* Isolated, so the sweep cannot trigger a repaint of the whole lane. */
+  isolation: isolate;
+}
+
+/*
+ * The sweep sits on the clip's TOP EDGE, not across the whole clip.
+ *
+ * A full-height sweep crosses the clip's NAME, and at any given moment it is
+ * sitting on the one line of text a user is trying to read. A 2px band along
+ * the top edge reads as "this is live" without ever touching the content.
+ */
+.ve-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.55) 45%,
+    rgb(255 214 128 / 0.9) 50%,
+    rgb(255 255 255 / 0.55) 55%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* Only clips on the lane under the playhead animate. */
+.ve-shimmer[data-live='true']::after {
+  opacity: 0.9;
+  animation: ve-sweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* ------------------------------------------------------------------ glow --- */
+
+/*
+ * Selection is a STATIC ring, not a pulsing one.
+ *
+ * A selected clip that pulses draws the eye to a piece of information you can
+ * already read, and it keeps doing it while you are trying to cut. The glow is
+ * therefore constant; what moves is only the surface texture.
+ */
+.ve-glow {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.75),
+    0 0 14px -2px rgb(56 189 248 / 0.55),
+    0 0 30px -8px rgb(56 189 248 / 0.35);
+}
+
+/* The audio lane keeps its own hue so the two lanes never look the same. */
+.ve-glow-audio {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.75),
+    0 0 14px -2px rgb(167 139 250 / 0.55),
+    0 0 30px -8px rgb(167 139 250 / 0.35);
+}
+
+.ve-glow-text {
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.75),
+    0 0 14px -2px rgb(251 191 36 / 0.5),
+    0 0 30px -8px rgb(251 191 36 / 0.3);
+}
+
+/* ---------------------------------------------------------------- sparkle --- */
+
+@keyframes ve-sparkle {
+  0% {
+    transform: translateX(0) scaleX(0.2);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateX(var(--ve-lane-w, 600px)) scaleX(1);
+    opacity: 0;
+  }
+}
+
+.ve-sparkle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 40px;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.8), transparent);
+  pointer-events: none;
+  z-index: 2;
+  animation: ve-sparkle 5.5s linear infinite;
+  /* Each clip starts at a different point in the cycle, so a row of clips does
+     not look like one single flash marching left to right - which is what makes
+     a repeating animation read as "fake" rather than as "alive". */
+  animation-delay: var(--ve-delay, 0s);
+}
+
+/* ------------------------------------------------------- reduced motion --- */
+
+/*
+ * Turn the MOTION off, keep the STATE on.
+ *
+ * The glow and the ring are what carry meaning, so they stay exactly as they
+ * are. Only the sweep and the travelling sparkle stop - and a static top-edge
+ * highlight is left in their place, so the clip still reads as "live".
+ */
+@media (prefers-reduced-motion: reduce) {
+  .ve-shimmer[data-live='true']::after {
+    animation: none;
+    opacity: 0.55;
+  }
+
+  .ve-sparkle {
+    animation: none;
+    display: none;
+  }
+}
+
+/* ========================================================== SIGN-IN GLOW === */
+
+/*
+ * A slow green sweep around the session controls.
+ *
+ * ---- WHY IT RUNS IN BOTH STATES ----
+ *
+ * The first version only glowed when logged out, as a "sign in, you are not
+ * signed in" nag. That reads as a problem with the user rather than as an
+ * invitation, and it disappears the moment they sign in - so the control the
+ * app asks you to look at is the one that moves most and then goes still.
+ *
+ * Here it sweeps either way, because what it is signalling is "this is the
+ * account area", not "you are in trouble". The ICONSET differs: an arrow when
+ * logged out, an avatar with an online dot when logged in.
+ */
+.ve-signin-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.ve-signin-glow::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9px;
+  z-index: -1;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    rgb(52 211 153 / 0.55) 40deg,
+    rgb(16 185 129 / 0.15) 90deg,
+    transparent 150deg,
+    transparent 360deg
+  );
+  animation: ve-glow-spin 3.6s linear infinite;
+  pointer-events: none;
+}
+
+/*
+ * The sweep is BEHIND the control (`z-index: -1` on a pseudo inside an isolated
+ * stacking context), so it reads as a halo around the buttons rather than a
+ * disc over them. Without `isolation: isolate` on the parent the -1 would put
+ * the glow behind the whole toolbar instead.
+ */
+@keyframes ve-glow-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Motion off, glow on. The halo stays visible - it is the affordance - and
+   only the rotation stops. */
+@media (prefers-reduced-motion: reduce) {
+  .ve-signin-glow::before {
+    animation: none;
+    background: conic-gradient(
+      from 0deg,
+      transparent 0deg,
+      rgb(52 211 153 / 0.4) 90deg,
+      transparent 220deg,
+      transparent 360deg
+    );
+  }
+}
+
+/* ---------------------------------------------------------------- fader --- */
+
+/*
+ * The track fader.
+ *
+ * A native range input at default styling is a fat round thumb on a thick
+ * track, and in a 178px header column that thumb becomes the loudest thing on
+ * screen - louder than the track name, louder than the clips. Movavi's header
+ * is quiet, so this is: a 2px rail, a 7px thumb, and no visible focus ring
+ * until the control is actually being used.
+ *
+ * Webkit only, because Firefox has no equivalent and its native thumb is
+ * already small enough that restyling it would be cosmetics for cosmetics.
+ */
+.ve-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+
+.ve-fader::-webkit-slider-runnable-track {
+  height: 2px;
+  border-radius: 9999px;
+  background: rgb(var(--ve-text-muted) / 0.35);
+}
+
+.ve-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 7px;
+  height: 7px;
+  margin-top: -2.5px; /* centres the 7px thumb on the 2px rail */
+  border-radius: 9999px;
+  background: rgb(var(--ve-text-secondary));
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.ve-fader:hover::-webkit-slider-thumb {
+  background: rgb(var(--ve-text-primary));
+  transform: scale(1.15);
+}
+
+/* Focus is shown by the thumb, not by a box, so the control does not jump
+   size the moment it is tabbed to. */
+.ve-fader:focus-visible::-webkit-slider-thumb {
+  background: rgb(56 189 248);
+}
+
+.ve-fader:focus {
+  outline: none;
+}

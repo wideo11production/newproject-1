@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -189,17 +190,30 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 	}
 
-	// ---- DEVICE LIMIT: max 3 accounts per device ----
-	// 4th account banane ki koshish yahin block hoti hai.
-	// Hinglish: ek device pe max 3 accounts - 4th pe reject
+	// ---- DEVICE LIMIT: per-device account cap ----
+	//
+	// NOTE: ye block LOGIN handler ke andar hai, REGISTER ke nahi. Yaani cap
+	// login par check hota hai - jab user pehli baar is device se login karta
+	// hai tab uska account `device_accounts` me record hota hai, aur 4th unique
+	// account pe login 403 se block ho jata hai.
+	//
+	// Ye ab .env se on/off hai (`DEVICE_LIMIT_ENABLED`), default ON + 3 (SPEC).
+	// Local dev me ek hi laptop se naye test accounts banane hote hain, isliye
+	// wahan `.env` me `DEVICE_LIMIT_ENABLED=false` karke cap band kiya ja
+	// sakta hai. OFF par ye block chalti hi nahi - user ko 403 nahi milta.
+	//
+	// Hinglish: ek device pe max N accounts - N+1 pe login reject (jab limit ON ho).
 	if h.securitySvc != nil && deviceInfo.Fingerprint != "" {
 		if regErr := h.securitySvc.RegisterDeviceAccount(
 			ctx, deviceInfo.Fingerprint, userIDFromEmailOrNil(h, ctx, req.Email), req.Email, ip, ua,
 		); regErr == service.ErrDeviceLimitExceeded {
+			// Message me hardcoded "3" NAHI - actual configured cap use karo.
+			// Warna limit 5 set ki ho to user ko jhooth dikhega.
+			limit := h.securitySvc.DeviceAccountCap()
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "device_limit_exceeded",
-				"message": "This device has reached the maximum number of accounts (3).",
-				"limit":   model.MaxAccountsPerDevice,
+				"message": fmt.Sprintf("This device has reached the maximum number of accounts (%d).", limit),
+				"limit":   limit,
 			})
 			return
 		}
@@ -273,6 +287,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"biometric_registered":          profile.BiometricRegistered,
 			"security_questions_configured": profile.SecurityQuestionsConfigured,
 			"setup_complete":                profile.SecuritySetupComplete,
+			// NEW: login page ko ye chahiye taaki wo security-setup gate
+			// email verification se PEHLE na khole. Spec order:
+			// email verify -> security setup. Ye `user` se padha ja raha hai
+			// (login yahin user fetch karta hai), to extra query nahi lagti.
+			//
+			// NOTE: login par ye hamesha `true` hota hai - auth-service
+			// UNVERIFIED user ko login deta hi nahi ("please verify your
+			// email"). Ye field consistency ke liye hai, taaki client ek hi
+			// shape parse kare.
+			"email_verified": user.IsVerified,
 			// NEW (migration 004): frontend ko ye batana zaroori hai ki
 			// biometric step skip hone layak hai ya nahi. Bina iske gate
 			// un users ko step 2 pe rok dega jinke device me sensor hi

@@ -125,6 +125,28 @@ func (h *SecurityHandler) SetupStatus(c *gin.Context) {
 	// Lockout bhi saath me batao (UI countdown dikhata hai)
 	lockoutState, remaining, _ := h.svc.GetLockoutStatus(c.Request.Context(), userID)
 
+	// ---- email_verified bhi bhejo ----
+	//
+	// YE FIELD KYUN ADD KI GAYI: web app ke middleware ko gate ka ORDER decide
+	// karna hai, aur wo sirf `setup_complete` dekh raha tha. Usse ye pata hi
+	// nahi chalta tha ki user ne email verify ki hai ya nahi.
+	//
+	// Result: register ke baad auth-service ek valid session token deta hai
+	// (jiska `exp` future me hai), to middleware ka JWT check pass ho jata tha,
+	// aur user UNVERIFIED hote hue bhi seedha security-setup gate par pahunch
+	// jata tha - yaani 6-digit PIN form, email verification ke BINA.
+	//
+	// Spec order ye hai: email verify -> security setup -> app. Isi liye ye
+	// value ab response me hai taaki middleware pehle verification check kar
+	// sake, security setup ka nahi.
+	//
+	// FAIL-CLOSED: user lookup fail ho to `false` bhejte hain (verified maan
+	// kar aage badhna secure nahi hota).
+	emailVerified := false
+	if u, uErr := h.authSvc.GetUserByID(c.Request.Context(), userID); uErr == nil && u != nil {
+		emailVerified = u.IsVerified
+	}
+
 	// REQUIREMENTS (SPEC):
 	//   - pin_configured
 	//   - biometric_registered
@@ -139,6 +161,7 @@ func (h *SecurityHandler) SetupStatus(c *gin.Context) {
 		"required_questions":            model.RequiredSecurityQuestions,
 		"lockout_state":                 lockoutState,
 		"lockout_seconds_remaining":     remaining,
+		"email_verified":                emailVerified,
 	})
 }
 

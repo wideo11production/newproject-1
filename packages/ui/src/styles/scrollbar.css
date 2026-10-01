@@ -60,8 +60,16 @@
 
 /* ---- WebKit (Chromium, Safari) ---- */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  /* 2px.
+   *
+   * 1px is BELOW the point where a scrollbar can be grabbed with a mouse - a
+   * 1px target means hitting it - and 4px is a wall. The timeline strip's
+   * scrollbar sits directly under the lanes, so at 4px it reads as a band of
+   * UI rather than as something you drag. 2px is the smallest target that is
+   * still comfortable, and at that width it reads as a line.
+   */
+  width: 2px;
+  height: 2px;
 }
 
 ::-webkit-scrollbar-track {

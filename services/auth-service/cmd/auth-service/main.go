@@ -177,7 +177,11 @@ func main() {
 	}
 
 	// Security service - lockout engine, PIN, questions, device limits
-	securitySvc := service.NewSecurityService(db)
+	//
+	// `cfg` pass kiya ja raha hai taki device-per-account limit .env se on/off
+	// ho sake (DEVICE_LIMIT_ENABLED). `cfg == nil` par service SECURE default
+	// maanta hai - limit chalu, cap 3.
+	securitySvc := service.NewSecurityService(db, cfg)
 	securityHandler := handler.NewSecurityHandler(securitySvc, authService)
 
 	// =========================================================================

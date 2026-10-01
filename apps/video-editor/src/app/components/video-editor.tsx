@@ -54,6 +54,7 @@ import { PlayerBar } from './player-bar';
 import { EditorToolbar } from './chrome/editor-toolbar';
 import { RecorderDialog } from './chrome/recorder-dialog';
 import { TimelineRuler } from './timeline/timeline-ruler';
+import { TimelineRail } from './timeline/timeline-rail';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { ResizableHandle, useClampToViewport } from './layout/resizable';
 import { MediaBin } from './panels/media-bin';
@@ -96,6 +97,7 @@ import {
 import { useSettings, setSettings, getSettings, hydrateSettings } from '../lib/engine/settings';
 import { nextMarkerId, nextMarker, prevMarker, type Marker } from '../lib/engine/markers';
 import { MIN_CLIP_FRAMES, rippleTrim, roll, slide, slip } from '../lib/engine/edits';
+import { attach, candidatesFor } from '../lib/engine/attach';
 import {
   loadProject,
   saveProject,
@@ -1157,7 +1159,24 @@ export function VideoEditor() {
   }, [projectName, playheadSeconds, fps]);
 
   // ---- Playback ----
-  const togglePlay = useCallback(() => setPlaying((p) => !p), []);
+  /**
+   * Play / pause, and play ALWAYS starts from where the playhead is.
+   *
+   * Pressing play at frame 0 used to resume from wherever the clock last stood,
+   * which is the single most confusing thing a transport can do: the timeline
+   * looks reset and the picture is already three seconds in. So the rule is
+   * one sentence long - play from the playhead, and the playhead is the start if
+   * the user put it there - and it removes the whole class of bug.
+   */
+  const togglePlay = useCallback(() => {
+    setPlaying((p) => {
+      if (p) return false;
+      // A timeline scrolled to its final frame would otherwise play one frame
+      // and stop, which reads as "play is broken".
+      if (playheadFrame >= durationFrames - 1) setPlayhead(0);
+      return true;
+    });
+  }, [playheadFrame, durationFrames, setPlayhead]);
 
   useEffect(() => {
     if (!playing || !settings.loopEnabled) return;
@@ -1520,6 +1539,8 @@ export function VideoEditor() {
         snapping={settings.snapEnabled}
         onToggleRipple={() => patch({ rippleEnabled: !settings.rippleEnabled })}
         onZoom={(d) => zoomAt(d > 0 ? 1.25 : 1 / 1.25, null)}
+        onZoomTo={(px) => patch({ pxPerFrame: px })}
+        pxPerFrame={pxPerFrame}
         onFit={() => patch({ pxPerFrame: 3 })}
         onFullscreen={() => {
           const el = document.querySelector('[data-preview-pane]');
@@ -1838,14 +1859,74 @@ export function VideoEditor() {
                 onDropHoverChange={() => undefined}
                 selectedClipId={selectedIdsArr.length === 1 ? selectedIdsArr[0] : null}
                 selectedTransitionId={selectedTransitionId}
+                selectedIdsCount={selectedIds.size}
+                clipboardHasContent={clipboard.length > 0}
+                // ONE handler for the context menu, the toolbar and the
+                // keyboard. If each had its own implementation they would
+                // drift, and "Cut" from the menu would quietly do something
+                // slightly different from Ctrl+X.
+                onContextAction={(action) => {
+                  if (action === 'cut') {
+                    copySelected();
+                    removeSelected();
+                  } else if (action === 'copy') copySelected();
+                  else if (action === 'paste') pasteClipboard();
+                  else if (action === 'ripple') removeSelected(true);
+                  else if (action === 'attach') {
+                    // Attach / DETACH. The label in the menu states the action,
+                    // so this one call does both - the same toggle the clip's
+                    // own button uses, so the two can never disagree.
+                    const id = selectedIdsArr[0];
+                    const hit = id ? clipById.get(id) : null;
+                    if (!id || !hit) {
+                      setToast('Select one clip first');
+                      return;
+                    }
+                    const result = attach(tracks, id);
+                    if (!result.ok) {
+                      setToast(result.label);
+                      return;
+                    }
+                    commit(result.tracks);
+                    setToast(result.label);
+                  } else if (action === 'mute') {
+                    const id = selectedIdsArr[0];
+                    const hit = id ? clipById.get(id) : null;
+                    if (!id || !hit) {
+                      setToast('Select one clip first');
+                      return;
+                    }
+                    patchClip(id, { muted: !hit.clip.muted });
+                    setToast(hit.clip.muted ? `Unmuted “${hit.clip.mediaName}”` : `Muted “${hit.clip.mediaName}” — the rest of the lane is unaffected`);
+                  } else if (action === 'split') {
+                    const hit = bladeRef.current?.();
+                    setToast(hit ? `Split “${hit}” at frame ${playheadFrame}` : 'Nothing under the playhead to split');
+                  }
+                }}
               />
               <div
                 className="pointer-events-none absolute top-0 z-30 h-full w-px bg-rose-500/70"
                 style={{ left: playheadFrame * pxPerFrame }}
-                aria-hidden="true"
+aria-hidden="true"
               />
             </div>
           </div>
+
+          {/*
+            The right rail: the voice meter at the full height of the lanes, and
+            the ruler's zoom.
+
+            It was in the player bar as a 16px stub, which read as a decoration
+            rather than as a meter - and the ruler's zoom controls had been
+            moved to the toolbar and then lost. Both belong here, beside the
+            timeline they measure and zoom, using height the lanes already have.
+          */}
+<TimelineRail
+            playing={playing}
+            pxPerFrame={pxPerFrame}
+            onZoomTo={(px) => patch({ pxPerFrame: px })}
+            onFit={() => patch({ pxPerFrame: 3 })}
+          />
         </div>
         <TimelineFooter
           currentFrame={playheadFrame}
@@ -1937,7 +2018,7 @@ export function VideoEditor() {
       {toast && (
         <div
           role="status"
-          className="pointer-events-none fixed bottom-12 left-1/2 z-50 max-w-[70vw] -translate-x-1/2 rounded-full border border-edge-strong bg-surface-raised/95 px-4 py-1.5 text-center text-xs text-fg shadow-lg"
+          className="pointer-events-none fixed bottom-12 left-1/2 z-50 max-w-[70vw] -translate-x-1/2 rounded-full border border-edge-strong bg-surface-raised/95 px-4 py-1.5 text-center text-[8px] text-fg shadow-lg"
         >
           {toast}
         </div>

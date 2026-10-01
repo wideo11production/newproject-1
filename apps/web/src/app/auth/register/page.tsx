@@ -48,6 +48,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { Checkbox } from '@wideo11/ui/checkbox';
@@ -65,6 +66,9 @@ FORM_SPACING,
 import { type BiometricMethod, type BiometricDiagnostics } from '@/lib/webauthn';
 // Click tracking + security audit (staff trap)
 import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+// `?next=` ko safe internal path me convert karne ke liye - absolute URL ya
+// `//evil.com` jaisa value open-redirect ban sakta hai.
+import { safeNext } from '@/lib/safe-next';
 
 // Strength levels: 0 = empty, 4 = strong (green)
 type Strength = 0 | 1 | 2 | 3 | 4;
@@ -79,7 +83,14 @@ useClickTracking('auth/register');
 // ek orphan variable ban gaya tha. Submit payload me ab hardcoded
 // `fullName: ''` jaata hai (backend optional kar chuka hai).
 const [username, setUsername] = useState('');
+const router = useRouter();
+
 const [email, setEmail] = useState('');
+// Registration ke waqt ka email, submit ke baad form clear hone se pehle capture
+// kar liya gaya. Verification screen ko ye chahiye taki user ko email type na
+// karni pade (resend panel `?email=` se prefill hota hai), aur success redirect
+// me bhi yehi value lagti hai.
+const [registeredEmail, setRegisteredEmail] = useState('');
 const [password, setPassword] = useState('');
 const [confirmPassword, setConfirmPassword] = useState('');
 const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -124,14 +135,44 @@ const [biometricDiag, setBiometricDiag] = useState<BiometricDiagnostics | null>(
 useEffect(() => {
   if (status !== 'success' || !message) return;
 
-  const timer = setTimeout(() => {
-    setMessage('');
-    setStatus('idle');
-  }, 5000); // 5 second
+  // ---- GO SOMEWHERE AFTER SUCCEEDING ----
+  //
+  // Ye pehle sirf 5 second wait karke message mitata tha aur form ko khaali
+  // kar deta tha. Registration POORI ho chuki hoti hai - session cookie set
+  // ho chuka hai, user signed in hai - aur phir bhi screen par kuch nahi
+  // hota tha. User ke liye iska matlab hi ye hota hai: "maine register kiya,
+  // login nahi hua, pipeline atak gaya."
+  //
+  // ---- AB YE `?next=` DESTINATION PAR JATA HAI, `?next=` DIKHATE HUYE ----
+  //
+  // DO STEP ZAROORI HAIN, warna verification skip ho jata hai:
+  //
+  //   1. Register ke baad auth-service ek valid session token deta hai (uska
+  //      `exp` future me hota hai). Toh middleware ka JWT check pass hota hai.
+  //   2. Naye account par `setup_complete` `false` hota hai. Pehle yahan seedha
+  //      `/dashboard` jaate the, jahan middleware user ko security-setup par
+  //      bhej deti thi - yaani 6-digit PIN form, bina email verify kiye.
+  //
+  // SPEC order ye hai: EMAIL VERIFY -> SECURITY SETUP -> app. Isliye ab
+  // verification screen par bhejte hain jahan user link kholta hai. Uske baad
+  // middleware unverified user ko security setup par pahunchne hi nahi deti.
+  //
+  // `?next=` (video-editor ka gate bhejta hai) ko aage `?next=` me bacha diya
+  // gaya hai, taaki verification ke baad user seedhe editor par wapas pahunche,
+  // dashboard par nahi.
+  const params = new URLSearchParams(window.location.search);
+  const destination = safeNext(params.get('next'));
 
-  // Timer unmount ho to clear karo (memory leak nahi)
+  const verify = new URLSearchParams({ next: destination });
+  if (registeredEmail) verify.set('email', registeredEmail);
+
+  const timer = setTimeout(() => {
+    router.push(`/auth/verify?${verify.toString()}`);
+    router.refresh();
+  }, 1200);
+
   return () => clearTimeout(timer);
-}, [status, message]);
+}, [status, message, router, registeredEmail]);
 
 useEffect(() => {
   // window sirf client side pe exist karta hai, isliye useEffect + state
@@ -332,6 +373,7 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
 
     if (response.ok) {
       setStatus('success');
+      setRegisteredEmail(email.trim().toLowerCase());
       setMessage(
         payload.message ??
           'Account created. Please check your email to verify your address within 30 minutes.'

@@ -22,11 +22,11 @@ export function HelpPanel() {
         <ul className="space-y-1">
           {SHORTCUTS.map((s) => (
             <li key={`${s.group}-${s.keys}`} className="flex items-start justify-between gap-2">
-              <span className="min-w-0 text-[11px] text-fg-secondary">
+              <span className="min-w-0 text-[8px] text-fg-secondary">
                 <span className="block text-fg">{s.label}</span>
-                {s.hint && <span className="block text-[10px] text-fg-muted">{s.hint}</span>}
+                {s.hint && <span className="block text-[8px] text-fg-muted">{s.hint}</span>}
               </span>
-              <kbd className="shrink-0 rounded border border-edge-strong px-1.5 py-0.5 font-mono text-[10px] text-fg">
+              <kbd className="shrink-0 rounded border border-edge-strong px-1.5 py-0.5 font-mono text-[8px] text-fg">
                 {s.keys}
               </kbd>
             </li>
@@ -37,7 +37,7 @@ export function HelpPanel() {
       <PanelSection
         title={
           <span className="inline-flex items-center gap-1">
-            <MousePointer2 className="h-3 w-3" aria-hidden="true" />
+            <MousePointer2 className="h-2 w-2" aria-hidden="true" />
             Mouse
           </span>
         }
@@ -45,9 +45,9 @@ export function HelpPanel() {
       >
         <ul className="space-y-1">
           {MOUSE_ACTIONS.map((m) => (
-            <li key={m.gesture} className="text-[11px]">
+            <li key={m.gesture} className="text-[8px]">
               <span className="text-fg">{m.gesture}</span>
-              <span className="block text-[10px] text-fg-muted">{m.does}</span>
+              <span className="block text-[8px] text-fg-muted">{m.does}</span>
             </li>
           ))}
         </ul>
@@ -56,7 +56,7 @@ export function HelpPanel() {
       <PanelSection
         title={
           <span className="inline-flex items-center gap-1">
-            <Sparkles className="h-3 w-3" aria-hidden="true" />
+            <Sparkles className="h-2 w-2" aria-hidden="true" />
             What runs locally
           </span>
         }
@@ -64,16 +64,16 @@ export function HelpPanel() {
       >
         <ul className="space-y-1">
           {FEATURES.map((f) => (
-            <li key={f.name} className="text-[11px]">
+            <li key={f.name} className="text-[8px]">
               <span className="text-fg">{f.name}</span>
-              <span className="block text-[10px] leading-snug text-fg-muted">{f.how}</span>
+              <span className="block text-[8px] leading-snug text-fg-muted">{f.how}</span>
             </li>
           ))}
         </ul>
       </PanelSection>
 
-      <p className="flex items-start gap-1.5 text-[10px] leading-snug text-fg-muted">
-        <Keyboard className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+      <p className="flex items-start gap-1.5 text-[8px] leading-snug text-fg-muted">
+        <Keyboard className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
         Shortcuts are ignored while you are typing in a text field, so a title can contain the letter
         S without cutting a clip.
       </p>

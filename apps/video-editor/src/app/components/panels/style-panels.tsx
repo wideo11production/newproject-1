@@ -130,7 +130,7 @@ export function FiltersPanel({ clip, applyFilter }: PanelClip) {
             </Button>
           }
         >
-          <p className="mb-2 text-[10px] text-fg-muted">
+          <p className="mb-2 text-[8px] text-fg-muted">
             Brightness, contrast, saturation and hue are the CSS filter operators, so what the slider
             says is what the canvas does. Temperature has no such operator and is applied as a warm or
             cool wash in the overlay blend mode.
@@ -207,7 +207,7 @@ export function TitlesPanel({ clip, applyText, addText }: PanelClip) {
           ))}
         </TileGrid>
         {stockTitles.filter((t) => !t.downloadable).length > 0 && (
-          <p className="mt-2 text-[10px] leading-snug text-fg-muted">
+          <p className="mt-2 text-[8px] leading-snug text-fg-muted">
             {stockTitles.filter((t) => t.downloadable).length} bundled title themes in the sample
             resources point at a downloadable package that is not in this repository, so they are not
             offered — a button that always fails is worse than no button.

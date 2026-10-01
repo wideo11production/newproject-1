@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { signIn } from './harness-session.mjs';
 import { join } from 'node:path';
 
 const URL = process.argv[2] ?? 'http://localhost:3000/auth/login';
@@ -44,9 +45,21 @@ try {
       if (/hydrat/i.test(t)) lines.push(t);
     }
   });
+  // Set a session cookie FIRST. The mismatch only reproduces when a session
+  // exists: the page renders a "logged out" tree on the server and a "logged
+  // in" tree on the client, so a fresh profile hides the bug completely.
+  await cdp('Network.enable', {}, sid);
+  await cdp(
+    'Network.setCookie',
+    { name: 'wideo11_session', value: 'probe.session.token', domain: 'localhost', path: '/' },
+    sid
+  );
+
+  await signIn(cdp, sid, URL);
+
   await cdp('Page.navigate', { url: URL }, sid);
   await sleep(WAIT);
-  console.log(lines.length ? lines.slice(0, 3).join('\n\n---\n\n').slice(0, 4000) : 'no hydration message captured');
+  console.log(lines.length ? lines.slice(0, 2).join('\n\n---\n\n').slice(0, 5000) : 'no hydration message captured');
 } catch (e) {
   console.error('probe failed:', e.message);
 } finally {

@@ -48,7 +48,14 @@ export interface Menu {
   items: MenuItem[];
 }
 
-export function MenuBar({ menus }: { menus: Menu[] }) {
+/**
+ * The top strip: menus on the left, page-level controls on the right.
+ *
+ * `children` renders in the far-right corner. Keeping the slot here rather
+ * than absolutely positioning the session control over the bar means the bar
+ * still lays out correctly with the controls absent.
+ */
+export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.ReactNode }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +98,7 @@ export function MenuBar({ menus }: { menus: Menu[] }) {
       ref={barRef}
       role="menubar"
       aria-label="Main menu"
-      className="flex h-9 shrink-0 items-center gap-0.5 border-b border-edge bg-surface px-2"
+      className="flex h-8 shrink-0 items-center gap-0.5 border-b border-edge bg-surface px-2"
     >
       {menus.map((menu) => {
         const open = openId === menu.id;
@@ -111,7 +118,7 @@ export function MenuBar({ menus }: { menus: Menu[] }) {
                 if (openId) setOpenId(menu.id);
               }}
               className={[
-                'rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                'rounded px-2.5 py-1 text-[8px] font-medium transition-colors',
                 open
                   ? 'bg-surface-overlay text-white'
                   : 'text-fg-secondary hover:bg-surface-overlay/60 hover:text-fg',
@@ -138,7 +145,7 @@ export function MenuBar({ menus }: { menus: Menu[] }) {
                         item.onSelect?.();
                       }}
                       className={[
-                        'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-xs transition-colors',
+                        'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-[8px] transition-colors',
                         item.disabled
                           ? 'cursor-not-allowed text-fg-muted'
                           : 'text-fg hover:bg-sky-600 hover:text-white',
@@ -148,7 +155,7 @@ export function MenuBar({ menus }: { menus: Menu[] }) {
                       {item.shortcut && (
                         <kbd
                           className={[
-                            'shrink-0 rounded border px-1 py-0.5 font-mono text-[10px]',
+                            'shrink-0 rounded border px-1 py-0.5 font-mono text-[8px]',
                             item.disabled
                               ? 'border-edge text-fg-muted'
                               : 'border-edge-strong text-fg-secondary',
@@ -165,6 +172,14 @@ export function MenuBar({ menus }: { menus: Menu[] }) {
           </div>
         );
       })}
+
+      {/*
+        Page-level controls, far right.
+
+        `ml-auto` pushes them to the edge WITHOUT being inside the scrolling
+        region, so they stay put no matter how wide the menus get.
+      */}
+      {children && <div className="ml-auto flex shrink-0 items-center gap-1 pl-2">{children}</div>}
     </div>
   );
 }

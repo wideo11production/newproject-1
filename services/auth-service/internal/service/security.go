@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/model"
 )
 
@@ -49,11 +50,81 @@ var (
 // SecurityService security operations handle karta hai
 type SecurityService struct {
 	db *gorm.DB
+
+	// deviceLimit: "max N accounts per device" ka on/off + cap value.
+	// `.env` se aata hai (DEVICE_LIMIT_ENABLED / DEVICE_LIMIT_MAX_ACCOUNTS).
+	// Zero value matlab: struct seedha banaya gaya bina config ke (tests) -
+	// isliye helper method `deviceLimitEnforced()` zero value ko SPEC default
+	// (ON, 3) maanta hai, taaki config bhool jane par bhi security ghat na ho.
+	deviceLimitEnabled bool
+	maxAccountsDevice  int
 }
 
 // NewSecurityService naya security service banata hai
-func NewSecurityService(db *gorm.DB) *SecurityService {
-	return &SecurityService{db: db}
+//
+// `cfg` device-limit switch carry karta hai. `cfg == nil` bhi allowed hai (tests
+// ya koi future caller jo config bhool jaye) - aur us case me hum SPEC default
+// maante hain: limit CHALU, cap 3. Yaani config na mile to security control
+// ghaab nahi hota. Ye fail-secure hai, fail-open nahi.
+//
+// Real toggle sirf explicit `DEVICE_LIMIT_ENABLED=false` se aata hai - yaani
+// jaan-boojh kar .env me likhna padta hai. Bhool kar chhod dene par bhi app
+// SPEC ke mutabiq secure rehta hai.
+func NewSecurityService(db *gorm.DB, cfg *config.Config) *SecurityService {
+	// Start from SECURE defaults.
+	s := &SecurityService{
+		db:                 db,
+		deviceLimitEnabled: true,
+		maxAccountsDevice:  model.MaxAccountsPerDevice,
+	}
+
+	if cfg != nil {
+		s.deviceLimitEnabled = cfg.DeviceLimit.Enabled
+		s.maxAccountsDevice = cfg.DeviceLimit.MaxAccounts
+	}
+
+	// Invalid/zero/negative cap ko SPEC value par reset kar do. Warna `0` ka
+	// matlab hota "limit 0" aur HAR register fail ho jata - jo silent breakage
+	// hai, isliye guard zaroori hai.
+	if s.maxAccountsDevice <= 0 {
+		s.maxAccountsDevice = model.MaxAccountsPerDevice
+	}
+
+	// ---- STARTUP LOG (OPERABILITY) ----
+	//
+	// Ye isliye zaroori hai kyunki ye do cheezein env se aati hain aur in
+	// galat hone par koi visible symptom nahi hota - bas device limit chup-chaap
+	// apply nahi hoti. Debug karte waqt yehi line batata hai ki service ko
+	// kya mila.
+	//
+	// Password/secret KABHI print nahi hota - sirf ye do non-sensitive values.
+	log.Printf("[SECURITY] device-per-account limit: enabled=%v cap=%d", s.deviceLimitEnabled, s.maxAccountsDevice)
+
+	return s
+}
+
+// deviceLimitEnforced - limit enforce karni hai ya nahi.
+func (s *SecurityService) deviceLimitEnforced() bool {
+	return s.deviceLimitEnabled
+}
+
+// deviceAccountCap - per-device account cap value.
+func (s *SecurityService) deviceAccountCap() int {
+	return s.maxAccountsDevice
+}
+
+// DeviceLimitEnabled reports whether the device-per-account cap is active.
+//
+// Handler isse use karta hai taaki jab cap OFF ho, 403 message me "3 accounts"
+// jaisa GALAT na dikhe. Ek exported wrapper isliye hai taki `model` ya
+// `config` import karne ki handler ko zaroorat na pade.
+func (s *SecurityService) DeviceLimitEnabled() bool {
+	return s.deviceLimitEnforced()
+}
+
+// DeviceAccountCap reports the configured per-device cap (default 3).
+func (s *SecurityService) DeviceAccountCap() int {
+	return s.deviceAccountCap()
 }
 
 // ---- Password hashing for secrets (PIN + answers) ----
@@ -577,9 +648,17 @@ func (s *AuthService) RecordLoginSuccess(ctx context.Context, userID uuid.UUID, 
 	log.Printf("[AUTH] login success: %s from %s", email, ip)
 }
 
-// ---- Device limits (max 3 accounts per device) ----
+// ---- Device limits (max N accounts per device) ----
 // RegisterDeviceAccount device pe account register karta hai
+//
 // SPEC: max 3 unique accounts per device signature. 4th pe REJECT.
+//
+// NOTE: ye LOGIN ke dauraan call hota hai, register ke dauraan nahi - yaani
+// "is device par is account ka pehla login" yahi moment hai jahan account
+// device se judta hai aur cap check hota hai.
+//
+// Ab cap .env se on/off hai: `DEVICE_LIMIT_ENABLED` (default true) aur
+// `DEVICE_LIMIT_MAX_ACCOUNTS` (default 3).
 func (s *SecurityService) RegisterDeviceAccount(
 	ctx context.Context, fingerprint string, userID uuid.UUID, email, ip, userAgent string,
 ) error {
@@ -600,6 +679,20 @@ func (s *SecurityService) RegisterDeviceAccount(
 		return nil // already registered, noop
 	}
 
+	// DEVICE LIMIT enforce karo.
+	//
+	// SPEC default: max 3 accounts/device. Par ab ye .env se on/off hai
+	// (`DEVICE_LIMIT_ENABLED`). Local dev me ek hi laptop se naye test accounts
+	// banane hote hain, aur limit ON hone par 4th register pe 403 aa jata tha -
+	// jo developer ko "registration bug" lagta tha jabki wo asli reason nahi tha.
+	//
+	// OFF hone par: account record phir bhi likha jaata hai (audit/history ke
+	// liye - device_accounts table useful rehta hai), sirf COUNT check skip hota
+	// hai. Yaani OFF = "cap lagao mat", OFF = "tracking band karo" NAHI.
+	if !s.deviceLimitEnforced() {
+		return s.recordDeviceAccount(ctx, fingerprint, userID, email, ip, userAgent)
+	}
+
 	// Total accounts on this device count karo
 	var total int64
 	err = s.db.WithContext(ctx).Model(&model.DeviceAccount{}).
@@ -608,16 +701,29 @@ func (s *SecurityService) RegisterDeviceAccount(
 		return err
 	}
 
-	// DEVICE LIMIT enforce karo (SPEC: max 3)
-	if total >= model.MaxAccountsPerDevice {
+	// NOTE: variable ko `cap` NAHI rakha - wo Go ka builtin hai, shadow karna
+	// legal hai par confusing aur linter-unfriendly.
+	deviceCap := s.deviceAccountCap()
+	if total >= int64(deviceCap) {
 		uid := userID
 		s.logEvent(ctx, &uid, email, model.EventDeviceLimitExceeded,
-			fmt.Sprintf("Device already has %d accounts (limit %d)", total, model.MaxAccountsPerDevice),
+			fmt.Sprintf("Device already has %d accounts (limit %d)", total, deviceCap),
 			ip, userAgent)
 
 		return ErrDeviceLimitExceeded
 	}
 
+	return s.recordDeviceAccount(ctx, fingerprint, userID, email, ip, userAgent)
+}
+
+// recordDeviceAccount device_accounts me row likhta hai.
+//
+// Limit ON aur OFF dono me ye SAME hota hai - farq sirf count-check ka hai.
+// OFF hone par bhi row likhi jaati hai, taki device history/audit bani rahe
+// (superadmin "kis device par kaun" view isi table se padhta hai).
+func (s *SecurityService) recordDeviceAccount(
+	ctx context.Context, fingerprint string, userID uuid.UUID, email, ip, userAgent string,
+) error {
 	record := model.DeviceAccount{
 		Fingerprint: fingerprint,
 		UserID:      userID,

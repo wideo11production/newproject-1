@@ -115,7 +115,7 @@ export function ExportDialog({
     >
       <div className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-lg border border-edge-strong bg-surface-raised shadow-2xl">
         <header className="flex items-center justify-between border-b border-edge px-4 py-2.5">
-          <h2 className="text-sm font-medium text-fg">Export video</h2>
+          <h2 className="text-[10px] font-medium text-fg">Export video</h2>
           <button
             type="button"
             onClick={onClose}
@@ -123,7 +123,7 @@ export function ExportDialog({
             aria-label="Close export dialog"
             className="rounded p-1 text-fg-muted hover:bg-surface-overlay hover:text-fg disabled:opacity-40"
           >
-            <X className="h-4 w-4" />
+            <X className="h-2 w-2" />
           </button>
         </header>
 
@@ -138,8 +138,8 @@ export function ExportDialog({
                   onChange={(v) => setPresetId(v)}
                 />
               </Field>
-              <div className="flex items-center gap-2 rounded border border-edge bg-surface/60 px-2 py-1.5 text-[10px] text-fg-muted">
-                <Film className="h-3 w-3 shrink-0" aria-hidden="true" />
+              <div className="flex items-center gap-2 rounded border border-edge bg-surface/60 px-2 py-1.5 text-[8px] text-fg-muted">
+                <Film className="h-2 w-2 shrink-0" aria-hidden="true" />
                 {preset.width || settings.width}×{preset.height || settings.height} at {preset.fps || settings.fps} fps
                 {' · '}
                 {preset.videoKbps} kbps video
@@ -167,14 +167,14 @@ export function ExportDialog({
           </PanelSection>
 
           <PanelSection title="What you are getting" hint="Said up front rather than discovered afterwards.">
-            <ul className="space-y-1 text-[11px] text-fg-secondary">
+            <ul className="space-y-1 text-[8px] text-fg-secondary">
               <li className="flex items-start gap-1.5">
-                <Clock className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+                <Clock className="mt-0.5 h-2 w-2 shrink-0 text-amber-400" aria-hidden="true" />
                 Real-time: {seconds.toFixed(1)}s of video takes about {seconds.toFixed(0)}s to render. The
                 progress bar tracks the render clock, not a fake timer.
               </li>
               <li className="flex items-start gap-1.5">
-                <Film className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+                <Film className="mt-0.5 h-2 w-2 shrink-0 text-amber-400" aria-hidden="true" />
                 {mimes.length ? (
                   <>Container: {mimes[0].replace('video/', '').toUpperCase()} — the only thing this browser's encoder produces.</>
                 ) : (
@@ -184,12 +184,12 @@ export function ExportDialog({
               <li className="flex items-start gap-1.5">
                 {result?.silent || !state.tracks.some((t) => t.clips.length > 0) ? (
                   <>
-                    <VolumeX className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+                    <VolumeX className="mt-0.5 h-2 w-2 shrink-0 text-amber-400" aria-hidden="true" />
                     No clip on the timeline carries sound, so the file will be silent.
                   </>
                 ) : (
                   <>
-                    <Volume2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                    <Volume2 className="mt-0.5 h-2 w-2 shrink-0 text-emerald-400" aria-hidden="true" />
                     Audio is the mix you are hearing — same gain graph, same fades, same track faders.
                   </>
                 )}
@@ -202,19 +202,19 @@ export function ExportDialog({
               <div className="h-2 w-full overflow-hidden rounded-full bg-surface-overlay">
                 <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
-              <p className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-fg-secondary">
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+              <p className="mt-1.5 flex items-center gap-1.5 font-mono text-[8px] text-fg-secondary">
+                <Loader2 className="h-2 w-2 animate-spin" aria-hidden="true" />
                 {phase} · {Math.round(progress * 100)}%
               </p>
             </div>
           )}
 
-          {error && <p className="rounded border border-rose-900 bg-rose-950/30 p-2 text-[11px] text-rose-300">{error}</p>}
+          {error && <p className="rounded border border-rose-900 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}
 
           {result && (
             <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2">
-              <p className="flex items-center gap-1.5 text-[11px] text-emerald-300">
-                <Check className="h-3 w-3" aria-hidden="true" />
+              <p className="flex items-center gap-1.5 text-[8px] text-emerald-300">
+                <Check className="h-2 w-2" aria-hidden="true" />
                 {result.name} · {(result.size / 1024 ** 2).toFixed(1)} MB
               </p>
               <div className="mt-1.5 flex gap-1.5">
@@ -225,7 +225,7 @@ export function ExportDialog({
                       .then((b) => downloadBlob(b, result.name));
                   }}
                 >
-                  <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Download className="h-2 w-2" aria-hidden="true" />
                   Download again
                 </Button>
               </div>

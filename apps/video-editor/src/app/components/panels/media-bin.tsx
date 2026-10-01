@@ -31,7 +31,7 @@
 // project is saved, so a saved project really does reopen with its media -
 // see `lib/engine/project-store.ts`.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Film, Music, Image as ImageIcon, Type, Upload, X, Loader2, Layers, Search } from 'lucide-react';
 import { extractThumbnail, hueFor } from '../../lib/media/thumbnail';
 import { useMediaStore, type MediaItem, type MediaKind } from '../../lib/engine/media-store';
@@ -82,6 +82,37 @@ export function MediaBin({
   const [filter, setFilter] = useState<FilterId>('all');
   const [reading, setReading] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
+  // Which tile is being previewed right now. ONE id, not a Set: two tiles
+  // playing audio-less video over each other is a mess, and a Set would make
+  // that normal instead of impossible.
+  const [hoveringId, setHoveringId] = useState<string | null>(null);
+  const previewEls = useRef(new Map<string, HTMLVideoElement>());
+
+  /**
+   * Play or stop a tile's preview.
+   *
+   * `play()` returns a promise that REJECTS if the browser has not been given
+   * permission yet, and an unhandled rejection here would surface as a console
+   * error on a perfectly normal hover. Swallowed deliberately: failing to
+   * preview is not an error, it is just no preview.
+   */
+  const setPreviewing = useCallback(async (id: string, on: boolean) => {
+    setHoveringId(on ? id : null);
+    const el = previewEls.current.get(id);
+    if (!el) return;
+    if (on) {
+      try {
+        el.currentTime = 0;
+        await el.play();
+      } catch {
+        // Permission not granted yet, or the codec is unsupported. The poster
+        // underneath is the fallback, so this is a quiet degradation.
+      }
+    } else {
+      el.pause();
+      el.currentTime = 0;
+    }
+  }, []);
 
   /**
    * Poster frames, extracted once per file.
@@ -127,9 +158,9 @@ export function MediaBin({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-dashed border-edge-strong px-3 py-2 text-xs font-medium text-fg transition-colors hover:border-sky-500 hover:text-sky-300"
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-dashed border-edge-strong px-3 py-2 text-[8px] font-medium text-fg transition-colors hover:border-sky-500 hover:text-sky-300"
         >
-          <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+          <Upload className="h-2 w-2" aria-hidden="true" />
           Import media
         </button>
         <input
@@ -147,14 +178,14 @@ export function MediaBin({
       </div>
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
+        <Search className="h-2 w-2" aria-hidden="true" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search media…"
           aria-label="Search media"
-          className="w-full rounded-md border border-edge-strong bg-surface py-1.5 pl-7 pr-2 text-xs text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
+          className="w-full rounded-md border border-edge-strong bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
         />
       </div>
 
@@ -168,14 +199,14 @@ export function MediaBin({
             aria-label={label}
             title={`${label}\n${hint}`}
             className={[
-              'flex h-7 w-7 items-center justify-center rounded transition-colors',
-              filter === id ? 'bg-sky-600 text-white' : 'text-fg-secondary hover:bg-surface-overlay hover:text-fg',
+              'flex h-6 w-6 items-center justify-center rounded transition-colors',
+            filter === id ? 'bg-sky-600 text-white' : 'text-fg-secondary hover:bg-surface-overlay hover:text-fg',
             ].join(' ')}
           >
-            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            <Icon className="h-2 w-2" aria-hidden="true" />
           </button>
         ))}
-        <span className="ml-auto self-center font-mono text-[10px] text-fg-muted">
+        <span className="ml-auto self-center font-mono text-[8px] text-fg-muted">
           {visible.length}/{items.length}
         </span>
       </div>
@@ -185,15 +216,15 @@ export function MediaBin({
           <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded border border-dashed border-edge p-4 text-center">
             {items.length === 0 ? (
               <>
-                <Film className="h-5 w-5 text-fg-muted" aria-hidden="true" />
-                <p className="text-xs text-fg-muted">No media imported yet</p>
-                <p className="max-w-[30ch] text-[11px] leading-snug text-fg-muted">
+                <Film className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+                <p className="text-[8px] text-fg-muted">No media imported yet</p>
+                <p className="max-w-[30ch] text-[8px] leading-snug text-fg-muted">
                   Import files, then click a tile to drop it on the timeline. Files stay in this browser
                   and are stored with the project when you save it.
                 </p>
               </>
             ) : (
-              <p className="text-xs text-fg-muted">Nothing matches “{search}”</p>
+              <p className="text-[8px] text-fg-muted">Nothing matches “{search}”</p>
             )}
           </div>
         ) : (
@@ -218,12 +249,27 @@ export function MediaBin({
                         onDragStart?.(item);
                       }}
                       onClick={() => onAdd(item)}
+                      // ---- HOVER TO PLAY ----
+                      //
+                      // Previewing an asset BEFORE committing it to the timeline
+                      // is the entire reason to hover a media bin. It has to be
+                      // instant though: mounting a player on hover means the
+                      // browser fetches and decodes before anything is visible,
+                      // and that is a visible half-second delay on every pass.
+                      //
+                      // So the element is already mounted below (paused,
+                      // `preload="none"`) and the ONLY work on enter is
+                      // `play()`. On leave it is paused and rewound, so the next
+                      // hover starts from the first frame rather than from
+                      // wherever the cursor last left the tile.
+                      onMouseEnter={() => void setPreviewing(item.id, true)}
+                      onMouseLeave={() => void setPreviewing(item.id, false)}
                       aria-pressed={active}
                       aria-label={`Add ${item.name} to the timeline`}
-                      title={`${item.name}\nClick or drag onto a track`}
+                      title={`${item.name}\nClick to add at the playhead · hover to preview`}
                       className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
                     >
-                      <div className="flex aspect-video items-center justify-center bg-surface">
+                      <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-surface">
                         {item.poster ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={item.poster} alt="" className="h-full w-full object-cover" />
@@ -253,21 +299,48 @@ export function MediaBin({
                             }
                           >
                             {reading.has(item.name) ? (
-                              <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-hidden="true" />
+                              <Loader2 className="h-2 w-2 animate-spin text-fg-muted" aria-hidden="true" />
                             ) : item.kind === 'audio' ? (
-                              <Music className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+                              <Music className="h-2 w-2 text-fg-muted" aria-hidden="true" />
                             ) : item.kind === 'text' ? (
-                              <Type className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+                              <Type className="h-2 w-2 text-fg-muted" aria-hidden="true" />
                             ) : (
-                              <Film className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+                              <Film className="h-2 w-2 text-fg-muted" aria-hidden="true" />
                             )}
                           </span>
+                        )}
+
+                        {/*
+                          The hovering preview element.
+
+                          Always mounted, PAUSED, and `preload="none"`. `none`
+                          matters: with `auto`, the browser downloads the whole
+                          file for EVERY tile in the bin the moment the panel
+                          opens, which on a folder of videos is the difference
+                          between an instant panel and a frozen tab.
+                        */}
+                        {item.kind === 'video' && (
+                          <video
+                            ref={(el) => {
+                              if (el) previewEls.current.set(item.id, el);
+                              else previewEls.current.delete(item.id);
+                            }}
+                            src={item.url}
+                            preload="none"
+                            muted
+                            playsInline
+                            loop
+                            className={`pointer-events-none absolute inset-0 h-full w-full object-cover transition-opacity duration-100 ${
+                              hoveringId === item.id ? 'opacity-100' : 'opacity-0'
+                            }`}
+                            aria-hidden="true"
+                          />
                         )}
                       </div>
 
                       <div className="space-y-0.5 p-1.5">
-                        <p className="truncate text-[11px] font-medium text-fg">{item.name}</p>
-                        <p className="flex items-center gap-1 text-[10px] text-fg-muted">
+                        <p className="truncate text-[8px] font-medium text-fg">{item.name}</p>
+                        <p className="flex items-center gap-1 text-[8px] text-fg-muted">
                           <span className={style.chip}>{style.label}</span>
                           <span>{fmtDuration(item.duration)}</span>
                           <span className="truncate">{fmtSize(item.sizeBytes)}</span>
@@ -282,7 +355,7 @@ export function MediaBin({
                       title={`Remove ${item.name} from the bin`}
                       className="absolute right-1 top-1 rounded bg-surface/80 p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-red-400 focus:opacity-100 focus:outline-none focus-visible:opacity-100 group-hover:opacity-100"
                     >
-                      <X className="h-3 w-3" aria-hidden="true" />
+                      <X className="h-2 w-2" aria-hidden="true" />
                     </button>
                   </div>
                 </li>

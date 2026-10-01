@@ -1,4 +1,14 @@
 @import '@wideo11/ui/src/styles/scrollbar.css';
+/* Timeline shimmer / glow / sparkle. Imported (not copied) so the animation
+   rules live in ONE place next to the reasoning for them, and so the reduced
+   motion override travels with them.
+
+   Path note: this file is `src/app/globals.css` and the CSS is
+   `src/app/lib/engine/timeline-shimmer.css`, so it is `./lib/...`. Writing
+   `../lib/...` points at `src/lib/...`, which does not exist - and postcss-import
+   fails the BUILD rather than falling back, which is the correct behaviour and
+   a genuinely confusing error message. */
+@import './lib/engine/timeline-shimmer.css';
 
 /* Project-wide scrollbar thickness, colour and hover behaviour:
    `packages/ui/src/styles/scrollbar.css` — 4px, transparent track, Grafana
@@ -212,8 +222,18 @@
  *           jati thi.
  */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  /* 2px, not 1px and not 4px.
+     *
+     * 1px is BELOW the point where a scrollbar can be grabbed reliably - a
+     * 1px-wide target means hitting it, and the timeline strip is used with a
+     * mouse, not a fingertip.
+     * 4px is a wall. On the timeline, whose scrollbar sits directly under the
+     * lanes, 4px reads as a band of UI rather than as something you can drag.
+     *
+     * 2px is the smallest target that is still comfortable, and at that width it
+     * reads as a line rather than as a control. */
+  width: 2px;
+  height: 2px;
 }
 
 ::-webkit-scrollbar-track,

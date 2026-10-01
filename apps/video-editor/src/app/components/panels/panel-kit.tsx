@@ -32,7 +32,7 @@ export function PanelSection({
         <h3 className="text-[10px] font-semibold uppercase tracking-wide text-fg-muted">{title}</h3>
         {action}
       </div>
-      {hint && <p className="mb-2 text-[11px] leading-snug text-fg-muted">{hint}</p>}
+      {hint && <p className="mb-2 text-[8px] leading-snug text-fg-muted">{hint}</p>}
       {children}
     </section>
   );
@@ -75,8 +75,8 @@ export function Tile({
       ].join(' ')}
     >
       {swatch && <span className={`h-7 w-full rounded bg-gradient-to-br ${swatch}`} aria-hidden="true" />}
-      <span className="truncate text-[11px] font-medium text-fg">{label}</span>
-      {hint && <span className="line-clamp-2 text-[10px] leading-snug text-fg-muted">{hint}</span>}
+      <span className="truncate text-[8px] font-medium text-fg">{label}</span>
+      {hint && <span className="line-clamp-2 text-[8px] leading-snug text-fg-muted">{hint}</span>}
     </button>
   );
 }
@@ -84,9 +84,9 @@ export function Tile({
 export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1 flex items-baseline justify-between text-[11px] text-fg-secondary">
+      <span className="mb-1 flex items-baseline justify-between text-[8px] text-fg-secondary">
         <span>{label}</span>
-        {hint && <span className="font-mono text-[10px] text-fg-muted">{hint}</span>}
+        {hint && <span className="font-mono text-[8px] text-fg-muted">{hint}</span>}
       </span>
       {children}
     </label>
@@ -142,7 +142,7 @@ export function TextInput({
       aria-label={ariaLabel}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-xs text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
     />
   );
 }
@@ -174,7 +174,7 @@ export function NumberInput({
         const n = Number(e.target.value);
         if (Number.isFinite(n)) onChange(n);
       }}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 font-mono text-[11px] text-fg focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
     />
   );
 }
@@ -195,7 +195,7 @@ export function Select<T extends string>({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as T)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[11px] text-fg focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg focus:border-sky-500 focus:outline-none"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -218,7 +218,7 @@ export function Toggle({
   hint?: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2 text-[11px] text-fg">
+    <label className="flex cursor-pointer items-start gap-2 text-[8px] text-fg">
       <input
         type="checkbox"
         checked={checked}
@@ -228,7 +228,7 @@ export function Toggle({
       />
       <span>
         <span>{label}</span>
-        {hint && <span className="block text-[10px] text-fg-muted">{hint}</span>}
+        {hint && <span className="block text-[8px] text-fg-muted">{hint}</span>}
       </span>
     </label>
   );
@@ -281,7 +281,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${
         full ? 'w-full' : ''
       }`}
     >
@@ -293,8 +293,8 @@ export function Button({
 export function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded border border-dashed border-edge p-3 text-center">
-      <p className="text-[11px] font-medium text-fg-secondary">{title}</p>
-      <p className="mt-1 text-[10px] leading-snug text-fg-muted">{body}</p>
+      <p className="text-[8px] font-medium text-fg-secondary">{title}</p>
+      <p className="mt-1 text-[8px] leading-snug text-fg-muted">{body}</p>
     </div>
   );
 }

@@ -108,7 +108,7 @@ export function AudioPanel({
                 );
               })}
             </TileGrid>
-            <p className="mt-2 text-[10px] leading-snug text-fg-muted">
+            <p className="mt-2 text-[8px] leading-snug text-fg-muted">
               {stockAudioEffects.length} effects, read out of the stock sample resources. Two that
               touch the same stage of the chain (two pitch shifts, two gates) are applied as the last
               one wins; AutoNoiseRemoval is a chain of three and keeps all three.
@@ -145,12 +145,12 @@ export function AudioPanel({
                 onChange={(n) => onClipFade('out', n)}
               />
             </Field>
-            <p className="text-[10px] leading-snug text-fg-muted">
+            <p className="text-[8px] leading-snug text-fg-muted">
               Fades are dragged directly on the clip — the small amber triangles in its top corners —
               or set in the properties dialog.
             </p>
             <Button onClick={() => onMatchLevel(-1)}>
-              <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
+              <Gauge className="h-2 w-2" aria-hidden="true" />
               Match to -1 dBFS peak
             </Button>
           </div>
@@ -168,31 +168,31 @@ export function AudioPanel({
           <Field label="Shortest gap to cut" hint={`${minSilence.toFixed(2)}s`}>
             <Slider min={0.1} max={1.5} step={0.05} value={minSilence} ariaLabel="Minimum silence length" onChange={setMinSilence} />
           </Field>
-          <p className="text-[10px] leading-snug text-fg-muted">
+          <p className="text-[8px] leading-snug text-fg-muted">
             -45 dBFS sits at a decent microphone&rsquo;s noise floor, and 350ms is below the gap
             between words, so cutting shorter makes speech sound clipped.
           </p>
           <div className="flex gap-1.5">
             <Button onClick={() => void run()} disabled={!canProcess || busy !== null}>
-              <AudioWaveform className="h-3.5 w-3.5" aria-hidden="true" />
+              <AudioWaveform className="h-2 w-2" aria-hidden="true" />
               {busy ?? 'Remove silence'}
             </Button>
             <Button variant="outline" onClick={onRecord}>
-              <Mic className="h-3.5 w-3.5" aria-hidden="true" />
+              <Mic className="h-2 w-2" aria-hidden="true" />
               Record
             </Button>
           </div>
           {!canProcess && (
-            <p className="text-[10px] text-fg-muted">
+            <p className="text-[8px] text-fg-muted">
               Record something, or import an audio file, and this becomes available.
             </p>
           )}
           {result && (
-            <p className="flex items-start gap-1.5 rounded border border-edge bg-surface-raised/70 p-2 text-[10px] leading-snug text-fg">
+            <p className="flex items-start gap-1.5 rounded border border-edge bg-surface-raised/70 p-2 text-[8px] leading-snug text-fg">
               {result.startsWith('Removed') ? (
-                <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" aria-hidden="true" />
+                <Check className="mt-0.5 h-2 w-2 shrink-0 text-emerald-400" aria-hidden="true" />
               ) : (
-                <Wand2 className="mt-0.5 h-3 w-3 shrink-0 text-amber-400" aria-hidden="true" />
+                <Wand2 className="mt-0.5 h-2 w-2 shrink-0 text-amber-400" aria-hidden="true" />
               )}
               {result}
             </p>

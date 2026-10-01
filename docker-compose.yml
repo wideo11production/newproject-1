@@ -328,6 +328,22 @@ services:
       REDIS_DB: 0
       # SSOT: ye sab values .env se aati hain, code me hardcoded kuch nahi
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+
+      # ---- DEVICE-PER-ACCOUNT LIMIT: ON / OFF SWITCH ----
+      #
+      # SPEC tha "ek device pe max 3 accounts". Wo rule local dev me TODTA tha:
+      # developer ke paas ek hi laptop hai aur wahi se naye test accounts bante
+      # hain, to 4th register pe 403 `device_limit_exceeded` aa jata tha.
+      #
+      #   DEVICE_LIMIT_ENABLED=false  -> cap OFF (unlimited accounts/device)
+      #   DEVICE_LIMIT_ENABLED=true   -> cap ON  (MAX_ACCOUNTS accounts/device)
+      #
+      # Default `true` + 3 = SPEC behaviour, agar ye var bhool jaye to bhi.
+      # Yaani production me jaan-boojh kar OFF karna hi padega - galti se
+      # security ghaab nahi hoti (fail-secure, fail-open nahi).
+      DEVICE_LIMIT_ENABLED: ${DEVICE_LIMIT_ENABLED:-true}
+      DEVICE_LIMIT_MAX_ACCOUNTS: ${DEVICE_LIMIT_MAX_ACCOUNTS:-3}
+
       # Superadmin recovery accounts (2) - main superadmin fail ho to backup access
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-advchashampalup@gmail.com}
 
@@ -1055,6 +1071,87 @@ services:
   #   chain nahi badla hai).
   # ==========================================================================
 
+  # ==========================================================================
+  # Web Frontend (Next.js) - Port 3000   [RE-ENABLED]
+  # ==========================================================================
+  #
+  # WHY IT IS A CONTAINER AGAIN
+  #
+  # Host pe `pnpm dev` se chalane ka ek practical problem tha: wo process
+  # har IDE/agent session ke saath chala jaata tha, aur 3000 chupke se
+  # girne par app ke andar ke SAARE links (login, register, dashboard) ek saath
+  # dead ho jaate the - bina kisi error ke. Do baar hua hai.
+  #
+  # Container me chalane se:
+  #   - `restart: unless-stopped` ke saath khud uthta hai
+  #   - 3000 HARGHAR available rehta hai
+  #   - video-editor ke andar ke auth links (`localhost:3000/...`) browser
+  #     se chalte hi rahenge
+  #
+  # `--hostname 0.0.0.0` ZAROORI hai: `next dev` default se localhost par
+  # bind karta hai, jo container ke andar se hi bahar (published port se)
+  # reachable nahi hota. Symptom: container UP, par host se 3000 dead.
+  # ==========================================================================
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: wideo11-web
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      # Server-side: compose network ke andar service names resolve hote hain.
+      # Ye container me hai, isliye `auth-service` theek hai aur `localhost`
+      # NAHI - localhost container KHUD hota hai, doosre service ko nahi.
+      AUTH_SERVICE_URL: http://auth-service:8085
+      AUTH_INTERNAL_URL: http://auth-service:8085
+      BOT_SERVICE_URL: http://dashboard-service:8080
+      DASHBOARD_SERVICE_URL: http://dashboard-service:8080
+      RECOMMENDATION_SERVICE_URL: http://billing-service:8082
+      # Client-side (`NEXT_PUBLIC_*`): ye BROWSER me chalti hain, isliye
+      # inhe host-mapped `localhost` hi rakhna padta hai - `auth-service` naam
+      # browser resolve nahi kar sakta.
+      NEXT_PUBLIC_AUTH_API: http://localhost:8085
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+      NEXT_PUBLIC_WS_URL: ws://localhost:8080
+      NEXT_PUBLIC_MINIO_PUBLIC_HOST: http://localhost:9000
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      # Next.js image optimiser ke liye. Production build me apna khud ka
+      # loader use karta hai; ye sirf sharp/Next image bhi chalata rahe.
+      NEXT_SHARP_PATH: /usr/lib/node_modules/sharp
+      # ======================================================================
+      # JWT_SECRET_KEY - YE LINE POORA LOGIN STUCK THA, YE AAPKA SYMPTOM THA.
+      # ======================================================================
+      #
+      # `src/middleware.ts` har protected request par token verify karta hai,
+      # aur usme fail-closed likha hai: `if (!JWT_SECRET) return false;`.
+      #
+      # Ye var is service ke `environment:` block me THA hi nahi, to container
+      # ko ye mila hi nahi. `JWT_SECRET` undefined hua, aur fail-closed ka
+      # matlab hua: HAR request unauthenticated.
+      #
+      # Isliye register 201 deta tha, login 200 deta tha, cookie set hoti thi -
+      # aur phir bhi /dashboard user ko wapas /auth/login bhej raha tha. Har baar.
+      # Na biometric ka masla tha, na email ka, na account ka. Ek missing env var.
+      #
+      # DHYAN: root `.env` me padha jaata hai sirf VARIABLE SUBSTITUTION ke liye -
+      # container ke andar bahar nahi jaata. Isliye ye line auth-service wale
+      # pattern se copy ki gayi hai, taake dono ek hi source se padhen.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+    depends_on:
+      auth-service:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/auth/login || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
   # Video Editor Frontend (Next.js) - Port 3002
   video-editor:
     build:
@@ -1090,7 +1187,13 @@ services:
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3002/ || exit 1"]
+      # `/api/health` par check karo, `/` par nahi.
+      #
+      # `/` auth gate se 307 redirect hota hai (bina session ke), aur
+      # `wget --spider` non-2xx ko failure maanta hai - isliye ye check hamesha
+      # fail hota tha (352 consecutive failures) jabki app theek tha. `api/` gate
+      # ke matcher se bahar hai, so ye route seedha 200 deta hai.
+      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3002/api/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

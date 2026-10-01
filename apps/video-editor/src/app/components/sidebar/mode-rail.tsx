@@ -156,16 +156,31 @@ export function ModeRail({
             // Three lines: what it is, what it does, and — for a mode that
             // does not work — exactly what is missing.
             title={`${label}\n${hint}${ready ? '' : `\n\nNot built. ${why ?? ''}`}`}
-            className={[
-              'relative flex h-9 w-9 items-center justify-center rounded-md transition-colors',
-              !ready
-                ? 'cursor-not-allowed text-fg-muted'
-                : on
-                  ? 'bg-sky-600 text-white'
-                  : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
-            ].join(' ')}
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
+          className={[
+            // TIGHT icon selector, not a selected tab.
+            //
+            // 32px square with a 3px left bar instead of a 36px filled block.
+            // The previous treatment made the ACTIVE icon the biggest thing in
+            // the rail, which inverts the hierarchy: the rail is a switchboard,
+            // not a list of destinations, and a destination should not shout
+            // louder than the picture.
+            'group relative flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors',
+            !ready
+              ? 'cursor-not-allowed text-fg-muted/50'
+              : on
+                ? 'bg-surface-overlay text-sky-300'
+                : 'text-fg-muted hover:bg-surface-overlay/60 hover:text-fg',
+          ].join(' ')}
+        >
+          {/*
+            The active marker is a 3px BAR, not a fill.
+            Same reason: a filled block is a bigger target for the eye than the
+            thing it points at.
+          */}
+          {on && ready && (
+            <span className="absolute -left-1 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sky-400" aria-hidden="true" />
+          )}
+          <Icon className="h-2 w-2" aria-hidden="true" />
             {!ready && (
               // A dot, not a "coming soon" label. Enough to signal "not yet"
               // without turning the rail into a list of apologies.
@@ -192,11 +207,11 @@ export function ModeRail({
           aria-label="Toggle waveforms"
           title={`${waveformVisible ? 'Hide' : 'Show'} audio waveforms on clips.\nThe peaks are decoded from your own file; a file the browser cannot decode draws a flat line rather than a fake one.`}
           className={[
-            'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+            'flex h-8 w-8 items-center justify-center rounded transition-colors',
             waveformVisible ? 'text-sky-400' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
           ].join(' ')}
         >
-          <AudioWaveform className="h-4 w-4" aria-hidden="true" />
+          <AudioWaveform className="h-2 w-2" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -205,11 +220,11 @@ export function ModeRail({
           aria-label="Toggle the frame grid"
           title={`${gridVisible ? 'Hide' : 'Show'} the frame grid behind the lanes.\nDrawn from the real frame count, so it moves when you zoom.`}
           className={[
-            'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+            'flex h-8 w-8 items-center justify-center rounded transition-colors',
             gridVisible ? 'text-sky-400' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
           ].join(' ')}
         >
-          <Grid3x3 className="h-4 w-4" aria-hidden="true" />
+          <Grid3x3 className="h-2 w-2" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -219,11 +234,11 @@ export function ModeRail({
           aria-label="Snapping"
           title={`Snapping is ${snapEnabled ? 'on' : 'off'} — toggle it with N.\nClips land on the playhead, clip edges, markers and the ends of the timeline.`}
           className={[
-            'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+            'flex h-8 w-8 items-center justify-center rounded transition-colors',
             snapEnabled ? 'text-sky-400' : 'text-fg-muted',
           ].join(' ')}
         >
-          <Magnet className="h-4 w-4" aria-hidden="true" />
+          <Magnet className="h-2 w-2" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -232,7 +247,7 @@ export function ModeRail({
           title={`${theme === 'dark' ? 'Light' : 'Dark'} theme\nPersisted, so it survives a refresh like everything else here.`}
           className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+          {theme === 'dark' ? <Sun className="h-2 w-2" aria-hidden="true" /> : <Moon className="h-3.5 w-3.5" aria-hidden="true" />}
         </button>
         <button
           type="button"
@@ -241,11 +256,11 @@ export function ModeRail({
           aria-label="Project settings"
           title="Project\nNew, open, save, autosave, and the resolution everything else follows."
           className={[
-            'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+            'flex h-8 w-8 items-center justify-center rounded transition-colors',
             active === 'project' ? 'bg-sky-600 text-white' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
           ].join(' ')}
         >
-          <Gauge className="h-4 w-4" aria-hidden="true" />
+          <Gauge className="h-2 w-2" aria-hidden="true" />
         </button>
       </div>
     </nav>

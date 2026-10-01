@@ -19,7 +19,27 @@ import { NextResponse } from 'next/server';
 const AUTH_SERVICE_URL =
   process.env.AUTH_SERVICE_URL ?? 'http://auth-service:8085';
 
+/**
+ * Should the session cookie be marked Secure?
+ *
+ * The rule is "was THIS request encrypted", never "are we a production build".
+ * Those two are not the same thing, and treating them as one is what made the
+ * local stack unable to hold a session at all.
+ *
+ * - Behind a TLS-terminating proxy: `x-forwarded-proto: https` -> secure.
+ * - Direct HTTPS: `nextUrl.protocol` is https -> secure.
+ * - Everything else: plain http -> NOT secure, because a Secure cookie set
+ *   over http is discarded by the browser without a warning.
+ */
+function shouldBeSecure(req: Request, nextUrl: URL): boolean {
+  const forwarded = req.headers.get('x-forwarded-proto');
+  if (forwarded) return forwarded.split(',')[0].trim() === 'https';
+  return nextUrl.protocol === 'https:';
+}
+
 export async function POST(request: Request) {
+  // Used to decide whether the session cookie may be marked Secure.
+  const nextUrl = new URL(request.url);
   let body: Record<string, unknown>;
 
   // Body parse - malformed JSON par 400
@@ -98,7 +118,7 @@ export async function POST(request: Request) {
         //   padega (ya env se control karo).
         httpOnly: true,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        secure: shouldBeSecure(request, nextUrl),
         path: '/',
         maxAge: expiresInSec,
       });

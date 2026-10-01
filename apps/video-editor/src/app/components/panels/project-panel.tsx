@@ -139,7 +139,7 @@ export function ProjectPanel({
       <PanelSection
         title="Project"
         action={
-          <span className={`text-[10px] ${dirty ? 'text-amber-400' : 'text-fg-muted'}`}>
+          <span className={`text-[8px] ${dirty ? 'text-amber-400' : 'text-fg-muted'}`}>
             {dirty ? 'unsaved' : lastSavedAt ? `saved ${new Date(lastSavedAt).toLocaleTimeString()}` : 'never saved'}
           </span>
         }
@@ -150,19 +150,19 @@ export function ProjectPanel({
           </Field>
           <div className="grid grid-cols-2 gap-1.5">
             <Button onClick={() => void save()} disabled={busy}>
-              <Save className="h-3.5 w-3.5" aria-hidden="true" />
+              <Save className="h-2 w-2" aria-hidden="true" />
               Save
             </Button>
             <Button variant="outline" onClick={onNew}>
-              <FilePlus2 className="h-3.5 w-3.5" aria-hidden="true" />
+              <FilePlus2 className="h-2 w-2" aria-hidden="true" />
               New
             </Button>
             <Button variant="outline" onClick={() => void download()} disabled={busy}>
-              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              <Download className="h-2 w-2" aria-hidden="true" />
               Download
             </Button>
             <Button variant="outline" onClick={() => fileRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+              <Upload className="h-2 w-2" aria-hidden="true" />
               Open file
             </Button>
             <input
@@ -195,15 +195,15 @@ export function ProjectPanel({
             />
           </div>
           {autosave && (
-            <p className="flex items-start gap-1.5 text-[10px] leading-snug text-fg-muted">
-              <Clock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+            <p className="flex items-start gap-1.5 text-[8px] leading-snug text-fg-muted">
+              <Clock className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
               Autosave runs every 30 seconds and on any change to the track list.
             </p>
           )}
           {status && (
             <p
               className={[
-                'flex items-start gap-1.5 rounded border p-2 text-[10px] leading-snug',
+                'flex items-start gap-1.5 rounded border p-2 text-[8px] leading-snug',
                 status.kind === 'ok'
                   ? 'border-emerald-900 text-emerald-300'
                   : status.kind === 'warn'
@@ -212,9 +212,9 @@ export function ProjectPanel({
               ].join(' ')}
             >
               {status.kind === 'ok' ? (
-                <Check className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                <Check className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
               ) : (
-                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                <AlertTriangle className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
               )}
               {status.text}
             </p>
@@ -234,8 +234,8 @@ export function ProjectPanel({
                   onClick={() => void onOpen(p.id)}
                   className="min-w-0 flex-1 rounded border border-edge px-2 py-1 text-left hover:border-edge-strong hover:bg-surface-overlay/40"
                 >
-                  <span className="block truncate text-[11px] text-fg">{p.name}</span>
-                  <span className="block font-mono text-[9px] text-fg-muted">
+                  <span className="block truncate text-[8px] text-fg">{p.name}</span>
+                  <span className="block font-mono text-[8px] text-fg-muted">
                     {new Date(p.updatedAt).toLocaleString()} · {p.clipCount} clips
                   </span>
                 </button>
@@ -248,7 +248,7 @@ export function ProjectPanel({
                   title={`Delete ${p.name} and its stored media`}
                   className="shrink-0 rounded p-1 text-fg-muted hover:text-rose-400"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-2 w-2" />
                 </button>
               </li>
             ))}
@@ -286,8 +286,8 @@ export function ProjectPanel({
           <Field label="Background">
             <ColorInput value={doc.settings.background} ariaLabel="Project background colour" onChange={(v) => onSettings({ background: v })} />
           </Field>
-          <p className="flex items-start gap-1.5 text-[10px] leading-snug text-fg-muted">
-            <HardDrive className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+          <p className="flex items-start gap-1.5 text-[8px] leading-snug text-fg-muted">
+            <HardDrive className="mt-0.5 h-2 w-2 shrink-0" aria-hidden="true" />
             {media.length} media file{media.length === 1 ? '' : 's'} in this project
             {media.length > 0 && ` · ${(media.reduce((n, m) => n + m.sizeBytes, 0) / 1024 ** 2).toFixed(1)} MB`}
           </p>

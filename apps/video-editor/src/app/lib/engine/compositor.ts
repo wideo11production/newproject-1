@@ -73,6 +73,15 @@ interface ClipRuntime {
   audio: ReturnType<typeof attachMedia>;
   ready: boolean;
   lastGain: number;
+  /**
+   * The clip this runtime was built for.
+   *
+   * `captureFilmstrip` needs the clip's `sourceIn` and `speed` to know WHICH
+   * frames to pull, and the runtime is already the thing that owns the element
+   * those frames come from. Storing the clip here is what lets the filmstrip
+   * reuse the decoder without being handed the whole model again.
+   */
+  clip: TimelineClip | null;
 }
 
 const EFFECT_BY_NAME = new Map<string, StockAudioEffect>(stockAudioEffects.map((e) => [e.id, e]));
@@ -201,12 +210,15 @@ export class Compositor {
   private scratchB: HTMLCanvasElement;
 
   constructor(canvas: HTMLCanvasElement) {
-    this.canvas = canvas;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('2D canvas context unavailable - the preview cannot render without it');
+    this.canvas = canvas;
     this.ctx = ctx;
     this.scratchA = document.createElement('canvas');
     this.scratchB = document.createElement('canvas');
+    // Published for the timeline's filmstrip. Cleared on dispose so a torn-down
+    // compositor is never reachable.
+    Compositor.live = this;
   }
 
   get width(): number {
@@ -254,7 +266,9 @@ export class Compositor {
   private runtimeFor(clip: TimelineClip, kind: string): ClipRuntime {
     let rt = this.runtimes.get(clip.id);
     if (rt) return rt;
-    rt = { el: null, audio: null, ready: false, lastGain: 1 };
+    // `clip` is stored so `captureFilmstrip` can read `sourceIn` and `speed`
+    // without being handed the whole model a second time.
+    rt = { el: null, audio: null, ready: false, lastGain: 1, clip };
 
     const source = this.state?.sources.get(clip.mediaId);
     if (source && (kind === 'video' || kind === 'audio') && source.url) {
@@ -289,6 +303,7 @@ export class Compositor {
   }
 
   dispose() {
+    if (Compositor.live === this) Compositor.live = null;
     for (const rt of this.runtimes.values()) {
       try {
         rt.el?.pause();
@@ -453,6 +468,154 @@ export class Compositor {
     } else {
       drawPlaceholder(ctx, 0, 0, W, H, clip.mediaName);
     }
+  }
+
+  /** Static handle on the live compositor.
+   *
+   * The timeline's filmstrip needs to reach the element that is ALREADY
+   * decoding each clip, and the compositor is the only thing that owns those
+   * elements. Threading a ref down through the preview to the lanes would work,
+   * but the dependency is backwards - the lanes are chrome, they should not know
+   * a compositor exists - so the live instance is published here instead. One
+   * live compositor, which is also true: there is one preview.
+   */
+  private static live: Compositor | null = null;
+
+  static getLive(): Compositor | null {
+    return Compositor.live;
+  }
+
+  /** Build a clip's decoder on demand.
+   *
+   * A clip that is not under the playhead has no element yet, because nothing
+   * has needed to draw it. The filmstrip needs one anyway, and waiting for the
+   * playhead to wander over the clip would mean a strip that appears only once
+   * you have already scrubbed past it.
+   */
+  ensureElement(clipId: string): boolean {
+    const rt = this.runtimes.get(clipId);
+    if (rt?.el) return true;
+    // `paint` creates the runtime; a 1x1 rect is enough, we only want the
+    // element, not a frame.
+    const clip = this.findClip(clipId);
+    if (!clip) return false;
+    const created = this.runtimeFor(clip, clip.type === 'audio' ? 'audio' : 'video');
+    return Boolean(created?.el);
+  }
+
+  private findClip(clipId: string): TimelineClip | null {
+    for (const track of this.state?.tracks ?? []) {
+      for (const c of track.clips) if (c.id === clipId) return c;
+    }
+    return null;
+  }
+
+  /**
+   * Real frames from a clip's own source, for the timeline filmstrip.
+   *
+   * THIS DELIBERATELY REUSES THE CLIP'S EXISTING ELEMENT rather than making a
+   * second one. A dedicated thumbnail video looked simpler, and it never
+   * loaded: measured in the browser, the elements sat at `readyState 0`
+   * forever, three extractions hung in flight, and the strip stayed empty
+   * while the code read as though it should work.
+   *
+   * The compositor's element is already decoding - the preview proves it, frame
+   * by frame - so reusing it means the filmstrip cannot fail in a way the
+   * preview does not. One decoder per clip, not two.
+   *
+   * Frames come from the clip's own span, NOT from 0: a clip that starts at
+   * 12s in its file would otherwise show the wrong twelve seconds entirely,
+   * and the strip would then disagree with the preview - which is worse than
+   * showing nothing.
+   */
+  async captureFilmstrip(clipId: string, count: number): Promise<string[]> {
+    if (!this.ensureElement(clipId)) return [];
+    const runtime = this.runtimes.get(clipId);
+    const el = runtime?.el as HTMLVideoElement | null;
+    const clip = runtime?.clip;
+    if (!el || !clip) return [];
+
+    if (el.readyState < 2 || !el.videoWidth) {
+      await new Promise<void>((resolve) => {
+        let settled = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          resolve();
+        };
+        el.addEventListener('loadeddata', done, { once: true });
+        el.addEventListener('canplay', done, { once: true });
+        el.addEventListener('error', done, { once: true });
+        setTimeout(done, 6000);
+      });
+    }
+    if (el.readyState < 2 || !el.videoWidth) return [];
+
+    const canvas = document.createElement('canvas');
+    // 2x capture, displayed at 1x - see the note in `filmstrip.ts`. Drawing at
+    // the DISPLAY size would sample too few pixels and then be upscaled back,
+    // which is precisely the dullness this is meant to remove.
+    canvas.width = 112;
+    canvas.height = 68;
+    const g = canvas.getContext('2d');
+    if (!g) return [];
+
+    const from = clip.sourceIn;
+    const span = clip.duration * Math.max(clip.speed, 0.01);
+    const wasPlaying = !el.paused;
+    const wasTime = el.currentTime;
+    if (wasPlaying) el.pause();
+
+    const out: string[] = [];
+    for (let i = 0; i < count; i++) {
+      // Sample the CENTRE of each slice, not its start. A frame taken exactly
+      // on the cut often belongs to the previous slice, so every strip would
+      // look one frame late.
+      const t = from + span * ((i + 0.5) / count);
+      const ok = await this.seekTo(el, t);
+      if (!ok) break;
+      try {
+        // `imageSmoothingQuality: high` matters at 2x DOWNSCALE quality: the
+        // default gives a soft, slightly aliased result that reads as a low
+        // resolution image even though the capture is high resolution.
+        g.imageSmoothingEnabled = true;
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(el, 0, 0, 112, 68);
+        out.push(canvas.toDataURL('image/jpeg', 0.82));
+      } catch {
+        break;
+      }
+    }
+
+    // Put the element back exactly where the timeline expects it. Capturing
+    // frames must not visibly move the playhead or stop the audio.
+    void this.seekTo(el, wasTime);
+    if (wasPlaying) void el.play().catch(() => undefined);
+    return out.length >= 2 ? out : [];
+  }
+
+  /** Seek with a timeout. An unseekable file must not hang the caller. */
+  private seekTo(el: HTMLVideoElement, time: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok: boolean) => {
+        if (done) return;
+        done = true;
+        el.removeEventListener('seeked', onSeeked);
+        el.removeEventListener('error', onError);
+        resolve(ok);
+      };
+      const onSeeked = () => finish(true);
+      const onError = () => finish(false);
+      el.addEventListener('seeked', onSeeked);
+      el.addEventListener('error', onError);
+      setTimeout(() => finish(false), 2000);
+      try {
+        el.currentTime = Math.max(0, time);
+      } catch {
+        finish(false);
+      }
+    });
   }
 
   /** Stop everything. Used when the preview switches away from hover mode. */

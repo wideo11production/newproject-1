@@ -28,7 +28,8 @@
 import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { AlertCircle, CheckCircle2, Loader2, Send } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, MailCheck, Send } from 'lucide-react';
+import { safeNext } from '@/lib/safe-next';
 
 import {
   AuthShell,
@@ -53,8 +54,36 @@ function VerifyContent() {
   // hai (fallback).
   const emailToResend = searchParams?.get('email') ?? '';
 
-  const [status, setStatus] = useState<'checking' | 'success' | 'error'>(
-    token ? 'checking' : 'error'
+  // ---- Where the user goes after a successful verification ----
+  //
+  // SUCCESS ke baad LOGIN page par bhejte hain - `?next=` ko lekar - aur na ki
+  // seedha destination par. Wajah upar render block ke comment me poori tarah
+  // hai: verification sirf email ownership prove karta hai; pehchaan tab banti
+  // hai jab user password daal ke login kare. Register ka session UNVERIFIED
+  // account ka bana hua hota hai, aur use turant aage le jaane se credentials
+  // wala step chhoot jata tha.
+  //
+  // `safeNext()` isliye zaroori hai: ye value user-controlled hai, aur bina
+  // check ke ye open-redirect ban sakta hai.
+  const destination = safeNext(searchParams?.get('next'));
+  const loginHref = `/auth/login?next=${encodeURIComponent(destination)}`;
+
+  // ---- FOUR STATES, NOT THREE ----
+  //
+  // `awaiting` exists because of a bug this page had for its whole life: with
+  // no `?token=` in the URL it initialised straight to 'error'. So arriving
+  // here WITHOUT a token - which is exactly what happens right after
+  // registration, and exactly what the editor gate sends people to - rendered a
+  // red "Verification failed" box.
+  //
+  // Nothing had failed. The email had simply not been opened yet. To someone
+  // who just typed their address into a form, a red failure banner reads as "the
+  // signup is broken" and sends them to register again.
+  //
+  // `awaiting` is the honest answer: no token, nothing attempted, check your
+  // inbox. `error` is reserved for a token that was actually tried and rejected.
+  const [status, setStatus] = useState<'checking' | 'awaiting' | 'success' | 'error'>(
+    token ? 'checking' : 'awaiting'
   );
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
@@ -85,14 +114,27 @@ function VerifyContent() {
   const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
-    // Token hi nahi hai - kuch verify karne ko nahi. Backend call bhi nahi karte
-    if (!token) {
-      setStatus('error');
-      setMessage(
-        'This verification link is missing its token. Please use the link from your email, or register again.'
-      );
-      return;
-    }
+    // Token hi nahi hai - kuch verify karne ko nahi, backend call bhi nahi karte.
+    //
+    // ---- YE `setStatus('error')` PEHLE BUG THA ----
+    //
+    // Effect mount hote hi `error` set kar deta tha, yaani page RED failure
+    // dikhata tha BINA kuch kiye. Aur sabse bura ye:
+    //
+    //   - Register ke turant baad user yahi page par aata hai (register
+    //     `?next=&email=` ke saath yahan bhejta hai)
+    //   - Editor ka gate bhi unauthenticated user ko yahan bhejta hai
+    //   - Dono jagah link abhi click nahi hua hota
+    //
+    // Yaani "abhi tak link nahi khola" aur "verification fail ho gayi" - do
+    // bilkul alag cheezein - screen par ek jaisi dikh rahi thin. Naye user ko
+    // lagta tha signup toot gaya, aur wo dobara register karta.
+    //
+    // Ab: kuch attempt nahi hua, to kuch fail bhi nahi hua. `awaiting` wahi
+    // pehle se set hai (initial state), aur message default copy se aata hai -
+    // jisme user ki email address naam liya hoti hai, yaani wo jaanta hai
+    // exactly kis inbox me dekhna hai.
+    if (!token) return;
 
     // -----------------------------------------------------------------------
     // STRICTMODE DOUBLE-INVOCATION GUARD (the fix)
@@ -315,8 +357,12 @@ function VerifyContent() {
     );
   }
 
-  // ---- Success / Error state ----
+  // ---- Success / Awaiting / Error state ----
   const success = status === 'success';
+  // Neutral, not a failure. See the `awaiting` state comment above: this is the
+  // screen a freshly-registered user lands on, and colouring it red was telling
+  // them their signup failed when it had not.
+  const awaiting = status === 'awaiting';
 
   return (
     <div className="space-y-5">
@@ -325,19 +371,35 @@ function VerifyContent() {
         className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${
           success
             ? 'border-emerald-700/60 bg-emerald-950/40 text-emerald-300'
-            : 'border-red-700/60 bg-red-950/40 text-red-300'
+            : awaiting
+              ? 'border-sky-800/60 bg-sky-950/30 text-sky-200'
+              : 'border-red-700/60 bg-red-950/40 text-red-300'
         }`}
       >
         {success ? (
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+        ) : awaiting ? (
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0" />
         ) : (
           <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
         )}
         <div className="min-w-0 space-y-1">
           <p className="font-medium leading-relaxed">
-            {success ? 'Email verified' : 'Verification failed'}
+            {success
+              ? 'Email verified'
+              : awaiting
+                ? 'Check your inbox'
+                : 'Verification failed'}
           </p>
-          <p className="leading-relaxed opacity-90">{message}</p>
+          <p className="leading-relaxed opacity-90">
+            {message ||
+              // `awaiting` has no server message - nothing was submitted - so
+              // the copy is written here. Naming the address is what makes it
+              // actionable: the user can go find that exact inbox.
+              (awaiting && emailToResend
+                ? `We sent a verification link to ${emailToResend}. Open it to confirm your address. The link expires in 30 minutes.`
+                : 'Open the verification link we emailed you to confirm your address.')}
+          </p>
           {success && email ? (
             <p className="pt-1 text-xs opacity-75">
               Verified address: <span className="font-medium">{email}</span>
@@ -369,17 +431,50 @@ function VerifyContent() {
           (same 200 har case me), isliye ye safe hai.
 
           Hinglish: verification fail ya 429 ho to yahan resend button
-          dikhta hai - user email miss kare to recover kar sakta hai. */}
+          dikhta hai - user email miss kare to recover kar sakta hai.
+
+          NOTE: condition `!success` hai, yaani ye `awaiting` (naya token
+          abhi aaya hi nahi) par bhi dikhta hai. Ye jaan-boojh kar rakha hai:
+          registration ke turant baad user yahan aata hai, aur agar email
+          inbox me nazar nahi aayi to uske paas turant doosra option hona
+          chahiye. Resend se naya link aane me kuch second lagte hain - us
+          deriye screen ko blank nahi chhodna chahiye. */}
       {!success ? (
         <ResendPanel initialEmail={emailToResend} />
       ) : null}
 
-      {/* Success me login, failure me register - dono ke liye clear next step */}
+      {/* ---- SUCCESS: login page, with `?next=` carried through ----
+       *
+       * Ye link do baar badal chuka hai, aur dono baar galat wajah se:
+       *
+       * 1. PEHLE ye hardcoded `/auth/login` tha - theek tha.
+       * 2. PHIR maine ise `?next=` destination par bada diya, ye sochkar ki
+       *    "user pehle se signed in hai, dobara login bekaar hai". Ye galat tha.
+       *
+       * Kyun galat tha: register ke waqt jo session milta hai, wo account ke
+       * UNVERIFIED state me bana hai. Verification link kholne ke baad usi
+       * session ko lekar seedha `destination` (dashboard) par jaate, aur
+       * middleware use turant `/auth/security-setup` par bhej deti - 6-digit PIN
+       * form. Yaani credentials wala step POORA skip ho jata tha. User ko
+       * "binaye login kiye seedha PIN" dikha, jabki usne kabhi authenticate hi
+       * nahi kiya tha apne naye account par.
+       *
+       * SPEC order ye maangta hai: email verify -> LOGIN -> security setup -> app.
+       * Verification sirf ye prove karta hai ki email address chala user ka
+       * hai. Uski pehchan tabhi banti hai jab wo password daal ke login kare.
+       * Bina credentials ke 6-digit PIN set karna isi liye galat hai - wo
+       * account par control ka pehla ASLI proof nahi hai, sirf ek extra lock
+       * hai jo kisi aur ne bhi lagayi ho sakti hai.
+       *
+       * `?next=` zaroor bacha diya gaya hai, taaki login ke baad user apni
+       * destination par pahunche (editor ka gate yehi bhejta hai) - dashboard
+       * par force nahi kiya jaata.
+       */}
       {success ? (
-        <Link href="/auth/login" className={PRIMARY_BUTTON_CLASS}>
+        <Link href={loginHref} className={PRIMARY_BUTTON_CLASS}>
           Continue to log in
         </Link>
-      ) : (
+      ) : awaiting ? null : (
         <Link href="/auth/register" className={PRIMARY_BUTTON_CLASS}>
           Register again
         </Link>

@@ -43,26 +43,135 @@ interface Attached {
   /** Effects currently in the chain, rebuilt when the clip's list changes. */
   chain: AudioNode[];
   signature: string;
+  /**
+   * Has this element ever been connected to the master bus?
+   *
+   * This is a separate flag rather than a clever initial `signature` value,
+   * because a clip with NO effects produces an EMPTY signature - and so does a
+   * freshly created attachment. The two compared equal, `applyEffects` returned
+   * early, and the gain node was never connected to anything. Result: the whole
+   * editor ran, the timeline played, the play button changed state, and there
+   * was no sound at all.
+   *
+   * It was found by MEASURING the destination with an AnalyserNode, not by
+   * reading the code - the code looked completely correct.
+   */
+  wired: boolean;
 }
 
 const attached = new WeakMap<HTMLMediaElement, Attached>();
 const contexts: AudioContext[] = [];
 
-/** Every AudioContext this module created, so audio can be re-routed later. */
+/**
+ * The ONE application context.
+ *
+ * A NEW context per element was a real bug, not a tidiness question. Browsers
+ * cap how many AudioContexts a page may hold alive - Chrome's is around six -
+ * and each one has its own decode and output path. So a five-clip timeline
+ * could push the oldest contexts to be garbage collected, and a collected
+ * context means AN ELEMENT THAT IS STILL PLAYING GOES SILENT. That is exactly
+ * the symptom reported: more clips, less sound.
+ *
+ * One context, one destination, one lifetime.
+ */
+let sharedContext: AudioContext | null = null;
+
+/**
+ * The MASTER bus, and the analyser hanging off it.
+ *
+ * Every clip's chain ends at `master`, and `master` feeds an AnalyserNode that
+ * feeds the speakers. That single tap is what makes a real level meter possible:
+ * an analyser attached to a clip only ever sees that clip, and an analyser
+ * attached to nothing sees nothing. A meter that is not wired to the actual
+ * output is a decoration, and a decorative meter is worse than no meter - it
+ * claims to be showing you the sound level and is not.
+ */
+let masterGain: GainNode | null = null;
+let analyser: AnalyserNode | null = null;
+let streamDestination: MediaStreamAudioDestinationNode | null = null;
+
+function ensureBus(ctx: AudioContext): void {
+  if (masterGain) return;
+  masterGain = ctx.createGain();
+  masterGain.gain.value = 1;
+  analyser = ctx.createAnalyser();
+  // 1024 bins at 48kHz is about 21Hz per bin - fine for a meter, and small
+  // enough that reading it every frame is not a cost worth measuring.
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.75;
+  masterGain.connect(analyser);
+  analyser.connect(ctx.destination);
+  try {
+    streamDestination = ctx.createMediaStreamDestination();
+    // The export taps the bus BEFORE the analyser, so recording gets the audio
+    // untouched and the meter is a pure listener.
+    masterGain.connect(streamDestination);
+  } catch {
+    streamDestination = null;
+  }
+}
+
+/** Peak 0..1 per band, for the meter. Empty until something plays. */
+export function levelBands(count = 12): number[] {
+  if (!analyser) return new Array(count).fill(0);
+  const bins = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteFrequencyData(bins);
+  // Logarithmic grouping, because the low end of a voice carries the words and
+  // linear bins give it one bar out of twelve.
+  const out: number[] = [];
+  const per = Math.max(1, Math.floor(bins.length / count));
+  for (let i = 0; i < count; i++) {
+    let sum = 0;
+    for (let j = 0; j < per; j++) sum += bins[i * per + j] ?? 0;
+    out.push(Math.min(1, sum / per / 255));
+  }
+  return out;
+}
+
+/** The master level, 0..1, for a single meter. */
+export function masterLevel(): number {
+  const bands = levelBands(16);
+  return bands.reduce((m, v) => Math.max(m, v), 0);
+}
+
+/** Set the master level. This is the volume fader, and it is the SAME node the
+ *  meter reads, so the meter cannot disagree with what you hear. */
+export function setMasterLevel(v: number): void {
+  if (!masterGain || !sharedContext) return;
+  try {
+    masterGain.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), sharedContext.currentTime, 0.02);
+  } catch {
+    /* context gone */
+  }
+}
+
+/** What the OUTPUT is doing right now, 0..1.
+ *
+ *  Published on `window` for the same reason the audio harness needs it: "the
+ *  editor looks right and there is no sound" is a question only a measurement
+ *  can answer, because a suspended context, an unconnected node and a zero gain
+ *  all look identical from the outside.
+ */
+if (typeof window !== 'undefined') {
+  (window as unknown as { __veLevel?: () => number }).__veLevel = masterLevel;
+}
+
+/** Every AudioContext this module created, so the exporter can find the graph. */
 export function allContexts(): AudioContext[] {
   return contexts.slice();
 }
 
 function makeContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
+  if (sharedContext) return sharedContext;
   const Ctor =
     window.AudioContext ??
     (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
   try {
-    const ctx = new Ctor();
-    contexts.push(ctx);
-    return ctx;
+    sharedContext = new Ctor();
+    contexts.push(sharedContext);
+    return sharedContext;
   } catch {
     return null;
   }
@@ -84,7 +193,7 @@ export function attachMedia(el: HTMLMediaElement): Attached | null {
     const gain = ctx.createGain();
     gain.gain.value = 1;
     source.connect(gain);
-    const entry: Attached = { ctx, source, gain, chain: [], signature: '' };
+    const entry: Attached = { ctx, source, gain, chain: [], signature: '', wired: false };
     attached.set(el, entry);
     return entry;
   } catch {
@@ -92,14 +201,14 @@ export function attachMedia(el: HTMLMediaElement): Attached | null {
   }
 }
 
-/** Where the exported audio track comes from. */
-export function masterStream(ctx: AudioContext): MediaStream | null {
-  try {
-    const dest = ctx.createMediaStreamDestination();
-    return dest.stream;
-  } catch {
-    return null;
-  }
+/**
+ * The exported audio track, taken from the MASTER bus.
+ *
+ * Tapping the bus rather than a context's destination is what makes the file's
+ * audio the same mix the meter shows: one source, two consumers.
+ */
+export function masterStream(_ctx: AudioContext): MediaStream | null {
+  return streamDestination ? streamDestination.stream : null;
 }
 
 /** The default output node, so a clip can be heard. */
@@ -108,7 +217,7 @@ export function speakers(ctx: AudioContext): AudioNode {
 }
 
 /** Called from a real user gesture. Safe to call repeatedly. */
-export async function resumeAudio(): Promise<void> {
+export async function resumeAllContexts(): Promise<void> {
   await Promise.all(
     contexts.map(async (c) => {
       if (c.state === 'suspended') {
@@ -120,6 +229,10 @@ export async function resumeAudio(): Promise<void> {
       }
     })
   );
+}
+
+export async function resumeAudio(): Promise<void> {
+  await resumeAllContexts();
 }
 
 // ---------------------------------------------------------------------------
@@ -186,7 +299,10 @@ export function applyEffects(
 ): boolean {
   if (!entry || !ctx) return false;
   const sig = effectsSignature(effects);
-  if (sig === entry.signature) return true;
+  // Rebuild only when the EFFECT LIST actually changed. A separate wired flag
+  // handles the first call, which must connect even though the signature
+  // matches the empty initial one.
+  if (entry.wired && sig === entry.signature) return true;
 
   try {
     entry.gain.disconnect();
@@ -197,11 +313,19 @@ export function applyEffects(
   }
   if (!effects.length) {
     try {
-      entry.gain.connect(ctx.destination);
+      // Explicitly route to the master bus even with no effects.
+      //
+      // The compositor sets `gain = 0` and pauses the element whenever the
+      // timeline is not playing, so "no gain" must NOT mean "muted forever" -
+      // the element has to be re-armed the moment playback starts, which it is,
+      // because this connection is permanent rather than rebuilt per frame.
+      ensureBus(ctx);
+      entry.gain.connect(masterGain!);
     } catch {
       /* ignore */
     }
     entry.signature = sig;
+    entry.wired = true;
     return true;
   }
 
@@ -233,6 +357,7 @@ export function applyEffects(
     /* ignore */
   }
   entry.signature = sig;
+  entry.wired = true;
   return true;
 }
 
