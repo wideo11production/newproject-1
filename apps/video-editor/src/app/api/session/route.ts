@@ -149,3 +149,45 @@ export async function GET() {
     { headers: noStore }
   );
 }
+
+/**
+ * DELETE /api/session - log out of this device.
+ *
+ * The same Bearer problem as the GET, in reverse: the editor's client cannot
+ * build the auth-service logout call itself, so it cannot log the user out.
+ * It also cannot clear the cookie - `httpOnly` means the browser hides it from
+ * JavaScript by design, which is the same property that stops XSS from stealing
+ * it.
+ *
+ * So the revocation happens here, server side, with the cookie's value used as
+ * the bearer token. auth-service hard-deletes the session row, which is what
+ * actually ends the session.
+ *
+ * We deliberately do NOT try to expire the cookie from here. The cookie belongs
+ * to the `localhost` host and both apps share it, and the web app already owns
+ * the code that clears it. Once the row is gone the cookie is inert - every
+ * request with it fails auth - so leaving it in place costs nothing and avoids
+ * two apps fighting over one cookie.
+ */
+export async function DELETE() {
+  const noStore = { 'Cache-Control': 'no-store' } as const;
+  const token = cookies().get(SESSION_COOKIE)?.value;
+
+  // No cookie: already logged out. Report success rather than an error, because
+  // from the caller's side the desired end state is the one that already holds.
+  if (!token) return NextResponse.json({ ok: true }, { headers: noStore });
+
+  try {
+    await fetch(`${AUTH_INTERNAL_URL}/api/v1/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
+    });
+  } catch {
+    // Best effort. An unreachable auth-service cannot be allowed to strand the
+    // user in a signed-in-looking UI, so the caller refreshes regardless and
+    // sees the truth.
+  }
+
+  return NextResponse.json({ ok: true }, { headers: noStore });
+}

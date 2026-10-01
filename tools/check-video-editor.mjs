@@ -34,7 +34,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { signIn } from './harness-session.mjs';
+import { signIn, signOut } from './harness-session.mjs';
 import { execFileSync } from 'node:child_process';
 
 const URL = process.argv[2] ?? 'http://localhost:3002/';
@@ -222,6 +222,7 @@ try {
   await cdp('Page.navigate', { url: URL }, sid);
   await sleep(7000);
 
+
   /**
    * Build a page-side gesture expression.
    *
@@ -271,6 +272,93 @@ try {
     );
     await sleep(400);
   };
+
+  // ====================================================================
+  // PHASE 0: THE SIGNED-OUT GATE
+  // ====================================================================
+  //
+  // This runs FIRST, before a single clip is loaded, and that ordering is the
+  // point rather than an accident.
+  //
+  // ---- WHY IT IS A *GATE* AND NOT A TOOLBAR ----
+  //
+  // The old suite asserted a logged-out NAVBAR: sign-in icons in the top-right
+  // of an otherwise complete editor. That is no longer the product. With an
+  // in-app gate, a signed-out visitor gets the gate screen and the editor
+  // never mounts - so there is no toolbar, no `[data-session]` marker and no
+  // avatar to find. The honest thing to assert is the gate itself.
+  //
+  // It also passed for the wrong reason for a long time. `auth-nav.tsx` probed
+  // auth-service directly from the browser, which always returned 401 (that
+  // service wants an `Authorization: Bearer` header, and an httpOnly cookie
+  // cannot produce one). So the navbar claimed "logged out" to everyone, always,
+  // and this section was validating a defect as if it were a feature.
+  //
+  // ---- WHY IT RUNS BEFORE THE MEDIA WORK ----
+  //
+  // Signing out and back in remounts the editor. Doing that halfway through the
+  // run tore down the loaded project and the clip checks then found an empty
+  // timeline - a failure caused by the test's own ordering, not by the app. One
+  // sign-out at the very start, one sign-in, and the rest of the run never
+  // touches auth again.
+  //
+  // The signed-IN navbar is a different contract and is covered by
+  // `tools/check-account-menu.mjs`: the avatar, its green ring, the absence of a
+  // register prompt, and the dashboard link inside the account menu.
+  await signOut(cdp, sid);
+  await cdp('Page.navigate', { url: URL }, sid);
+  await sleep(3500);
+
+  const out = await json(gesture(`
+    const link = (re) => [...document.querySelectorAll('a[href]')]
+      .find(a => re.test(a.getAttribute('href') || '') || re.test(a.innerText || ''));
+    const register = link(/Create an account/i);
+    const signIn = link(/already have an account|log in/i);
+    return JSON.stringify({
+      // The editor itself must NOT be present - that is the whole gate.
+      editorMounted: !!document.querySelector('[data-clip]'),
+      hasRegister: !!register,
+      hasSignIn: !!signIn,
+      registerHref: register ? register.getAttribute('href') : null,
+      signInHref: signIn ? signIn.getAttribute('href') : null,
+      // The return trip has to be preserved, or the visitor lands somewhere
+      // they were not trying to go after signing in.
+      carriesNext: /[?&]next=/.test((register && register.getAttribute('href')) || ''),
+      // Icons are the visible form, words are for a screen reader: a control
+      // with no accessible name is simply not there for many users.
+      registerChars: register ? (register.innerText || '').trim().length : null,
+      registerName: register ? register.getAttribute('aria-label') : null,
+      // No token in the DOM or storage, ever.
+      tokenInDom: /eyJ[A-Za-z0-9_-]{10,}/.test(document.documentElement.innerHTML),
+      storageKeys: Object.keys(localStorage).filter(k => /token|auth|session/i.test(k)),
+    });
+  `));
+
+  check(
+    'a signed-OUT visitor gets the gate, not the editor',
+    out.editorMounted === false && out.hasRegister === true && out.hasSignIn === true,
+    out
+  );
+  check(
+    'the gate sends the visitor back to the editor after signing in',
+    out.carriesNext === true,
+    { registerHref: out.registerHref, signInHref: out.signInHref }
+  );
+  check(
+    'the gate controls keep a name for a screen reader',
+    !!out.registerName && out.registerChars === 0,
+    { name: out.registerName, visibleChars: out.registerChars }
+  );
+  check(
+    'no auth token is readable by the client (httpOnly cookie, not stolen into JS)',
+    out.tokenInDom === false && (out.storageKeys || []).length === 0,
+    { tokenInDom: out.tokenInDom, storageKeys: out.storageKeys }
+  );
+
+  // ---- And now stay signed in for everything that follows ----
+  await signIn(cdp, sid, URL);
+  await cdp('Page.navigate', { url: URL }, sid);
+  await sleep(7000);
 
   // === 1. Boot ===============================================================
   const boot = await json(`(() => {
@@ -1167,41 +1255,6 @@ try {
     }
   );
 
-  // === 20. Navbar session awareness ==========================================
-  // A fresh browser profile has no session, so the ONLY honest thing the
-  // navbar can show is the logged-out state. If it ever shows an avatar here,
-  // that is a fake session indicator - the worst kind of navbar bug, because
-  // the user clicks it believing something that is not true.
-  const nav = await json(gesture(`
-    const box = document.querySelector('[data-session]');
-    const links = [...document.querySelectorAll('a[aria-label]')]
-      .filter(a => /Log in|Create an account|Back to dashboard/.test(a.getAttribute('aria-label') || ''))
-      .map(a => ({ label: a.getAttribute('aria-label'), href: a.getAttribute('href') }));
-    return JSON.stringify({
-      state: box ? box.getAttribute('data-session') : null,
-      links,
-      // No token anywhere in the DOM or storage. The session is an httpOnly
-      // cookie, so the client CANNOT have it - and must not be faking it.
-      tokenInDom: /eyJ[A-Za-z0-9_-]{10,}/.test(document.documentElement.innerHTML),
-      storageKeys: Object.keys(localStorage).filter(k => /token|auth|session/i.test(k)),
-    });
-  `));
-  check(
-    'a fresh session renders the LOGGED-OUT navbar (no fake avatar)',
-    nav.state === 'out' && (nav.links || []).some((l) => /Log in/.test(l.label || '')),
-    { state: nav.state, links: nav.links }
-  );
-  check(
-    'the login and register URLs come from the environment',
-    (nav.links || []).some((l) => (l.href || '').includes('/auth/login')) &&
-      (nav.links || []).some((l) => (l.href || '').includes('/auth/register')),
-    { links: nav.links }
-  );
-  check(
-    'no auth token is readable by the client (httpOnly cookie, not stolen into JS)',
-    nav.tokenInDom === false,
-    { tokenInDom: nav.tokenInDom, storageKeys: nav.storageKeys }
-  );
 
   // === 21. Sprint 4: Movavi-clean chrome, shimmer, help modal =================
   const ui = await json(gesture(`
@@ -1254,11 +1307,6 @@ try {
     'the help modal explains cost, not just benefit (pros AND cons)',
     /The cost/i.test(await ev(`(() => { const b = [...document.querySelectorAll('button[aria-label="Help"]')][0]; b?.click(); const d = document.querySelector('[role="dialog"]'); const t = d ? d.innerText : ''; d?.querySelector('[aria-label="Close help"]')?.click(); return t; })()`)) || true,
     {}
-  );
-  check(
-    'login and register are ICONS now, with their labels kept for a screen reader',
-    (ui.authIcons || []).length === 2 && (ui.authIcons || []).every((a) => a.chars === 0),
-    { authIcons: ui.authIcons }
   );
   check(
     'the shimmer, glow and reduced-motion rules all ship',

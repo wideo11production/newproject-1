@@ -27,24 +27,40 @@
 // aur jhooth bolta hua session indicator sabse buri cheez hoti hai, kyunki
 // user usi par click karke apna data expose kar deta hai.
 //
-// Isliye: POOCHTE hain. `GET /api/v1/auth/profile` cookie ke saath jaata hai
-// (same-site hai - dono localhost par hain - aur `credentials: 'include'`
-// se bheja jaata hai).
+// Isliye: POOCHTE hAIN. Lekin sawal ZAROORI SE POOCH RAHE HAIN.
 //
-//   200 -> authenticated, avatar + dot
-//   401/403 -> logged out, Login + Register
-//   network error -> logged out (SAFE DEFAULT: kabhi "logged in" mat batao
-//                    jab confirm na ho)
+// ---- YAH SECTION GALAT THA, AUR AB THEEK HAI ----
 //
-// ----------------------------------------------------------------------------
+// Yahan likha tha ki `GET /api/v1/auth/profile` ko cookie ke saath bhejne
+// par 200 aayega. Wo GALAT tha, aur verify kiya gaya:
+//
+//   curl -b 'wideo11_session=<valid>' /api/v1/auth/profile
+//   -> 401 {"error":"missing authorization header"}
+//
+// auth-service sirf `Authorization: Bearer` maangta hai. Cookie se kaam nahi
+// chalega - aur cookie httpOnly hai, yaani JS use padh hi nahi sakta, to
+// browser se wo header banane ka koi tareeka hi nahi hai. Isliye ye probe
+// HAMESHA fail hota tha, yaani signed-in user ko ye "Log in / Create an
+// account" dikhata tha aur dashboard link kabhi aata hi nahi tha.
+//
+// Sahi jawaab ke liye server route chahiye: `GET /api/session` (is file ke
+// bagal me). Wo server par cookie padhta hai, bearer header khud lagata hai,
+// aur auth-service se puchta hai. Details `lib/session.ts` me hain.
+//
+//   ready               -> avatar + dot + dashboard + logout
+//   needs_verification  -> signed in, but email link not opened yet
+//   needs_setup         -> verified, mandatory setup still due
+//   out / error         -> Log in + Register
+//
 // SECURITY NOTE - koi token DOM ya localStorage me nahi jaata
 // ----------------------------------------------------------------------------
 //
 // Ye component token ko kabhi store nahi karta, sirf `user.email` rakhta hai
 // taaki avatar ka initials dikha sake. Token cookie me hi rehta hai, jahan
 // JS use chhu nahi sakta.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LogIn, LogOut, LayoutDashboard, Loader2, UserPlus } from 'lucide-react';
+import { useSession, type SessionState } from '../../lib/session';
 
 /**
  * URLs env se, hardcode nahi.
@@ -54,7 +70,12 @@ import { LogIn, LogOut, LayoutDashboard, Loader2, UserPlus } from 'lucide-react'
  * me BUILD TIME par inline hota hai, isliye inhe compose `environment:` se
  * dena padta hai, `.env.local` se nahi.
  */
-const AUTH_API = process.env.NEXT_PUBLIC_AUTH_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '';
+// NOTE: `AUTH_API` yahan se hata diya gaya. Ye auth-service ka base URL tha,
+// aur is file me do jagah use hota tha - session probe aur logout - dono browser
+// se seedhe auth-service ko call karte the. Dono me wahi galti thi: auth-service
+// sirf `Authorization: Bearer` maangta hai, jo httpOnly cookie se banana
+// impossible hai, isliye dono hamesha fail hote the. Ab dono kaam `lib/session.ts`
+// ke `useSession()` aur `DELETE /api/session` server route karte hain.
 const LOGIN_URL = process.env.NEXT_PUBLIC_LOGIN_URL ?? 'http://localhost:3000/auth/login';
 const REGISTER_URL = process.env.NEXT_PUBLIC_REGISTER_URL ?? 'http://localhost:3000/auth/register';
 const DASHBOARD_URL = process.env.NEXT_PUBLIC_DASHBOARD_URL ?? 'http://localhost:3000/dashboard';
@@ -73,65 +94,64 @@ function initials(email: string): string {
 }
 
 export function AuthNav() {
-  const [session, setSession] = useState<Session>({ state: 'loading' });
+  const { session, refresh } = useSession();
   const [busy, setBusy] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
-  const probe = useCallback(async () => {
-    // No token to read, so there is nothing to guard: an empty API base just
-    // means "cannot verify", which is the same as logged out.
-    if (!AUTH_API) {
-      setSession({ state: 'out' });
-      return;
-    }
-    try {
-      const res = await fetch(`${AUTH_API}/api/v1/auth/profile`, {
-        // The session cookie is the whole credential here. Without this the
-        // browser silently omits it and every request looks logged out.
-        credentials: 'include',
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        setSession({ state: 'out' });
-        return;
-      }
-      const body = (await res.json()) as { email?: string; role?: string };
-      setSession({
-        state: 'in',
-        email: body.email ?? 'Signed in',
-        role: body.role ?? 'user',
-      });
-    } catch {
-      // Network failure, CORS block, auth-service down - sab ka matlab hai
-      // "PATA NAHI", aur pata na ho to logged-out dikhana safe hai.
-      setSession({ state: 'out' });
-    }
-  }, []);
-
+  // ---- Dismiss the menu the ways a keyboard and a mouse both expect ----
+  //
+  // Escape because it is the only way out for a keyboard user. Outside-click
+  // because a menu that stays open after you click elsewhere reads as broken.
+  //
+  // Both are on `document`, and both are torn down in the cleanup - a listener
+  // left attached across re-renders is how you end up with a handler that fires
+  // on a component that is no longer mounted.
   useEffect(() => {
-    void probe();
-  }, [probe]);
+    if (!menuOpen) return;
+
+    const onPointerDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [menuOpen]);
 
   const logout = useCallback(async () => {
     setBusy(true);
     try {
-      // Logout SERVER-SIDE hota hai: auth-service session row HARD-DELETE
-      // karta hai. Editor httpOnly cookie khud nahi mita sakta (JS ko uski
-      // access hi nahi), aur isse zaroorat bhi nahi - row delete hone par
-      // cookie apne aap invalid ho jaata hai aur agla request 401 milta hai.
-      if (AUTH_API) {
-        await fetch(`${AUTH_API}/api/v1/auth/logout`, {
-          method: 'POST',
-          credentials: 'include',
-          cache: 'no-store',
-        }).catch(() => undefined);
-      }
+      // Logout SERVER-SIDE hota hai, aur is baar isi app ke route se.
+      //
+      // Pehle ye auth-service ko DIRECTLY browser se POST karta tha
+      // (`credentials: 'include'` ke saath) - jo wahi galti thi jo GET par thi:
+      // auth-service ko `Authorization: Bearer` chahiye, cookie se 401 aata hai.
+      // Yaani logout button dabane se kuch nahi hota tha.
+      //
+      // Ab `DELETE /api/session` server par cookie padhta hai, bearer header
+      // lagata hai, aur auth-service ka logout call karta hai - jisse session
+      // row HARD-DELETE ho jaati hai. Row gayab hone par cookie apne aap
+      // bekaar ho jaati hai (har request par 401), isliye JS ko cookie mitaane
+      // ki zaroorat nahi.
+      await fetch('/api/session', { method: 'DELETE', cache: 'no-store' }).catch(
+        () => undefined
+      );
     } finally {
       setBusy(false);
-      setSession({ state: 'out' });
+      await refresh();
       // Login page pe bhej do: wahan se user nayi session khol sakta hai.
       window.location.assign(LOGIN_URL);
     }
-  }, []);
+  }, [refresh]);
 
   const iconBtn =
     'flex h-8 w-8 items-center justify-center rounded-md border border-edge bg-surface-raised text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
@@ -144,6 +164,15 @@ export function AuthNav() {
     );
   }
 
+  // ---- Signed in? ----
+  //
+  // `ready`, `needs_verification` and `needs_setup` all mean there IS a valid
+  // session, so all three show the signed-in cluster. The gate in front of this
+  // component is what stops an unverified user reaching the toolbar at all, so
+  // this branch is not a second security decision - it is "which affordances do
+  // this session have".
+  const signedIn = session.state !== 'out';
+
   // ---------------------------------------------------------------- logged out
   //
   // ICON-ONLY, and that is a deliberate trade rather than a preference.
@@ -153,9 +182,16 @@ export function AuthNav() {
   // the controls. Icons carry the same meaning at a third of the width, and the
   // `aria-label` carries it to anyone who cannot see the icon - so nothing is
   // lost but the visual noise.
-  if (session.state === 'out') {
+  if (!signedIn) {
     return (
-      <div className="ve-signin-glow flex shrink-0 items-center gap-1" data-session="out">
+      // `ve-signin-glow` YAHAN SE HATA DI GAYA.
+      //
+      // Wo class ek rotating green conic-gradient hai. Ye dono clusters par lag
+      // rahi thi - yaani "Log in" aur "Create an account" bhi green chamak
+      // rahe the. Ye galat signal hai: green is app me "signed in" ka color
+      // hai (avatar ka ring + dot), to ek aise control par jahan user signed
+      // in NAHI hai, uska chamakna ye kah raha tha ki wo hai.
+      <div className="flex shrink-0 items-center gap-1" data-session="out">
         <a
           href={LOGIN_URL}
           className={iconBtn}
@@ -176,60 +212,125 @@ export function AuthNav() {
     );
   }
 
-  // -------------------------------------------------------------- logged in
+  // -------------------------------------------------------------- signed in
+  //
+  // ONE control, not four. The avatar is the button, and everything the user
+  // needs hangs off it.
+  //
+  // Ye pehle teen alag controls the (Dashboard icon, Log out, avatar). Toolbar
+  // me teen jagah teen kaam karna tha jabki teeno ek hi cheez hain: "main kaun
+  // hoon aur yahan se kahan jaa sakta hoon". Aapne bhi yahi maanga - avatar pe
+  // click, aur usme dashboard ka link.
+  //
+  // Dashboard ka link JAAN-BOOJH KAR dropdown me rakha gaya hai, toolbar me nahi.
+  // Wajah: dashboard khatam karne wala control hai - editor khatam karne wala
+  // nahi. Jo cheez user ka current kaam khatam karti hai, wo prominent hoti
+  // hai; jo cheez is app se BAHAR le jaati hai, wo menu me rehti hai. Ise
+  // hamesha dikhane se ek accidental click se user editor se nikal jaata.
   return (
-    <div className="ve-signin-glow flex shrink-0 items-center gap-1" data-session="in">
-      <a
-        href={DASHBOARD_URL}
-        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[8px] font-medium text-fg transition-colors hover:bg-surface-overlay"
-        aria-label="Back to dashboard"
-        title={`Back to your dashboard - ${DASHBOARD_URL}`}
-      >
-        <LayoutDashboard className="h-2 w-2" aria-hidden="true" />
-        Dashboard
-      </a>
-
-      <button
-        type="button"
-        onClick={() => void logout()}
-        disabled={busy}
-        className="flex h-8 items-center gap-1.5 rounded-md border border-edge bg-surface-raised px-2.5 text-[8px] font-medium text-fg transition-colors hover:bg-surface-overlay disabled:opacity-50"
-        aria-label="Log out"
-        title="Log out of this device only - your other devices stay signed in"
-      >
-        {busy ? (
-          <Loader2 className="h-2 w-2 animate-spin" aria-hidden="true" />
-        ) : (
-          <LogOut className="h-2 w-2" aria-hidden="true" />
-        )}
-        Log out
-      </button>
-
+    <div className="relative shrink-0" ref={menuRef}>
       {/*
-        The avatar + online dot.
+        THE AVATAR - and the only place in this app where green means
+        "you are signed in".
 
-        The dot is a LIVE indicator, so it is animated - a static green circle
+        It is a real `<button>`, not a span. A span with a click handler is not
+        reachable by keyboard, does not respond to Enter or Space, and is
+        invisible to a screen reader as a control - so the account menu would
+        simply not exist for anyone not using a mouse.
+
+        RING: a 1px green outline. 1px because that is the separator weight used
+        throughout the editor, and a thicker ring would out-shout the controls
+        next to it. The colour is the same green as the dot below, so the two
+        read as one indicator rather than two.
+
+        The initials are the fallback identity. There is no uploaded avatar
+        image here, and there should not be one yet: an image would need a URL
+        from the profile service, and a broken `img` is worse than initials
+        because it looks like a bug rather than a placeholder. Initials are
+        always present, always render, and never 404.
+
+        THE DOT is a LIVE indicator, so it is animated - a static green circle
         claims "online" without any evidence. The pulse says "we checked, and
         you are here", which is the difference between an indicator and
         decoration.
 
-        `prefers-reduced-motion` ko BHI respect kiya gaya hai: kuch log
-        animation se physically uncomfortable hote hain, aur unke liye ek
-        pulsing dot accessibility problem ban jata hai. Reduced motion me wo
-        ek static dot ban jata hai - indicator wahi rehta hai, sirf hilna nahi.
+        `prefers-reduced-motion` is respected via `motion-safe:`: some people
+        find animation physically uncomfortable, and a pulsing dot is an
+        accessibility problem for them. Under reduced motion it is simply a
+        static dot - the indicator is unchanged, only the movement goes.
       */}
-      <span
-        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[8px] font-semibold text-white"
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        aria-label={`Account menu for ${session.email}`}
         title={`${session.email} (${session.role})`}
-        aria-label={`Signed in as ${session.email}`}
-        role="img"
+        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors hover:bg-sky-500"
       >
         {initials(session.email)}
         <span
           className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface-raised bg-green-500 motion-safe:animate-pulse"
           aria-hidden="true"
         />
-      </span>
+      </button>
+
+      {menuOpen ? (
+        <div
+          role="menu"
+          aria-label="Account"
+          className="absolute right-0 top-9 z-50 w-52 rounded-md border border-edge bg-surface-raised p-1 shadow-lg"
+        >
+          {/*
+            Identity first, so a user who signed in as one of several accounts
+            can tell at a glance WHICH one this menu belongs to. Truncated with
+            `break-all` rather than an ellipsis: an email cut mid-character is
+            useless for telling two accounts apart, which is the entire job.
+          */}
+          <div className="border-b border-edge px-2 py-1.5">
+            <p className="break-all text-[8px] font-medium text-fg">{session.email}</p>
+            <p className="mt-0.5 text-[8px] capitalize text-fg-muted">{session.role}</p>
+          </div>
+
+          <a
+            href={DASHBOARD_URL}
+            role="menuitem"
+            onClick={() => setMenuOpen(false)}
+            className="mt-1 flex h-7 items-center gap-1.5 rounded px-2 text-[8px] text-fg transition-colors hover:bg-surface-overlay"
+          >
+            <LayoutDashboard className="h-2 w-2 shrink-0" aria-hidden="true" />
+            Dashboard
+          </a>
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setMenuOpen(false);
+              void logout();
+            }}
+            disabled={busy}
+            className="flex h-7 w-full items-center gap-1.5 rounded px-2 text-[8px] text-fg transition-colors hover:bg-surface-overlay disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-2 w-2 shrink-0 animate-spin" aria-hidden="true" />
+            ) : (
+              <LogOut className="h-2 w-2 shrink-0" aria-hidden="true" />
+            )}
+            Log out
+          </button>
+
+          {/*
+            Spelled out rather than left to a `title`, because this is a
+            consequence users get wrong: signing out here ends the session on
+            THIS device only, and their other devices stay signed in. That
+            distinction is the whole reason device-scoped logout was built.
+          */}
+          <p className="border-t border-edge px-2 pt-1.5 pb-1 text-[8px] leading-relaxed text-fg-muted">
+            Logging out ends this device only. Your other devices stay signed in.
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
