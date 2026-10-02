@@ -451,9 +451,10 @@ func (s *StorageService) CreateAvatarUploadTicket(
 //
 // @param userID   - uploading user (ownership prefix)
 // @param channelID - cover kis channel ka hai. Ye URL me NAHI aata
-//                   (PII/ID hygiene nahi chahiye), par ownership prefix
-//                   userID se banta hai, to finalize koi aur user ka cover
-//                   finalize nahi kar sakta.
+//
+//	(PII/ID hygiene nahi chahiye), par ownership prefix
+//	userID se banta hai, to finalize koi aur user ka cover
+//	finalize nahi kar sakta.
 func (s *StorageService) CreateCoverUploadTicket(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -468,6 +469,59 @@ func (s *StorageService) CreateCoverUploadTicket(
 	return s.createImageUploadTicket(
 		ctx, userID, filename, mimeType,
 		s.cfg.GetCoverBucket(), config.MaxCoverBytes, false,
+	)
+}
+
+// CreateLogoUploadTicket channel LOGO ke liye presigned PUT URL.
+//
+// A logo is a different asset from a cover and gets its own budget, for the same
+// reason covers and avatars do: a logo renders in a 40-200px circle on every card
+// and list row, so a 4 MB "logo" is 4 MB downloaded by every visitor to draw
+// something the size of a fingernail.
+//
+// It shares the cover BUCKET and therefore the same `covers/*` policy grant, and
+// it reuses `createImageUploadTicket`, so there is exactly one presign path. The
+// object key is still namespaced by user id, which is what makes finalize refuse
+// anybody else's object.
+//
+// @param userID   - uploading user (ownership prefix)
+// @param filename - original client filename (extension validation)
+// @param mimeType - client's claimed content type (allowlist check)
+func (s *StorageService) CreateLogoUploadTicket(
+	ctx context.Context,
+	userID uuid.UUID,
+	filename, mimeType string,
+) (*UploadTicket, error) {
+	// ensureBucket=false, same as covers: the bucket is provisioned at init and
+	// the scoped account deliberately has no `s3:CreateBucket`.
+	return s.createImageUploadTicket(
+		ctx, userID, filename, mimeType,
+		s.cfg.GetCoverBucket(), config.MaxLogoBytes, false,
+	)
+}
+
+// DeleteLogo purana logo hatata hai (best effort).
+//
+// Best effort on purpose: the replacement is already saved by the time this runs,
+// so a failed delete leaves an unreferenced object rather than a broken logo.
+func (s *StorageService) DeleteLogo(ctx context.Context, publicURL string) {
+	s.deleteObjectAtURL(ctx, publicURL, s.cfg.GetCoverBucket())
+}
+
+// FinalizeLogoUpload - channel logo upload ka server-side verification.
+//
+// EXACTLY the same security checks as avatars and covers - existence, size, magic
+// bytes, forced content type - via the one `finalizeImageUpload` helper. A third
+// hand-written finalize path would be the first place to forget the magic-byte
+// check, and that is the check that stops an HTML file with a `.png` name.
+func (s *StorageService) FinalizeLogoUpload(
+	ctx context.Context,
+	userID uuid.UUID,
+	objectKey string,
+) (string, error) {
+	return s.finalizeImageUpload(
+		ctx, userID, objectKey,
+		s.cfg.GetCoverBucket(), config.MaxLogoBytes,
 	)
 }
 
@@ -696,8 +750,8 @@ func (s *StorageService) objectKeyFromURL(publicURL string) string {
 // strip nahi hota tha), aur `DeleteAvatar` usi key ko bucket ke saath use
 // karta tha:
 //
-//     RemoveObject(ctx, "avatars", "avatars/<uid>/<rand>.png")
-//                          ^^^^^^^^ double prefix
+//	RemoveObject(ctx, "avatars", "avatars/<uid>/<rand>.png")
+//	                     ^^^^^^^^ double prefix
 //
 // Matlab avatar/cover delete HAMESHA se silent no-op tha - MinIO "no such
 // object" return karta aur error ignore ho jata tha. User ko koi dikhta nahi

@@ -126,17 +126,41 @@ function buildCSP() {
 }
 
 /**
- * HSTS - sirf production me, aur sirf tab jab HTTPS already use ho raha ho.
+ * HSTS - sirf production me, aur sirf tab jab value set ho.
  *
  * Local dev plain HTTP (http://localhost:3000) par chalta hai. HSTS wahan
  * bhejne se browser ka HSTS cache atak jaata hai aur user ko hack-proof
  * karne ke liye `http://localhost:3000` type karke "thisisunsafe.com" visit
  * karna padta hai. Ye ek classic, khud-budha hua dev break hai.
+ *
+ * ---- VAR KA NAAM: `SECURITY_`, NA KI `NEXT_PUBLIC_` ----
+ *
+ * Pehle ye `process.env.NEXT_PUBLIC_HSTS_MAX_AGE` padhta tha, jabki compose
+ * aur `.env` dono `SECURITY_HSTS_MAX_AGE` set karte hain. Do alag naam, do alag
+ * jagah, aur beech me koi connection nahi - matlab header kabhi on nahi hota tha.
+ * `.env` me `SECURITY_HSTS_MAX_AGE=31536000` daal kar production me HSTS
+ * chalu karne ki koshish bhi chup-chaap nahi karti.
+ *
+ * `NEXT_PUBLIC_` isliye bhi galat choice tha: wo prefix browser bundle ke liye
+ * hai. HSTS ek RESPONSE HEADER hai jo server bhejta hai - iska browser code me
+ * koi matlab nahi, aur use expose karna usse zyada expose karta hai. Naam me
+ * ye baat dikhti hai, isliye naam theek rakhna hai.
+ *
+ * `includeSubDomains` alag flag hai, kyunki har deployment ko wo chahiye hi
+ * nahi - kuch shops subdomain ke bina khulte hain aur force karne se unka
+ * MX/bare-domain redirect toot jata hai.
  */
-const HSTS_MAX_AGE = process.env.NEXT_PUBLIC_HSTS_MAX_AGE;
+const HSTS_MAX_AGE = process.env.SECURITY_HSTS_MAX_AGE;
+const HSTS_INCLUDE_SUBDOMAINS = process.env.SECURITY_HSTS_INCLUDE_SUBDOMAINS;
+const hstsMaxAge = Number(HSTS_MAX_AGE);
 const hstsValue =
-  !isDev && HSTS_MAX_AGE && Number(HSTS_MAX_AGE) > 0
-    ? `max-age=${Number(HSTS_MAX_AGE)}; includeSubDomains`
+  !isDev && Number.isFinite(hstsMaxAge) && hstsMaxAge > 0
+    ? [
+        `max-age=${hstsMaxAge}`,
+        HSTS_INCLUDE_SUBDOMAINS === 'true' ? 'includeSubDomains' : null,
+      ]
+        .filter(Boolean)
+        .join('; ')
     : null;
 
 // next.config.mjs header() return shape: [{ source, headers: [{key, value}] }]

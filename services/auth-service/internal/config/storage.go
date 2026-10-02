@@ -37,18 +37,19 @@ package config
 type StorageConfig struct {
 	// MinIO endpoint (host:port, no scheme)
 	Endpoint string `mapstructure:"endpoint"`
-	// Access key. Compose se aata hai.
+	// Access key for avatar/cover buckets. Compose se aata hai.
 	AccessKey string `mapstructure:"access_key"`
 	SecretKey string `mapstructure:"secret_key"`
+	// Access key for video bucket (transcoder-scoped credentials).
+	// Separate from avatar/cover credentials to maintain least privilege.
+	VideoAccessKey string `mapstructure:"video_access_key"`
+	VideoSecretKey string `mapstructure:"video_secret_key"`
 	// Bucket jisme avatars jaayenge
 	AvatarBucket string `mapstructure:"avatar_bucket"`
 	// Bucket jisme channel covers jaayenge.
-	//
-	// WHY A SEPARATE BUCKET: covers wide banners hain (16:9), avatars square
-	// hain. Inhe ek hi bucket me daalne par size/lifecycle rules ek jaisa
-	// rakhna impossible ho jata hai - aur ek oversized "cover" avatar size
-	// limit se nikal kar poore bucket ko bhar sakta hai.
 	CoverBucket string `mapstructure:"cover_bucket"`
+	// VideoBucket - source media and the transcoder's HLS output.
+	VideoBucket string `mapstructure:"video_bucket"`
 	// Presigned URL ki TTL (minutes)
 	PresignTTLMinutes int `mapstructure:"presign_ttl_minutes"`
 	// Browser ko dene wali public base URL (e.g. http://localhost:9000)
@@ -60,23 +61,6 @@ type StorageConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 	// ManageBucket - kya ye service bucket KHUD banayegi aur uski policy
 	// khud set karegi (`MakeBucket` + `SetBucketPolicy`).
-	//
-	// ---- KYUN YE FLAG ZAROORI HAI ----
-	// `MakeBucket` ko `s3:CreateBucket` chahiye, aur `SetBucketPolicy` ko
-	// `s3:PutBucketPolicy`. Root account ke paas dono hain, isliye pehle ye
-	// chupke se kaam kar raha tha.
-	//
-	// Par jab auth-service ko MINIO ROOT chhodkar bucket-scoped service
-	// account pe migrate kiya (Phase A / gap #1), to wo account DELIBERATELY
-	// in dono actions ko NAHI kar sakta - kyunki unke bina bucket create
-	// karwane ka matlab hai "leak hua account naye bucket bana sakta hai",
-	// jo hum exactly band karna chahte hain.
-	//
-	// Isliye provisioning ka kaam `minio-init` container karta hai (root ke
-	// saath, ek baar), aur yahan flag false ho jaata hai.
-	//
-	// DEFAULT true rakha hai taaki purane setups (jahan sirf root creds
-	// hain) bina kuch kiye na toot-te hain.
 	ManageBucket bool `mapstructure:"manage_bucket"`
 }
 
@@ -93,6 +77,19 @@ func (s *StorageConfig) GetCoverBucket() string {
 		return "covers"
 	}
 	return s.CoverBucket
+}
+
+// GetVideoBucket returns the media bucket, defaulting to "video".
+//
+// Added because `MINIO_VIDEO_BUCKET` already existed in `.env` and in three
+// compose service blocks - but had no reader on this side. A var that is set,
+// passed to four containers and never read is worse than one that is absent: it
+// looks configured.
+func (s *StorageConfig) GetVideoBucket() string {
+	if s == nil || s.VideoBucket == "" {
+		return "video"
+	}
+	return s.VideoBucket
 }
 
 func (s *StorageConfig) GetPresignTTL() int {
@@ -151,6 +148,18 @@ const MaxAvatarBytes int64 = 5 * 1024 * 1024 // 5MB
 // Isse koi absurdly bada upload (RAW/PNG screenshot) pehle hi reject ho
 // jayega instead of silently serving a 40MB image to every visitor.
 const MaxCoverBytes int64 = 4 * 1024 * 1024 // 4MB
+
+// MaxLogoBytes - 2 MB.
+//
+// The smallest of the three, and the ratio is the reason: a cover is served at
+// full viewport width, an avatar at 96px, and a channel logo at 40-200px on every
+// card, list row and comment. So the asset that appears MOST often has the
+// tightest budget - which is the opposite of how a "bigger limit for the bigger
+// image" instinct would set it, and is the point worth writing down.
+//
+// A square logo PNG at any sane resolution is 50-400 KB, so 2 MB never refuses a
+// real logo while refusing the raw file someone exports from a design tool.
+const MaxLogoBytes int64 = 2 * 1024 * 1024 // 2MB
 
 // AllowedImageExtensions - extension -> content type map.
 // Browser sirf filename bhejta hai, content-type unreliable hota hai,

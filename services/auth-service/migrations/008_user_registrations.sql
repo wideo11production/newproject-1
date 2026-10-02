@@ -21,7 +21,7 @@
 
 BEGIN;
 
-CREATE TABLE user_registrations (
+CREATE TABLE IF NOT EXISTS user_registrations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- ON DELETE CASCADE: user delete hua to uska registration record bhi
@@ -50,15 +50,26 @@ CREATE TABLE user_registrations (
 );
 
 -- Analytics queries in columns par index expect karti hain.
--- `IF NOT EXISTS` zaroori hai - bina iske dobara chalane par ye fail hoti
--- hai (relation already exists), aur ye repo me migrations `psql -f` se
--- manually chalti hain, isliye re-run routine hai.
-CREATE INDEX idx_user_reg_country ON user_registrations(country);
-CREATE INDEX idx_user_reg_continent ON user_registrations(continent);
-CREATE INDEX idx_user_reg_device   ON user_registrations(device_type);
-CREATE INDEX idx_user_reg_created  ON user_registrations(created_at DESC);
+--
+-- `IF NOT EXISTS` on every one of them, which is the whole reason this table
+-- needs it: `user_registrations` is a GORM model, so AutoMigrate has already
+-- created it before this file runs. Without the guard a second application fails
+-- with `relation "user_registrations" already exists` and rolls the file back.
+--
+-- That was the actual state of this file until now - the comment below already
+-- said `IF NOT EXISTS` was necessary while the statements carried no guard.
+CREATE INDEX IF NOT EXISTS idx_user_reg_country   ON user_registrations(country);
+CREATE INDEX IF NOT EXISTS idx_user_reg_continent ON user_registrations(continent);
+CREATE INDEX IF NOT EXISTS idx_user_reg_device    ON user_registrations(device_type);
+CREATE INDEX IF NOT EXISTS idx_user_reg_created   ON user_registrations(created_at DESC);
 
--- Table documentation is kept in this migration because the target database
--- does not support PostgreSQL's COMMENT ON TABLE syntax.
+COMMENT ON TABLE user_registrations IS
+  'Permanent audit record of every real registration: who, when, from where, on what device and browser. Separate from the click ledger because a registration is a one-time event and must never be purged with click data.';
+
+COMMENT ON COLUMN user_registrations.country IS
+  'ISO 3166-1 alpha-2 from a TRUSTED proxy geo header. NULL when no such header was present - never guessed, because a fabricated country would silently corrupt the country-wise signup analytics this table exists for.';
+
+COMMENT ON COLUMN user_registrations.user_id IS
+  'ON DELETE CASCADE: deleting the account removes its registration record, so the audit trail does not outlive the user it describes with nobody able to answer questions about it.';
 
 COMMIT;

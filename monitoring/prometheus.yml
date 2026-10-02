@@ -87,6 +87,25 @@ scrape_configs:
       - targets: ['nats-exporter:7777']
     metrics_path: '/metrics'
 
+  # ---- analytics-service (the click ledger's firehose) ----
+  #
+  # This job did not exist when the ledger was owned by auth-service, because
+  # auth-service exposed no metrics at all. So `wideo11_ui_click_events_total` and
+  # `wideo11_telemetry_*` had nowhere to be scraped from, and the alert rules that
+  # watch them could not have fired.
+  #
+  # `/metrics` is deliberately NOT behind the internal token. Prometheus does not
+  # present credentials, and a scrape endpoint that needs one would mean either
+  # embedding a secret in prometheus.yml (which is mounted, and read by humans) or
+  # adding an exporter sidecar purely to authenticate. The metrics are counters
+  # with bounded labels - no user id, no email, no URL - so there is nothing in
+  # them to protect. That constraint is enforced by
+  # `analytics-service/src/metrics/cardinality_test.go`, not by good intentions.
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8091']
+    metrics_path: '/metrics'
+
   - job_name: 'dashboard-service'
     static_configs:
       - targets: ['dashboard-service:8080']

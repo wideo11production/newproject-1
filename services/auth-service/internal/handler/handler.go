@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -26,12 +27,77 @@ type AuthHandler struct {
 	// saaf 503 return karte hain (crash nahi) - user ko pata chalega ki
 	// upload available nahi hai, blank screen nahi milega.
 	storage *service.StorageService
+
+	// rbac / serviceAccess - "who may do what", backed by migration 017.
+	//
+	// Attached by `SetRBAC` rather than through the constructor, because main.go
+	// builds the handler before it has a database.
+	//
+	// Nil is treated as FAIL CLOSED everywhere they are read: an authorization
+	// layer that was never wired must refuse privileged routes, never permit them.
+	// See `requirePermission` and `requireService`.
+	rbac          *service.RBAC
+	serviceAccess *service.ServiceAccess
+
+	// subscriptions - channel subscribe/unsubscribe and the DERIVED count.
+	//
+	// Separate from authService because it is a different bounded context: channels
+	// have no auth semantics, and the derived count has to be the only path to a
+	// subscriber number. Nil is tolerated - reads fall back to the database.
+	media *service.MediaService
+
+	// transcode hands a stored asset to the transcoding service. May be nil, in
+	// which case an upload is recorded and the transcode is not queued - never a
+	// failed request.
+	transcode *service.TranscodeClient
+
+	// deviceSlots is the lifetime plan's device allowance. Read-only here; the
+	// enforcement happens in the register path (see DeviceSlotService).
+	deviceSlots *service.DeviceSlotService
+
+	// entitlements - what this user may do. Server-side authority for every quota.
+	entitlements *service.EntitlementService
+
+	// subscriptions - channel subscribe/unsubscribe and the DERIVED count.
+	//
+	// Separate from authService because it is a different bounded context: channels
+	// have no auth semantics, and the derived count has to be the only path to a
+	// subscriber number. Nil is tolerated - reads fall back to the database.
+	subscriptions *service.ChannelSubscriptionService
 }
 
 // SetStorageService storage service inject karta hai (constructor dependency
 // cycle se bachne ke liye setter pattern, baaki services jaisa).
 func (h *AuthHandler) SetStorageService(st *service.StorageService) {
 	h.storage = st
+}
+
+// SetSubscriptionService channel-subscription service inject karta hai.
+//
+// Setter, same reason as the others: the constructor would have to grow another
+// parameter for a service that has no bearing on authentication.
+func (h *AuthHandler) SetSubscriptionService(svc *service.ChannelSubscriptionService) {
+	h.subscriptions = svc
+}
+
+// SetMediaService wires the media pipeline (migration 015's media_assets).
+func (h *AuthHandler) SetMediaService(m *service.MediaService) {
+	h.media = m
+}
+
+// SetEntitlementService wires the plan ledger.
+func (h *AuthHandler) SetEntitlementService(e *service.EntitlementService) {
+	h.entitlements = e
+}
+
+// SetTranscodeClient wires the transcoding handoff.
+func (h *AuthHandler) SetTranscodeClient(t *service.TranscodeClient) {
+	h.transcode = t
+}
+
+// SetDeviceSlotService wires the lifetime device allowance.
+func (h *AuthHandler) SetDeviceSlotService(d *service.DeviceSlotService) {
+	h.deviceSlots = d
 }
 
 // SetSecurityService security service inject karta hai (circular dep se bachne ke liye
@@ -499,6 +565,37 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 		"is_verified":   user.IsVerified,
 		"last_login_at": user.LastLoginAt,
 		"created_at":    user.CreatedAt,
+
+		// `role` was MISSING here while the column existed on the user the whole
+		// time. That is not a cosmetic gap - it broke authorisation somewhere
+		// else entirely.
+		//
+		// The superadmin app's telemetry relay must answer "is this caller a
+		// superadmin?" and it authenticates the token HERE, at the one service
+		// that holds the signing key. With no `role` in this response it had no
+		// trustworthy source, and defaulted to "not a superadmin" - so the
+		// superadmin themselves were refused from their own console while the
+		// check looked like it was working.
+		//
+		// Included deliberately rather than decoded from the JWT in the calling
+		// app: an unverified claim is not a permission, and this endpoint's whole
+		// value is that it is verified.
+		//
+		// Note this is the caller's OWN role, returned to the caller about
+		// themselves - it exposes nothing about any other user.
+		"role": user.Role,
+
+		// The caller's OWN avatar, so every app shows the SAME picture.
+		//
+		// Without it the value sat in the database and nowhere else: one page read
+		// it directly, the account menu in the web app and the editor read a
+		// `/profile` that omitted it - so a person who HAD uploaded a photo was
+		// shown letters almost everywhere and their face on one page.
+		//
+		// Safe to return: it is the caller's own avatar, in a response about the
+		// caller. Deliberately NOT on any public channel payload, where
+		// `contact_email` is the field that must never leak.
+		"avatar_url": user.AvatarURL,
 	})
 }
 
@@ -709,4 +806,15 @@ func (h *AuthHandler) ResendVerification(c *gin.Context) {
 
 	log.Printf("[RESEND] Email sent successfully to %s", email)
 	respondGeneric(false, int(h.authService.VerificationTTLMinutes()))
+}
+
+// getenvStr reads an env var with a fallback.
+//
+// A tiny local helper rather than a package import: the services in this file
+// use `os.Getenv` directly, and a mixed style is worse than either.
+func getenvStr(key, def string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return def
 }

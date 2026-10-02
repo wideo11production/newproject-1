@@ -6,21 +6,96 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/shopspring/decimal"
 	"newproject/services/analytics-service/src/model"
+	"newproject/services/analytics-service/src/repository"
 	"newproject/services/analytics-service/src/service"
+	"newproject/services/analytics-service/src/telemetry"
 )
 
 type Handler struct {
 	svc *service.AnalyticsService
+
+	// uiClicks is the ledger repository, held directly rather than reached
+	// through the service.
+	//
+	// The ingest path is the one place that does not belong in the service
+	// layer: it is a high-volume append that must not be blocked behind the
+	// analytics aggregations, and it needs to answer "how many rows did this
+	// batch write" for the metrics labels. Routing it through the service would
+	// mean either a batched-append flag on every analytics method or a second
+	// service instance; neither earns its keep.
+	uiClicks *repository.UIClickRepository
+
+	// retentionDays is what the retention job ACTUALLY uses, passed in so the
+	// dashboard cannot report a different number than the sweeper enforces.
+	retentionDays int
+
+	// publisher is the NATS firehose. May be nil, in which case clicks are
+	// recorded and not published - which is a legitimate configuration, not a
+	// degraded mode that needs rescuing.
+	publisher *telemetry.Publisher
 }
 
-func NewHandler(svc *service.AnalyticsService) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(
+	svc *service.AnalyticsService,
+	uiClicks *repository.UIClickRepository,
+	retentionDays int,
+	publisher *telemetry.Publisher,
+) *Handler {
+	return &Handler{
+		svc:           svc,
+		uiClicks:      uiClicks,
+		retentionDays: retentionDays,
+		publisher:     publisher,
+	}
 }
 
-func (h *Handler) RegisterRoutes(r *gin.Engine) {
-	analytics := r.Group("/analytics")
+// RegisterPublicRoutes are the routes that must stay reachable without a token.
+//
+// Exactly two, and both are safe to expose:
+//   - `/health`  - a liveness probe. Answering it must not require a credential,
+//     or the orchestrator has to hold a secret to know the container is alive.
+//   - `/metrics` - Prometheus scrapes it, and Prometheus does not send our header.
+//     It exposes counters only (never a label carrying a user id, an email or a
+//     URL), so there is nothing in it to protect.
+//
+// Everything else is guarded. See `RegisterRoutes`.
+func (h *Handler) RegisterPublicRoutes(r *gin.Engine) {
+	r.GET("/health", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "analytics-service"})
+	})
+	// `gin.WrapH` adapts Prometheus's net/http handler to Gin. It is the
+	// idiomatic bridge: Prometheus writes its own content type and encoding, and
+	// a Gin-written wrapper would have to reimplement the exposition format.
+	r.GET("/metrics", gin.WrapH(promhttp.Handler()))
+}
+
+// RegisterRoutes are the guarded routes.
+//
+// `guarded` is passed in rather than the bare engine, so the split between
+// public and protected is visible at the call site in main.go instead of being
+// implied by whatever grouping happens to be in here. A new route added to the
+// bare engine would silently be public; adding it to `guarded` makes it
+// protected by default.
+func (h *Handler) RegisterRoutes(guarded *gin.RouterGroup) {
+	// The UI interaction ledger. Distinct from `POST /analytics/clicks`, which is
+	// ad engagement - see `src/model/ui_click.go`.
+	//
+	// GET is the Awareness grid's read; both sit behind the internal token,
+	// because the ledger is a full record of every interface interaction in the
+	// system and is not public information.
+	guarded.POST("/ui-clicks", h.RecordUIClicks)
+	guarded.GET("/ui-clicks", h.ListUIClicks)
+	guarded.GET("/ui-clicks/stats", h.UIClickStats)
+	guarded.GET("/ui-clicks/targets", h.TopUIClickTargets)
+	// POST, not GET: a GET that deletes can be triggered by a crawler or a
+	// prefetcher. The superadmin app's "purge now" button is a POST for the same
+	// reason.
+	guarded.POST("/ui-clicks/purge", h.PurgeUIClicks)
+
+	analytics := guarded.Group("/analytics")
 	{
 		analytics.POST("/views", h.RecordView)
 		analytics.POST("/clicks", h.RecordClick)
@@ -35,7 +110,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		analytics.GET("/campaign/:campaign_id/analytics", h.GetCampaignAnalytics)
 	}
 
-	ai := r.Group("/ai")
+	ai := guarded.Group("/ai")
 	{
 		ai.POST("/content/categorize", h.CategorizeContent)
 		ai.GET("/creators/:creator_id/recommendations", h.GetCreatorRecommendations)
@@ -48,20 +123,20 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 
 func (h *Handler) RecordView(c *gin.Context) {
 	var req struct {
-		AdID        uint   `json:"ad_id" binding:"required"`
-		CampaignID  uint   `json:"campaign_id" binding:"required"`
-		UserID      uint   `json:"user_id"`
-		VideoID     uint   `json:"video_id"`
-		ContentID   string `json:"content_id" binding:"required"`
-		Type        string `json:"type" binding:"required"`
-		Duration    int    `json:"duration" binding:"required"`
+		AdID           uint   `json:"ad_id" binding:"required"`
+		CampaignID     uint   `json:"campaign_id" binding:"required"`
+		UserID         uint   `json:"user_id"`
+		VideoID        uint   `json:"video_id"`
+		ContentID      string `json:"content_id" binding:"required"`
+		Type           string `json:"type" binding:"required"`
+		Duration       int    `json:"duration" binding:"required"`
 		PercentWatched string `json:"percent_watched" binding:"required"`
-		IPAddress    string `json:"ip_address"`
-		UserAgent    string `json:"user_agent"`
-		Country      string `json:"country"`
-		Region       string `json:"region"`
-		City         string `json:"city"`
-		Device       string `json:"device"`
+		IPAddress      string `json:"ip_address"`
+		UserAgent      string `json:"user_agent"`
+		Country        string `json:"country"`
+		Region         string `json:"region"`
+		City           string `json:"city"`
+		Device         string `json:"device"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -86,17 +161,17 @@ func (h *Handler) RecordView(c *gin.Context) {
 
 func (h *Handler) RecordClick(c *gin.Context) {
 	var req struct {
-		AdID        uint   `json:"ad_id" binding:"required"`
-		CampaignID  uint   `json:"campaign_id" binding:"required"`
-		UserID      uint   `json:"user_id"`
-		VideoID     uint   `json:"video_id"`
-		ContentID   string `json:"content_id" binding:"required"`
-		IPAddress    string `json:"ip_address"`
-		UserAgent    string `json:"user_agent"`
-		Country      string `json:"country"`
-		Region       string `json:"region"`
-		City         string `json:"city"`
-		Device       string `json:"device"`
+		AdID       uint   `json:"ad_id" binding:"required"`
+		CampaignID uint   `json:"campaign_id" binding:"required"`
+		UserID     uint   `json:"user_id"`
+		VideoID    uint   `json:"video_id"`
+		ContentID  string `json:"content_id" binding:"required"`
+		IPAddress  string `json:"ip_address"`
+		UserAgent  string `json:"user_agent"`
+		Country    string `json:"country"`
+		Region     string `json:"region"`
+		City       string `json:"city"`
+		Device     string `json:"device"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -121,7 +196,7 @@ func (h *Handler) RecordConversion(c *gin.Context) {
 		EventType         string `json:"event_type" binding:"required"`
 		EventValue        string `json:"event_value"`
 		ConversionRevenue string `json:"conversion_revenue"`
-		RevenueSource      string `json:"revenue_source"`
+		RevenueSource     string `json:"revenue_source"`
 		IPAddress         string `json:"ip_address"`
 		UserAgent         string `json:"user_agent"`
 		Country           string `json:"country"`
@@ -141,10 +216,10 @@ func (h *Handler) RecordConversion(c *gin.Context) {
 
 func (h *Handler) RecordReach(c *gin.Context) {
 	var req struct {
-		CampaignID uint   `json:"campaign_id" binding:"required"`
-		Date       string `json:"date" binding:"required"`
-		UniqueUsers int    `json:"unique_users" binding:"required"`
-		Impressions int    `json:"impressions" binding:"required"`
+		CampaignID   uint   `json:"campaign_id" binding:"required"`
+		Date         string `json:"date" binding:"required"`
+		UniqueUsers  int    `json:"unique_users" binding:"required"`
+		Impressions  int    `json:"impressions" binding:"required"`
 		ReachPercent string `json:"reach_percent" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -174,10 +249,10 @@ func (h *Handler) RecordReach(c *gin.Context) {
 
 func (h *Handler) RecordRevenue(c *gin.Context) {
 	var req struct {
-		CampaignID uint   `json:"campaign_id" binding:"required"`
-		Date       string `json:"date" binding:"required"`
-		Revenue    string `json:"revenue" binding:"required"`
-		AdSpend    string `json:"ad_spend" binding:"required"`
+		CampaignID  uint   `json:"campaign_id" binding:"required"`
+		Date        string `json:"date" binding:"required"`
+		Revenue     string `json:"revenue" binding:"required"`
+		AdSpend     string `json:"ad_spend" binding:"required"`
 		Conversions int    `json:"conversions" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {

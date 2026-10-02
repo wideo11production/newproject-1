@@ -29,6 +29,9 @@
 import Link from 'next/link';
 import { Button } from '@wideo11/ui/button';
 import { BrandLockup } from '@wideo11/ui/brand/characters';
+import { SessionUserMenu } from '@wideo11/ui/session-user-menu';
+import { LandingCta, MidPageCta } from './components/landing/landing-cta';
+
 import { CHARACTER_SPEC_REVISION } from '@wideo11/ui/brand/characters-manifest';
 import { SEED_POOL } from '@/lib/landing/ad-pool';
 import LandingShell from '@/components/landing/landing-shell';
@@ -50,19 +53,28 @@ function SiteHeader() {
           </span>
         </Link>
 
-        {/* Auth navigation - Register primary, Log in secondary */}
-        <nav className="flex items-center gap-2">
-          <Link href="/auth/login">
-            <Button variant="ghost" className="h-9 text-[#9fa7b3] hover:text-[#d8d9da]">
-              Log in
-            </Button>
-          </Link>
-          <Link href="/auth/register">
-            <Button className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85">
-              Register
-            </Button>
-          </Link>
-        </nav>
+        {/*
+          THE SESSION, NOT TWO LINKS.
+
+          This nav was hardcoded "Log in" / "Register" and never read the
+          session cookie - so a signed-in user landed on the home page and was
+          told they were signed out. The page looked correct to everyone who was
+          not already signed in, which is why it survived.
+
+          Now it renders `SessionUserMenu`, the same shared component the editor
+          uses, reading this app's own `/api/session`. Signed in: avatar with a
+          green ring, a dropdown, and a working Sign out. Signed out: Log in and
+          Register.
+
+          The editor link keeps its explicit `?next=/` so a signed-out visitor
+          who signs in from here lands in the editor rather than on the home
+          page again - the same reason the editor's own gate passes it.
+        */}
+        <SessionUserMenu
+          loginUrl="/auth/login?next=/"
+          registerUrl="/auth/register?next=/"
+          dashboardUrl="/dashboard"
+        />
       </div>
     </header>
   );
@@ -84,73 +96,36 @@ function HeroStrip() {
             Publish to the edge, keep every rupee. No paid tools in the loop.
           </p>
         </div>
-        {/* Primary CTA */}
-        <Link href="/auth/register" className="shrink-0">
-          <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
-            Create your account
-          </Button>
-        </Link>
+        {/*
+          THE PRIMARY CTA, AND IT DEPENDS ON WHETHER YOU ARE SIGNED IN.
+
+          This said "Create your account" to everyone, including people who already
+          had one. Signing in and then being told to create an account is the kind
+          of thing that makes a person conclude the site did not notice them.
+
+          So: signed out, the signup CTA. Signed in, a WELCOME with the two
+          things they can actually do next - open the editor, or the dashboard -
+          which is the whole point of a service selector.
+
+          `useSession` means no flash of "create your account" for a signed-in
+          user: the component renders nothing until the answer is known.
+        */}
+        <LandingCta />
       </div>
     </section>
   );
 }
 
-// ---------------------------------------------------------------------------
-// MID-PAGE CONVERSION CTA
-// ---------------------------------------------------------------------------
-function MidPageCta() {
-  return (
-    <section className="w-full border-y border-[#2c3235] bg-[#181b1f] px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 text-center">
-        <h2 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
-          Ready to publish your first video?
-        </h2>
-        <p className="max-w-xl text-sm text-[#9fa7b3]">
-          Create an account in under a minute. Free to start, no card required.
-        </p>
-        <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-          <Link href="/auth/register" className="w-full sm:w-auto">
-            <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
-              Register now
-            </Button>
-          </Link>
-          <Link href="/auth/login" className="w-full sm:w-auto">
-            <Button
-              variant="outline"
-              className="w-full border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
-            >
-              Log in
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 // ---------------------------------------------------------------------------
-// FOOTER
+// SITE FOOTER
 // ---------------------------------------------------------------------------
 function SiteFooter() {
   return (
-    <footer className="w-full border-t border-[#2c3235] bg-[#111217] py-8">
-      <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-4 px-4 text-sm text-[#9fa7b3] sm:flex-row sm:px-6 lg:px-8">
-        <p>&copy; {new Date().getFullYear()} Wideo11. All rights reserved.</p>
-        <div className="flex items-center gap-4">
-          {/* Brand spec revision stamp - transparent about the locked vectors */}
-          <p className="font-mono text-[10px] text-[#9fa7b3]/50">
-            brand spec v{CHARACTER_SPEC_REVISION}
-          </p>
-          <nav className="flex items-center gap-4">
-            <Link href="/auth/login" className="transition-colors hover:text-[#d8d9da]">
-              Login
-            </Link>
-            <Link href="/auth/register" className="transition-colors hover:text-[#d8d9da]">
-              Register
-            </Link>
-          </nav>
-        </div>
-      </div>
+    <footer className="w-full border-t border-[#2c3235] bg-[#0f1115] px-4 py-8 text-center sm:px-6 lg:px-8">
+      <p className="text-xs text-[#6b7280]">
+        Wideo11 - publish to the edge, keep every rupee.
+      </p>
     </footer>
   );
 }

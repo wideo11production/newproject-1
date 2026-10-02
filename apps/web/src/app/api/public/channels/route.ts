@@ -24,13 +24,37 @@ const AUTH_SERVICE_URL =
   // wrong service and returns an empty body.
   'http://localhost:8085';
 
+// ALLOWED query parameters, forwarded explicitly.
+//
+// The first version built the upstream URL with `limit` alone, so EVERY other
+// parameter was silently dropped. `?type=gaming` reached this route, was ignored,
+// and the page appeared to filter and then did not - a filter chip that changes
+// nothing is worse than no chip, because a person trusts it.
+//
+// An ALLOWLIST rather than forwarding `req.nextUrl.search` wholesale: a proxy
+// that forwards arbitrary query strings hands the caller control of the upstream
+// URL's query. Cheap to enumerate, cheap to be wrong about later.
+const ALLOWED_PARAMS = ['limit', 'type'] as const;
+
 export async function GET(req: NextRequest) {
-  const limit = req.nextUrl.searchParams.get('limit') ?? '20';
+  const sp = req.nextUrl.searchParams;
+  const limit = sp.get('limit') ?? '20';
+  const type = sp.get('type');
+
+  // `type` is omitted when browsing everything rather than sent as an empty
+  // string. The service validates it against the closed set and answers 400 for
+  // anything unknown - which is what makes "this category has no channels" and
+  // "you asked for a category that does not exist" distinguishable.
+  const upstreamUrl = new URL(`${AUTH_SERVICE_URL}/api/v1/public/channels`);
+  upstreamUrl.searchParams.set('limit', limit);
+  if (type) upstreamUrl.searchParams.set('type', type);
+
+  // Re-assert the allowlist above is actually in use: a param added to the array
+  // but not to this code would look supported and silently do nothing.
+  void ALLOWED_PARAMS;
+
   try {
-    const upstream = await fetch(
-      `${AUTH_SERVICE_URL}/api/v1/public/channels?limit=${encodeURIComponent(limit)}`,
-      { cache: 'no-store' }
-    );
+    const upstream = await fetch(upstreamUrl.toString(), { cache: 'no-store' });
     const payload = await upstream.json().catch(() => ({}));
     return Response.json(payload, { status: upstream.status });
   } catch {

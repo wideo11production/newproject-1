@@ -72,3 +72,24 @@ ode tools/check-*.mjs <url> [shot.png] writes its
 editor.png
 editor-full.png
 editor-full-light.png
+# ---- Compiled binaries ----
+#
+# services/transcoding-service/ me teen built artifacts TRACKED the:
+#   cmd.exe                  11.9 MB
+#   transcoding-service      14.6 MB
+#   transcoding-service.exe  14.6 MB
+#
+# 41 MB of machine-specific output in version control, in a service whose
+# Dockerfile builds its own binary inside the image. A Windows .exe living in a
+# Linux service directory is the clearest sign these were built by accident on a
+# Windows shell rather than produced by the build.
+#
+# Two costs, both real:
+#   - every clone pays 41 MB for nothing, and every future commit re-diffs them
+#   - a stale binary in the tree can be run INSTEAD of the built one, which is a
+#     genuinely nasty class of bug: the code you edited is not the code you ran
+#
+# The files stay on disk - this only stops them being tracked. They are build
+# output, not source, and docker compose build produces the real binary.
+*.exe
+services/transcoding-service/transcoding-service

@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	ErrViewLogNotFound     = errors.New("view log not found")
-	ErrClickLogNotFound     = errors.New("click log not found")
-	ErrConversionNotFound   = errors.New("conversion event not found")
-	ErrReachNotFound       = errors.New("reach stat not found")
+	ErrViewLogNotFound       = errors.New("view log not found")
+	ErrClickLogNotFound      = errors.New("click log not found")
+	ErrConversionNotFound    = errors.New("conversion event not found")
+	ErrReachNotFound         = errors.New("reach stat not found")
 	ErrRevenueReportNotFound = errors.New("revenue report not found")
 )
 

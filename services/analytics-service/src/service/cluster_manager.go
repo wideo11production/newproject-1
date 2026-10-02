@@ -70,7 +70,7 @@ func (cm *ActiveClusterManager) checkHealth() {
 	cm.mu.RUnlock()
 
 	resp, err := client.Get(primaryURL)
-	
+
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
 

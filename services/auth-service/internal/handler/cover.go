@@ -77,7 +77,7 @@ func (h *AuthHandler) coverOwnerChannelID(c *gin.Context) (uuid.UUID, bool) {
 	return channelID, true
 }
 
-// CoverUploadURL - step 1: presigned PUT URL do.
+// CoverUploadURL - step 1: presigned PUT URL do (for EXISTING channel).
 func (h *AuthHandler) CoverUploadURL(c *gin.Context) {
 	uid, ok := userIDFromToken(c)
 	if !ok {
@@ -129,7 +129,52 @@ func (h *AuthHandler) CoverUploadURL(c *gin.Context) {
 	c.JSON(http.StatusOK, ticket)
 }
 
-// CoverFinalize - step 3: server-side verify + save on the channel.
+// CoverUploadURLForCreate - step 1: presigned PUT URL for cover DURING channel creation.
+// No channel ID exists yet, so ownership is based on user ID only.
+func (h *AuthHandler) CoverUploadURLForCreate(c *gin.Context) {
+	uid, ok := userIDFromToken(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.requireContentUpload(c) {
+		return
+	}
+
+	var req struct {
+		Filename    string `json:"filename"`
+		ContentType string `json:"contentType"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if h.storage == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "upload_unavailable",
+			"message": "File uploads are not configured on this server.",
+		})
+		return
+	}
+
+	ticket, err := h.storage.CreateCoverUploadTicket(
+		c.Request.Context(), uuidFromString(uid), req.Filename, req.ContentType,
+	)
+	if err != nil {
+		msg := err.Error()
+		status := http.StatusBadRequest
+		if strings.Contains(msg, "credentials missing") {
+			status = http.StatusServiceUnavailable
+		}
+		c.JSON(status, gin.H{"error": "invalid_upload", "message": msg})
+		return
+	}
+
+	c.JSON(http.StatusOK, ticket)
+}
+
+// CoverFinalize - step 3: server-side verify + save on the channel (for EXISTING channel).
 func (h *AuthHandler) CoverFinalize(c *gin.Context) {
 	uid, ok := userIDFromToken(c)
 	if !ok {
@@ -205,5 +250,53 @@ func (h *AuthHandler) CoverFinalize(c *gin.Context) {
 		"publicUrl": publicURL,
 		"maxBytes":  config.MaxCoverBytes,
 		"channelId": channelID,
+	})
+}
+
+// CoverFinalizeForCreate - step 3: server-side verify during channel creation.
+// Returns the public URL without attaching to a channel (channel doesn't exist yet).
+func (h *AuthHandler) CoverFinalizeForCreate(c *gin.Context) {
+	uid, ok := userIDFromToken(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	if !h.requireContentUpload(c) {
+		return
+	}
+
+	var req struct {
+		ObjectKey string `json:"objectKey"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body"})
+		return
+	}
+
+	if h.storage == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "upload_unavailable",
+			"message": "File uploads are not configured on this server.",
+		})
+		return
+	}
+
+	// Server-side verification: existence, size, MAGIC BYTES, content-type
+	// force. Same code path as avatars - a `.html` file renamed `.png` dies
+	// here, not in the browser.
+	publicURL, err := h.storage.FinalizeCoverUpload(
+		c.Request.Context(), uuidFromString(uid), req.ObjectKey,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "upload_failed",
+			"message": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"publicUrl": publicURL,
+		"maxBytes":  config.MaxCoverBytes,
 	})
 }

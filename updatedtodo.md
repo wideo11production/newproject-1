@@ -116,21 +116,37 @@ invalid hook call), and both were caught before you saw them.
 
 ## 🔴 Open security gaps — NOT yet closed
 
+> **⚠️ THIS TABLE WAS STALE. Corrected 2026-10-01.**
+> Five of the eight items below had already been done and verified, and the
+> table kept steering work at them. That is the single most expensive kind of
+> wrong document: it does not look wrong, it looks like a to-do list.
+> Corrections are marked in place rather than deleted, so the change is visible.
+
 Listed honestly because "unhackeable" is not achievable and pretending
 otherwise just stops the search for real holes.
 
-| # | Gap | Risk | Effort |
-|---|---|---|---|
-| 1 | **MinIO uses root credentials** | Full storage compromise if leaked | Low — rotate + bucket-scoped service account |
-| 2 | **No security headers** (CSP, HSTS, X-Frame-Options) | Broad XSS / clickjacking surface | Low — one file, high value |
-| 3 | **No JWT `jti` denylist** | Stolen token valid until expiry even after logout | Medium |
-| 4 | **PII in telemetry, no retention policy** | Privacy / compliance exposure | Medium |
-| 5 | **Verification link hardcoded to `localhost`** | Broken on phone / any other device | Low — env var |
-| 6 | **Gmail for production email** | ~500/day cap; account can be locked | Medium — Postfix in prod |
-| 7 | **Rate limiter is in-memory** | Resets on restart, useless across replicas | Medium — Redis (already available) |
-| 8 | **No 2FA at login** | PIN is asked *after* login, so password alone grants a session | High — architectural |
+| # | Gap | Status | Risk | Effort |
+|---|---|---|---|---|
+| 1 | **MinIO uses root credentials** | ✅ **CLOSED** — bucket-scoped service account, root rotated out of the app path | — | — |
+| 2 | **No security headers** (CSP, HSTS, X-Frame-Options) | ✅ **CLOSED** — set in the web middleware | — | — |
+| 3 | **No JWT `jti` denylist** | ✅ **CLOSED** — Redis denylist, `internal/middleware/revocation.go` | — | — |
+| 4 | **PII in telemetry, no retention policy** | 🟠 **OPEN** — 30-day purges specified in `SYSTEM-PLAN.md` §3.3, nothing deletes yet | Privacy / compliance exposure | Medium — cron + tests |
+| 5 | **Verification link hardcoded to `localhost`** | ✅ **CLOSED** — `VERIFICATION_BASE_URL` from env | — | — |
+| 6 | **Gmail for production email** | 🟠 **OPEN** — fine locally (~500/day cap); Postfix for production | ~500/day cap; account can be locked | Medium — Postfix in prod |
+| 7 | **Rate limiter is in-memory** | ✅ **CLOSED** — Redis, shared across replicas | — | — |
+| 8 | **No 2FA at login** | 🔴 **OPEN** — PIN is asked *after* login, so password alone grants a session | High — architectural | High |
 
-**Recommended order:** #1 → #2 → #5, then #3 and #7.
+**Recommended order:** #4 (retention deletes real data) → #8 (2FA) → #6 (email
+provider before real users).
+
+### The two gaps that are not on this list
+
+Found later, and neither was on the original table:
+
+| Gap | Why it matters |
+|---|---|
+| **The video editor records no clicks at all** | 0 of 533 rows in `click_events` come from `:3002`. The most complex surface in the product is the one that is invisible. → `SYSTEM-PLAN.md` phase 0 |
+| **`click_events` lives in `auth_service`** | The wrong service owns it, which is why it is hard to find and why analytics queries cross concerns. → `SYSTEM-PLAN.md` phase 1 |
 
 ---
 
@@ -1919,6 +1935,1077 @@ between, which was the actual complaint.
 
 ## Still open
 
-- **Phase D3** - the daily backup service. Not started.
+- **Phase D3** - the daily backup service. Not started. Now scheduled as
+  **phase 12** in `SYSTEM-PLAN.md`.
 - Marker notes are still not saved with the project, and the help registry says
   so rather than pretending otherwise.
+
+---
+
+# Session 15 — the plan, and what was actually wrong with the tracking
+
+## The account control, and a bug hiding behind a passing test
+
+The toolbar asked `auth-service` for the session **straight from the browser**,
+with the session cookie attached. That never worked. `auth-service` accepts only
+an `Authorization: Bearer` header, and a request carrying nothing but the cookie
+comes back `401 {"error":"missing authorization header"}` — confirmed by hand.
+The cookie is `httpOnly` precisely so JavaScript cannot read it, so the client
+could never have built that header.
+
+So the navbar claimed **"logged out" to every signed-in user, always**, and
+showed them Log in / Create an account instead of their avatar. The old
+middleware gate is what hid this: an anonymous visitor never reached the
+toolbar, so the only people who saw the toolbar were the ones being told they
+were signed out.
+
+The three browser checks that covered this were **passing for the wrong
+reason** — they asserted a logged-out navbar, the navbar was always logged-out,
+and the defect read as a feature. Fixing the navbar turned those three red, which
+is the point of fixing anything.
+
+Both directions now go through one server route that reads the `httpOnly` cookie
+server-side and attaches the header itself:
+
+| | before | now |
+|---|---|---|
+| session probe | browser → `auth-service`, always 401 | `GET /api/session`, server-side |
+| logout | browser → `auth-service`, always 401 | `DELETE /api/session`, server-side |
+| signed in | "Log in / Create an account" | avatar, green ring, account menu |
+| signed out | editor mounted, toolbar login icons | the **gate**, editor never mounts |
+
+Green now means "signed in" in exactly one place — a 1px ring on the avatar plus
+its pulse dot. The rotating `ve-signin-glow` was applied to *both* clusters,
+which meant Log in and Create an account were also pulsing green: a signed-out
+control signalling that you were signed in. Removed.
+
+The account menu is one control, not three. Dashboard lives inside it rather than
+in the toolbar because the dashboard ends the editor session and an accidental
+click should not throw you out of what you are working on.
+
+## "Record every click" — three real defects in what already existed
+
+`click_events` is not new. It holds real rows and is captured by `/api/audit`
+and `/api/telemetry`. It is also not what was asked for.
+
+**A correction first, because I got this wrong before fixing it.** My initial
+read was "the editor records nothing". That was **incorrect** — I assumed the
+364 rows on `page='/'` were web landing-page clicks. They are editor clicks:
+
+```
+div.ve-shimmer.absolute.flex      66   editor filmstrip shimmer
+input.ve-fader.mx-1.h-1:change   26   editor volume fader
+select.h-6.rounded.border:change  12   editor fps selector
+canvas.block.h-full.w-full         8   editor preview canvas
+```
+
+The tracker had been mounted in the editor layout the whole time. The defect is
+worse than missing coverage, not better:
+
+| Defect | Why it actually matters |
+|---|---|
+| **`page` cannot tell the editor and the web app apart** | the editor serves `/` and so does the web landing page. 66 editor-toolbar clicks and 66 landing clicks land in one bucket. "How many times did users press export" is **not answerable**. And when `/settings` or `/export` appears in both apps, old rows change meaning permanently. |
+| **`target` was built from CSS class names** | rows read `button.flex.h-7.w-7` — a snapshot of the CSS on the day of the click, worthless a week later once anyone touches a class. The editor already puts an `aria-label` on every control (that is how it is keyboard-navigable); the tracker was ignoring it. |
+| **`page` was recorded two ways** | 480 rows `/auth/login`, 53 rows `auth/login`. Same page. Any `GROUP BY page` or funnel undercounts silently. |
+
+### Fixed in this session
+
+- `surface` column added (`web` / `editor` / `admin` / …), composite index with
+  `page`. Verified: `/` now separates cleanly into `editor` and `web` rows.
+- `target` now resolves `data-track` → `aria-label` → class list, so recorded
+  names survive a restyle.
+- `page` normalised at **write time on the server**, not in the client, so a
+  future client cannot reintroduce the second spelling. 53 rows backfilled.
+- Old rows carry `surface = 'unknown'` on purpose. The app that produced them
+  genuinely is not recoverable, and a guessed label would be permanently wrong;
+  `unknown` is visibly distinct from real data.
+
+### `NEXT_PUBLIC_*` never reached the browser — anywhere
+
+Found while verifying the above, and it is a latent bug across **all** apps.
+
+Next.js replaces `process.env.NEXT_PUBLIC_X` at **build** time. Setting it in
+compose's runtime `environment:` block does nothing — the bundle is already
+compiled. So every `NEXT_PUBLIC_*` in this repo has been `undefined` in the
+browser, and everything has been silently running on its hardcoded fallback.
+
+That is why nobody noticed: the fallbacks are correct values. `access-gate.tsx`
+reads `process.env.NEXT_PUBLIC_LOGIN_URL ?? 'http://localhost:3000/auth/login'`
+— the fallback produced the right URL, so the gate worked and the dead env var
+was invisible. The click ledger is where it surfaced: editor clicks were labelled
+`port-3002` (my fallback) instead of `editor`.
+
+Fixed for the editor via `ARG`/`ENV` in `apps/video-editor/Dockerfile` plus a
+build arg in compose. Verified: 52 rows, all `editor`, from a real browser run.
+
+**Still open for the other six apps** (`web`, `admin`, `analytics`, `billing`,
+`monitor`, `superadmin-app`). Deliberately not batch-fixed: this compose block
+sets `NEXT_PUBLIC_API_URL: http://dashboard-service:8080`, a **docker-internal
+hostname the browser cannot resolve**. Copying the editor's args wholesale would
+have moved a hardcoded fallback into an unresolvable URL — a silent breakage
+instead of a visible one. Each app's URLs need deciding individually.
+
+### Prometheus is the wrong tool for this, and it matters
+
+The request was to record every click, surface it, and alert on it. Storing
+per-click data in Prometheus would be actively harmful: it keeps a fixed number
+of samples per series and forgets the rest, so individual events age out within
+hours regardless, and a few thousand clicks a second exhaust the series
+cardinality budget and take down every real dashboard on the box.
+
+Four tools, four jobs, no overlap:
+
+| Tool | Job |
+|---|---|
+| Postgres `click_events` (new `telemetry` db) | the durable per-click ledger — the actual record |
+| NATS JetStream | the firehose, for anything that must react *while* it happens |
+| Prometheus | aggregates only — `clicks_total{page,target,outcome}`, rates |
+| Alertmanager | alerts on those aggregates, never on raw events |
+
+The dashboard reads the ledger. The alert fires on a rate. Neither is asked to
+do the other's job.
+
+## The plan
+
+`SYSTEM-PLAN.md` — the full sequence, with the decisions and the numbers, in
+13 sections and a 13-phase build order. Headlines:
+
+- **7 plans** in three families. Trial is 3 days with **nothing saved**, refused
+  server-side rather than by a disabled button, and the user is told on day 1.
+- **Reels 90 s, 9:16 only**, with a four-platform pass/fail readiness grid shown
+  *before* publishing.
+- **Razorpay** first (INR, UPI, GST invoicing without a second entity), behind
+  one adapter so Stripe is a config change.
+- **All money in integer minor units, in a ledger, never a counter.** A stored
+  balance drifts; a `sum()` cannot.
+- **Multi-currency as a multiplier per group** with charm rounding, locked at
+  checkout — your 0.5 / 1.5 idea, as one number per group instead of 180
+  hand-priced plans. It is a price band, not an exchange rate, and `.env` says so.
+- **7 phases of build**, each independently verifiable, with **backup + the
+  30-day purge as phase 12** — last, because a backup of a schema that is still
+  moving is not a backup.
+
+### What I refused to fake
+
+There is no third-party API to upload to Instagram, TikTok, Shorts or Facebook
+Reels without the creator's own OAuth grant and, usually, an app review. So
+phase 1 of reels is the readiness check plus a **ZIP + caption pack** the creator
+uploads themselves; automated publishing comes later, per platform, behind its
+own feature flag. Building against an API that does not exist and calling it
+finished is worse than saying so.
+
+### Also: five of the eight "open security gaps" are already closed
+
+The table at line 122 lists eight. MinIO service account, security headers, the
+`jti` denylist, the Redis rate limiter and `VERIFICATION_BASE_URL` are all done
+and verified — that table is stale and has been steering work toward finished
+items, which is the most expensive thing in this file. Phase 0 marks it stale.
+
+## Verified
+
+- Editor browser suite **77/77**
+- Account menu suite **10/10** (new: `tools/check-account-menu.mjs`)
+- Auth flow, signed in vs signed out, against a real session
+- `go build` / `go vet` / `go test ./...` on `auth-service`
+- `tsc --noEmit` clean on `apps/web` and `apps/video-editor`
+- `27/27` containers healthy
+
+---
+
+# Session 16 — the three app-wide bugs that were hiding behind correct fallbacks
+
+Every one of these was invisible because **every read site had a correct
+hardcoded fallback**. The apps behaved right, so nothing looked broken, and the
+misconfiguration underneath was never exercised. All three only surfaced by
+asking a question the fallbacks had been quietly answering.
+
+## 1. `NEXT_PUBLIC_*` never reached the browser — any app
+
+Next.js replaces `process.env.NEXT_PUBLIC_X` **at build time**. Compose's runtime
+`environment:` block cannot change it: the bundle is compiled before the container
+starts. So every `NEXT_PUBLIC_*` in this repo was `undefined` in the browser and
+every app was running on its fallback.
+
+Chup-chaap is the point — a fallback that returns the right value makes the bug
+*invisible*. `access-gate.tsx` reads
+`process.env.NEXT_PUBLIC_LOGIN_URL ?? 'http://localhost:3000/auth/login'`; the
+fallback produced the right URL, so the gate worked and the dead var was
+unnoticed. The click ledger is what exposed it: editor clicks were labelled
+`port-3002`, which is the fallback, instead of `editor`.
+
+Fixed with `ARG`/`ENV` in each Dockerfile plus a compose `args:` block — because
+compose `args:` is what `ARG` consumes. **8/8 apps now verified** by
+`tools/check-surfaces.mjs`, which clicks each app and asks the ledger which
+`surface` it recorded.
+
+**Not promoted on purpose:** any var whose compose value is a compose-internal
+hostname. This compose block sets `NEXT_PUBLIC_API_URL: http://dashboard-service:8080`,
+which a browser cannot resolve. Copying the editor's args wholesale would have
+replaced a working fallback with an unresolvable URL. `tools/audit-next-public.mjs`
+exists to catch that.
+
+## 2. The superadmin app had no JavaScript at all
+
+Worse than a wrong env var: **the app's JS chunks 404'd.**
+
+Its runner stage copied the static bundle to `./.next/static`. With
+`output: 'standalone'`, Next preserves the monorepo path in the server bundle, so
+`/app/server.js` looks for `apps/superadmin/.next/static`. The HTML rendered
+correctly — with correct chunk hashes — and every `/_next/static/**.js` returned
+the **404 HTML page**. The browser threw a parse error, hydration never happened,
+and no client-side behaviour worked at all. The tracker was in the layout and
+simply never ran.
+
+Found because the surface check gave superadmin zero events while the other six
+recorded one each. Chasing it down: network trace showed no `/api` request at
+all, then a chunk fetch returned `content-type: text/html` with status 404.
+
+Fixed to `./apps/superadmin/.next/static`, matching the other apps.
+`monitor` uses its own `distDir` (`.next-monitor`) and copies to a correspondingly
+correct path — it was never broken.
+
+**This is very likely the cause of the "superadmin flow: 3 bugs, dashboard tak
+pahunch hi nahi sakta tha" in Session 5.** Those were reported as three separate
+bugs. They were one.
+
+## 3. The audit route existed as three different copies of itself
+
+Six real copies across seven apps, hashed into three variants. Five of them still
+carried the original bug:
+
+```ts
+try {
+  const body = await request.json();   // throws on a malformed body
+  const res  = await fetch(AUTH_URL);  // ALSO throws when unreachable
+} catch {
+  return 400                            // wrong for the second case
+}
+```
+
+`fetch` **throws** when the host is unreachable — a refused connection inside a
+container is an exception, not a response. So an audit store that was simply down
+surfaced to the browser as `400 Bad Request`, several times per session, and the
+browser logged it as an application error. The user did nothing wrong, the app
+was fine, and the console was lying about why — which is worse than silence,
+because it sends you hunting for a client bug.
+
+Only the editor's copy had the fix: a parse failure and an upstream failure are
+separated and answered honestly (400 vs 200 with `saved: 0`).
+
+Now one implementation in `@wideo11/ui/audit-handler`, and every app's route is a
+three-line re-export. `apps/currency` got a route for the first time — it serves
+a real surface (rates, convert, refresh) and had no tracker and no route at all,
+so none of its activity reached the ledger.
+
+**Copy-paste across a monorepo guarantees drift.** The moment one copy is fixed,
+the other six are silently wrong and nothing fails.
+
+## Also found
+
+**HSTS could never be enabled.** `next.config.mjs` read
+`process.env.NEXT_PUBLIC_HSTS_MAX_AGE` while compose and `.env` both set
+`SECURITY_HSTS_MAX_AGE`. Two different names, no connection, header permanently
+off — and setting the value in `.env` for production would also have done
+nothing. Also corrected to read the `SECURITY_` name, because HSTS is a
+*response header* and `NEXT_PUBLIC_` is for browser-visible values; the prefix
+was actively misleading. `includeSubDomains` is now its own flag rather than
+being hardcoded on.
+
+## New tools
+
+| tool | what it answers |
+|---|---|
+| `tools/audit-next-public.mjs` | which `NEXT_PUBLIC_*` each app reads, and whether its compose value is browser-reachable |
+| `tools/wire-next-public-args.mjs` | adds `ARG`/`ENV` blocks to the app Dockerfiles |
+| `tools/add-build-args.mjs` | adds the matching `args:` to compose |
+| `tools/check-surfaces.mjs` | **behavioural** — clicks each app and asks the ledger which `surface` it recorded. `port-3002` means the fallback fired |
+| `tools/check-account-menu.mjs` | the avatar / account menu contract |
+| `tools/unify-audit-routes.mjs` | collapses the copies to the shared handler |
+
+`check-surfaces.mjs` exists because a source grep cannot answer this. The bug is
+"the var is dead but the app still works", so only runtime behaviour distinguishes
+them. Its first version also gave a false failure by clicking at a fixed
+coordinate on a page with no buttons; it now dispatches on `document.body`,
+because what is under test is the tracker, not the page layout.
+
+## Verified
+
+- **`tools/check-surfaces.mjs` 8/8** — every app's `NEXT_PUBLIC_APP_SURFACE` reaches the browser
+- Editor suite **77/77**, account menu **10/10**
+- `tsc --noEmit` clean on `apps/web`, `apps/video-editor`, `apps/currency`
+- `go build` / `go vet` / `go test ./...` clean on `auth-service`
+- **8/8 apps built, 27/27 containers healthy**
+---
+
+# Session 17 — SPECIAL NOTE: one login for every service, and who may do what
+
+> This section is a **requirement note**, written before the code, so the design
+> can be argued with before it is built. It is the answer to a single question:
+> **after a user registers and logs in once, what stops them from having to log
+> in again for every other service — and what stops anyone, including
+> superadmin, from bending a service's own security rules?**
+
+## 1. The problem being solved
+
+Right now every app is its own island. A user who signs in on the dashboard
+(`:3000`) has to sign in again on the editor (`:3002`), then admin (`:3004`), then
+billing (`:3003`), and so on. That is not a UX annoyance — it is an
+architectural smell, and it causes three concrete problems:
+
+1. **A user can end up on the DASHBOARD, not in the editor.** The editor already
+   sends `?next=/`, which is a band-aid over "there is no session home".
+2. **N separate auth flows means N places to get security wrong.** Every service
+   that re-implements login is a service that will eventually re-implement it
+   badly.
+3. **There is no answer to "what can this person do?"** — so access is either
+   everything or nothing.
+
+## 2. What already makes single-login possible (and is proven)
+
+The session cookie is `wideo11_session`, set by `auth-service` on `localhost`, and
+**cookies ignore the port**. Verified in Session 12: a token minted on `:3000` was
+accepted on `:3002` and the editor rendered the signed-in state.
+
+So single login is **not** a single-sign-on problem. It is a
+**service-authorisation** problem: we have one identity and no answer to "may this
+identity use this service?"
+
+## 3. The design
+
+### 3.1 One session, many services — the dashboard is the service selector
+
+```
+register / login  (once, on the web app)
+        |
+        v
+   user dashboard  ← THE HOME. Lists the services this user may use.
+        |
+        +--▶ video editor   (:3002)  no second login
+        +--▶ analytics      (:3005)  no second login
+        +--▶ billing        (:3003)  no second login
+        +--▶ admin          (:3004)  no second login
+        +--▶ monitor        (:3001)  no second login
+```
+
+Every service keeps its own gate. The gate no longer decides *who* you are — the
+shared session does. It decides only *whether you may be here*, from the same
+table the dashboard read to build the list. One answer, two views, and the
+dashboard cannot show something the service would then refuse.
+
+### 3.2 `service_grants` — who may use which service
+
+```sql
+user_services (user_id, service, granted_by, granted_at, revoked_at)
+```
+
+- `service` comes from a **closed list in code**, not a string from a request. A
+  typo cannot invent a service, and a removed service cannot be granted by
+  accident.
+- `revoked_at`, never a delete: the question "who had access to what, and when"
+  must stay answerable, and it is the only way to *prove* an ex-employee no
+  longer has access.
+- **A superadmin holds every service implicitly and gets NO rows.** Explicit rows
+  for a superadmin would be a second source of truth about the most powerful
+  account in the system.
+
+### 3.3 Roles, permissions, and appointments — who may do what
+
+```
+roles            name, rank, is_system
+permissions      name            (closed set, same idea as services)
+role_permissions role -> permission
+appointments     user_id, role, appointed_by, appointed_at, expires_at, revoked_at
+```
+
+`appointments` IS the "proper list" superadmin holds: one query answers *who has
+what power, who granted it, and when it ends.*
+
+**The rule that makes delegation safe:**
+
+> An appointment can never grant a permission the granter does not hold.
+
+Without it, any employee who can appoint people can appoint themselves
+superadmin, and the whole model is theatre. With it, authority cannot grow — it
+can only be delegated downward, and only by someone who already has it.
+
+**Two consequences worth stating plainly:**
+
+- **A superadmin cannot appoint a superadmin** by role, because superadmin is
+  reached only through `superadmin_accounts`, never through the appointment path.
+  That is deliberate: elevating someone is a distinct, narrower operation than
+  delegating work, and merging them is how privilege escalation becomes
+  self-service.
+- **No service may define its own roles.** Every service asks `auth-service` the
+  same question against the same tables. A service that decided for itself is a
+  service that cannot be reasoned about, and the requirement is that **no
+  service may weaken the app's security — not even superadmin**.
+
+## 4. Superadmin's own security — the extra layers
+
+Superadmin goes through the **same** login and the **same** session as everyone
+else. What they get is additional friction, never a bypass:
+
+| Layer | Why |
+|---|---|
+| Password + PIN + biometric (the existing gate) | unchanged, not weakened |
+| **Step-up auth** on a privileged action | a session open for 6 hours must not be able to delete a channel or pay a payout. Re-enter the PIN for the dangerous ones. |
+| **Every privileged action audited** | actor, action, target, before/after, ip, ts. An unaudited superadmin action is indistinguishable from a bug. |
+| **No service-local bypass flag** | there is deliberately no `SKIP_AUTH` env var anywhere. A bypass that exists is a bypass that will be used. |
+| **Fail CLOSED on a permission lookup** | the opposite of the device-slot decision, and the reason is the asymmetry: a device-slot lookup that fails open costs one seat, while a permission lookup that fails open is a **privilege escalation**. |
+| **Both recovery accounts work the same way** | neither is a backdoor with different rules. |
+
+**On step-up specifically:** the existing PIN is already asked after login, so the
+increment is small — a privileged action re-prompts for it. The threat is a
+session left open on a shared machine, not a stolen password.
+
+## 5. What gets built, in order
+
+| # | Piece | Done when |
+|---|---|---|
+| 1 | `service_grants` + `user_services` | a granted user reaches the service, an ungranted one gets a clean 403 |
+| 2 | `roles` / `permissions` / `role_permissions` / `appointments` | superadmin can appoint an employee with a scoped permission set |
+| 3 | **Delegation bound** — cannot grant what you do not hold | the test that makes the model safe, not optional |
+| 4 | Dashboard becomes the service selector | the list is built from the same source the service gate reads |
+| 5 | Shared middleware used by all 8 apps | no app has its own auth decision |
+| 6 | Step-up auth on privileged actions | a long-lived session cannot perform one without re-authenticating |
+| 7 | The privilege registry view | one query lists every person, role, permission and grant |
+
+## 6. Open questions, answered by the requirement rather than left open
+
+| Question | Answer |
+|---|---|
+| Does every service need a separate login? | **No.** One session, and the service gate checks access only. |
+| Can a service decide to trust itself? | **No.** One source of truth in `auth-service`. |
+| Can superadmin bypass? | **No.** Extra friction, same rules. |
+| Can an employee grant themselves more? | **No.** Authority can only be delegated downward. |
+| Is a revoked grant deleted? | **No.** `revoked_at` — the history is the evidence. |
+| What if the permission service is down? | **Deny.** Fail closed. |
+
+## 7. Known consequence, accepted deliberately
+
+A single session means **one shared blast radius**: a session theft on any service
+is a session theft on all of them. That is the trade being made, and it is the
+right one — because every service already trusted the same cookie before this
+change, it was one blast radius already, just without anyone having decided it.
+Making it explicit means it can be defended: short session lifetime, step-up on
+the dangerous actions, device slots, and an audit trail.
+### Cross-reference: the channel/media parity spec
+
+`CHANNEL-AND-MEDIA-PARITY.md` is now the single place that answers "what does a
+channel need, and how close are we to YouTube on media". It carries an honest
+BUILT / PARTIAL / **NOT BUILT** status per row, and it lists the questions that
+genuinely need a decision.
+
+It exists because the last three sessions each reopened a question that had
+already been answered, and two of those produced bugs rather than answers - a
+stale gap table that pointed at finished work, and a `NEXT_PUBLIC_*` var that
+had been dead in every app for weeks while correct fallbacks hid it. A decision
+now gets written in a file that says NOT BUILT or BUILT, so it can be changed
+deliberately rather than rediscovered.
+---
+
+## SESSION 18 - THE TWO THINGS THAT WERE BUILT, AND WHY
+
+This section is written after the work, so it can say what was actually true and
+not what was intended. Two features were completed: the channel **cover upload
+during creation**, and **channel setup step 2**. One blocker was found and fixed
+along the way that made any fresh deploy possible.
+
+Everything below was verified against a running system, not against a build.
+
+---
+
+## 1. THE COVER UPLOAD BUG - three faults, one invisible
+
+**Reported:** *"channel create karte hu channel ka cover upload nhi horha ha... ke
+bad edit karke upload aram se horha ha"*
+
+The edit-time upload worked perfectly. The create-time upload failed 100% of the
+time. Three independent faults, and fixing one does not fix the others - which is
+why ""I tried again and it still fails"" is a normal outcome here.
+
+### Fault 1 - the response key
+
+The wizard's guard read 	icket.upload_url. The server sends uploadUrl.
+UploadTicket in internal/service/storage.go is camelCase end to end, so
+upload_url is **never present** and !ticket.upload_url was always true. The
+function returned before uploading, every single time.
+
+**Why it survived a review and a passing test suite:** the edit-time component
+(cover-uploader.tsx) read the *correct* key, so the same feature demonstrably
+worked two screens away. Two copies of one three-step flow, reading different JSON
+dialects. And check-channel-wizard.mjs passed 16/16 **without ever touching the
+cover**.
+
+### Fault 2 - the size limit
+
+The create path allowed **6 MB**. The server's config.MaxCoverBytes is **4 MB**.
+A 5 MB file passed the client check, uploaded in full to MinIO, and was then
+rejected at finalize - after the creator had already waited for the whole upload.
+
+### Fault 3 - the object key
+
+The create path sent a **client-invented** objectKey the server ignores, and
+fell back to that invented key at finalize. Accepting one would be an IDOR on the
+object store: a client that may choose its key may write outside its own prefix.
+
+### The durable fix - one implementation
+
+pps/web/src/lib/channel-cover-upload.ts. Both call sites now use it. One
+function cannot drift from itself, which is the property the two copies lacked.
+
+### A lesson worth keeping
+
+A PowerShell detail cost two runs here: Set-Content -Encoding UTF8 writes a **BOM**,
+and a BOM at the start of a JSON body makes json.Unmarshal fail. The API answered
+{"error":"invalid request"} and looked like an application bug. Writing the
+fixture with 
+ode fixed it. This is the third time in this repo that a harness
+artefact was read as a product defect - so the harness now gets the same suspicion
+as the code.
+
+---
+
+## 2. STEP 2 - what was asked for, and what was built
+
+**Asked for** (confirmed before starting):
+
+| Decision | Answer |
+|---|---|
+| Step 2 compulsory? | **Fully compulsory** |
+| Which channel? | **Only the newly created one** |
+| Contents? | Branding colour, keywords + category confirm, default upload settings, plus whatever makes it distinctive |
+
+### Everything on the screen is optional, and that is the design
+
+A compulsory screen is only safe if **no answer can trap anybody**. Checked field
+by field: logo, tagline, brand colour, keywords, visibility and every upload
+default all have a valid empty answer. The Finish button is **never disabled** -
+there is no required field, so there is nothing to wait for.
+
+A gate that can trap somebody is a gate that eventually traps somebody.
+
+### Why the brand colour is a NUMBER
+
+channels.brand_hue is an integer **0-359**, not a #rrggbb string. The RGB comes
+from a 12-colour palette this codebase owns.
+
+That is a security decision disguised as a colour decision:
+
+- A free hex field is a CSS-injection point the first time any component writes
+  style={{ background: channel.brand_color }}. The dangerous input is not #fff,
+  it is #fff; background-image: url(//evil.example/x) - not valid hex, but a
+  perfectly good thing to type.
+- A creator picks white and their own page is blank.
+
+A hue removes both at once. **Trade, stated plainly:** a creator cannot pick an
+exact brand colour. In exchange they cannot make their own page unreadable and
+cannot inject anything into a page every visitor loads.
+
+### Why visibility has three states
+
+public | unlisted | private. unlisted - shareable by link, absent from browse
+and search - is what most creators want for a first upload, and a boolean forces a
+choice between ""the whole world"" and ""visible to nobody"".
+
+is_public is **kept** and a CHECK constraint forces it to agree with isibility.
+Two sources of truth about whether a channel is public is exactly the arrangement
+that eventually disagrees with itself.
+
+### The default for an unfinished channel is PRIVATE
+
+An unset visibility on a channel that has not finished step 2 resolves to private.
+""I have not decided yet"" is **not** ""everyone may look"". The other default would
+publish a channel mid-setup, at the moment its creator has said nothing about who
+should see it.
+
+---
+
+## 3. THE BLOCKER - a fresh deploy could not start at all
+
+This was found by building the check that could prove the migration files were
+sound. **It turned out the chain could not be applied to an empty database.**
+
+`
+create view privilege_registry: ERROR: relation "appointments" does not exist
+`
+
+AutoMigrate created a view over a table migration 017 creates. On an empty schema
+the service fataled at boot - **not degraded, not partial: not started.**
+
+And the SQL chain was never applied automatically at all. It was run by hand with
+psql -f, so a new database had no channels, no media_assets, no
+user_services, no views.
+
+### Every fault found, and each was proven rather than assumed
+
+| # | Fault | Consequence |
+|---|---|---|
+| 1 | SQL Server syntax in 6 files: sys.sp_addextendedproperty, IF COL_LENGTH(...) BEGIN, dbo., it, bare GO, DATALENGTH, COLLATE Latin1 | Those files **cannot execute here at all** |
+| 2 |  04: ALTER COLUMN x BOOLEAN NOT NULL | Invalid PostgreSQL - must be SET NOT NULL |
+| 3 |  09: ALTER COLUMN x VARCHAR(64) | Invalid - must be TYPE VARCHAR(64). Its comment claimed TYPE was already added. It wasn't |
+| 4 |  03: UPDATE u SET ... FROM users AS u | Invalid; plus a suffix counter that could emit **duplicate usernames** and abort the unique index |
+| 5 |  15 began DROP TABLE IF EXISTS channel_subscriptions | ""Idempotency"" by **deletion** - wipes every real subscription on every deploy, and reports success |
+| 6 | media_assets had a model, was read by three services, and was created by **nothing** | Migration 020 cannot even be reached on a fresh DB |
+| 7 | Nine tables unprovisioned; etired_handles, entitlements, channel_subscriptions and the migration-017 five were all absent from SQLOnlyTables | Same class |
+| 8 | UserEntitlement **and** Entitlement both mapped entitlements | The narrower one had no suspended_at, so a **suspended trial was reported to its owner as active** |
+| 9 | Migration 013's guard tested conname only | GORM creates k_refresh_tokens_session **first**, with no delete rule, so the guard always skipped and ON DELETE CASCADE never landed anywhere |
+| 10 |  02's header claimed idempotency its CREATE TABLE did not have | Second application fails 42P07 |
+
+### The audit harness
+
+TestWholeMigrationChainHasNoSQLErrors reports **every** broken file in one run.
+Migrate correctly stops at the first failure, and finding twenty errors that way
+costs twenty runs - so the auditor deliberately does the opposite on purpose.
+
+`
+files: 22
+failed to execute (first pass): 0
+failed on re-application:      0
+SQL Server syntax leaks:       0
+destructive statements:        0
+unguarded DDL (not idempotent): 0
+`
+
+### The runner
+
+internal/database/migrator.go embeds the SQL into the binary, so the artifact that
+serves traffic is the artifact that knows its schema. It records version + checksum
+in schema_migrations, takes an advisory lock so replicas cannot race, and
+**refuses to re-run a migration whose file has been edited since it ran** - logged
+loudly, not silently.
+
+Verified on the live database:
+
+`
+applied=22 skipped=0 drifted=0     first boot
+applied=0  skipped=22 drifted=0   second boot - idempotent
+`
+
+---
+
+## 4. TWO THINGS I BROKE MYSELF, AND THE CHECKS THAT CAUGHT THEM
+
+Both are recorded because they are the same failure this repo keeps hitting: a
+correct-looking change that nothing verifies.
+
+**First:** the audit test had its **own copy** of the transaction-stripper. It
+blanked any line ending in END, destroyed a plpgsql trigger function in migration
+001, and reported **seven files broken when all seven were fine**. Fixed by exporting
+the production stripper and deleting the copy.
+
+**Second:** I removed Go's view definitions and let the SQL chain own every view.
+Boot 1 worked. Boot 2 **deleted all three views permanently**, because the ledger
+skips applied files and nothing recreated them. The symptom is not a crash - a
+missing view reads as *zero videos*. So erifyExpectedViews now fails the boot if
+any view is missing **or unqueryable**.
+
+---
+
+## 5. SECURITY - what was closed, and what remains
+
+### Closed in this session
+
+| Risk | Fix |
+|---|---|
+| CSS injection via channel colour | Hue integer 0-359, CHECK-constrained, palette owned by the code |
+| Stored XSS via logo URL | Scheme + host allowlist; javascript:, data:, bscript:, ile: and protocol-relative all refused |
+| IDOR on step 2 | WHERE id = ? AND user_id = ?; user id from the token, **never** from the body. Not-yours returns **404, not 403** |
+| Upload policy bypass | Re-checked at finalize, not only at mint - a presigned URL outlives the decision |
+| Client-chosen object key | Removed. The server mints the key from the caller's own user id |
+| Uploaded file used as another format | Magic bytes at finalize; a .html file named .png dies server-side |
+| Clicking through the upload policy | The presigned URL stays valid for the TTL, so finalize is re-gated |
+| Front-end byte ceiling disagreeing with the server | Read from the server's maxBytes; the local constant is gone |
+| Duplicate model for one table | Deleted; the suspended-trial bug went with it |
+| Account deletion blocked by FKs | FK rules now express MEANING: owned = CASCADE, audit = SET NULL, historical = RESTRICT |
+
+### Still open, and stated plainly
+
+- **6 of 8 apps have no auth gate.** illing, nalytics, currency, monitor,
+  dmin render with no session at all.
+- **monitor and dmin middleware matches every path.** publicPaths starts
+  with ['/', ...] and is tested with startsWith, so / matches everything and
+  the guard is a no-op. Infrastructure metrics are readable by anyone.
+- **superadmin requires a manually pasted bearer token** rather than a session.
+- **packages/auth is dead code holding tokens in localStorage.** Unused today,
+  and a liability the day it is wired.
+- **packages/ui export map drift**: ./collapse points at collapse.tsx when
+  the file is collapsible.tsx; jwt-payload.ts is not exported.
+- **No 2FA at login**, and **no PII retention purge**.
+
+### On the ""no third party, no per-user cost"" requirement
+
+The AURA-120 request was declined in part. Specifically: the instruction to **strip
+camera sensor metadata and apply a uniform synthetic noise matrix across frame
+boundaries** is provenance removal. Combined with the requested disclaimer text -
+which tells users *they* must not manipulate media while the company ""maintains
+absolute corporate denial of involvement"" - the product is designed to defeat
+attribution and to make the liability land on the user. I will not build that.
+
+Everything else in that request is ordinary work and I will do it: regional pricing
+including **₹29,999 for India**, a lifetime-only entitlement that no group plan or
+shared profile can satisfy, single-user isolation checks, a post-purchase
+acknowledgement wizard, and a 120 FPS interpolation pipeline. If the metadata
+stripping is dropped, the rest stands.
+
+---
+
+## SESSION 19 - SIX APPS HAD NO GATE, AND THE RBAC LAYER NEVER RAN
+
+Two things were on the list as "still open" at the end of session 18. Both were
+worse than the note said, and both are now closed and verified against running
+containers.
+
+---
+
+## 1. THE NO-OP MIDDLEWARE
+
+### What it was
+
+pps/monitor and pps/admin each had a file that looked like an auth guard:
+
+    const publicPaths = ['/', '/login', '/signup', '/api/auth'];
+    const isPublicPath = publicPaths.some((p) => request.nextUrl.pathname.startsWith(p));
+
+'/' is a prefix of **every** path. So isPublicPath was always true, the
+redirect never fired, and the guard was a no-op.
+
+It also read the session with getToken from 
+ext-auth/jwt, which parses a
+next-auth cookie this product has never set - so it returned 
+ull on every
+request. Two independent reasons it could never have worked, and
+pps/web's own middleware header documents exactly this bug.
+
+currency, illing, nalytics and superadmin had **no middleware at all**.
+
+### What that exposed - verified, not assumed
+
+    GET http://localhost:3001/api/metrics      ->  200
+    {"containersUp":9,"cpuCores":0.53,"memoryGB":4.02,"networkRxGB":9.4,
+     "dataEgress":{"videoBucketBytes":725992,"bucket":"video"},
+     "prometheusUrl":"http://prometheus:9090"}
+
+Container count, host CPU and memory, cumulative network volume, an object-store
+bucket name, and an **internal hostname**. Not a secret in isolation, and
+exactly the reconnaissance map somebody reads before deciding what to target.
+
+### Why it was invisible
+
+A middleware that allows everything looks exactly like a middleware that is
+working when you are standing inside it. Every app built. Every app had passing
+checks. Six of eight.
+
+### The fix - one implementation, six configurations
+
+packages/ui/src/auth-gate.ts - createGate(options). Each app's middleware is
+now ~15 lines of configuration and one import.
+
+| app | rule | notes |
+|---|---|---|
+| monitor | session required | the fix this whole item is about |
+| dmin | session required, /api/health-check public | a load balancer has no session and must be able to ask "is this up" |
+| superadmin | session **and** ole === 'superadmin' | read from the SIGNED claim |
+| currency | session required | gates /api/refresh, which costs money upstream |
+| illing, nalytics | session required | placeholders today, gated for tomorrow |
+
+Three properties that are decisions rather than defaults:
+
+- **FAIL CLOSED.** No JWT_SECRET_KEY means nothing is authorised. A gate that
+  fails open is not a gate - but this is also the reason the secret had to be
+  plumbed BEFORE deployment, which 	ools/plumb-jwt-secret.mjs does.
+- **EXACT match for public paths**, never startsWith. A prefix list is a bypass
+  waiting to happen: '/api/auth' matches /api/authenticated-anything.
+- **
+ext is forwarded only when it is a same-origin path.** An absolute URL or a
+  //host there is an open redirect.
+
+### THE CHECK THAT WOULD HAVE CAUGHT IT
+
+	ools/check-app-gates.mjs - **18/18**, against the running containers. It
+asserts each protected route returns 401/403 with no credential, that the leak is
+gone specifically, and - importantly - that a **valid session is still accepted**,
+because fail-closed with a missing secret means every user is locked out and
+reporting that as "secured" would be the worst possible outcome.
+
+### TWO THINGS THAT LOOKED LIKE BUGS AND WERE NOT
+
+1. dmin's liveness probe returns **503**. My check asserted status < 400 and
+   called that a gate failure. It is not: the gate let the request through and the
+   route reported that "Recommendation Service" and "Bot Service" are down. Two
+   failures needing different fixes, now asserted separately.
+
+2. illing and nalytics kept returning 200 after the middleware was added.
+   They use root-level pp/, not src/app/ - and with pp/ at the root, Next
+   resolves middleware from the project root too. src/middleware.ts was silently
+   ignored: middleware-manifest.json was literally "middleware": {}. Proved it
+   by reading the manifest rather than by guessing, then moved both files.
+
+---
+
+## 2. THE RBAC LAYER THAT WAS COMPLETE AND NEVER RAN
+
+internal/service/service_access.go and internal/service/rbac.go were fully
+written, heavily commented and covered by 40 tests. **Neither was ever constructed
+in main.go.**
+
+Verified on the live database before the change:
+
+    SELECT count(*) FROM permissions;   ->  0
+    SELECT count(*) FROM roles;         ->  0
+    SELECT count(*) FROM user_services; ->  0
+
+Migration 017's five tables existed and were empty, the registry view existed, and
+the code that reads them was unreachable. A superadmin's "who may do what" screen
+would have rendered an empty list forever, and nothing anywhere would have said
+why.
+
+This is the same lesson as the migration work: **a feature can be complete, tested,
+documented and never run.** TestEveryTableNameIsProvisioned checks the tables are
+CREATED; nothing checked they were POPULATED.
+
+### Now
+
+    permissions 16 | roles 4 | role_permissions 23 | registry view queryable
+
+Seeded at boot, and the seed is **fatal on failure** - an empty permission
+catalogue makes every privileged action silently refuse, and "nobody can do
+anything" looks like a permissions bug rather than a boot that skipped a step.
+
+New routes: GET /services, GET /admin/registry,
+POST /admin/services/grant|revoke. Verified live:
+
+    GET /api/v1/auth/services          -> {"catalog":[...8 apps...],"services":[]}
+    GET /api/v1/auth/admin/registry    -> 403 (non-superadmin)
+    GET /api/v1/auth/admin/registry    -> 401 (no token)
+
+equirePermission and equireService exist as middleware, both fail closed when
+the layer is unwired, and the superadmin check reads superadmin_accounts.is_active
+from the **database** rather than a token claim - so revoking a compromised admin
+takes effect on the next request instead of at token expiry.
+
+### And a test failure that was my fault, not the code's
+
+A new test asserted "a revoked service grant still works" and **failed** - which
+reads like a serious authorization bug. It was not: the test had claimed a
+superadmin slot first, and CanUse returns early for a superadmin, which is
+correct. The assertion was measuring the wrong thing. Reordered, and the comment
+now says so - because "the test was wrong" is only useful if it is written down
+where the next person will read it.
+
+---
+
+## 3. THE PACKAGE EXPORT MAP WAS LYING
+
+    "./collapse": "./src/collapse.tsx"     <- the file is collapsible.tsx
+
+@wideo11/ui/collapse did not resolve, and nothing reported it: TypeScript only
+checks specifiers somebody actually writes.
+
+At the same time jwt-payload.ts was fully written and had **no export entry**,
+so it was unreachable dead code.
+
+And eight apps imported enterprise-theme as
+'../../packages/ui/src/enterprise-theme' - a deep relative path that bypasses the
+export map entirely, so nothing validates it and moving the file breaks eight build
+configs at once.
+
+	ools/check-ui-exports.mjs - **8/8**. It compares the map and the directory in
+BOTH directions: every target must exist, every source file must be reachable, and
+every specifier must name the file its target points at (with an explicit alias
+list, so the two intentional renames are decisions rather than gaps). Plus
+jose is now a declared dependency - pps/web had been importing it undeclared
+and getting away with hoisting.
+
+SessionClaims in jwt-payload.ts is an **unverified** decode; the gate's type is
+VerifiedSession. Two exported types with the same name and different trust levels
+is exactly the ambiguity that ends with the wrong one in an authorization check.
+
+---
+
+## STILL OPEN - honestly
+
+- **superadmin still asks for a pasted bearer token.** The gate now protects the
+  pages, but a token in a text box is a token in JS-reachable storage. The fix is a
+  cookie-based login on that origin; doing it half-way would lock every superadmin
+  out.
+- **dmin's health check reports "Recommendation Service" and "Bot Service" as
+  ERROR.** They do not exist in compose. The probe answers 503, which is honest.
+- **No 2FA at login, and no PII retention purge.**
+- **packages/auth remains dead code holding tokens in localStorage.** Unused
+  today. Deleting it is the safe move; wiring it is not.
+
+---
+
+## SESSION 19 ADDENDUM - I BROKE SIX CONTAINERS AND FIXED IT PROPERLY
+
+Worth recording because it is the same lesson a fourth time, and because the
+naive fix is one an attacker would want.
+
+### What happened
+
+The moment the six gates started working, all six containers went unhealthy:
+
+    wget: server returned error: HTTP/1.1: 401 Unauthorized
+
+because the health check probed /:
+
+    wget --spider -q http://127.0.0.1:3001/ || exit 1
+
+**The gate was correct.** A liveness probe is not a user request - it is Docker
+asking whether the process started and is still serving, and there is nobody to log
+in as. Answering 401 makes Docker kill a healthy app after etries failures.
+
+### The fix that was NOT taken
+
+Exempt / for loopback. It is the obvious one-word change and it is wrong:
+"is this request from this container" is not something the gate can know, and a
+route open to anything carrying a spoofable loopback header is not a route. That
+is the same reasoning that makes Host untrustworthy, and it is the first thing
+somebody tries.
+
+### What was done instead
+
+Each app gets a real GET /api/live, marked public in its own gate
+configuration, and each health check points at it.
+
+It deliberately returns **nothing** beyond {"status":"ok"}:
+
+- **NO DATABASE QUERY.** A liveness probe that checks the database reports the
+  DATABASE as unhealthy, and Docker restarts the app to fix a problem it cannot
+  fix. Readiness is a different question with a different endpoint.
+- **NO dependencies, NO version, NO build id, NO hostname, NO uptime.** Anything
+  that can change makes the probe flap for a reason unrelated to "is this alive".
+
+So it leaks nothing that an open TCP port does not already say, and
+check-app-gates.mjs now asserts it is reachable **without** a credential.
+
+### And two YAML faults of my own, while fixing it
+
+The health-check edits produced an unparseable docker-compose.yml twice -
+a bare scalar under healthcheck: followed by a mapping key
+(mapping values are not allowed in this context), and then an indentation
+mismatch that rewrote all four ports to 3001. Both were caught by
+docker compose config rather than by a container failing to start, which is the
+only reason the blast radius was one file.
+
+The second one is worth naming: a bulk line-rewrite keyed on a regex, applied to
+ports it never verified, set four different health checks to the same port. A
+rewrite that does not assert what it changed should not be allowed to write.
+
+---
+
+## SESSION 20 - TWO REPORTS, AND ONE OF THEM WAS A BAD FIX ON MY PART
+
+### 1. "3001 par api authentication required band ho raha hai, yeh to bilkul band nahi hona chahiye"
+
+**The reporter was right, and I had treated a symptom as a problem.**
+
+In session 19 I gated monitor completely, because it was serving host metrics to
+anyone who could reach the port. That locked the operator out of their own
+infrastructure dashboard.
+
+**Why the gate could not have worked anyway:**
+
+- the page needs /api/metrics to render anything at all
+- gating the API means the page loads and shows an empty shell
+- so "gate the page, allow the API" leaks everything anyway
+- and "gate both" ships a dashboard nobody can use
+
+Neither is security. It is a broken tool.
+
+**What the disclosure actually was: ONE FIELD.**
+
+    {"prometheusUrl":"http://prometheus:9090", ...}
+
+And lib/prometheus.ts had a comment DIRECTLY ABOVE the line sending it:
+
+    // Server-side URL: sirf logs aur debugging ke liye. Client ise render
+    // nahi karta. Isi ko browser tak bhejne se cluster topology leak hota hai.
+    prometheusUrl: PROMETHEUS_URL,
+
+**The comment explains the fix and the next line does the opposite.** That is the
+fourth time in this repository a comment has documented a fix the code never
+received - and the first time the comment and the statement were adjacent.
+
+So the field is gone. It goes to the log, where a server-side address belongs,
+because it is a constant and never runtime state. No UI consumed it: the browser
+cannot resolve prometheus:9090, so the value had no possible reader.
+
+**What stays open, deliberately:** host CPU, memory, container count. On an
+internal port, for the person operating the machine, that is the dashboard's
+entire purpose. A container count is not a credential.
+
+monitor is open. The gate is still installed in its middleware.ts with the
+reasoning written down, so if it is ever published beyond the host the fix is one
+line rather than a rewrite.
+
+### 2. The Prometheus alert on /host_mnt
+
+**Not a false positive - and the annotation was wrong.**
+
+    DiskSpaceCritical  /host_mnt has under 10% free
+    fstype="virtiofs"  device="host"  ratio=0.0967
+
+Two separate facts, only one of them the alert working:
+
+1. **THE NUMBER IS REAL.** /host_mnt is the **Windows host disk** shared into the
+   WSL2 VM, and it really is at 9.67% free. Docker Desktop keeps its VHDX there.
+
+   It did not move after docker builder prune -af freed 17.6 GB and
+   docker image prune -f freed 1.9 GB, because **freeing space inside a VHDX
+   does not shrink the host file.** Pruning is the wrong tool for this number.
+   The host drive needs space freed on Windows, or the VHDX compacted.
+
+   Postgres is **unaffected**: its data is a Docker named volume on
+   /var/lib/docker (ext4, on the VM's own 289 GB disk at 10% used).
+
+2. **THE DESCRIPTION WAS WRONG.** It said *"Postgres will refuse writes and then
+   refuse to start"* for **every** mountpoint. So the one sentence the operator
+   read described a consequence that would not happen on the filesystem that was
+   actually full - and would happen on one that was at 75% free.
+
+### Rule changes in monitoring/rules/platform.yml
+
+- stype!~"tmpfs|overlay" → ...|squashfs|selfowner|devtmpfs.
+
+  selfowner is Docker Desktop's file-sharing **marker**, not a filesystem. It
+  inherits its parent's numbers, reports a mountpoint nobody configured, and can
+  never be fixed. squashfs and devtmpfs are the same shape of thing.
+
+- The description now **names what is on each mount** instead of asserting one
+  consequence for all of them, and says plainly that pruning inside the VM will not
+  move /host_mnt.
+
+- /var/lib is **not** excluded. That is the mount whose full disk really would
+  stop Postgres, and it is where the original warning was accurate.
+
+Validated with promtool check rules - **11 rules, SUCCESS** - before reloading,
+because a rule file that does not parse takes every other rule down with it.
+
+### The lesson from the check that caught my own bad fix
+
+check-app-gates.mjs reported **"monitor no longer publishes the internal
+Prometheus address or host metrics"** with
+{"leaked":{"containersUp":9}}.
+
+It was calling a host resource count a disclosure, on an app I had just opened on
+purpose. The check had been written for the previous decision and was never
+updated when the decision changed - which is how a check becomes evidence for
+something nobody believes any more.
+
+It is now narrowed to the one value that was never needed by a browser, and a
+mustNotContain table covers the general case. **25/25.**
+
+### And the general lesson, which is the fourth occurrence now
+
+1. 	icket.upload_url - a comment-level drift between two copies
+2. ALTER COLUMN ... TYPE - a comment saying "TYPE added", statement had no TYPE
+3. a # security_profile comment justifying an omitted COMMENT ON
+4. prometheusUrl - a comment explaining exactly why it must not be sent, on the
+   line above the statement sending it
+
+**A comment explaining a security property is not evidence the property holds.**
+The only thing that is evidence is a check that fails when the property stops
+holding. That is why there are now four of them in this repo and why the ones that
+matter assert on the bytes a browser receives.

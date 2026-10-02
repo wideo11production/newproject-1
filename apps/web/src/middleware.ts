@@ -88,7 +88,47 @@ const PUBLIC_PAGES = new Set<string>([
   '/auth/verify', // email verification link target
   '/auth/security-setup', // security gate khud - gate ko redirect karna
   //                          infinite loop bana dega
+
+  // ---- The public browse pages ----
+  //
+  // `/channels` and `/channel/<handle>` read the PUBLIC endpoint
+  // (`/api/public/channels`, which deliberately does not forward the session
+  // cookie), and the page metadata even says "Browse channels on Wideo11".
+  //
+  // They were still behind the auth gate, so a logged-out visitor got a 307 to
+  // the login form and the public endpoint had no way to ever be seen by the
+  // people it is public for. A public API behind a private page is a public API
+  // nobody can use.
+  //
+  // Nothing sensitive is exposed: the same data is already readable without a
+  // session, and a creator's CHANNELS are meant to be found.
+  // `/channels` is a single page and IS in the exact set. Its sibling
+  // `/channel/@handle` is a PATH - one per channel, created as people sign up -
+  // so it cannot be listed there. It goes in the prefix list below.
+  '/channels',
+
+  // The docs explain the product to people deciding whether to sign up, which is
+  // the one moment they definitely are not signed in yet.
+  '/pricing',
 ]);
+
+/**
+ * PUBLIC PAGE PREFIXES - paths whose CHILDREN are also public.
+ *
+ * ---- WHY THIS IS SEPARATE AND NOT `startsWith` ON PUBLIC_PAGES ----
+ *
+ * The set above is EXACT on purpose. An earlier version used `startsWith` here,
+ * which made `/auth` a prefix that matched `/authenticated-anything` - a real
+ * bypass, fixed by moving to exact matching. The comment at its declaration says
+ * so, which is exactly why it is worth not quietly reintroducing.
+ *
+ * So a page whose CHILDREN must be public gets an entry here instead, where it is
+ * visible on its own and reviewed on its own.
+ *
+ * Every entry is a whole SEGMENT followed by `/`, so `/channel` cannot match
+ * `/channels` or `/channelsomething` - the same guard the API prefix list uses.
+ */
+const PUBLIC_PAGE_PREFIXES = ['/channel'];
 
 /**
  * PUBLIC API PATHS - bina session ke callable (exact ya explicit prefix).
@@ -420,8 +460,13 @@ export async function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(p + '/')
   );
 
-  // ---- Public page check (EXACT match only) ----
-  const isPublicPage = PUBLIC_PAGES.has(pathname);
+  // ---- Public page check (EXACT match, plus an explicit prefix list) ----
+  //
+  // Segment-aware: `pathname === p + '/' || pathname.startsWith(p + '/')`, so
+  // `/channel` covers `/channel/@handle` without also matching `/channels`.
+  const isPublicPage =
+    PUBLIC_PAGES.has(pathname) ||
+    PUBLIC_PAGE_PREFIXES.some((p) => pathname.startsWith(p + '/'));
 
   // ---- Session-only API check ----
   // Valid session chahiye, par security-setup-complete nahi chahiye (warna

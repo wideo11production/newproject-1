@@ -55,17 +55,17 @@ import (
 // service (security_events table). Identity is already truncated by the
 // caller, so no raw email is ever published - see truncateIdentity.
 type RateLimitEvent struct {
-	EventType      string    `json:"event_type"`
-	LimitName      string    `json:"limit_name"`
-	IP             string    `json:"ip"`
-	Identity       string    `json:"identity"`
-	Path           string    `json:"path"`
-	Method         string    `json:"method"`
-	MaxRequests    int       `json:"max_requests"`
-	WindowSeconds  int       `json:"window_seconds"`
-	UserAgent      string    `json:"user_agent,omitempty"`
-	UserID         string    `json:"user_id,omitempty"`
-	OccurredAt     time.Time `json:"occurred_at"`
+	EventType     string    `json:"event_type"`
+	LimitName     string    `json:"limit_name"`
+	IP            string    `json:"ip"`
+	Identity      string    `json:"identity"`
+	Path          string    `json:"path"`
+	Method        string    `json:"method"`
+	MaxRequests   int       `json:"max_requests"`
+	WindowSeconds int       `json:"window_seconds"`
+	UserAgent     string    `json:"user_agent,omitempty"`
+	UserID        string    `json:"user_id,omitempty"`
+	OccurredAt    time.Time `json:"occurred_at"`
 }
 
 // streamName is the JetStream stream for security-relevant events. It is
@@ -104,7 +104,7 @@ func NewRateLimitAuditSink(js JetStreamPublisher) *jetStreamSink {
 // `auth-service.security.>` (see natsx.DefaultStreams). A publish to any
 // subject OUTSIDE that filter gets:
 //
-//     nats: no response from stream
+//	nats: no response from stream
 //
 // because JetStream has no stream that would accept it. That is exactly what
 // happened while the two used different prefixes (`WIDEO11_SECURITY.*` here,

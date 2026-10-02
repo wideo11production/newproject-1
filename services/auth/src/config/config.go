@@ -2,14 +2,15 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server    ServerConfig
+	Database  DatabaseConfig
 	Biometric BiometricConfig
 }
 
@@ -32,12 +33,12 @@ type DatabaseConfig struct {
 
 type BiometricConfig struct {
 	// WebAuthn specific settings
-	RPID          string // Relying Party ID (domain)
-	RPName        string // Relying Party Name
-	Origin        string // The origin (scheme://host:port) of the web app
-	IconURL       string // Optional icon URL
-	Timeout       time.Duration // Timeout for WebAuthn operations
-	Attestation   string        // Preference for attestation conveyance (none, indirect, direct)
+	RPID                   string        // Relying Party ID (domain)
+	RPName                 string        // Relying Party Name
+	Origin                 string        // The origin (scheme://host:port) of the web app
+	IconURL                string        // Optional icon URL
+	Timeout                time.Duration // Timeout for WebAuthn operations
+	Attestation            string        // Preference for attestation conveyance (none, indirect, direct)
 	AuthenticatorSelection struct {
 		AuthenticatorAttachment string // "platform" or "cross-platform"
 		RequireResidentKey      bool
@@ -53,6 +54,22 @@ func LoadConfig() (*Config, error) {
 	viper.AddConfigPath("/etc/biometric-service")
 
 	viper.AutomaticEnv()
+	// ---- ENVIRONMENT VARIABLES NEED THIS LINE TO WORK AT ALL ----
+	//
+	// Viper looks up an env var by upper-casing the key and replacing the
+	// SEPARATOR - but only when `SetEnvKeyReplacer` says what the separator is.
+	// Without it, `security.internal_token` is looked up as
+	// `SECURITY.INTERNAL_TOKEN`, with a literal dot, which nothing sets.
+	//
+	// The result is silent: no error, no warning, the process starts, and every
+	// value arrives as its zero value. A security setting that was configured
+	// reads as DISABLED.
+	//
+	// This is not theoretical. `analytics-service` was about to start with no
+	// authentication because of it, and the only reason that was caught was a
+	// fail-closed startup check refusing to run. 25 of the 28 viper services in
+	// this tree had the same defect - see SERVICE-TRIAGE.md.
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	setDefaults()
 

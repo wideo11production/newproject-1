@@ -25,7 +25,14 @@
 //
 // Hinglish comments: har block ka arth
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+  ChannelWizardFields,
+  clientPreflight,
+  EMPTY_WIZARD,
+  type ChannelWizardExtras,
+} from '@/components/channels/channel-wizard-fields';
 import Link from 'next/link';
 
 /**
@@ -150,11 +157,64 @@ function initialsOf(profile: Profile | null): string {
 }
 
 export default function CreatorDashboard() {
+  const router = useRouter();
+
   // ---- Data ----
   const [profile, setProfile] = useState<Profile | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [devices, setDevices] = useState<DeviceSession[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ======================================================================
+  // THE COMPULSORY STEP-2 GATE
+  // ======================================================================
+  //
+  // While a channel is unfinished, the dashboard sends the creator to step 2.
+  //
+  // ---- WHY THIS IS ASKED AND NOT DERIVED FROM `channels` ----
+  //
+  // The channel list already carries `cover_url` and the rest, so the obvious
+  // implementation is "if the newest channel has no cover, redirect". That is
+  // wrong in three ways at once:
+  //
+  //   1. It is a CLIENT decision about a COMPULSORY step. Whoever wants to skip it
+  //      edits the request and skips it. The real rule is `setup_step2_at`, which
+  //      the client cannot see or forge.
+  //   2. It guesses what "finished" means. Step 2 is not "has a cover" - a creator
+  //      may legitimately choose no cover, and that is a finished answer.
+  //   3. It breaks the moment a channel is finished WITHOUT a cover. The channel is
+  //      fine, and the guess redirects anyway, forever.
+  //
+  // So the question is asked of the server, and `channels` is left alone.
+  //
+  // ---- WHY `suppressGate` EXISTS, AND WHY IT IS NOT THE SAME AS BEING DONE ----
+  //
+  // Without it, arriving straight from step 2 would bounce back into it: step 2
+  // finishes, pushes `/dashboard`, the gate re-asks, the server says "not
+  // finished" (the save may not have landed yet), and the creator is trapped in a
+  // loop they cannot leave.
+  //
+  // That is not hypothetical - it is the shape of every bug this repo has hit where
+  // a gate re-evaluated before its own write became visible.
+  //
+  // So `suppressGate` is a TIMER, not a permission: it holds the gate off for a
+  // few seconds after an explicit successful finish, and then the gate resumes
+  // asking the server again. A creator who is not actually finished still gets
+  // redirected; a creator who just finished does not get trapped. Nothing here can
+  // make an unfinished channel look finished, because the gate goes back to asking
+  // the server - it just waits a moment before asking.
+  const [gateSuppressed, setGateSuppressed] = useState(false);
+  const gateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const skipGateBriefly = useCallback(() => {
+    setGateSuppressed(true);
+    if (gateTimer.current) clearTimeout(gateTimer.current);
+    gateTimer.current = setTimeout(() => setGateSuppressed(false), 6000);
+  }, []);
+
+  useEffect(() => () => {
+    if (gateTimer.current) clearTimeout(gateTimer.current);
+  }, []);
 
   // ---- Avatar state ----
   const [avatarInput, setAvatarInput] = useState('');
@@ -163,6 +223,10 @@ export default function CreatorDashboard() {
 
   // ---- Channel form state ----
   const [showChannelForm, setShowChannelForm] = useState(false);
+  // The wizard answers the backend REQUIRES (migration 018). Without them the form
+  // was unusable: the server replied `channel_type is required` and the UI had
+  // nowhere to put it. Backend first, form second - that ordering shows.
+  const [wizard, setWizard] = useState<ChannelWizardExtras>(EMPTY_WIZARD);
   const [handle, setHandle] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
@@ -196,6 +260,39 @@ export default function CreatorDashboard() {
   useEffect(() => {
     void loadAll().finally(() => setLoading(false));
   }, [loadAll]);
+
+  // ======================================================================
+  // The gate itself
+  // ======================================================================
+  //
+  // Runs once the dashboard has its data, so the redirect does not race the
+  // first paint and flash the whole page before bouncing.
+  //
+  // The failure case is the interesting one: if this request FAILS, the creator
+  // is NOT redirected. A compulsory step must not be enforced by a network error -
+  // if the check cannot be answered, the right behaviour is to let somebody
+  // through and show them the dashboard, not to lock the page and hide why. The
+  // step is still compulsory in the sense that matters: it cannot be skipped on
+  // purpose.
+  useEffect(() => {
+    if (loading || gateSuppressed) return;
+    let cancelled = false;
+
+    (async () => {
+      const res = await fetch('/api/channels/setup/pending', { cache: 'no-store' })
+        .then((r) => r.json())
+        .catch(() => null);
+
+      if (cancelled || !res) return;
+      if (res.needs_setup && res.channel_id) {
+        router.replace('/dashboard/channels/setup');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, gateSuppressed, router]);
 
   // ======================================================================
   // Avatar save
@@ -247,6 +344,16 @@ export default function CreatorDashboard() {
       return;
     }
 
+    // The three REQUIRED wizard answers, each with its own message. `channel_type`
+    // arrived as a 400 from the server and the form had nowhere to put it - the
+    // backend required a field the UI did not have, so the form was unusable
+    // rather than merely incomplete.
+    const preflight = clientPreflight(wizard);
+    if (preflight) {
+      setChannelErr(preflight);
+      return;
+    }
+
     setChannelBusy(true);
     try {
       const res = await fetch('/api/channels', {
@@ -256,6 +363,21 @@ export default function CreatorDashboard() {
           handle: handle.trim().toLowerCase(),
           display_name: displayName.trim(),
           description: description.trim(),
+          channel_type: wizard.channelType,
+          mature_content: wizard.matureContent,
+          // Sent as null when unanswered, never as a bare `false`. An omitted
+          // boolean would decode to false, which is an assertion about somebody's
+          // content that nobody made.
+          made_for_kids: wizard.madeForKids,
+          contact_email: wizard.contactEmail.trim(),
+          country: wizard.country.trim(),
+          primary_language: wizard.primaryLanguage.trim(),
+          keywords: wizard.keywords.trim(),
+          // Only sent when an upload actually finished. Sending an empty string
+          // would be a different instruction from sending nothing - "no cover"
+          // versus "leave whatever is there" - and the create path has no
+          // previous value to leave.
+          ...(wizard.coverUrl ? { cover_url: wizard.coverUrl } : {}),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -267,8 +389,30 @@ export default function CreatorDashboard() {
       setHandle('');
       setDisplayName('');
       setDescription('');
+      setWizard(EMPTY_WIZARD);
       setShowChannelForm(false);
       await loadAll();
+
+      // ------------------------------------------------------------------
+      // Straight into step 2.
+      // ------------------------------------------------------------------
+      //
+      // Not a "you can finish later" banner and not a link on the channel card.
+      // Step 2 is compulsory, and the moment it is least annoying is immediately
+      // after creating - the creator already has the channel open in their head and
+      // has not been interrupted by anything yet.
+      //
+      // Dropping them back on the dashboard instead means the next action they see
+      // is something else, and a compulsory step that competes with other work is a
+      // compulsory step that gets deferred until it stops feeling compulsory.
+      //
+      // `replace` rather than `push`, so Back does not return to the dashboard they
+      // were just bounced off - they would land there, be redirected again, and
+      // conclude the app is broken.
+      if (data.channel?.id) {
+        skipGateBriefly();
+        router.replace(`/dashboard/channels/setup?channel=${encodeURIComponent(data.channel.id)}`);
+      }
     } catch {
       setChannelErr('Network error. Please try again.');
     } finally {
@@ -635,6 +779,14 @@ export default function CreatorDashboard() {
                   className="w-full rounded-lg border border-[#2c3235] bg-[#181b1f] px-3 py-2 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/50 focus:border-[#5794f2] focus:outline-none"
                 />
               </div>
+
+                <ChannelWizardFields
+                  value={wizard}
+                  // Functional updater, because the field is a "set one key"
+                  // helper internally and a plain value would make two answers
+                  // in the same tick overwrite each other.
+                  onChange={(updater) => setWizard(updater)}
+                />
 
               {channelErr ? (
                 <p className="text-[11px] text-red-400">{channelErr}</p>

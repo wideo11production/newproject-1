@@ -29,12 +29,16 @@
 BEGIN;
 
 -- ---- STEP 1: users.avatar_url ----
--- ("column avatar_url of relation users already exists", SQLSTATE 42701).
-IF COL_LENGTH('users', 'avatar_url') IS NULL
-BEGIN
-  ALTER TABLE users
-    ADD avatar_url TEXT;
-END;
+-- Pehle `IF COL_LENGTH('users','avatar_url') IS NULL BEGIN ... END` tha.
+-- Ye T-SQL hai: `COL_LENGTH` SQL Server ka catalog function hai (PostgreSQL
+-- me iska koi equivalent nahi), aur `IF ... BEGIN ... END` PostgreSQL me
+-- statement hai, block nahi. Ye statement hamesha fail hoti thi.
+--
+-- `ADD COLUMN IF NOT EXISTS` wahi "agar pehle se nahi hai" guarantee deta hai,
+-- bina kisi catalog lookup ke - aur ye woh catalog nahi hai jo MySQL/SQL
+-- Server se aaya tha.
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 
 -- ============================================================================
 -- channels table
@@ -42,7 +46,7 @@ END;
 -- `IF NOT EXISTS` isliye ki service pehle chalu ho chuki ho to GORM ne table
 -- bana di ho, ya ye migration dobara chale - dono me ye statement no-op honi
 -- chahiye. Iske bina SQLSTATE 42P07 aata hai.
-CREATE TABLE channels (
+CREATE TABLE IF NOT EXISTS channels (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- Owner. ON DELETE CASCADE: user delete hota hai to channels bhi hat jaate
@@ -99,11 +103,11 @@ CREATE TABLE channels (
 --
 -- NOTE: ye `LOWER(handle)` par hai taaki case-insensitive uniqueness rahe -
 -- "Aarav" aur "aarav" ek hi handle nahi ban sakte.
-CREATE UNIQUE INDEX idx_channels_user_handle
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_user_handle
   ON channels (user_id, handle);
 
 -- Listing fast ho - user ke channels hamesha usi user_id se filter hote hain
-CREATE INDEX idx_channels_user_id
+CREATE INDEX IF NOT EXISTS idx_channels_user_id
   ON channels (user_id);
 
 -- ============================================================================

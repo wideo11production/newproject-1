@@ -1,4 +1,4 @@
-﻿package service
+package service
 
 import (
 	"context"
@@ -18,16 +18,16 @@ import (
 // WebAuthnService WebAuthn (biometric/passkey) flows implement karta hai.
 //
 // FLOW 1 - REGISTRATION (naya device enroll karna):
-//   1. Client "begin" request karta hai -> hum random challenge banaate hain
-//   2. Browser device me key pair banata hai, public key + attestation bhejta hai
-//   3. Client "finish" request karta hai -> hum attestation VERIFY karte hain
-//   4. Credential (public key) DB me save ho jata hai
+//  1. Client "begin" request karta hai -> hum random challenge banaate hain
+//  2. Browser device me key pair banata hai, public key + attestation bhejta hai
+//  3. Client "finish" request karta hai -> hum attestation VERIFY karte hain
+//  4. Credential (public key) DB me save ho jata hai
 //
 // FLOW 2 - AUTHENTICATION (login with fingerprint/face):
-//   1. Client "begin" -> challenge + allowed credentials bhejte hain
-//   2. Device private key se SIGNATURE banata hai
-//   3. Client "finish" -> hum signature ko stored public key se verify karte hain
-//   4. Verify pass = login successful (password ki zaroorat NAHI)
+//  1. Client "begin" -> challenge + allowed credentials bhejte hain
+//  2. Device private key se SIGNATURE banata hai
+//  3. Client "finish" -> hum signature ko stored public key se verify karte hain
+//  4. Verify pass = login successful (password ki zaroorat NAHI)
 //
 // Hinglish comments: har block ka arth
 type WebAuthnService struct {
@@ -306,7 +306,7 @@ func (s *WebAuthnService) UpdateSignCount(ctx context.Context, cred *webauthn.Cr
 		return tx.Model(&model.WebAuthnCredential{}).
 			Where("id = ?", record.ID).
 			Updates(map[string]any{
-				"sign_count":     newCount,
+				"sign_count":    newCount,
 				"clone_warning": cloneDetected,
 			}).Error
 	})

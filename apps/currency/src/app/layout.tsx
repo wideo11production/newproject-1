@@ -1,6 +1,13 @@
 import type { Metadata } from 'next';
 // Global font stack - Grafana-style system fonts (air-gapped, no network fetch)
 import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
+// Click ledger ka data source (Awareness grid isi ko padhta hai).
+//
+// Ye baaki saat apps me mounted hai; currency app chhoot gaya tha - iska apna
+// koi tracker nahi tha aur koi `/api/audit` route bhi nahi, to is app ki koi
+// bhi activity ledger me nahi jaati thi. Currency rates dikhna ek real user
+// journey hai (multi-currency phase 9 ka hissa), to uska data chahiye.
+import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
 import './globals.css';
 import type { ReactNode } from 'react';
 
@@ -13,6 +20,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }}>
+        <GlobalActivityTracker />
         {children}
       </body>
     </html>

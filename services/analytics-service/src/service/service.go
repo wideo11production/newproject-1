@@ -16,11 +16,11 @@ import (
 )
 
 type AnalyticsService struct {
-	viewRepo     repository.ViewLogRepository
-	clickRepo     repository.ClickLogRepository
-	convRepo      repository.ConversionRepository
-	reachRepo     repository.ReachRepository
-	revenueRepo    repository.RevenueReportRepository
+	viewRepo    repository.ViewLogRepository
+	clickRepo   repository.ClickLogRepository
+	convRepo    repository.ConversionRepository
+	reachRepo   repository.ReachRepository
+	revenueRepo repository.RevenueReportRepository
 }
 
 func NewAnalyticsService(
@@ -31,32 +31,32 @@ func NewAnalyticsService(
 	revenueRepo repository.RevenueReportRepository,
 ) *AnalyticsService {
 	return &AnalyticsService{
-		viewRepo:     viewRepo,
-		clickRepo:     clickRepo,
-		convRepo:      convRepo,
-		reachRepo:     reachRepo,
-		revenueRepo:    revenueRepo,
+		viewRepo:    viewRepo,
+		clickRepo:   clickRepo,
+		convRepo:    convRepo,
+		reachRepo:   reachRepo,
+		revenueRepo: revenueRepo,
 	}
 }
 
 func (s *AnalyticsService) RecordView(ctx context.Context, adID, campaignID, userID, videoID uint, contentID string, viewType model.ViewType, duration int, percentWatched decimal.Decimal, ipAddress, userAgent, country, region, city, device string) (*model.ViewLog, error) {
 	view := &model.ViewLog{
-		UUID:        uuid.New(),
-		AdID:        &adID,
-		CampaignID:  &campaignID,
-		UserID:      &userID,
-		VideoID:     &videoID,
-		ContentID:   contentID,
-		Type:        viewType,
-		Duration:    duration,
+		UUID:           uuid.New(),
+		AdID:           &adID,
+		CampaignID:     &campaignID,
+		UserID:         &userID,
+		VideoID:        &videoID,
+		ContentID:      contentID,
+		Type:           viewType,
+		Duration:       duration,
 		PercentWatched: percentWatched,
-		IPAddress:    ipAddress,
-		UserAgent:    userAgent,
-		Country:      country,
-		Region:       region,
-		City:         city,
-		Device:       device,
-		Timestamp:    time.Now().UTC(),
+		IPAddress:      ipAddress,
+		UserAgent:      userAgent,
+		Country:        country,
+		Region:         region,
+		City:           city,
+		Device:         device,
+		Timestamp:      time.Now().UTC(),
 	}
 
 	if err := s.viewRepo.Create(ctx, view); err != nil {
@@ -68,19 +68,19 @@ func (s *AnalyticsService) RecordView(ctx context.Context, adID, campaignID, use
 
 func (s *AnalyticsService) RecordClick(ctx context.Context, adID, campaignID, userID, videoID uint, contentID string, ipAddress, userAgent, country, region, city, device string) (*model.ClickLog, error) {
 	click := &model.ClickLog{
-		UUID:        uuid.New(),
-		AdID:        &adID,
-		CampaignID:  &campaignID,
-		UserID:      &userID,
-		VideoID:     &videoID,
-		ContentID:   contentID,
-		IPAddress:   ipAddress,
-		UserAgent:   userAgent,
-		Country:     country,
-		Region:      region,
-		City:        city,
-		Device:      device,
-		Timestamp:   time.Now().UTC(),
+		UUID:       uuid.New(),
+		AdID:       &adID,
+		CampaignID: &campaignID,
+		UserID:     &userID,
+		VideoID:    &videoID,
+		ContentID:  contentID,
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		Country:    country,
+		Region:     region,
+		City:       city,
+		Device:     device,
+		Timestamp:  time.Now().UTC(),
 	}
 
 	if err := s.clickRepo.Create(ctx, click); err != nil {
@@ -92,17 +92,17 @@ func (s *AnalyticsService) RecordClick(ctx context.Context, adID, campaignID, us
 
 func (s *AnalyticsService) RecordConversion(ctx context.Context, adID, campaignID, userID, videoID uint, contentID, eventType string, eventValue string, conversionRevenue string, revenueSource string, ipAddress, userAgent, country string) (*model.ConversionEvent, error) {
 	conv := &model.ConversionEvent{
-		UUID:          uuid.New(),
-		AdID:          &adID,
-		CampaignID:    &campaignID,
-		UserID:        &userID,
-		VideoID:       &videoID,
-		ContentID:     contentID,
-		EventType:      eventType,
-		Timestamp:      time.Now().UTC(),
-		IPAddress:      ipAddress,
-		UserAgent:      userAgent,
-		Country:        country,
+		UUID:       uuid.New(),
+		AdID:       &adID,
+		CampaignID: &campaignID,
+		UserID:     &userID,
+		VideoID:    &videoID,
+		ContentID:  contentID,
+		EventType:  eventType,
+		Timestamp:  time.Now().UTC(),
+		IPAddress:  ipAddress,
+		UserAgent:  userAgent,
+		Country:    country,
 	}
 
 	if eventValue != "" {
@@ -132,10 +132,10 @@ func (s *AnalyticsService) RecordConversion(ctx context.Context, adID, campaignI
 
 func (s *AnalyticsService) RecordReach(ctx context.Context, campaignID uint, date time.Time, uniqueUsers, impressions int, reachPercent decimal.Decimal) (*model.Reach, error) {
 	reach := &model.Reach{
-		UUID:        uuid.New(),
-		CampaignID: campaignID,
-		Date:        date,
-		UniqueUsers: uniqueUsers,
+		UUID:         uuid.New(),
+		CampaignID:   campaignID,
+		Date:         date,
+		UniqueUsers:  uniqueUsers,
 		Impressions:  impressions,
 		ReachPercent: reachPercent,
 	}
@@ -164,7 +164,7 @@ func (s *AnalyticsService) RecordRevenue(ctx context.Context, campaignID uint, d
 
 	report := &model.RevenueReport{
 		UUID:        uuid.New(),
-		CampaignID: campaignID,
+		CampaignID:  campaignID,
 		Date:        date,
 		Revenue:     revenueDec,
 		AdSpend:     adSpendDec,
@@ -290,11 +290,11 @@ func sumUniqueUsers(reach []*model.Reach) int {
 
 // ContentCategorization represents AI-powered content categorization
 type ContentCategorization struct {
-	ContentID        string   `json:"content_id"`
-	Category         string   `json:"category"`
-	Tags             []string `json:"tags"`
-	Confidence       float64  `json:"confidence"`
-	EngagementScore  float64  `json:"engagement_score"`
+	ContentID       string   `json:"content_id"`
+	Category        string   `json:"category"`
+	Tags            []string `json:"tags"`
+	Confidence      float64  `json:"confidence"`
+	EngagementScore float64  `json:"engagement_score"`
 }
 
 // CreatorRecommendation represents AI-powered creator recommendations
@@ -318,12 +318,12 @@ type EngagementPrediction struct {
 
 // RevenueForecast represents AI-powered revenue forecasting
 type RevenueForecast struct {
-	CreatorID       uint      `json:"creator_id"`
-	Date            time.Time `json:"date"`
-	PredictedRevenue float64  `json:"predicted_revenue"`
-	Confidence       float64  `json:"confidence"`
-	LowerBound       float64  `json:"lower_bound"`
-	UpperBound       float64  `json:"upper_bound"`
+	CreatorID        uint      `json:"creator_id"`
+	Date             time.Time `json:"date"`
+	PredictedRevenue float64   `json:"predicted_revenue"`
+	Confidence       float64   `json:"confidence"`
+	LowerBound       float64   `json:"lower_bound"`
+	UpperBound       float64   `json:"upper_bound"`
 }
 
 // TrendingContent represents trending content detection
@@ -339,12 +339,12 @@ type TrendingContent struct {
 
 // CreatorTargetStatus represents the daily ₹500 target achievement tracking
 type CreatorTargetStatus struct {
-	CreatorID          uint             `json:"creator_id"`
-	Date               time.Time        `json:"date"`
-	TargetMet          bool             `json:"target_met"`
-	TargetAmount       decimal.Decimal  `json:"target_amount"`
-	ActualRevenue      decimal.Decimal  `json:"actual_revenue"`
-	AchievementPercent decimal.Decimal  `json:"achievement_percent"`
+	CreatorID          uint            `json:"creator_id"`
+	Date               time.Time       `json:"date"`
+	TargetMet          bool            `json:"target_met"`
+	TargetAmount       decimal.Decimal `json:"target_amount"`
+	ActualRevenue      decimal.Decimal `json:"actual_revenue"`
+	AchievementPercent decimal.Decimal `json:"achievement_percent"`
 }
 
 // CategorizeContent performs AI-powered content categorization
@@ -420,9 +420,9 @@ func (s *AnalyticsService) RecommendCreators(ctx context.Context, creatorID uint
 
 	for i := 0; i < limit; i++ {
 		rec := &CreatorRecommendation{
-			CreatorID:      uint(i + 1),
-			Username:       fmt.Sprintf("creator_%d", i+1),
-			Recommendation: "Collaboration opportunity based on similar audience overlap",
+			CreatorID:       uint(i + 1),
+			Username:        fmt.Sprintf("creator_%d", i+1),
+			Recommendation:  "Collaboration opportunity based on similar audience overlap",
 			ConfidenceScore: 0.75,
 			SuggestedActions: []string{
 				"Cross-promote content",
@@ -502,13 +502,13 @@ func (s *AnalyticsService) ForecastRevenue(ctx context.Context, creatorID uint, 
 	forecasts := make([]*RevenueForecast, 0, days)
 	baseDate := time.Now()
 
-		var totalRevenue float64
-		var totalDays int
-		for _, r := range revers {
-			f, _ := r.Revenue.Float64()
-			totalRevenue += f
-			totalDays++
-		}
+	var totalRevenue float64
+	var totalDays int
+	for _, r := range revers {
+		f, _ := r.Revenue.Float64()
+		totalRevenue += f
+		totalDays++
+	}
 
 	avgDailyRevenue := 0.0
 	if totalDays > 0 {
@@ -527,12 +527,12 @@ func (s *AnalyticsService) ForecastRevenue(ctx context.Context, creatorID uint, 
 		}
 
 		forecasts = append(forecasts, &RevenueForecast{
-			CreatorID:       creatorID,
-			Date:            date,
+			CreatorID:        creatorID,
+			Date:             date,
 			PredictedRevenue: predicted,
-			Confidence:      confidence,
-			LowerBound:      predicted * 0.7,
-			UpperBound:      predicted * 1.3,
+			Confidence:       confidence,
+			LowerBound:       predicted * 0.7,
+			UpperBound:       predicted * 1.3,
 		})
 	}
 

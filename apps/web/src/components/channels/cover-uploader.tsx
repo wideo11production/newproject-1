@@ -10,24 +10,26 @@
  *   3. `POST /api/channels/:id/cover/finalize`   -> magic-bytes verify, and
  *      the server saves `cover_url` onto the channel itself
  *
+ * The three steps themselves live in `lib/channel-cover-upload.ts`. They used to
+ * be written out here as well, and the two copies disagreed - see that file's
+ * header for how the create-time copy ended up reading `ticket.upload_url` while
+ * the server sends `uploadUrl`, and why the create path failed 100% of the time
+ * while this one always worked.
+ *
  * ---- DIFFERENCES FROM AvatarUploader (deliberate, not accidental) ----
  *  1. Rectangular 16:9 preview, not a circle. A cover is a wide banner;
  *     forcing it into `rounded-full` would crop it to nothing.
- *  2. 4 MB limit, not 5 MB. Covers stretch across the full viewport width,
- *     so they are served to every visitor - a 4MB banner is a real cost,
- *     while a 4MB avatar renders in a 96px circle.
+ *  2. No local size constant. The limit comes from the server's own `maxBytes`,
+ *     so this component cannot disagree with the rule that is enforced.
  *  3. NO `onUploaded` persist step. The finalize endpoint writes `cover_url`
- *     itself, unlike avatars where the client must PATCH the profile. This
- *     is why this component takes `channelId` and not a save callback.
- *
- * ---- PROGRESS UI ----
- * `XMLHttpRequest` use kiya hai (fetch nahi) kyunke `fetch` me upload
- * progress nahi milti.
+ *     itself, unlike avatars where the client must PATCH the profile. This is
+ *     why this component takes `channelId` and not a save callback.
  */
 
 import { useCallback, useRef, useState } from 'react';
-import { Image as ImageIcon, Loader2, Upload, X } from 'lucide-react';
+import { Image as ImageIcon, Upload, X } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
+import { COVER_ACCEPTED, uploadChannelCover } from '@/lib/channel-cover-upload';
 
 type Props = {
   /** Which channel this cover belongs to */
@@ -37,9 +39,6 @@ type Props = {
   /** Fires after a successful upload so the parent can refresh its list */
   onUploaded: (publicUrl: string) => Promise<void> | void;
 };
-
-const MAX_BYTES = 4 * 1024 * 1024; // 4MB - backend MaxCoverBytes
-const ACCEPTED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -61,98 +60,25 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
   }, []);
 
   const upload = useCallback(
-    (file: File) => {
+    async (file: File) => {
       setError(null);
       setBusy(true);
       setProgress(0);
 
-      // ---- CLIENT PRE-CHECKS (UX, not security) ----
-      // NOTE: ye sirf user ko jaldi feedback dene ke liye hain. Asli
-      // verification server par MAGIC BYTES se hoti hai - client ka
-      // content-type claim kabhi bharosa nahi kiya jaata.
-      if (!ACCEPTED.includes(file.type)) {
-        setError('Please choose a PNG, JPEG, WebP or GIF image.');
+      try {
+        const publicUrl = await uploadChannelCover({
+          file,
+          scope: { channelId },
+          onProgress: setProgress,
+        });
+        // Step 4: parent ko refresh karne do
+        await onUploaded(publicUrl);
+        setProgress(100);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Upload failed. Please retry.');
+      } finally {
         setBusy(false);
-        return;
       }
-      if (file.size > MAX_BYTES) {
-        setError(
-          `Image is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max is 4 MB.`
-        );
-        setBusy(false);
-        return;
-      }
-
-      // ---- STEP 1: presigned URL ----
-      (async () => {
-        try {
-          const urlRes = await fetch(
-            `/api/channels/${encodeURIComponent(channelId)}/cover/upload-url`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                filename: file.name,
-                contentType: file.type,
-              }),
-            }
-          );
-          const ticket = await urlRes.json().catch(() => ({}));
-          if (!urlRes.ok) {
-            setError(ticket?.message ?? 'Could not start the upload.');
-            setBusy(false);
-            return;
-          }
-
-          // ---- STEP 2: PUT bytes DIRECTLY to MinIO ----
-          // NOTE: `Content-Type` EXACTLY wahi hona chahiye jo ticket me hai.
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('PUT', ticket.uploadUrl, true);
-            xhr.setRequestHeader('Content-Type', ticket.contentType);
-
-            xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable) {
-                setProgress(Math.round((e.loaded / e.total) * 100));
-              }
-            };
-            xhr.onload = () => {
-              if (xhr.status >= 200 && xhr.status < 300) resolve();
-              else reject(new Error(`Upload failed (${xhr.status})`));
-            };
-            xhr.onerror = () => reject(new Error('Network error during upload.'));
-            xhr.send(file);
-          });
-
-          // ---- STEP 3: finalize ----
-          // Server magic bytes verify karta hai, purana cover delete karta
-          // hai, aur naya `cover_url` channel par SAVE karta hai.
-          const finRes = await fetch(
-            `/api/channels/${encodeURIComponent(channelId)}/cover/finalize`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ objectKey: ticket.objectKey }),
-            }
-          );
-          const final = await finRes.json().catch(() => ({}));
-          if (!finRes.ok) {
-            setError(final?.message ?? 'That file is not a valid image.');
-            setBusy(false);
-            return;
-          }
-
-          // ---- STEP 4: parent ko refresh karne do ----
-          await onUploaded(final.publicUrl);
-          setProgress(100);
-        } catch (err) {
-          setError(
-            err instanceof Error ? err.message : 'Upload failed. Please retry.'
-          );
-        } finally {
-          setBusy(false);
-        }
-      })();
     },
     [channelId, onUploaded]
   );
@@ -162,7 +88,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
     if (!file) return;
     // Turant local preview dikhao (upload start hone se pehle hi feedback)
     setPreviewSafely(URL.createObjectURL(file));
-    upload(file);
+    void upload(file);
     // Same file dobara select karne par change event na fire ho - isliye reset
     e.target.value = '';
   }
@@ -201,8 +127,9 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPTED.join(',')}
+          accept={COVER_ACCEPTED.join(',')}
           onChange={onPick}
+          data-track={`channel-cover-${channelId}`}
           className="hidden"
           id={inputId}
         />
@@ -247,7 +174,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
         )}
 
         <p className="mt-1 text-[11px] text-[#9fa7b3]">
-          PNG, JPEG, WebP or GIF. Max 4 MB. Stored on your own server.
+          PNG, JPEG or WebP. Under 4 MB. Stored on your own server.
         </p>
 
         {error ? <p className="text-[11px] text-red-400">{error}</p> : null}

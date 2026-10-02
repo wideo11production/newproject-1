@@ -1,4 +1,4 @@
-﻿package purge
+package purge
 
 import (
 	"context"
@@ -28,13 +28,13 @@ import (
 //
 // Hinglish: 30 minute purana unverified account = permanently delete + email
 type Worker struct {
-	cfg         *config.Config
-	purgeRepo   repository.PurgeRepository
-	verifRepo   repository.VerificationTokenRepository
-	emailer     *email.Dispatcher
-	stopCh      chan struct{}
-	interval    time.Duration
-	ttl         time.Duration
+	cfg       *config.Config
+	purgeRepo repository.PurgeRepository
+	verifRepo repository.VerificationTokenRepository
+	emailer   *email.Dispatcher
+	stopCh    chan struct{}
+	interval  time.Duration
+	ttl       time.Duration
 }
 
 // NewWorker naya purge worker banata hai

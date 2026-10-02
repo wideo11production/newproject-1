@@ -165,8 +165,26 @@ type RefreshToken struct {
 	// rehta hai - yaani gradual cutover, big bang nahi.
 	SessionID *uuid.UUID `gorm:"type:uuid;index" json:"session_id"`
 
-	User    User    `gorm:"foreignKey:UserID" json:"-"`
-	Session Session `gorm:"foreignKey:SessionID" json:"-"`
+	User User `gorm:"foreignKey:UserID" json:"-"`
+
+	// `constraint:OnDelete:CASCADE` is LOAD-BEARING, and it was missing.
+	//
+	// GORM creates a foreign key for this association with no delete rule - which
+	// PostgreSQL treats as NO ACTION - and it names it `fk_refresh_tokens_session`,
+	// which is exactly the name migration 013 looks for. Since AutoMigrate runs
+	// BEFORE the SQL chain, the constraint was always already there, so 013's
+	// `IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = ...)` guard
+	// skipped every time and the CASCADE never landed on any database.
+	//
+	// The result was a foreign key that REFUSED session deletion whenever a
+	// refresh token still pointed at the session - so a session could not be
+	// cleaned up, and "log out of this device" had no way to remove the
+	// credentials it had issued.
+	//
+	// This is the shape of bug that hides best: the migration is correct, the
+	// comment explains exactly why CASCADE matters, and the guard is written to
+	// succeed quietly. Nothing fails. The constraint simply never appears.
+	Session Session `gorm:"foreignKey:SessionID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE" json:"-"`
 }
 
 func (RefreshToken) TableName() string {

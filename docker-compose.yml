@@ -59,9 +59,29 @@ services:
     ports:
       - "4222:4222"
       - "8222:8222"
-    command: ["-js", "-m", "8222"]
+    # ---- Config file, not CLI flags ----
+    #
+    # Ye pehle `command: ["-js", "-m", "8222"]` tha - JetStream ON tha, par koi
+    # stream nahi thi. Matlab click ledger "realtime firehose" ke liye jaata
+    # kahan, ye sawaal ka jawaab tha hi nahi.
+    #
+    # Config file do cheezein deti hai jo flags nahi de sakte:
+    #   1. Stream DECLARED hai - publisher down hone par bhi maujood rehta hai.
+    #      Code se banayi stream sirf tab hoti hai jab koi chal raha ho, yaani
+    #      incident ke baad - jab use dekhna chahiye - uska matlab
+    #      "streak hi nahi hai".
+    #   2. `store_dir` / `max_bytes` DIKHTE hain. `max_memory_store` default
+    #      bahut bada hota hai aur ek traffic spike host disk bhar sakta hai -
+    #      us container ke saath Postgres bhi jaata hai.
+    #
+    # `-js` aur `-m 8222` flags ab config me hain (watchers block me), isliye
+    # command replace hua hai, add nahi.
+    command: ["-c", "/etc/nats/nats.conf"]
     volumes:
       - nats_data:/data
+      # Read-only: NATS ko config me likhne ki zaroorat nahi, aur writable mount
+      # ka matlab hota hai ki container host ke config par likh sakta hai.
+      - ./docker/nats/nats.conf:/etc/nats/nats.conf:ro
     restart: unless-stopped
     healthcheck:
       # nats CLI binary alpine image me installed nahi hai, isliye monitoring
@@ -298,7 +318,81 @@ services:
       # sirf `avatars` bucket tak limited hai - policies/auth-avatars.json.
       MINIO_AUTH_ACCESS_KEY: ${MINIO_AUTH_ACCESS_KEY:?set MINIO_AUTH_ACCESS_KEY in .env - see infrastructure/storage/policies/README.md}
       MINIO_AUTH_SECRET_KEY: ${MINIO_AUTH_SECRET_KEY:?set MINIO_AUTH_SECRET_KEY in .env - see infrastructure/storage/policies/README.md}
+      # ---- Scoped account for transcoding-service ----
+      #
+      # Its OWN account, not the auth one and not root. The auth account is
+      # scoped to `avatars`/`covers`; granting it `video` would put every user's
+      # source media behind the service that mints profile-image URLs.
+      #
+      # The init script REFUSES to finish without these (it used to be optional,
+      # and an unset value would have meant the transcoder quietly kept root).
+      MINIO_TRANSCODE_ACCESS_KEY: ${MINIO_TRANSCODE_ACCESS_KEY:?set MINIO_TRANSCODE_ACCESS_KEY in .env}
+      MINIO_TRANSCODE_SECRET_KEY: ${MINIO_TRANSCODE_SECRET_KEY:?set MINIO_TRANSCODE_SECRET_KEY in .env}
     restart: "no"
+
+  # ==========================================================================
+  # analytics-service
+  # ==========================================================================
+  #
+  # One of ~29 services that existed on disk but had NEVER been deployed (see
+  # SERVICE-TRIAGE.md). It compiles, it has real routes, and it had NO
+  # authentication whatsoever - `gin.Logger()`, `gin.Recovery()`, then straight
+  # to the handlers. Deployed as it stood, it would have exposed an API that
+  # records views, clicks, conversions and revenue, and returns all of it back.
+  #
+  # It is ADOPTED rather than replaced, because it is where click data belongs:
+  # it already models clicks, and it is the analytics service. Building a 30th
+  # service beside it would be the duplication the plan forbids.
+  #
+  # Auth is a requirement here, not a follow-up. The process refuses to start
+  # without the token, and the middleware independently fails closed if the token
+  # is empty - so "token missing" can never quietly mean "open".
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: wideo11-analytics-service
+    ports:
+      - "8091:8091"
+    environment:
+      SERVER_PORT: "8091"
+      SERVER_MODE: release
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_USER: postgres
+      DATABASE_PASSWORD: postgres
+      DATABASE_DBNAME: analytics_service
+      DATABASE_SSLMODE: disable
+      DATABASE_TIMEZONE: UTC
+      # The whole point of adopting it. Without this the process exits rather
+      # than serving.
+      SECURITY_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required - analytics-service refuses to start without it}
+      # 90 days, per SYSTEM-PLAN.md. Configurable because it is the number most
+      # likely to be argued about, and the wrong value has a legal dimension too.
+      TELEMETRY_RETENTION_DAYS: ${RETENTION_CLICK_EVENTS:-90}
+      # Realtime firehose. Every click also goes onto JetStream, so something can
+      # react to it while it is happening - a database poll cannot do that.
+      #
+      # Empty disables publishing entirely, which is a legitimate setting: the
+      # ledger write is what matters, and publishing is best-effort by design.
+      TELEMETRY_NATS_URL: ${TELEMETRY_NATS_URL:-nats://nats:4222}
+      # Bounded on purpose. Full means DROP, never block - an unbounded queue
+      # would turn a NATS outage into unbounded memory growth, and then into a
+      # latency spike on every user's click when it finally flushed.
+      TELEMETRY_PUBLISH_QUEUE_SIZE: ${TELEMETRY_PUBLISH_QUEUE_SIZE:-4096}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      # /health is deliberately NOT behind the token: a liveness probe that
+      # needs a credential means the orchestrator has to hold a secret just to
+      # learn whether the container is alive.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8091/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # Auth Service (Go) - users, sessions, bcrypt password hashing, JWT
   # Pehle ye service repo me maujood thi par kabhi compile nahi hui (module path
@@ -346,6 +440,21 @@ services:
 
       # Superadmin recovery accounts (2) - main superadmin fail ho to backup access
       SUPERADMIN_EMAIL: ${SUPERADMIN_EMAIL:-advchashampalup@gmail.com}
+
+      # ---- Transcoding handoff (Phase 3) ----
+      #
+      # The service reads ONE token and uses it for BOTH directions: the intake
+      # (auth-service -> transcoder, via the `Authorization` header) and the
+      # callback (transcoder -> auth-service, via `X-Internal-Token`). One secret
+      # for one trust boundary; a second token would be a second thing to rotate
+      # and a second thing to get wrong.
+      TRANSCODING_INTERNAL_URL: http://transcoding-service:8083
+      TRANSCODE_INTERNAL_TOKEN: ${TRANSCODE_INTERNAL_TOKEN:?TRANSCODE_INTERNAL_TOKEN is required}
+      # Where the transcoder reports a finished job. Without it an asset sits at
+      # `uploaded` FOREVER: the upload looks fine, the file is stored, and the
+      # channel shows nothing because the count only includes `ready`.
+      TRANSCODE_CALLBACK_URL: http://auth-service:8085/api/v1/internal/media/transcode-callback
+      TRANSCODE_CALLBACK_TOKEN: ${TRANSCODE_INTERNAL_TOKEN:?TRANSCODE_INTERNAL_TOKEN is required}
 
       # Master-root ka password. Ye env var set hone par
       # `bootstrap.DefaultSuperadminPasswordHash` IGNORE ho jata hai aur ye
@@ -478,8 +587,25 @@ services:
       TRANSCODING_SERVICE_PORT: 8083
       # MinIO connection (self-hosted, SSOT se)
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      # ---- SCOPED account, NOT root ----
+      #
+      # Ye pehle `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` tha. Yaani storage ka
+      # poora takeover credential us service par tha jo har user ka source video
+      # padhta hai - pure stack ki sabse badi blast radius, aur sabse bada key.
+      #
+      # Isko `video` bucket tak scoped account mila
+      # (`infrastructure/storage/policies/transcode-video.json`), jo minio-init
+      # lagata hai AUR denial assertions bhi check karta hai - yaani ye account
+      # `avatars` read kar sakta ho to init FAIL hota hai, chup-chaap pass nahi.
+      #
+      # `minio` aur `minio-init` ko root dena sahi hai - pehla server hai, doosra
+      # users aur policies banata hai. Sirf ye service ko nahi chahiye.
+      MINIO_TRANSCODE_ACCESS_KEY: ${MINIO_TRANSCODE_ACCESS_KEY:?set MINIO_TRANSCODE_ACCESS_KEY in .env - transcoding-service is NOT given root credentials}
+      MINIO_TRANSCODE_SECRET_KEY: ${MINIO_TRANSCODE_SECRET_KEY:?set MINIO_TRANSCODE_SECRET_KEY in .env - transcoding-service is NOT given root credentials}
+      # Intake is authenticated. `POST /api/v1/transcode` runs ffmpeg per job, so
+      # an open endpoint is a CPU-exhaustion vector: anyone on the network could
+      # queue work for free.
+      TRANSCODE_INTERNAL_TOKEN: ${TRANSCODE_INTERNAL_TOKEN:?TRANSCODE_INTERNAL_TOKEN is required - the transcode intake runs ffmpeg and must not be open}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
       # Public host jo playlist URL me use hoga (client ko yahi dikhta hai)
@@ -653,13 +779,36 @@ services:
     build:
       context: .
       dockerfile: apps/currency/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_CURRENCY:-currency}
+        NEXT_PUBLIC_CURRENCY_API: ${CURRENCY_PUBLIC_API:-http://localhost:8086}
     container_name: wideo11-currency-app
     ports:
       - "3007:3007"
     environment:
-      # Browser se hit hone wala URL (container name nahi, localhost chahiye
-      # kyunki ye browser me khulta hai - internal DNS browser ko nahi dikhta)
-      NEXT_PUBLIC_CURRENCY_API: ${CURRENCY_PUBLIC_API:-http://localhost:8086}
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+        ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+        ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
+        # The shared session gate (`@wideo11/ui/gate` in src/middleware.ts) verifies
+        # the `wideo11_session` cookie's signature with this SAME secret
+        # auth-service signs with. Without it the gate fails CLOSED and every route
+        # answers 401 - correct behaviour for a security control, and the worst
+        # possible outcome for a missing env var.
+        #
+        # This app did not get the secret from `plumb-jwt-secret.mjs`, which keys
+        # off `AUTH_INTERNAL_URL`, because this block does not set that variable -
+        # currency talks to `currency-service`, not to auth directly.
+        JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
+        # Browser se hit hone wala URL (container name nahi, localhost chahiye
+        # kyunki ye browser me khulta hai - internal DNS browser ko nahi dikhta)
+        NEXT_PUBLIC_CURRENCY_API: ${CURRENCY_PUBLIC_API:-http://localhost:8086}
     depends_on:
       currency-service:
         condition: service_healthy
@@ -673,7 +822,7 @@ services:
     # dikha raha tha.
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3007/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3007/api/live || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -688,13 +837,39 @@ services:
     build:
       context: .
       dockerfile: apps/superadmin/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_SUPERADMIN:-superadmin}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-superadmin
     ports:
       - "3008:3008"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Auth service ka internal URL - same-origin proxy routes isko use karte hain
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-}
+      # Click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0).
+      # Is service ka koi `NEXT_PUBLIC_APP_URL` nahi tha, isliye anchor yahan
+      # `NEXTAUTH_SECRET` ke baad rakha hai.
+      NEXT_PUBLIC_APP_SURFACE: superadmin
     depends_on:
       auth-service:
         condition: service_healthy
@@ -708,7 +883,7 @@ services:
     # dikha raha tha.
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3008/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3008/api/live || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -779,13 +954,36 @@ services:
     build:
       context: .
       dockerfile: apps/monitor/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_MONITOR:-monitor}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-monitor
     ports:
       - "3001:3001"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_APP_SURFACE: monitor  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -801,7 +999,7 @@ services:
     # balki "Next.js ne page serve kiya" confirm hota hai.
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3001/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3001/api/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1096,10 +1294,32 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_WEB:-web}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-http://localhost:3000}
+        NEXT_PUBLIC_AUTH_API: ${NEXT_PUBLIC_AUTH_API:-http://localhost:8085}
+        NEXT_PUBLIC_MINIO_PUBLIC_HOST: ${NEXT_PUBLIC_MINIO_PUBLIC_HOST:-http://localhost:9000}
+        NEXT_PUBLIC_MINIO_VIDEO_BUCKET: ${NEXT_PUBLIC_MINIO_VIDEO_BUCKET:-video}
+        NEXT_PUBLIC_VIDEO_EDITOR_URL: ${NEXT_PUBLIC_VIDEO_EDITOR_URL:-http://localhost:3002}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-web
     ports:
       - "3000:3000"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: 0.0.0.0
@@ -1108,6 +1328,10 @@ services:
       # NAHI - localhost container KHUD hota hai, doosre service ko nahi.
       AUTH_SERVICE_URL: http://auth-service:8085
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # NOTE: JWT_SECRET_KEY is set further down in this block. It is deliberately
+      # NOT repeated here - one secret per service, one place to change it. The
+      # comment at its real definition explains why it is mandatory rather than
+      # defaulted: the session gate fails CLOSED without it.
       BOT_SERVICE_URL: http://dashboard-service:8080
       DASHBOARD_SERVICE_URL: http://dashboard-service:8080
       RECOMMENDATION_SERVICE_URL: http://billing-service:8082
@@ -1119,6 +1343,7 @@ services:
       NEXT_PUBLIC_WS_URL: ws://localhost:8080
       NEXT_PUBLIC_MINIO_PUBLIC_HOST: http://localhost:9000
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_SURFACE: web  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
       # Next.js image optimiser ke liye. Production build me apna khud ka
       # loader use karta hai; ye sirf sharp/Next image bhi chalata rahe.
       NEXT_SHARP_PATH: /usr/lib/node_modules/sharp
@@ -1157,13 +1382,43 @@ services:
     build:
       context: .
       dockerfile: apps/video-editor/Dockerfile
+      args:
+        # Sirf `surface` build arg banaya gaya hai, URLs nahi.
+        #
+        # `NEXT_PUBLIC_*` Next.js BUILD time par inline hota hai, isliye ye
+        # `args:` se jaane chahiye - runtime `environment:` se nahi.
+        #
+        # URLs isliye nahi bheji ja rahi kyunki is block me
+        # `NEXT_PUBLIC_API_URL: http://dashboard-service:8080` hai, jo ek
+        # DOCKER-INTERNAL hostname hai. Browser use resolve nahi kar sakta. Ye
+        # build arg ban jata to editor ka API base browser me undefined ho
+        # jata - jo isi tarah chup-chaap fallback par chala jata. Dockerfile
+        # me host-reachable `localhost` defaults sahi hain, inhe wahi rehne
+        # dena hai.
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_EDITOR:-editor}
     container_name: wideo11-video-editor
     ports:
       - "3002:3002"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_APP_SURFACE: editor  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
       # ---- Navbar session awareness ----
       #
       # AuthNav session POOCHTA hai, token padhta nahi - session ek httpOnly
@@ -1257,20 +1512,43 @@ services:
     build:
       context: .
       dockerfile: apps/billing/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_BILLING:-billing}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-billing
     ports:
       - "3003:3003"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://billing-service:8082
+      NEXT_PUBLIC_APP_SURFACE: billing  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
     depends_on:
       billing-service:
         condition: service_healthy
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3003/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3003/api/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1285,20 +1563,44 @@ services:
     build:
       context: .
       dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_ADMIN:-admin}
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL_ADMIN:-http://localhost:3004}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-admin
     ports:
       - "3004:3004"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_APP_SURFACE: admin  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
     depends_on:
       dashboard-service:
         condition: service_healthy
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3004/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3004/api/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -1313,20 +1615,43 @@ services:
     build:
       context: .
       dockerfile: apps/analytics/Dockerfile
+      args:
+        NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_ANALYTICS:-analytics}
+        # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
+        # runtime `environment:` se nahi, yahan se jaana padta hai.
+        # Inme koi compose-internal hostname nahi: browser unhe
+        # resolve nahi kar sakta, to wahan kaam karta fallback
+        # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-analytics
     ports:
       - "3005:3005"
     environment:
+      # ---- Click ledger: analytics-service ----
+      #
+      # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
+      # into the browser bundle, and a shared secret in a bundle is published.
+      #
+      # The apps post to their OWN /api/audit route; that route reads the
+      # httpOnly session cookie and forwards here with the token attached. The
+      # browser never sees either value.
+      ANALYTICS_INTERNAL_URL: http://analytics-service:8091
+      ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
+      # cookie's signature with this SAME secret auth-service signs with. Without it
+      # the gate fails CLOSED and every route on this app returns 401 - the correct
+      # failure, but only if the secret is actually plumbed. SSOT: .env
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
+      NEXT_PUBLIC_APP_SURFACE: analytics  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
     depends_on:
       dashboard-service:
         condition: service_healthy
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3005/ || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3005/api/live || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

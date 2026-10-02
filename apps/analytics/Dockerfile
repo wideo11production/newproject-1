@@ -129,6 +129,26 @@ WORKDIR /app/apps/analytics
 # pnpm ke package-dir script resolution par depend nahi karte (MODULE_NOT_FOUND fix)
 # Build heap limit 4GB deta hai taaki bade apps OOM na ho. 76% resource ceiling
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# ---- NEXT_PUBLIC_* ko BUILD TIME par pass karo ----
+#
+# Next.js inhe `next build` ke dauraan source me inline kar deta hai, runtime
+# par nahi. Isliye compose ka `environment:` block in vars ke liye DEAD hai -
+# bundle pehle hi compile ho chuka hota hai. Ye ARG block usi ko build time
+# par wapas laata hai.
+#
+# Har app me har `NEXT_PUBLIC_*` read site par ek hardcoded fallback hai, aur wahi
+# sahi value hai - isliye bug chup-chaap tha. Click ledger me hi nikla: editor
+# apne events `port-3002` (fallback) label ke saath bhej raha tha, `editor`
+# nahi.
+#
+# NOTE: sirf wahi vars yahan hain jo BROWSER me padhe jaate hain aur jinki value
+# host se resolve ho sakti hai. Koi compose-internal hostname (`auth-service`,
+# `dashboard-service`) jaan-boojh kar nahi daala gaya - browser unhe resolve hi
+# nahi kar sakta, to ek kaam karne wala fallback badal kar chup-chaap toota URL
+# mil jata.
+ARG NEXT_PUBLIC_APP_SURFACE=analytics
+ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ------------------------------------------------------------

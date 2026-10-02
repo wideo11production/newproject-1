@@ -111,6 +111,66 @@ function fmtRate(n: number | null | undefined): string {
   return `${fmtBytes(n, 0)}/s`;
 }
 
+/**
+ * Y-AXIS TICK FORMATTERS, one per unit.
+ *
+ * =============================================================================
+ * WHY THIS EXISTS - THE `unit` PARAMETER WAS IGNORED
+ * =============================================================================
+ *
+ * `timeSeriesOption(series, unit, ...)` took a `unit` and never used it. Every
+ * chart therefore rendered ECharts' default numeric labels, and the result was
+ * visible nonsense:
+ *
+ *     Memory working set      0.000000 / 0.000000 / 0.000000 / 0.000000
+ *     Network throughput      9.000000 / 8.000000 / 7.000000
+ *     NATS connections        2.000000 / 1.500000 / 1.000000 / 0.500000
+ *
+ * The memory chart's data is in BYTES (~3.2e9). ECharts divides it by its own
+ * axis span, prints six decimals, and every label becomes the same string. A chart
+ * whose axis cannot be read is not a chart - and the stat card two inches above it
+ * correctly says "2.9 GB", so the two disagree on the same page.
+ *
+ * `unit` was already being passed correctly at every call site. The information
+ * was there and unused, which is why nothing looked broken enough to investigate.
+ *
+ * Each formatter returns a SHORT string. Axis gutters are 56px wide; "3.2 GB"
+ * fits, "3,200,000,000 bytes" does not, and an unreadable axis is what we are
+ * fixing.
+ */
+const AXIS_FORMATTERS: Record<string, (v: number) => string> = {
+  // Cores in use: 0.75, 1.5, 4. Two decimals below 10, because a monitor box
+  // frequently sits at 0.25 cores and "0" would hide real variance.
+  cores: (v) => (Math.abs(v) < 10 ? v.toFixed(2) : v.toFixed(0)),
+  // Bytes: the same ladder as the stat cards, so an axis label and its card agree.
+  bytes: (v) => fmtBytes(v, v < 1024 ? 0 : 1),
+  // Bytes per second.
+  Bps: (v) => `${fmtBytes(v, v < 1024 ? 0 : 1)}/s`,
+  // Percent: already 0-100 and small, so a plain integer is more readable than a
+  // percentage sign on every line.
+  percent: (v) => v.toFixed(0),
+};
+
+/**
+ * The axis formatter for a unit, falling back to a bounded default.
+ *
+ * The fallback is NOT raw: a unit that is unknown, or `''` for a plain count, must
+ * still produce a readable label. `toPrecision(3)` on a count gives "1.00e+0" and
+ * on a large number gives "9.41e+9" - which is why the old charts looked the way
+ * they did.
+ */
+function axisFormatter(unit: string): (v: number) => string {
+  const known = AXIS_FORMATTERS[unit];
+  if (known) return known;
+  return (v) => {
+    const abs = Math.abs(v);
+    if (abs === 0) return '0';
+    if (abs < 1) return v.toFixed(3);
+    if (abs < 1000) return String(Math.round(v * 100) / 100);
+    return fmtBytes(v, 1);
+  };
+}
+
 // ---------------------------------------------------------------------------
 // ECharts option builders
 // ---------------------------------------------------------------------------
@@ -144,7 +204,14 @@ function timeSeriesOption(
       type: 'value',
       max: maxY,
       axisLine: { show: false },
-      axisLabel: { color: '#6b7280', fontSize: 10 },
+      // The unit-aware formatter. Without this the axis shows ECharts' raw
+      // numbers, which for byte-valued series means every label prints the same
+      // six-decimal string.
+      axisLabel: {
+        color: '#6b7280',
+        fontSize: 10,
+        formatter: axisFormatter(unit),
+      },
       splitLine: { lineStyle: { color: '#1f2937' } },
     },
     series: series.map((s, i) => ({
@@ -416,7 +483,30 @@ export default function MetricsDashboard() {
         />
         <Stat
           label="Network RX"
-          value={fmtRate(metrics?.networkRxGB === null || metrics?.networkRxGB === undefined ? null : metrics.networkRxGB * 1024 ** 3)}
+          /*
+            `fmtBytes`, NOT `fmtRate` - and the difference is not cosmetic.
+            `networkRxGB` is
+            `container_network_receive_bytes_total`, a CUMULATIVE counter: every
+            byte the host has ever received since boot. It is divided by nothing.
+
+            `fmtRate` appended "/s", so the card read:
+
+                NETWORK RX   15 GB/s
+
+            which is wrong twice over. The value is not a rate, and 15 GB/s is not a
+            plausible number for a Docker VM's receive throughput - it is a
+            cumulative total that happens to be around 15 GB. An operator glancing
+            at the dashboard would read that as a throughput problem.
+
+            `fmtRate` has no other caller now, so it is left in place for the
+            per-second series in the timeseries charts, where the value IS
+            `irate(...[5m])` and genuinely is a rate.
+
+            The hint states what it is, because a bare cumulative counter on a
+            dashboard is read as a rate by everyone, including the author.
+          */
+          value={fmtBytes(metrics?.networkRxGB === null || metrics?.networkRxGB === undefined ? null : metrics.networkRxGB * 1024 ** 3)}
+          hint="Total received since boot, not a rate — container_network_receive_bytes_total is a monotonic counter."
         />
         <Stat
           label="Storage"

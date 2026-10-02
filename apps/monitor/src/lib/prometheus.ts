@@ -195,7 +195,7 @@ export async function getPrometheusMetrics() {
   ];
   const allLive = queries.every((q) => q.value !== null);
 
-  return {
+  const payload = {
     containersUp: upResult.value,
     containersUpError: upResult.error,
 
@@ -240,9 +240,33 @@ export async function getPrometheusMetrics() {
     // bolе.
     dataSource: allLive ? 'live' : 'degraded',
 
-    // Server-side URL: sirf logs aur debugging ke liye. Client ise render
-    // nahi karta. Isi ko browser tak bhejne se cluster topology leak hota hai.
-    prometheusUrl: PROMETHEUS_URL,
+    // `prometheusUrl` is DELIBERATELY NOT IN THIS PAYLOAD.
+    //
+    // The comment immediately above used to say "sending this to the browser leaks
+    // cluster topology" and then the next line sent it. That is the fourth time in
+    // this repository a comment has documented a fix that the code below it never
+    // received - and this one was live:
+    //
+    //     GET http://localhost:3001/api/metrics
+    //     {"prometheusUrl":"http://prometheus:9090", "containersUp":9, ...}
+    //
+    // It is an internal container hostname. The browser cannot resolve it, so no
+    // UI can use it, and sending it publishes the topology of the Docker network to
+    // anyone who can reach the port.
+    //
+    // It goes to the LOG instead, which is where a server-side address belongs.
+    // `dataSource` above is what the UI actually needs: is this data real or
+    // degraded. `console.log` rather than a logger because this module has no
+    // logger import, and adding one to log one string is not worth the churn.
+    //
+    // If you need the URL to debug a scrape, it is in `docker-compose.yml` under
+    // `PROMETHEUS_URL` and in this file's `PROMETHEUS_URL` constant. It is a
+    // constant, not runtime state.
     fetchedAt: new Date().toISOString(),
   };
+
+  console.log(
+    `[monitor] metrics scraped from ${PROMETHEUS_URL} at ${new Date().toISOString()}`,
+  );
+  return payload;
 }

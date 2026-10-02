@@ -41,6 +41,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSession } from '@wideo11/ui/session-user-menu';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Play, Pause } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
@@ -61,6 +62,14 @@ export interface HeroCarouselProps {
 }
 
 export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
+  // The carousel is `'use client'`, so this hook is legal here - and it is the
+  // only reason the component is a client component at all in this respect.
+  // `/` (the page) is a SERVER component, which is why the hero CTA and the
+  // mid-page CTA live in `app/components/landing/landing-cta.tsx` instead: calling
+  // `useSession()` from `page.tsx` fails the prerender with a minified
+  // `is not a function` that names neither the file nor the cause.
+  const session = useSession();
+
   // ---- State: current active slide index ----
   const [activeIndex, setActiveIndex] = useState(0);
   // ---- State: autoplay chalu hai ya nahi (hover/focus se control) ----
@@ -368,13 +377,35 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
                       </p>
 
                       {/* CTA button - internal route only */}
-                      {slide.ctaLabel && slide.ctaHref ? (
+                      {/*
+                        CTA button - internal route only.
+
+                        The LABEL and the TARGET are both session-aware, and both
+                        have to be: pointing a signed-in creator at
+                        `/auth/register` is the exact thing this change exists to
+                        stop, and a button reading "Start publishing" that lands
+                        on a signup form is worse than one reading "Create your
+                        account" - it looks like a broken link.
+
+                        The seed creatives carry registration copy in
+                        `lib/landing/ad-pool.ts`, which is the right place for
+                        that copy to live. The swap happens here, at the only
+                        point that knows whether anyone is signed in, rather than
+                        by editing the pool - a pool edited for "signed out"
+                        would then be wrong for a signed-in visitor on the very
+                        next render.
+                      */}
+                      {(slide.ctaLabel && slide.ctaHref) || session.state === 'ready' ? (
                         <Link
-                          href={slide.ctaHref}
+                          href={
+                            session.state === 'ready' ? '/dashboard' : (slide.ctaHref ?? '/dashboard')
+                          }
                           className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#5794f2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#5794f2]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
                         >
                           <Play className="h-4 w-4" aria-hidden="true" />
-                          {slide.ctaLabel}
+                          {session.state === 'ready'
+                            ? 'Go to dashboard'
+                            : (slide.ctaLabel ?? 'Get started')}
                         </Link>
                       ) : null}
                     </div>

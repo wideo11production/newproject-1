@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -11,19 +12,19 @@ import (
 // Config holds all configuration for the recommendation service
 // सारा कॉन्फिगरेशन .env से लोड होता है (SSOT - Single Source of Truth)
 type Config struct {
-	Server               ServerConfig
-	Database             DatabaseConfig
-	NATS                 NATSConfig
-	AI                   AIConfig
-	Search               SearchConfig
-	Feed                 FeedConfig
-	I18n                 I18nConfig
-	Currency             CurrencyConfig
+	Server   ServerConfig
+	Database DatabaseConfig
+	NATS     NATSConfig
+	AI       AIConfig
+	Search   SearchConfig
+	Feed     FeedConfig
+	I18n     I18nConfig
+	Currency CurrencyConfig
 	// Universal Multi-Country Logic Matrices
-	MinimumBalanceBuffer int                    // ₹2000 Minimum Balance (INR) - held from earnings after profits
-	SisterSharePercentage float64                // 5% share for Sister's dashboard
-	HpaAutoScalingLimit  int                    // 76% auto-scaling limit for Kubernetes HPA
-	CountrySpecific      map[string]CountrySpecificConfig
+	MinimumBalanceBuffer  int     // ₹2000 Minimum Balance (INR) - held from earnings after profits
+	SisterSharePercentage float64 // 5% share for Sister's dashboard
+	HpaAutoScalingLimit   int     // 76% auto-scaling limit for Kubernetes HPA
+	CountrySpecific       map[string]CountrySpecificConfig
 }
 
 // ServerConfig holds HTTP server configuration
@@ -66,35 +67,35 @@ type NATSConfig struct {
 // NATSSubjects defines the 7 event stream topologies
 // 7 इवेंट स्ट्रीम टोपोलॉजी: VIDEO, WALLET, USER, CONTENT, ANALYTICS, NOTIFICATION, SYSTEM
 type NATSSubjects struct {
-	Video       string
-	Wallet      string
-	User        string
-	Content     string
-	Analytics   string
+	Video        string
+	Wallet       string
+	User         string
+	Content      string
+	Analytics    string
 	Notification string
-	System      string
+	System       string
 }
 
 // NATSConsumerConfig holds consumer configuration
 type NATSConsumerConfig struct {
-	DurableName       string
-	AckPolicy         string
-	MaxDeliver        int
-	AckWait           time.Duration
-	MaxAckPending     int
-	FilterSubjects    []string
+	DurableName    string
+	AckPolicy      string
+	MaxDeliver     int
+	AckWait        time.Duration
+	MaxAckPending  int
+	FilterSubjects []string
 }
 
 // AIConfig holds local AI (Ollama) configuration
 // फ्री लोकल AI (Ollama) इंटीग्रेशन के लिए कॉन्फिगरेशन
 type AIConfig struct {
-	BaseURL       string
-	Model         string
-	Timeout       time.Duration
-	MaxTokens     int
-	Temperature   float64
-	EnableCache   bool
-	CacheTTL      time.Duration
+	BaseURL     string
+	Model       string
+	Timeout     time.Duration
+	MaxTokens   int
+	Temperature float64
+	EnableCache bool
+	CacheTTL    time.Duration
 }
 
 // SearchConfig holds PostgreSQL full-text search configuration
@@ -125,13 +126,13 @@ type FeedConfig struct {
 
 // FeedScoreWeights holds weights for feed scoring algorithm
 type FeedScoreWeights struct {
-	FollowScore       float64
-	EngagementScore   float64
-	RecencyScore      float64
-	DiversityScore    float64
+	FollowScore        float64
+	EngagementScore    float64
+	RecencyScore       float64
+	DiversityScore     float64
 	LanguageMatchScore float64
 	CurrencyMatchScore float64
-	AIInferenceScore  float64
+	AIInferenceScore   float64
 }
 
 // I18nConfig holds internationalization configuration
@@ -147,18 +148,18 @@ type I18nConfig struct {
 // CurrencyConfig holds multi-currency configuration
 // मल्टी-करेंसी सपोर्ट - डायनामिक करेंसी वैल्यू स्ट्रक्चर
 type CurrencyConfig struct {
-	DefaultCurrency string
+	DefaultCurrency     string
 	SupportedCurrencies []string
-	ExchangeRateAPI   string
-	CacheTTL        time.Duration
+	ExchangeRateAPI     string
+	CacheTTL            time.Duration
 }
 
 // CountrySpecificConfig holds country-specific logic matrices
 // देश-विशिष्ट तर्क मैट्रिक्स - क्षेत्र-विशिष्ट नियम, non-refundable सीमाएँ, डिवाइस प्रोफ़ाइल लॉक
 type CountrySpecificConfig struct {
-	MinimumBalanceBuffer   int    // local currency units (e.g., USD for US, CAD for Canada)
-	NonRefundableBoundary  bool   // if true, transactions are non-refundable after this boundary (e.g., time-based or amount-based)
-	DeviceProfileLock      string // e.g., "strict", "moderate", "lenient" - locks device profile to prevent refund liabilities
+	MinimumBalanceBuffer  int    // local currency units (e.g., USD for US, CAD for Canada)
+	NonRefundableBoundary bool   // if true, transactions are non-refundable after this boundary (e.g., time-based or amount-based)
+	DeviceProfileLock     string // e.g., "strict", "moderate", "lenient" - locks device profile to prevent refund liabilities
 }
 
 // LoadConfig loads configuration from .env file (SSOT)
@@ -166,6 +167,22 @@ type CountrySpecificConfig struct {
 func LoadConfig() (*Config, error) {
 	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
+	// ---- ENVIRONMENT VARIABLES NEED THIS LINE TO WORK AT ALL ----
+	//
+	// Viper looks up an env var by upper-casing the key and replacing the
+	// SEPARATOR - but only when `SetEnvKeyReplacer` says what the separator is.
+	// Without it, `security.internal_token` is looked up as
+	// `SECURITY.INTERNAL_TOKEN`, with a literal dot, which nothing sets.
+	//
+	// The result is silent: no error, no warning, the process starts, and every
+	// value arrives as its zero value. A security setting that was configured
+	// reads as DISABLED.
+	//
+	// This is not theoretical. `analytics-service` was about to start with no
+	// authentication because of it, and the only reason that was caught was a
+	// fail-closed startup check refusing to run. 25 of the 28 viper services in
+	// this tree had the same defect - see SERVICE-TRIAGE.md.
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Default values - डिफॉल्ट मान
 	setDefaults()
@@ -197,9 +214,9 @@ func LoadConfig() (*Config, error) {
 		// However, to be safe, we'll check if the value was actually provided by viper or is the zero value from not being set.
 		// Since we set defaults in setDefaults, we can assume they are set, but we'll use the values we got.
 		cfg.CountrySpecific[country] = CountrySpecificConfig{
-			MinimumBalanceBuffer:   minBuffer,
-			NonRefundableBoundary:  nonRefundable,
-			DeviceProfileLock:      deviceLock,
+			MinimumBalanceBuffer:  minBuffer,
+			NonRefundableBoundary: nonRefundable,
+			DeviceProfileLock:     deviceLock,
 		}
 	}
 
@@ -304,16 +321,16 @@ func setDefaults() {
 	viper.SetDefault("MINIMUM_BALANCE_BUFFER", 2000) // ₹2000 INR
 	viper.SetDefault("SISTER_SHARE_PERCENTAGE", 5.0) // 5%
 	viper.SetDefault("HPA_AUTO_SCALING_LIMIT", 76)   // 76%
-	
+
 	// Country-specific defaults for US, Canada, and Global
-	viper.SetDefault("COUNTRY_US_MINIMUM_BALANCE_BUFFER", 25)   // $25 USD
+	viper.SetDefault("COUNTRY_US_MINIMUM_BALANCE_BUFFER", 25) // $25 USD
 	viper.SetDefault("COUNTRY_US_NON_REFUNDABLE_BOUNDARY", true)
 	viper.SetDefault("COUNTRY_US_DEVICE_PROFILE_LOCK", "strict")
-	
-	viper.SetDefault("COUNTRY_CA_MINIMUM_BALANCE_BUFFER", 30)   // $30 CAD
+
+	viper.SetDefault("COUNTRY_CA_MINIMUM_BALANCE_BUFFER", 30) // $30 CAD
 	viper.SetDefault("COUNTRY_CA_NON_REFUNDABLE_BOUNDARY", true)
 	viper.SetDefault("COUNTRY_CA_DEVICE_PROFILE_LOCK", "strict")
-	
+
 	viper.SetDefault("COUNTRY_GLOBAL_MINIMUM_BALANCE_BUFFER", 2000) // Default to INR equivalent
 	viper.SetDefault("COUNTRY_GLOBAL_NON_REFUNDABLE_BOUNDARY", true)
 	viper.SetDefault("COUNTRY_GLOBAL_DEVICE_PROFILE_LOCK", "strict")
@@ -325,44 +342,44 @@ func validateConfig(cfg *Config) error {
 	if cfg.MinimumBalanceBuffer <= 0 {
 		return fmt.Errorf("MINIMUM_BALANCE_BUFFER must be positive, got %d", cfg.MinimumBalanceBuffer)
 	}
-	
+
 	// Validate SisterSharePercentage (between 0 and 100)
 	if cfg.SisterSharePercentage < 0 || cfg.SisterSharePercentage > 100 {
 		return fmt.Errorf("SISTER_SHARE_PERCENTAGE must be between 0 and 100, got %.2f", cfg.SisterSharePercentage)
 	}
-	
+
 	// Validate HpaAutoScalingLimit (between 1 and 100)
 	if cfg.HpaAutoScalingLimit < 1 || cfg.HpaAutoScalingLimit > 100 {
 		return fmt.Errorf("HPA_AUTO_SCALING_LIMIT must be between 1 and 100, got %d", cfg.HpaAutoScalingLimit)
 	}
-	
+
 	// Validate CountrySpecific map is initialized
 	if cfg.CountrySpecific == nil {
 		return fmt.Errorf("CountrySpecific map is nil")
 	}
-	
+
 	// Define required countries
 	requiredCountries := []string{"US", "CA", "GLOBAL"}
-	
+
 	for _, country := range requiredCountries {
 		config, exists := cfg.CountrySpecific[country]
 		if !exists {
 			return fmt.Errorf("missing country configuration for %s", country)
 		}
-		
+
 		// Validate country-specific fields
 		if config.MinimumBalanceBuffer <= 0 {
 			return fmt.Errorf("country %s: MinimumBalanceBuffer must be positive, got %d", country, config.MinimumBalanceBuffer)
 		}
-		
+
 		// NonRefundableBoundary is bool, no range validation needed
-		
+
 		// Validate DeviceProfileLock (allowed values)
 		allowedLocks := map[string]bool{"strict": true, "moderate": true, "lenient": true}
 		if !allowedLocks[config.DeviceProfileLock] {
 			return fmt.Errorf("country %s: DeviceProfileLock must be one of strict, moderate, lenient, got %s", country, config.DeviceProfileLock)
 		}
 	}
-	
+
 	return nil
 }

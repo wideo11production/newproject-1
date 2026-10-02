@@ -23,10 +23,10 @@ import (
 
 // Superadmin errors
 var (
-	ErrDeviceLocked       = errors.New("this account is locked to another device")
-	ErrNotSuperadmin      = errors.New("superadmin role required")
+	ErrDeviceLocked        = errors.New("this account is locked to another device")
+	ErrNotSuperadmin       = errors.New("superadmin role required")
 	ErrRecoveryCodeInvalid = errors.New("invalid recovery code")
-	ErrAccountDeactivated = errors.New("this account has been deactivated")
+	ErrAccountDeactivated  = errors.New("this account has been deactivated")
 )
 
 // SuperadminService superadmin/recovery accounts aur sessions manage karta hai
@@ -320,11 +320,11 @@ type UserActivity struct {
 	//
 	// NOTE: ye column pehle MISSING tha - awareness page par "Registration Date"
 	// dikha hi nahi sakta tha. Ab directly users table se aata hai.
-	RegisteredAt *time.Time `json:"registered_at"`
-	TotalSessions int64     `json:"total_sessions"`
-	TotalSecondsOnline int64 `json:"total_seconds_online"`
-	IsOnline           bool  `json:"is_online"`
-	DistinctDevices    int64 `json:"distinct_devices"`
+	RegisteredAt       *time.Time `json:"registered_at"`
+	TotalSessions      int64      `json:"total_sessions"`
+	TotalSecondsOnline int64      `json:"total_seconds_online"`
+	IsOnline           bool       `json:"is_online"`
+	DistinctDevices    int64      `json:"distinct_devices"`
 	FirstSeen          *time.Time `json:"first_seen"`
 	LastSeen           *time.Time `json:"last_seen"`
 	// IsSuperadmin/IsRecovery: role flags - superadmin panel filters me use hote hain
@@ -537,12 +537,12 @@ func (s *SuperadminService) PurgeTestAccounts(ctx context.Context, dryRun bool) 
 	}
 
 	return map[string]interface{}{
-		"dry_run":           dryRun,
+		"dry_run":              dryRun,
 		"marked_test_accounts": len(markers),
-		"would_delete":      len(emails),
-		"deleted":           deleted,
-		"skipped_protected": skippedProtected,
-		"emails":            emails,
+		"would_delete":         len(emails),
+		"deleted":              deleted,
+		"skipped_protected":    skippedProtected,
+		"emails":               emails,
 	}, nil
 }
 
@@ -596,6 +596,7 @@ func (s *SuperadminService) ListTestAccounts(ctx context.Context) ([]model.TestA
 		Find(&markers).Error
 	return markers, err
 }
+
 // GetSecurityEventsFrom security events laata hai (superadmin awareness ke liye).
 // NOTE: Ye apne DB se seedha query karta hai - security service se delegate
 // karne ki zarurat nahi kyunki dono ka db same hai.

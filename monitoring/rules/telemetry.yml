@@ -1,0 +1,228 @@
+# ============================================================================
+# Telemetry alert rules
+# ============================================================================
+# Mounted at /etc/prometheus/rules/ by docker-compose.yml.
+#
+# ---- WHY THESE EXIST ----
+#
+# Phase 1 of SYSTEM-PLAN.md moved the click ledger out of auth-service and into
+# `analytics-service`, which also publishes a realtime firehose to NATS.
+#
+# The important thing about these rules is not the count, it is the one at the
+# top. Everything else here is "something is wrong". That one is "you no longer
+# know what your users are doing":
+#
+#   The ledger is the ONLY complete record of every interface interaction in the
+#   product. The NATS stream is explicitly best-effort - it drops rather than
+#   block, because a user's click must never wait on telemetry. So a sustained
+#   drop rate does not degrade the product, it degrades the OBSERVABILITY of the
+#   product, silently. You find out weeks later that a release broke the editor
+#   and you have no data from that week.
+#
+# Every other rule here is about a service being down. This one is about data
+# that was collected and then thrown away.
+#
+# ---- WHAT IS DELIBERATELY NOT ALERTED ON ----
+#
+# * Absolute click counts. Traffic goes up and down for reasons that have nothing
+#   to do with health, and an alert on volume trains people to ignore alerts on
+#   volume. A rate SPIKE from a normal baseline is a separate question and
+#   belongs in a dashboard, not a pager.
+#
+# * Per-target or per-page alerts. Those labels are unbounded by design - they
+#   live in the database precisely so they cannot become labels here. An alert
+#   rule per target would reintroduce the exact cardinality problem
+#   `metrics/cardinality_test.go` exists to prevent.
+
+groups:
+  # ======================================================================
+  - name: telemetry
+    interval: 30s
+    rules:
+      # ---- The one that matters ----
+      #
+      # Publishing drops are only lossy, not an outage: clicks are still written
+      # to the database. So this is not `critical`. It is `warning` and it has a
+      # long `for`, because a firehose that has been dropping for five minutes
+      # is not a blip, and the only symptom is this alert.
+      #
+      # Thresholds are expressed as a RATIO rather than a count, so the alert
+      # means the same thing at 10 clicks a minute and at 10 million.
+      - alert: TelemetryFirehoseDropping
+        expr: |
+          sum(rate(wideo11_telemetry_publish_dropped_total[5m]))
+          /
+          clamp_min(
+            sum(rate(wideo11_telemetry_publish_dropped_total[5m]))
+            + sum(rate(wideo11_telemetry_published_total[5m])),
+            1
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "Click firehose is dropping events (>5% over 5m)"
+          description: >-
+            {{ $value | humanizePercentage }} of click events are being dropped
+            instead of published to NATS. The ledger in Postgres is unaffected -
+            clicks are still recorded - but the realtime feed is incomplete, so
+            alerting on live behaviour is degraded. Check analytics-service logs
+            for NATS connection errors.
+          runbook: |
+            1. `docker logs wideo11-analytics-service | grep TELEMETRY`
+            2. `curl -s localhost:8091/metrics | grep telemetry_` - check
+               `wideo11_telemetry_nats_connected`
+            3. If NATS is down, the clicks are safe in Postgres. Fix NATS; the
+               stream resumes on its own.
+
+      # ---- NATS unreachable ----
+      #
+      # Fires on the gauge rather than on "publish errors", because a publisher
+      # that cannot connect never gets far enough to error per message - and a
+      # metric that only ever reads zero during an outage is a metric that tells
+      # you nothing.
+      - alert: TelemetryNATSDisconnected
+        expr: wideo11_telemetry_nats_connected == 0
+        for: 2m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "analytics-service cannot reach NATS"
+          description: >-
+            The realtime firehose has been disconnected for 2 minutes. Clicks
+            are still recorded in Postgres; only the live feed is lost.
+          runbook: |
+            1. `docker compose ps nats` - is the container healthy?
+            2. `docker logs wideo11-nats | tail -20` - config parse errors put
+               it in a crash loop and look exactly like this.
+
+      # ---- Publish errors ----
+      #
+      # Separate from drops: an error is a failed publish ATTEMPT, a drop is an
+      # event we never tried to send. Together they say whether NATS is
+      # rejecting messages or the service cannot reach it.
+      - alert: TelemetryPublishErrors
+        expr: rate(wideo11_telemetry_publish_errors_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "Sustained errors publishing to NATS"
+          description: >-
+            {{ $value | printf "%.2f" }} publish errors per second over 5
+            minutes. NATS is reachable but rejecting messages - check stream
+            limits and the subject naming.
+
+      # ---- The ledger's own health ----
+      #
+      # `outcome="error"` means rows failed to write. That is different from a
+      # publish failure and much more serious: it is the RECORD failing, not the
+      # feed.
+      - alert: TelemetryLedgerWriteErrors
+        expr: rate(wideo11_ui_click_events_total{outcome="error"}[5m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: telemetry
+        annotations:
+          summary: "Click ledger is failing to record events"
+          description: >-
+            Rows are failing to insert into `ui_click_events`. Unlike the NATS
+            path, nothing is being retained anywhere - these clicks are lost.
+
+      # ---- Ingest rejections ----
+      #
+      # `outcome="rejected"` is a malformed payload. Small numbers are a client
+      # bug; a sustained rate means something is posting garbage at the ingest
+      # route, which is worth knowing about even though the route is
+      # token-protected.
+      - alert: TelemetryIngestRejections
+        expr: rate(wideo11_ui_click_events_total{outcome="rejected"}[10m]) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "Sustained malformed payloads at the click ingest route"
+          description: >-
+            Over half a request per second is being rejected as invalid. The
+            internal token is shared, so this is more likely a buggy client
+            than an attack - but it is worth finding out which.
+
+  # ======================================================================
+  - name: telemetry-retention
+    interval: 30s
+    rules:
+      # ---- Retention is not running ----
+      #
+      # A HEARTBEAT, compared against wall-clock time. Not "nothing was purged in
+      # N hours", which is the rule that looks obvious and does not work:
+      #
+      #   * A counter that has never been incremented is NOT absent. It is
+      #     registered at process start with value 0, so `absent_over_time` on it
+      #     is empty forever and the rule can never fire - valid YAML that looks
+      #     like coverage.
+      #   * On a quiet night, purging nothing is CORRECT. Alerting on it trains
+      #     people to dismiss the alert that matters.
+      #
+      # The threshold is 6h sweep interval + 3h of slack. The heartbeat is only
+      # advanced on a fully SUCCESSFUL sweep, so a sweeper that is up but erroring
+      # goes stale here too - which is what you want, and what
+      # `wideo11_telemetry_retention_sweep_failures_total` then explains.
+      - alert: TelemetryRetentionNotRunning
+        expr: (time() - wideo11_telemetry_retention_last_sweep_timestamp_seconds) > 32400
+        for: 10m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "Retention sweep has not completed successfully in 9 hours"
+          description: >-
+            Last successful sweep was {{ $value | humanizeDuration }} ago. The
+            sweep runs every 6h, so 9h means either the job is not running or it
+            is failing every time. `ui_click_events` is still growing, and nothing
+            is reclaiming space.
+          runbook: |
+            1. `docker logs wideo11-analytics-service | grep RETENTION`
+            2. If the log stops after a deploy, the goroutine is not starting -
+               check for a panic in main.
+            3. If it logs FAILED, the DELETE is erroring. A locked table or a
+               full disk both look like this.
+
+      # ---- The sweeper is alive but erroring ----
+      #
+      # Distinct from the heartbeat, and worth separating: "not running" and
+      # "running and failing" have different fixes and the heartbeat alone cannot
+      # tell them apart.
+      - alert: TelemetryRetentionSweepFailing
+        expr: increase(wideo11_telemetry_retention_sweep_failures_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "Retention sweeps are failing"
+          description: >-
+            {{ $value }} failed sweep(s) in the last hour. The heartbeat will
+            also go stale, but this names the cause.
+
+      # ---- The table falling behind ----
+      #
+      # Non-zero BETWEEN sweeps is normal and expected; this is deliberately a
+      # warning rather than critical, and has a `for` so a single sweep boundary
+      # does not page anyone.
+      - alert: TelemetryPurgeBacklogGrowing
+        expr: wideo11_telemetry_rows_pending_purge > 0
+        for: 30m
+        labels:
+          severity: warning
+          component: telemetry
+        annotations:
+          summary: "{{ $value }} rows are past the retention window and not being purged"
+          description: >-
+            A small number between sweeps is normal. Sustained for 30 minutes
+            means the sweeper is not keeping up, or has stopped - see
+            `TelemetryRetentionNotRunning`.

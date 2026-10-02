@@ -5,6 +5,9 @@ packages:
   - 'infrastructure/*'
   - 'model/*'
   - 'repository/*'
+  - 'docker/*'
+  - 'monitoring/*'
+  - 'tools/*'
 
 # Pura system ek central dynamic catalogs block ke andar unified object locked:
 catalogs:

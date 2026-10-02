@@ -4,12 +4,12 @@
 // karta tha aur kuch nahi karta tha - na FFmpeg chala, na MinIO par upload.
 //
 // AB KYA HOTA HAI (end-to-end):
-//   1. Client transcode job bhejta hai (video_id + source URL)
-//   2. HLS profile chuna jata hai (2s/4s segments - .env se)
-//   3. FFmpeg actually CHALA jata hai -> .m3u8 + .ts chunks generate
-//   4. Saare chunks MinIO 'video' bucket me UPLOAD hote hain
-//   5. Playlist ka URL client ko wapas milta hai
-//   6. Playback seedha bucket/CDN se hoti hai - GKE compute bypass
+//  1. Client transcode job bhejta hai (video_id + source URL)
+//  2. HLS profile chuna jata hai (2s/4s segments - .env se)
+//  3. FFmpeg actually CHALA jata hai -> .m3u8 + .ts chunks generate
+//  4. Saare chunks MinIO 'video' bucket me UPLOAD hote hain
+//  5. Playlist ka URL client ko wapas milta hai
+//  6. Playback seedha bucket/CDN se hoti hai - GKE compute bypass
 //
 // ARCHITECTURE (aapke rule):
 //   - GKE compute sirf TRANSCODE karta hai
@@ -22,8 +22,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/subtle"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -67,14 +71,17 @@ type Config struct {
 
 // TranscodeJob - ek video transcode request
 type TranscodeJob struct {
-	ID       string `json:"id"`
-	VideoID  string `json:"video_id"`
-	SourceURL string `json:"source_url"`
-	Profile  string `json:"profile"`   // 480p / 720p / 1080p
-	Status   string `json:"status"`
-	Progress int    `json:"progress"`
+	ID          string `json:"id"`
+	VideoID     string `json:"video_id"`
+	SourceURL   string `json:"source_url"`
+	Profile     string `json:"profile"` // 480p / 720p / 1080p
+	Status      string `json:"status"`
+	Progress    int    `json:"progress"`
 	PlaylistURL string `json:"playlist_url"`
-	Error    string `json:"error"`
+	Error       string `json:"error"`
+	// PosterURL is produced alongside the playlist, so the callback can send it
+	// and the channel card has something to show without signing a URL per view.
+	PosterURL string    `json:"poster_url"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -87,8 +94,8 @@ var minioClient *minio.Client
 
 // HLS profiles - resolution to bitrate mapping
 var hlsProfiles = map[string]struct {
-	Width    int
-	Height   int
+	Width        int
+	Height       int
 	VideoBitrate string
 	AudioBitrate string
 }{
@@ -128,8 +135,19 @@ func loadConfig() {
 	cfg.Port = envStr("TRANSCODING_SERVICE_PORT", "8083")
 
 	cfg.MinIOEndpoint = envStr("MINIO_ENDPOINT", "minio:9000")
-	cfg.MinIOAccessKey = envStr("MINIO_ROOT_USER", "")
-	cfg.MinIOSecretKey = envStr("MINIO_ROOT_PASSWORD", "")
+	// Renamed from MINIO_ROOT_USER / MINIO_ROOT_PASSWORD.
+	//
+	// The values are now a BUCKET-SCOPED service account, not root - but the env var
+	// NAME was left reading MINIO_ROOT_*, which is a trap: an operator auditing
+	// compose, or a secret scanner, sees `MINIO_ROOT_USER` attached to this service
+	// and reasonably concludes it still holds storage-wide credentials. It does not,
+	// and the only evidence is the value it is fed.
+	//
+	// So the name now says what the credential is. `MINIO_ROOT_*` is reserved for
+	// `minio` (which defines root) and `minio-init` (which provisions accounts) -
+	// those two genuinely need it.
+	cfg.MinIOAccessKey = envStr("MINIO_TRANSCODE_ACCESS_KEY", "")
+	cfg.MinIOSecretKey = envStr("MINIO_TRANSCODE_SECRET_KEY", "")
 	cfg.MinIOUseSSL = envBool("MINIO_USE_SSL", false)
 	cfg.VideoBucket = envStr("MINIO_VIDEO_BUCKET", "video")
 
@@ -147,12 +165,12 @@ func ensureBucket(ctx context.Context) error {
 // processTranscoding - ACTUAL FFmpeg execution + MinIO upload
 //
 // Steps:
-//   1. Profile validate karo
-//   2. Temp dir banao
-//   3. FFmpeg chalao (HLS: .m3u8 playlist + .ts segments)
-//   4. Sabhi files MinIO me upload karo
-//   5. Temp dir clean karo
-//   6. Playlist URL return karo
+//  1. Profile validate karo
+//  2. Temp dir banao
+//  3. FFmpeg chalao (HLS: .m3u8 playlist + .ts segments)
+//  4. Sabhi files MinIO me upload karo
+//  5. Temp dir clean karo
+//  6. Playlist URL return karo
 func processTranscoding(ctx context.Context, job *TranscodeJob) {
 	start := time.Now()
 	job.Status = "processing"
@@ -211,6 +229,7 @@ func processTranscoding(ctx context.Context, job *TranscodeJob) {
 		job.Error = fmt.Sprintf("ffmpeg failed: %v | output: %s",
 			err, string(output[len(output)-min(500, len(output)):]))
 		log.Printf("[TRANSCODING] Job %s FAILED: %v", job.ID, err)
+		reportBack(job)
 		return
 	}
 
@@ -283,6 +302,79 @@ func processTranscoding(ctx context.Context, job *TranscodeJob) {
 
 	log.Printf("[TRANSCODING] Job %s COMPLETE in %v | uploaded=%d files | playlist=%s",
 		job.ID, time.Since(start).Round(time.Millisecond), uploaded, job.PlaylistURL)
+
+	// ---- Report the result back to the owner of the asset ----
+	//
+	// Without this the asset sits at `uploaded` FOREVER. Nothing else in the
+	// system ever advances it: the transcoder does the work and then finishes
+	// silently, the channel page counts only `ready` rows, and the creator sees
+	// a file that uploaded fine and never appears.
+	//
+	// Best-effort BY DESIGN, and the ordering matters: this runs after the output
+	// is in MinIO, so a failed callback costs a re-run, never a lost transcode. A
+	// failed callback does NOT fail the job - the bytes are safely stored either
+	// way, and an operator can re-drive it.
+	reportBack(job)
+}
+
+// reportBack tells auth-service what happened to this asset.
+//
+// The token is the same shared secret the transcode INTAKE uses. It is a
+// service-to-service call inside the compose network, and a per-caller token
+// would be a second credential to manage for the same trust boundary.
+//
+// Failure is logged and swallowed, and the reason is the asymmetry: the file is
+// already stored and transcoded, so the only loss is the RECORD of it. Failing
+// the job here would report a broken transcode for work that actually
+// succeeded, which is worse than a late record.
+func reportBack(job *TranscodeJob) {
+	callback := envStr("TRANSCODE_CALLBACK_URL", "")
+	if callback == "" {
+		return
+	}
+
+	body := map[string]any{
+		"asset_id":     job.VideoID,
+		"job_id":       job.ID,
+		"status":       job.Status,
+		"progress":     job.Progress,
+		"playlist_url": job.PlaylistURL,
+		"error":        job.Error,
+		"poster_url":   job.PosterURL,
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		log.Printf("[TRANSCODING] callback payload failed for job %s: %v", job.ID, err)
+		return
+	}
+
+	req, err := http.NewRequest(http.MethodPost, callback, bytes.NewReader(payload))
+	if err != nil {
+		log.Printf("[TRANSCODING] callback request failed for job %s: %v", job.ID, err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if tok := envStr("TRANSCODE_INTERNAL_TOKEN", ""); tok != "" {
+		req.Header.Set("X-Internal-Token", tok)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		log.Printf("[TRANSCODING] callback FAILED for job %s (asset %s): %v - "+
+			"the asset stays `uploaded` until a re-run", job.ID, job.VideoID, err)
+		return
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		snippet, _ := io.ReadAll(io.LimitReader(res.Body, 256))
+		log.Printf("[TRANSCODING] callback returned %d for job %s: %s",
+			res.StatusCode, job.ID, string(bytes.TrimSpace(snippet)))
+		return
+	}
+	log.Printf("[TRANSCODING] reported job %s (asset %s) back as %s", job.ID, job.VideoID, job.Status)
 }
 
 func min(a, b int) int {
@@ -365,17 +457,52 @@ func main() {
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"status":         "ok",
-			"service":        "transcoding-service",
-			"port":           cfg.Port,
+			"status":          "ok",
+			"service":         "transcoding-service",
+			"port":            cfg.Port,
 			"segment_seconds": cfg.HLSSegmentSeconds,
-			"bucket":         cfg.VideoBucket,
-			"workers":        cfg.MaxWorkers,
+			"bucket":          cfg.VideoBucket,
+			"workers":         cfg.MaxWorkers,
 		})
 	})
 
+	// ---- Intake auth ----
+	//
+	// `POST /api/v1/transcode` was OPEN. It runs ffmpeg per job, so anything able
+	// to reach this container could queue encodes for free - a CPU-exhaustion
+	// vector dressed as an internal endpoint, and the compose network is not a
+	// trust boundary (every service can reach every other one).
+	//
+	// Health stays open on purpose: a liveness probe that needs a credential
+	// means the orchestrator has to hold a secret just to learn whether the
+	// container is alive.
+	//
+	// A missing token is REFUSED rather than defaulted to "allow". Failing closed
+	// here is the whole point - an unset env var must never mean "open", or the
+	// protection is one deploy mistake away from not existing.
+	internalToken := envStr("TRANSCODE_INTERNAL_TOKEN", "")
+	if internalToken == "" {
+		log.Fatal("TRANSCODE_INTERNAL_TOKEN is empty: the transcode intake runs ffmpeg and " +
+			"must not be open. Set it rather than starting without a token.")
+	}
+
+	requireInternalToken := func(c *gin.Context) {
+		got := strings.TrimSpace(c.GetHeader("X-Internal-Token"))
+		// Constant-time: the token is compared by length first by
+		// ConstantTimeCompare, and a `==` would leak via timing on a value that
+		// gates a CPU-bound endpoint.
+		if subtle.ConstantTimeCompare([]byte(got), []byte(internalToken)) != 1 {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "invalid_internal_token",
+				"message": "Provide a valid X-Internal-Token header.",
+			})
+			return
+		}
+		c.Next()
+	}
+
 	// Transcode job submit karo
-	r.POST("/api/v1/transcode", func(c *gin.Context) {
+	r.POST("/api/v1/transcode", requireInternalToken, func(c *gin.Context) {
 		var req struct {
 			VideoID   string `json:"video_id" binding:"required"`
 			SourceURL string `json:"source_url" binding:"required"`
@@ -391,12 +518,12 @@ func main() {
 		}
 
 		job := TranscodeJob{
-			ID:         uuid.New().String(),
-			VideoID:    req.VideoID,
-			SourceURL:  req.SourceURL,
-			Profile:    req.Profile,
-			Status:     "queued",
-			CreatedAt:  time.Now(),
+			ID:        uuid.New().String(),
+			VideoID:   req.VideoID,
+			SourceURL: req.SourceURL,
+			Profile:   req.Profile,
+			Status:    "queued",
+			CreatedAt: time.Now(),
 		}
 
 		select {

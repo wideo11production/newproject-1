@@ -42,6 +42,20 @@ COPY apps/currency ./apps/currency
 WORKDIR /app/apps/currency
 # 4GB heap - 76% ceiling ke andar (monorepo Next.js builds memory heavy hote hain)
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# ---- NEXT_PUBLIC_* ko BUILD TIME par pass karo ----
+#
+# Next.js inhe `next build` ke dauraan source me inline kar deta hai, runtime par
+# nahi - isliye compose ka `environment:` block in vars ke liye DEAD hai.
+#
+# Isi wajah se ye app click ledger me dikhai nahi deta tha: tracker
+# `NEXT_PUBLIC_APP_SURFACE` padhta tha, par value `undefined` thi, to fallback
+# chala aur app apna naam nahi, apna port bhejti thi.
+ARG NEXT_PUBLIC_APP_SURFACE=currency
+ARG NEXT_PUBLIC_CURRENCY_API=http://localhost:8086
+ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
+ENV NEXT_PUBLIC_CURRENCY_API=$NEXT_PUBLIC_CURRENCY_API
+
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ---- Runner stage: minimal standalone output ----

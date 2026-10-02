@@ -47,8 +47,26 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	// Auto migrate database schema
-	if err := database.AutoMigrate(db); err != nil {
+	// =========================================================================
+	// SCHEMA
+	// =========================================================================
+	//
+	// `database.Migrate` and not `database.AutoMigrate`, and the difference is the
+	// whole point: AutoMigrate only creates the tables GORM knows about, so on an
+	// empty database EVERYTHING the SQL chain owns is missing - `channels`,
+	// `user_services`, `appointments`, `privilege_registry`, and every view.
+	//
+	// That was not theoretical. With the chain unrun, the service could not start
+	// AT ALL on a fresh database:
+	//
+	//	create view privilege_registry: ERROR: relation "appointments" does not exist
+	//
+	// because the view is created after AutoMigrate and reads a table migration
+	// 017 creates. Not degraded, not partially - not started.
+	//
+	// `Migrate` orders the four phases and records a ledger, so a fresh deploy and
+	// a redeploy converge on the same schema without a human running psql.
+	if err := database.Migrate(db); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -245,6 +263,100 @@ func main() {
 	// (login me 3-failed-password lockout enforce karne ke liye zaroori hai)
 	// NOTE: ye authHandler BANNE KE BAAD hona chahiye - pehle undefined error aata tha
 	authHandler.SetSecurityService(securitySvc)
+
+	// ---- Channel subscriptions (migration 015) ----
+	//
+	// The subscriber COUNT is DERIVED from `channel_subscriptions` through the
+	// `channel_subscriber_counts` view. Nothing increments a counter anywhere -
+	// that is the whole point, and it is why a stored `subscriber_count` column
+	// is deliberately absent from the `channels` table.
+	//
+	// Redis caches the derived count for 60s and is invalidated on every write.
+	// `Keys()` hands over the raw client so this can take the narrow `CountCache`
+	// interface rather than the whole wrapper - which also means the count can be
+	// tested without a live Redis.
+	subSvc := service.NewChannelSubscriptionService(db, redisClient.Keys())
+	authHandler.SetSubscriptionService(subSvc)
+
+	// ---- Media pipeline (Phase 3 + 4) ----
+	//
+	// `MediaService` owns the `media_assets` rows and the state machine;
+	// `StorageService` only signs URLs and never touches the database. Keeping
+	// them apart means "can this URL be signed" and "is this user over quota"
+	// stay two questions with two failure modes, instead of one component that
+	// is bad at both.
+	// ---- Entitlements (Phase 5) ----
+	//
+	// Seeded from .env on every boot, so a plan or price change is a restart
+	// rather than a migration. The seed is an UPSERT by (plan_code, capability)
+	// AND it DELETES grants for plans that are no longer configured - otherwise a
+	// retired plan quietly keeps granting capabilities to whoever still holds it.
+	entitlementSvc := service.NewEntitlementService(db, cfg.Plans)
+	if err := entitlementSvc.Seed(context.Background()); err != nil {
+		// Fatal, not a warning. Running with an EMPTY catalogue means every quota
+		// check resolves to zero and nobody can do anything - which looks like a
+		// total outage rather than a misconfiguration, and would be diagnosed in
+		// entirely the wrong place.
+		log.Fatalf("entitlement seed failed: %v", err)
+	}
+	log.Printf("[ENTITLEMENTS] seeded %d plan(s): %v", len(cfg.Plans.Plans), cfg.Plans.Codes())
+
+	// =========================================================================
+	// SERVICE ACCESS + RBAC (migration 017)
+	// =========================================================================
+	//
+	// ---- WHY THIS IS HERE NOW AND NOT ALREADY ----
+	//
+	// `internal/service/service_access.go` and `internal/service/rbac.go` were
+	// fully written, fully commented and covered by 40 tests. Neither was ever
+	// CONSTRUCTED in this file. Verified on the live database before this change:
+	//
+	//     SELECT count(*) FROM permissions;  -> 0
+	//     SELECT count(*) FROM roles;        -> 0
+	//     SELECT count(*) FROM user_services -> 0
+	//
+	// So migration 017's four tables existed and were empty, the registry view
+	// existed, and the code that reads them was unreachable. A superadmin's
+	// "who may do what" screen would have rendered an empty list forever, and
+	// nothing anywhere would have said why.
+	//
+	// The lesson is the same one this repo keeps meeting: a feature can be
+	// complete, tested, documented and never run. `TestEveryTableNameIsProvisioned`
+	// now checks the tables are created; nothing checked they were POPULATED.
+	//
+	// ---- WHY THE SEED IS FATAL ON FAILURE ----
+	//
+	// An empty permission catalogue means `Can()` answers `false` for everything.
+	// Every privileged action silently refuses, and the symptom - "nobody can do
+	// anything" - looks like a permissions bug rather than a boot that skipped a
+	// step. Failing loudly at startup is the honest version of the same state.
+	serviceAccess := service.NewServiceAccess(db)
+	rbac := service.NewRBAC(db, serviceAccess)
+
+	if err := rbac.Seed(context.Background()); err != nil {
+		// Same reasoning as the entitlement seed above, and the same severity.
+		log.Fatalf("RBAC seed failed: %v", err)
+	}
+	log.Printf("[RBAC] permission catalogue seeded")
+
+	authHandler.SetRBAC(rbac, serviceAccess)
+
+	authHandler.SetMediaService(service.NewMediaService(db, entitlementSvc))
+	// ---- Transcoding handoff ----
+	//
+	// Optional. A missing client does NOT fail an upload - FinalizeMedia
+	// records the asset and simply does not queue the transcode, because telling
+	// a user their 8 GB upload failed means they re-upload it.
+	if tc, err := service.NewTranscodeClient(); err != nil {
+		log.Printf("[MEDIA] transcode handoff OFF: %v - uploads will be stored but not transcoded", err)
+	} else {
+		authHandler.SetTranscodeClient(tc)
+		// Lifetime device slots. Read-only surface for the account screen; the
+		// ENFORCEMENT happens inside the register path, so it cannot be bypassed by
+		// calling a different endpoint.
+		authHandler.SetDeviceSlotService(service.NewDeviceSlotService(db, entitlementSvc))
+	}
+	authHandler.SetEntitlementService(entitlementSvc)
 
 	// Set up router
 	r := gin.New()
@@ -496,6 +608,7 @@ func main() {
 
 			// ---- Creator dashboard endpoints (migration 005) ----
 			// Sab token-derived user_id par scoped hain.
+			protected.GET("/dashboard/stats", authHandler.GetDashboardStats)
 			protected.GET("/channels", authHandler.ListChannels)
 			protected.POST("/channels", authHandler.CreateChannel)
 			// ---- Phase B1: channel management beyond create ----
@@ -512,7 +625,118 @@ func main() {
 			// BEFORE minting a URL or saving anything.
 			protected.POST("/channels/:id/cover/upload-url", authHandler.CoverUploadURL)
 			protected.POST("/channels/:id/cover/finalize", authHandler.CoverFinalize)
+			// Cover upload during channel creation (no channel ID yet).
+			protected.POST("/channels/cover/upload-url", authHandler.CoverUploadURLForCreate)
+			protected.POST("/channels/cover/finalize", authHandler.CoverFinalizeForCreate)
+
+			// ---- CHANNEL SETUP STEP 2 (migration 022) ----
+			//
+			// The compulsory second step. Creating a channel and having a channel
+			// are different things, and a creator who stops after creating one
+			// leaves an empty banner, no logo and no upload defaults behind -
+			// which is the state every abandoned account looks like.
+			//
+			// `/channels/setup/pending` puts a STATIC segment where `:id` puts a
+			// wildcard, so the two share a path position. Gin resolves the static
+			// segment in preference to the wildcard, which is what makes the
+			// pending route work; registration order was checked and does not
+			// matter either way.
+			//
+			// What DOES matter is that the static route exists at all. A request to
+			// `/channels/setup/pending` served by the `:id` handler would parse
+			// "pending" as a channel id, fail, and answer 400 - so the dashboard
+			// gate would report "setup status unavailable" on every load with no
+			// other symptom. `TestChannelSetupRoutesAreReachable` holds this.
+			protected.GET("/channels/setup/pending", authHandler.PendingChannelSetup)
+			protected.GET("/channels/:id/setup", authHandler.GetChannelSetup)
+			protected.PATCH("/channels/:id/setup", authHandler.UpdateChannelSetup)
+			// The logo's three steps. A separate bucket budget from the cover, so
+			// separate endpoints rather than a `?kind=` parameter - a kind
+			// parameter would be one handler with two security profiles, and the
+			// wrong branch is the one nobody reads.
+			protected.POST("/channels/:id/logo/upload-url", authHandler.LogoUploadURL)
+			protected.POST("/channels/:id/logo/finalize", authHandler.LogoFinalize)
+			// ---- Channel subscriptions (migration 015) ----
+			//
+			// The COUNT is served from the `channel_subscriber_counts` VIEW, not a
+			// column. Nothing increments a subscriber number anywhere in this
+			// codebase, which is the entire point - see
+			// `internal/service/channel_subscription.go`.
+			//
+			// `subscribe` / `unsubscribe` / `mine` take the viewer from the TOKEN,
+			// never from a parameter, so nobody can subscribe anyone else.
+			protected.POST("/channels/:id/subscribe", authHandler.SubscribeChannel)
+			protected.POST("/channels/:id/unsubscribe", authHandler.UnsubscribeChannel)
+			protected.GET("/channels/:id/subscription", authHandler.AmIChannelSubscriber)
+			// The LIST of who subscribed is audience data and is authenticated for
+			// that reason. The COUNT is public - see the handler's comment.
+			protected.GET("/channels/:id/subscribers", authHandler.ListChannelSubscribers)
 			protected.PATCH("/profile", authHandler.UpdateProfile)
+			// ---- Reel platform readiness (Phase 4) ----
+			//
+			// GET /media/:id/reel-readiness is PUBLIC, and that is deliberate: the grid
+			// describes a FILE - its dimensions, length, size, whether it has audio - and
+			// contains nothing about who owns it. It is fixed-length and keyed by
+			// platform, so there is nothing to enumerate either.
+			//
+			// It reads through MediaService.ReelFactsFor, which returns a struct that
+			// CANNOT carry the owner. The guarantee is in the type rather than in trusting
+			// the handler not to read a field it was not given - which is the difference
+			// between a boundary and a habit.
+			publicMedia := r.Group("/api/v1/media")
+			{
+				publicMedia.GET("/reel-platforms", authHandler.ListReelPlatforms)
+				publicMedia.GET("/:id/reel-readiness", authHandler.ReelReadiness)
+			}
+
+			// Owner-scoped media routes.
+			// From `protected`, NOT from `auth`.
+			//
+			// `protected` is the group that carries `AuthMiddleware()`. Attaching to
+			// `auth` would put a token-gated handler behind no token check at all.
+			//
+			// The handler reads the user id from the TOKEN (`creatorUserID`), so this
+			// mistake produced a 401 rather than a breach - which is exactly the reason
+			// that is the only place it reads it from. Had it taken the id from the
+			// request body, the same wiring mistake would have been an open endpoint.
+			protectedMedia := protected.Group("/media")
+			{
+				protectedMedia.GET("/:id/export-pack", authHandler.ReelExportPack)
+				// Media mutations. The quota lives at initiate, so a user who is over
+				// allowance never receives a URL and never pays the upload time.
+				protectedMedia.POST("/initiate", authHandler.InitMedia)
+				protectedMedia.POST("/:id/finalize", authHandler.FinalizeMedia)
+				protectedMedia.GET("", authHandler.ListMedia)
+				protectedMedia.GET("/:id", authHandler.GetMedia)
+				// Poll for "is it ready yet" without downloading the whole asset.
+				// Owner-scoped, because `failure_reason` and `object_key` are not
+				// things to hand a stranger.
+				protectedMedia.GET("/:id/status", authHandler.MediaStatus)
+
+				// ---- The transcode callback ----
+				//
+				// NOT under `/media/:id`, deliberately: this is a REPORT about an asset,
+				// not a request for one, and the id arrives in the body.
+				//
+				// It authenticates with the shared `TRANSCODE_INTERNAL_TOKEN` inside the
+				// handler, using a constant-time compare. It is not behind
+				// `AuthMiddleware` because the transcoder is a SERVICE, not a signed-in
+				// user - and it WRITES to media rows, so an open endpoint here would let
+				// anyone mark anyone's video `ready` with a url of their choosing.
+				r.POST("/api/v1/internal/media/transcode-callback", authHandler.TranscodeCallback)
+
+				// ---- Device management (lifetime plan allowance) ----
+				//
+				// Read-only surface for the account screen. The ENFORCEMENT lives in the
+				// register path (DeviceSlotService.CheckSlot), so it cannot be sidestepped by
+				// calling a different endpoint.
+				//
+				// `revoke` takes the fingerprint in a BODY, never in a URL: a fingerprint
+				// identifies a device, and a URL would put it in every access log, proxy log
+				// and browser history between here and the user.
+				protected.GET("/devices", authHandler.ListDevices)
+				protected.POST("/devices/revoke", authHandler.RevokeDevice)
+			}
 			// Profile GET v2 - avatar_url ke saath (purana `GetProfile`
 			// fields ka subset return karta hai, isliye naya endpoint).
 			protected.GET("/profile/full", authHandler.GetProfileV2)
@@ -537,7 +761,40 @@ func main() {
 		{
 			publicGroup.GET("", authHandler.ListPublicChannels)
 			publicGroup.GET("/:handle", authHandler.GetPublicChannel)
+			// The channel's published videos and reels. Separate from the channel itself
+			// so a page can show the Videos and Shorts tabs without fetching everything
+			// and splitting it in the client.
+			publicGroup.GET("/:handle/media", authHandler.GetPublicChannelMedia)
 		}
+
+		// =====================================================================
+		// SERVICE ACCESS + RBAC (migration 017)
+		// =====================================================================
+		//
+		// Registered on `protected`, so a token is already required. Everything
+		// below then answers a NARROWER question: is this token a superadmin, or
+		// does it hold a named permission?
+		//
+		// The superadmin check lives INSIDE the handlers rather than as a
+		// middleware on this group, and that is deliberate. It is read from the
+		// DATABASE (`superadmin_accounts.is_active`), not from a role claim on the
+		// token, so a slot revoked mid-session stops working on the next request
+		// rather than at token expiry. As a group middleware it would also run
+		// identically for every route in `protected` - and these are the routes
+		// that DEFINE the privilege model, so they must be able to answer for
+		// themselves.
+		//
+		// `requirePermission` IS a middleware, and is applied per-route where it is
+		// used, so a handler cannot forget to call it.
+		//
+		// These live INSIDE this block because `protected` is block-scoped: a
+		// declaration in one `{ ... }` is not visible in the next one.
+		protected.GET("/services", authHandler.MyServices)
+
+		adminRBAC := protected.Group("/admin")
+		adminRBAC.GET("/registry", authHandler.GetPrivilegeRegistry)
+		adminRBAC.POST("/services/grant", authHandler.GrantService)
+		adminRBAC.POST("/services/revoke", authHandler.RevokeService)
 	}
 
 	// Security routes - PIN, questions, biometric, audit
@@ -607,14 +864,26 @@ func main() {
 		log.Printf("[OK] Storage ready: MinIO %s (bucket %s)",
 			cfg.Storage.GetEndpoint(), cfg.Storage.GetAvatarBucket())
 	}
-	// Click tracking service - persistent history + 30-day retention
-	clickSvc := service.NewClickService(db)
-	clickHandler := handler.NewClickHandler(clickSvc)
-	// Recording public hai, list/stats/purge superadmin-only
-	clickHandler.RegisterRoutes(auth, authHandler.AuthMiddleware(), superadminHandler.RequireSuperadminMiddleware())
-
-	// 30-day retention worker - background me chalta hai
-	clickSvc.StartClickRetentionWorker(context.Background())
+	// ---- Click tracking REMOVED from auth-service ----
+	//
+	// This used to be a full click-tracking stack here: `ClickService`, the
+	// `/click-events` routes, the `click_events` table and a 30-day retention
+	// worker. All of it has moved to `analytics-service` as `ui_click_events`.
+	//
+	// WHY IT MOVED, since "it worked, why move it": "which button did this user
+	// press" is not an auth concern. It lived here only because this service had
+	// a database already wired up, and the cost was that the ledger was
+	// unfindable, analytics queries had to cross service boundaries, and the
+	// table had exactly one owner who did not want it.
+	//
+	// The analytics service is where it belongs: it already models clicks,
+	// views, conversions and reach, and it now owns the 90-day retention for
+	// the UI ledger. The superadmin Awareness grid reads it from there via
+	// `forwardTelemetry`, which checks the caller's role before attaching the
+	// internal token.
+	//
+	// Removed rather than left behind: dead endpoints on a live service are how
+	// the next person ends up writing to a table nobody is reading.
 
 	// WebAuthn (biometric/passkey) routes
 	// Sirf tab register karte hain jab WebAuthn service successfully init hua ho

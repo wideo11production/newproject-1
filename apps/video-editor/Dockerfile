@@ -125,6 +125,45 @@ WORKDIR /app/apps/video-editor
 # pnpm ke package-dir script resolution par depend nahi karte (MODULE_NOT_FOUND fix)
 # Build heap limit 4GB deta hai taaki bade apps OOM na ho. 76% resource ceiling
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# ---- `NEXT_PUBLIC_*` ko BUILD TIME par pass karo ----
+#
+# Ye ZAROORI hai, warna ye sab chup-chaap `undefined` rehte hain.
+#
+# Next.js `process.env.NEXT_PUBLIC_X` ko **build** ke dauraan source code me
+# literal value se replace kar deta hai - `next start` par nahi. Isliye runtime
+# `environment:` block me var dene se koi fark nahi padta: browser bundle pehle
+# hi compile ho chuka hota hai, usme sirf `undefined` likha hota hai.
+#
+# Ye chup-chaap bug hai kyunki apps me hardcoded fallbacks hain. `access-gate.tsx`
+# me `process.env.NEXT_PUBLIC_LOGIN_URL ?? 'http://localhost:3000/auth/login'`
+# - fallback sahi value de raha tha, isliye gate kaam karta raha, aur env var ke
+# miss hone ka koi nazar nahi aayi. Wahi cheez click ledger me bhi hui: editor
+# ke clicks `editor` ke bajaye `port-3002` label ke saath aa rahe the.
+#
+# Values `docker-compose.yml` ke build args se aati hain, `.env` se. Inhe
+# runtime vars ki tarah NA likhna - `.env` me `NEXT_PUBLIC_*` sirf is build arg
+# ko default dene ke liye hai.
+ARG NEXT_PUBLIC_APP_SURFACE=editor
+ARG NEXT_PUBLIC_AUTH_API_URL=http://localhost:8085
+ARG NEXT_PUBLIC_AUTH_INTERNAL_URL=http://auth-service:8085
+ARG NEXT_PUBLIC_API_URL=http://localhost:8080
+ARG NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000/dashboard
+ARG NEXT_PUBLIC_LOGIN_URL=http://localhost:3000/auth/login
+ARG NEXT_PUBLIC_REGISTER_URL=http://localhost:3000/auth/register
+ARG NEXT_PUBLIC_VERIFY_URL=http://localhost:3000/auth/verify
+ARG NEXT_PUBLIC_SECURITY_SETUP_URL=http://localhost:3000/auth/security-setup
+
+ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
+ENV NEXT_PUBLIC_AUTH_API_URL=$NEXT_PUBLIC_AUTH_API_URL
+ENV NEXT_PUBLIC_AUTH_INTERNAL_URL=$NEXT_PUBLIC_AUTH_INTERNAL_URL
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DASHBOARD_URL=$NEXT_PUBLIC_DASHBOARD_URL
+ENV NEXT_PUBLIC_LOGIN_URL=$NEXT_PUBLIC_LOGIN_URL
+ENV NEXT_PUBLIC_REGISTER_URL=$NEXT_PUBLIC_REGISTER_URL
+ENV NEXT_PUBLIC_VERIFY_URL=$NEXT_PUBLIC_VERIFY_URL
+ENV NEXT_PUBLIC_SECURITY_SETUP_URL=$NEXT_PUBLIC_SECURITY_SETUP_URL
+
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ------------------------------------------------------------

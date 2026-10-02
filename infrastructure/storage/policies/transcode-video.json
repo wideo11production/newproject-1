@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Scoped policy for `transcoding-service`.",
+    "",
+    "Why this exists: `transcoding-service` was running on MINIO_ROOT_USER. That is",
+    "the full-storage takeover credential, in the one service that reads every",
+    "user's source video and writes HLS renditions - so it is the single highest",
+    "blast radius service in the stack, and it had the widest key.",
+    "",
+    "The gap table in `updatedtodo.md` marked 'MinIO uses root credentials' as",
+    "CLOSED. That was true for auth-service, which got `wideo11-auth-avatars`, and",
+    "false here. A fix applied to four services out of five is not a fix.",
+    "",
+    "Scope is deliberately narrower than auth-avatars:",
+    "  - READ on `video/*`    - it has to fetch the source file to transcode it",
+    "  - WRITE on `video/*`   - it writes HLS segments and playlists",
+    "  - NOTHING on `avatars` - it has no business touching a profile image",
+    "  - NOTHING on `covers`  - same",
+    "",
+    "No `s3:DeleteBucket`, no `s3:PutBucketPolicy`, no admin actions. It can only",
+    "read and write objects inside the one bucket it needs.",
+    "",
+    "Note the READ grant covers `video/*`, which includes other users' uploads.",
+    "That is unavoidable - a transcode reads arbitrary source files - and it is why",
+    "the service still must not be reachable by anything untrusted."
+  ],
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ListVideoBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetBucketLocation",
+        "s3:ListBucket",
+        "s3:ListBucketMultipartUploads"
+      ],
+      "Resource": [
+        "arn:aws:s3:::video"
+      ]
+    },
+    {
+      "Sid": "ReadWriteVideoObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:GetObjectVersion",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "Resource": [
+        "arn:aws:s3:::video/*"
+      ]
+    }
+  ]
+}

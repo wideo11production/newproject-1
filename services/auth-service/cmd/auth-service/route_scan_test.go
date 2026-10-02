@@ -68,8 +68,8 @@ func prefixesOf(arg string) string {
 //
 // A literal-only comparison is wrong. main.go contains both:
 //
-//   protected.POST("/pin/verify")        -> /api/v1/auth/pin/verify
-//   secGroup.POST("/pin/verify")         -> /api/v1/auth/security/pin/verify
+//	protected.POST("/pin/verify")        -> /api/v1/auth/pin/verify
+//	secGroup.POST("/pin/verify")         -> /api/v1/auth/security/pin/verify
 //
 // The path literal "/pin/verify" appears twice, but these are DIFFERENT
 // routes and gin does not panic on them. A literal scanner reports a false
@@ -87,7 +87,7 @@ func newRouteScanner() *routeScanner {
 	return &routeScanner{
 		// `r` is gin's root engine; its prefix is empty.
 		groupPrefix: map[string]string{"r": ""},
-		counts:     map[string]int{},
+		counts:      map[string]int{},
 	}
 }
 

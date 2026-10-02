@@ -37,18 +37,30 @@
 
 BEGIN;
 
-IF COL_LENGTH('dbo.security_profiles', 'biometric_opted_out') IS NULL
-BEGIN
-  ALTER TABLE dbo.security_profiles
-    ADD biometric_opted_out bit NOT NULL
-      CONSTRAINT DF_security_profiles_biometric_opted_out DEFAULT (0);
-END;
+-- Ye pehle ye tha:
+--
+--   IF COL_LENGTH('dbo.security_profiles', 'biometric_opted_out') IS NULL
+--   BEGIN
+--     ALTER TABLE dbo.security_profiles
+--       ADD biometric_opted_out bit NOT NULL
+--         CONSTRAINT DF_... DEFAULT (0);
+--   END;
+--   EXEC sys.sp_addextendedproperty ...
+--
+-- Teeno PostgreSQL par fail hote the, alag-alag reasons se:
+--   - `IF ... BEGIN ... END` T-SQL hai; PostgreSQL me `IF` ek statement hai
+--   - `dbo.security_profiles` SQL Server ka schema-qualified naam hai
+--   - `bit` SQL Server ka boolean type hai (PostgreSQL: `boolean`)
+--   - `sys.sp_addextendedproperty` SQL Server procedure hai
+--
+-- Jo bhi pehle apply hua tha, `bit` type hone ki wajah se ye column ya to
+-- bilkul nahi bana, ya ek alag type ke saath bana - aur Go model ke `bool`
+-- ke saath mismatch. `boolean NOT NULL DEFAULT false` wahi contract hai jo
+-- `recomputeSetupComplete` code me padhta hai.
+ALTER TABLE security_profiles
+  ADD COLUMN IF NOT EXISTS biometric_opted_out BOOLEAN NOT NULL DEFAULT false;
 
-EXEC sys.sp_addextendedproperty
-  @name = N'MS_Description',
-  @value = N'User explicitly declined biometric setup. When true, biometric enrollment is no longer required for security setup completion. Only set via the explicit skip action.',
-  @level0type = N'SCHEMA', @level0name = N'dbo',
-  @level1type = N'TABLE',  @level1name = N'security_profiles',
-  @level2type = N'COLUMN', @level2name = N'biometric_opted_out';
+COMMENT ON COLUMN security_profiles.biometric_opted_out IS
+  'User explicitly declined biometric setup. When true, biometric enrollment is no longer required for security setup completion. Only set via the explicit skip action.';
 
 COMMIT;

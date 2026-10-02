@@ -48,9 +48,19 @@ export interface Session {
   state: SessionState;
   email: string;
   role: string;
+  /**
+   * The one avatar the user uploaded.
+   *
+   * The editor's account menu used to draw INITIALS while the web app's profile
+   * drew the real photo, so the same person had two faces depending on which app
+   * they were in. A user who uploaded a picture expects it to be the picture.
+   *
+   * Empty when there is none, and the component falls back to initials.
+   */
+  avatarUrl: string;
 }
 
-const INITIAL: Session = { state: 'loading', email: '', role: '' };
+const INITIAL: Session = { state: 'loading', email: '', role: '', avatarUrl: '' };
 
 /**
  * Read the current session from the server route.
@@ -65,21 +75,23 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
     try {
       const res = await fetch('/api/session', { cache: 'no-store' });
       if (!res.ok) {
-        setSession({ state: 'out', email: '', role: '' });
+        setSession({ state: 'out', email: '', role: '', avatarUrl: '' });
         return;
       }
       const body = (await res.json()) as {
         state?: SessionState;
         email?: string;
         role?: string;
+        avatarUrl?: string;
       };
       setSession({
         state: body.state ?? 'out',
         email: body.email ?? '',
         role: body.role ?? 'user',
+        avatarUrl: body.avatarUrl ?? '',
       });
     } catch {
-      setSession({ state: 'out', email: '', role: '' });
+      setSession({ state: 'out', email: '', role: '', avatarUrl: '' });
     }
   }, []);
 

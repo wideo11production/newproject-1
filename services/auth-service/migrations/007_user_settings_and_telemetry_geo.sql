@@ -74,33 +74,73 @@ COMMENT ON TABLE user_settings IS
   'Single source of truth for user preferences (theme, language, accent, feature toggles). One row per user, created lazily on first settings read.';
 
 -- ============================================================================
--- TABLE 2: click_events geo/device enrichment
+-- TABLE 2: click_events geo/device enrichment - RETIRED LEDGER
 -- ============================================================================
 --
--- ---- WHY ----
--- Requirement: "superadmin ko pata chale user KIS DESH, KIS CONTINENT se,
--- KIS DEVICE, KIS BROWSER se aaya".
+-- ---- WHY THIS SECTION NO LONGER CREATES ANYTHING ON A FRESH DATABASE ----
 --
--- Existing columns me sirf `user_agent` (raw string) aur `ip_address` thhe.
--- Raw UA parse karna fragile hai (bad bot traffic, custom UAs), aur country/
--- continent to bilkul nahi tha.
+-- Original purpose: "superadmin ko pata chale user KIS DESH se, KIS DEVICE se,
+-- KIS BROWSER se aaya". So `click_events` gained `country`, `continent`,
+-- `device_type`, `browser`, `os` and `session_id`.
 --
--- NOTE: ye REAL values hain - request headers se derive kiye jayenge.
--- Koi bhi default/fake/demo value nahi daali jaayegi. Agar header missing
--- hai to NULL rahega - jhootha data likhne se behtar hai.
+-- That ledger has since MOVED. `ui_click_events` in `analytics-service` is
+-- authoritative, and `model.ClickEvent` was deliberately removed from
+-- `MigratedModels()` - with the reason written down there: leaving it registered
+-- would make AutoMigrate recreate `click_events` on every boot, so the table
+-- could never actually go away and you would have TWO ledgers with no way to tell
+-- which one is read.
 --
--- ---- PRIVACY NOTE (important) ----
--- Ye location DATA kabhi USER KO DIKHATA nahi - sirf superadmin panel me
--- jaata hai, aur wo analytics/audit purpose ke liye hai. Country-level
--- granularity rakhi hai (city/precise location nahi) - ye GDPR-friendly
--- approach hai (exact location chahiye hota to consent + explicit purpose
--- chahiye hota).
+-- But this migration kept `ALTER TABLE click_events ...` unguarded. On a database
+-- where the table still exists that is harmless. On a fresh one it is fatal:
+--
+--     ERROR: relation "click_events" does not exist
+--
+-- which is how the chain came to be un-runnable from 001 upward - the service
+-- could not be provisioned at all. Verified against a real empty database while
+-- fixing this.
+--
+-- ---- WHAT IT DOES INSTEAD ----
+--
+--   * Table present (every existing deployment) -> the columns are added, exactly
+--     as before. Nothing about a live database changes.
+--   * Table absent (a fresh deployment) -> the section is SKIPPED with a NOTICE.
+--     No dead ledger is resurrected, because resurrecting it is precisely the
+--     outcome the Go-side removal was trying to prevent.
+--
+-- The equivalence it gives up is stated rather than hidden: a brand-new install
+-- no longer has geo/device columns on a legacy table, because it does not have
+-- that table. The equivalent data is in `analytics-service.ui_click_events`.
+--
+-- ---- PRIVACY, unchanged ----
+--
+-- Location data is country-level only - never city, never precise - and is
+-- visible only in the superadmin panel, for analytics and audit. That is the
+-- GDPR-shaped choice: exact location would require consent and a stated purpose.
+-- Values are derived from request headers; when a header is missing the column
+-- stays NULL. A faked default would be worse than a gap.
 DO $$
 BEGIN
-  -- Country (ISO 3166-1 alpha-2, e.g. "IN", "US")
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'click_events'
+  ) THEN
+    RAISE NOTICE
+      '007: click_events is absent - skipping geo/device enrichment. That ledger '
+      'has moved to analytics-service.ui_click_events, and recreating the table '
+      'here would produce a second, unread one. Nothing to do.';
+
+    -- Country (ISO 3166-1 alpha-2, e.g. "IN", "US")
+  END IF;
+
+  -- ---- Everything below is a no-op unless the legacy table is still here ----
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'click_events'
+  ) THEN
+
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='country'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name = 'country'
   ) THEN
     ALTER TABLE click_events ADD COLUMN country VARCHAR(2);
   END IF;
@@ -108,7 +148,7 @@ BEGIN
   -- Continent (e.g. "AS", "EU", "NA")
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='continent'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name='continent'
   ) THEN
     ALTER TABLE click_events ADD COLUMN continent VARCHAR(8);
   END IF;
@@ -118,7 +158,7 @@ BEGIN
   -- Derived from UA + client hints. NULL = could not determine.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='device_type'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name='device_type'
   ) THEN
     ALTER TABLE click_events ADD COLUMN device_type VARCHAR(16);
   END IF;
@@ -127,7 +167,7 @@ BEGIN
   -- "Chrome 131" jaisa. Raw UA se parse.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='browser'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name='browser'
   ) THEN
     ALTER TABLE click_events ADD COLUMN browser VARCHAR(64);
   END IF;
@@ -136,7 +176,7 @@ BEGIN
   -- "Windows 11", "Android 14", "iOS 17" jaisa.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='os'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name='os'
   ) THEN
     ALTER TABLE click_events ADD COLUMN os VARCHAR(64);
   END IF;
@@ -146,24 +186,51 @@ BEGIN
   -- anonymous visitor ke clicks alag, ek logged-in user ke alag.
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
-     WHERE table_name='click_events' AND column_name='session_id'
+     WHERE table_schema = 'public' AND table_name = 'click_events' AND column_name = 'session_id'
   ) THEN
     ALTER TABLE click_events ADD COLUMN session_id UUID;
   END IF;
+
+  END IF; -- table present
 END $$;
 
--- Index: superadmin panel filters by country/device/time
-CREATE INDEX IF NOT EXISTS idx_click_events_country ON click_events(country);
-CREATE INDEX IF NOT EXISTS idx_click_events_device  ON click_events(device_type);
-CREATE INDEX IF NOT EXISTS idx_click_events_session ON click_events(session_id);
-CREATE INDEX IF NOT EXISTS idx_click_events_time    ON click_events(timestamp DESC);
+-- ---------------------------------------------------------------------------
+-- Indexes and comments - ALSO guarded.
+-- ---------------------------------------------------------------------------
+--
+-- These were bare statements. `CREATE INDEX ... ON click_events(country)` on an
+-- absent table fails exactly like the ALTER did, so guarding only the columns
+-- would have moved the failure three lines down rather than removing it.
+--
+-- `EXECUTE` with a quoted literal, because a plain `CREATE INDEX` inside plpgsql
+-- is a DDL statement and plpgsql only accepts DDL through EXECUTE - it will not
+-- plan `CREATE INDEX` as static SQL. The same applies to `COMMENT ON`.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+     WHERE table_schema = 'public' AND table_name = 'click_events'
+  ) THEN
+    -- Index: superadmin panel filters by country/device/time
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_click_events_country ON click_events(country)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_click_events_device  ON click_events(device_type)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_click_events_session ON click_events(session_id)';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_click_events_time    ON click_events(timestamp DESC)';
 
-COMMENT ON COLUMN click_events.country IS
-  'ISO 3166-1 alpha-2 country derived from request IP geo headers. NULL when unavailable (never faked).';
-COMMENT ON COLUMN click_events.continent IS
-  'Continent derived from country. NULL when country unknown.';
-COMMENT ON COLUMN click_events.device_type IS
-  'Device class parsed from User-Agent/client hints: mobile, tablet, desktop, bot, or unknown.';
+    EXECUTE $cmt$
+      COMMENT ON COLUMN click_events.country IS
+        'ISO 3166-1 alpha-2 country derived from request IP geo headers. NULL when unavailable (never faked).'
+    $cmt$;
+    EXECUTE $cmt$
+      COMMENT ON COLUMN click_events.continent IS
+        'Continent derived from country. NULL when country unknown.'
+    $cmt$;
+    EXECUTE $cmt$
+      COMMENT ON COLUMN click_events.device_type IS
+        'Device class parsed from User-Agent/client hints: mobile, tablet, desktop, bot, or unknown.'
+    $cmt$;
+  END IF;
+END $$;
 
 -- ============================================================================
 -- PROMOTION: koi user ko superadmin banana ho to:

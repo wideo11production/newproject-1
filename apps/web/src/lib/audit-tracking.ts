@@ -124,9 +124,14 @@ export function useClickTracking(pageName: string) {
  * flush - queued events ko SERVER par bhejta hai
  *
  * PERSISTENCE FIX: pehle ye localStorage + memory buffer me store karta tha, jo
- * RESTART par gayab ho jata tha. Ab ye auth-service ke click_events table me
- * POST karta hai - jo Postgres me hota hai, to restart-safe hai aur superadmin
- * dashboard par dikhta hai.
+ * RESTART par gayab ho jata tha. Ab ye `/api/audit` par POST karta hai, jo
+ * `analytics-service` ke `ui_click_events` table me Postgres me likhta hai - to
+ * restart-safe hai aur superadmin dashboard par dikhta hai.
+ *
+ * NOTE: ye localStorage me KOI click data nahi rakhta. Pehle rakhta tha, jo
+ * privacy ka poora alag problem hai (browser disk par PII, aur logout par bhi
+ * pada rehta hai). Ab sirf event queue memory me hai, aur pagehide par flush
+ * ho jata hai.
  *
  * Hinglish: ab clicks database me jaati hain - restart karne par bhi rahengi
  */

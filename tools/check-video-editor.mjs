@@ -328,6 +328,7 @@ try {
       // with no accessible name is simply not there for many users.
       registerChars: register ? (register.innerText || '').trim().length : null,
       registerName: register ? register.getAttribute('aria-label') : null,
+      registerText: register ? (register.innerText || '').trim() : null,
       // No token in the DOM or storage, ever.
       tokenInDom: /eyJ[A-Za-z0-9_-]{10,}/.test(document.documentElement.innerHTML),
       storageKeys: Object.keys(localStorage).filter(k => /token|auth|session/i.test(k)),
@@ -345,9 +346,21 @@ try {
     { registerHref: out.registerHref, signInHref: out.signInHref }
   );
   check(
-    'the gate controls keep a name for a screen reader',
-    !!out.registerName && out.registerChars === 0,
-    { name: out.registerName, visibleChars: out.registerChars }
+    'the gate controls have a name a screen reader can read',
+    // NOT an icon-only check. A sign-in screen with two buttons SHOULD have
+    // words on it - "Create an account" and "I already have an account" are
+    // clearer than two glyphs, and there is no dense toolbar here to protect.
+    // Icon-only is the right call in the 40-control editor toolbar, which is
+    // where the suite checks that separately.
+    //
+    // The actual requirement is simply: a name that is not empty. `aria-label`
+    // when present, otherwise the visible text, because either one is what a
+    // screen reader announces.
+    (() => {
+      const name = out.registerName ?? out.registerText ?? '';
+      return name.trim().length > 0;
+    })(),
+    { ariaLabel: out.registerName, text: out.registerText }
   );
   check(
     'no auth token is readable by the client (httpOnly cookie, not stolen into JS)',

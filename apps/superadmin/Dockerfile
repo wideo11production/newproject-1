@@ -42,6 +42,26 @@ COPY apps/superadmin ./apps/superadmin
 
 WORKDIR /app/apps/superadmin
 ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# ---- NEXT_PUBLIC_* ko BUILD TIME par pass karo ----
+#
+# Next.js inhe `next build` ke dauraan source me inline kar deta hai, runtime
+# par nahi. Isliye compose ka `environment:` block in vars ke liye DEAD hai -
+# bundle pehle hi compile ho chuka hota hai. Ye ARG block usi ko build time
+# par wapas laata hai.
+#
+# Har app me har `NEXT_PUBLIC_*` read site par ek hardcoded fallback hai, aur wahi
+# sahi value hai - isliye bug chup-chaap tha. Click ledger me hi nikla: editor
+# apne events `port-3002` (fallback) label ke saath bhej raha tha, `editor`
+# nahi.
+#
+# NOTE: sirf wahi vars yahan hain jo BROWSER me padhe jaate hain aur jinki value
+# host se resolve ho sakti hai. Koi compose-internal hostname (`auth-service`,
+# `dashboard-service`) jaan-boojh kar nahi daala gaya - browser unhe resolve hi
+# nahi kar sakta, to ek kaam karne wala fallback badal kar chup-chaap toota URL
+# mil jata.
+ARG NEXT_PUBLIC_APP_SURFACE=superadmin
+ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ---- Runner ----
@@ -54,7 +74,28 @@ RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 WORKDIR /app
 
 COPY --from=builder --chown=nextjs:nodejs /app/apps/superadmin/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/superadmin/.next/static ./.next/static
+# ---- YEH PATH PEHLE GALAT THI ----
+#
+# Pehle ye `./.next/static` tha. `output: 'standalone'` me Next.js monorepo ka
+# path apne server bundle me PRESERVE karta hai - matlab `/app/server.js`
+# `apps/superadmin/.next/static` me static dhoondta hai, `/app/.next/static`
+# me nahi.
+#
+# Iska matlab: HTML sahi serve hota hai (usme sahi chunk hash likhe hote hain),
+# par wo chunks disk par hote hi nahi. Har `/_next/static/**.js` par server
+# 404 page return karta tha - jo browser ke liye JavaScript nahi, balki HTML
+# hai. `script` tag parse error throw karta hai, hydration kabhi hoti hi nahi.
+#
+# Isiliye is app ka POORA client-side behaviour mara hua tha: tracker nahi
+# chal raha tha, buttons click nahi ho rahe the. Ye tab pata chala jab click
+# ledger check kiya gaya aur superadmin par zero events aaye, jabki baaki chhe
+# apps par ek-ek aa rahe the.
+#
+# Baaki paanch apps ka path sahi hai - har ek `./apps/<name>/.next/static` use
+# karta hai. `monitor` ka apna `distDir` (`.next-monitor`) hai, isliye wo
+# `./apps/monitor/.next-monitor/static` karta hai - apne distDir ke hisab se,
+# jo bhi sahi hai.
+COPY --from=builder --chown=nextjs:nodejs /app/apps/superadmin/.next/static ./apps/superadmin/.next/static
 
 USER nextjs
 EXPOSE 3008

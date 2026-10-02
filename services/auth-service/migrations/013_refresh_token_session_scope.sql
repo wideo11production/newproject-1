@@ -77,15 +77,71 @@ CREATE INDEX IF NOT EXISTS idx_refresh_tokens_session_id
 -- Session delete -> uske saare refresh tokens delete.
 -- Ye `sessions.id` par hai (user par nahi), kyunki hum device-scope
 -- isolation chahte hain, user-scope nahi.
+--
+-- -----------------------------------------------------------------------------
+-- WHY THE GUARD COMPARES THE RULE AND NOT JUST THE NAME
+-- -----------------------------------------------------------------------------
+--
+-- Ye pehle ye tha:
+--
+--     IF NOT EXISTS (
+--       SELECT 1 FROM pg_constraint WHERE conname = 'fk_refresh_tokens_session'
+--     ) THEN
+--       ALTER TABLE refresh_tokens ADD CONSTRAINT fk_refresh_tokens_session
+--         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+--     END IF;
+--
+-- Jo bilkul OK lagta hai, aur KUCH NAHI karta.
+--
+-- `AutoMigrate` PEHLE chalta hai, aur `model.RefreshToken` ka
+--
+--     Session Session `gorm:"foreignKey:SessionID"`
+--
+-- association GORM se ban jata hai - WITHOUT a delete rule (PostgreSQL usko
+-- NO ACTION samajhta hai) - aur GORM usko EXACTLY `fk_refresh_tokens_session`
+-- naam deta hai.
+--
+-- Toh sequence ye hai:
+--     1. AutoMigrate constraint banata hai  -> NO ACTION
+--     2. ye file chalti hai
+--     3. guard constraint ko `conname` se dhoondta hai -> MILTA HAI
+--     4. guard `RETURN` kar deta hai -> CASCADE KABHI LAGTA HI NAHI
+--
+-- Har database par. Har boot par. Silently.
+--
+-- Isi wajah se guard ab RULE check karta hai, `pg_constraint.confdeltype`
+-- se. 'c' = CASCADE, 'a' = NO ACTION, 'r' = RESTRICT.
+--
+-- Galat rule ho to constraint DROP karke sahi rule ke saath dobara banaya
+-- jaata hai. `refresh_tokens` rows exist ho sakte hain - lekin ye DDL hai,
+-- row-level locking nahi, aur galat rule se `DELETE FROM sessions` FAIL hota
+-- hai. Fail karna, ya sessions ko delete na ho paana, dono behtar hain.
 DO $$
+DECLARE
+  current_rule "char";
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'fk_refresh_tokens_session'
-  ) THEN
-    ALTER TABLE refresh_tokens
-      ADD CONSTRAINT fk_refresh_tokens_session
-      FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
+  SELECT confdeltype INTO current_rule
+    FROM pg_constraint
+   WHERE conname = 'fk_refresh_tokens_session'
+     AND connamespace = 'public'::regnamespace;
+
+  IF current_rule = 'c' THEN
+    -- Already correct. DO NOT touch it: dropping and recreating a constraint on
+    -- every boot would take an ACCESS EXCLUSIVE lock for no reason, and the rule
+    -- is already what we want.
+    RETURN;
   END IF;
+
+  IF current_rule IS NOT NULL THEN
+    RAISE NOTICE
+      '013: fk_refresh_tokens_session existed with delete rule % - recreating with CASCADE',
+      current_rule;
+    ALTER TABLE refresh_tokens DROP CONSTRAINT fk_refresh_tokens_session;
+  END IF;
+
+  ALTER TABLE refresh_tokens
+    ADD CONSTRAINT fk_refresh_tokens_session
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE;
 END
 $$;
 

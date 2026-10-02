@@ -4,6 +4,8 @@ import { Moon, Sun, User, LogOut, Settings, BarChart3, Activity, Bell, Users, Da
 import { Button } from '@wideo11/ui/button';
 import { useTheme } from 'next-themes';
 import type { ReactNode } from 'react';
+// The one real user menu in this monorepo. See the comment on `UserMenu`.
+import { SessionUserMenu } from '@wideo11/ui/session-user-menu';
 
 type DropdownProps = {
   children: ReactNode;
@@ -44,29 +46,24 @@ export function ThemeToggle() {
   );
 }
 
+// =============================================================================
+// UserMenu is the SHARED session menu, not a local one.
+//
+// It used to be a static block: a placeholder <img src="/placeholder.svg">, three
+// hardcoded items, and a "Sign Out" that was a button with no handler - it
+// looked like a user menu and did nothing. There was no logout route on this app
+// at all, so there was nothing for it to call.
+//
+// It now renders `SessionUserMenu` from `@wideo11/ui`, which reads this app's
+// `/api/session` and posts to `/api/auth/logout`. The editor renders the same
+// component, so the two cannot drift apart again.
+//
+// The local DropdownMenu* primitives below are kept: other menus in this file
+// still use them, and re-implementing them here would be the duplication this
+// change exists to remove.
+// =============================================================================
 export function UserMenu() {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Button variant="ghost" size="sm" className="text-gray-300 hover:text-ink hover:bg-gray-800">
-          <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-gray-700 text-xs text-gray-300">
-            <img src="/placeholder.svg" alt="User avatar" className="h-full w-full object-cover" />
-          </div>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
-        <DropdownMenuItem>
-          <User className="h-4 w-4 mr-2" /> Profile
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="h-4 w-4 mr-2" /> Settings
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          <LogOut className="h-4 w-4 mr-2" /> Sign Out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+  return <SessionUserMenu dashboardUrl="/dashboard" className="" />;
 }
 
 export function Loading() {

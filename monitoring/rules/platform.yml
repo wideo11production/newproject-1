@@ -327,11 +327,11 @@ groups:
       # uske liye `DiskSpaceCritical` (niche, 10% se kam) hai. Dono chahiye.
       - alert: DiskFillingUp
         expr: >-
-          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[24h], 24 * 3600) - 5 * 1024 * 1024 * 1024 < 0
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|selfowner|devtmpfs"}[24h], 24 * 3600) - 5 * 1024 * 1024 * 1024 < 0
           and
-          count_over_time(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}[24h]) > 100
+          count_over_time(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|selfowner|devtmpfs"}[24h]) > 100
           and
-          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} > 0
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|selfowner|devtmpfs"} > 0
         for: 1h
         labels:
           severity: warning
@@ -345,11 +345,52 @@ groups:
             unrecoverable without a backup, so a sustained trend is still
             worth acting on.
 
+      # ======================================================================
+      # The filesystem selector, and why it lists more than tmpfs|overlay.
+      # ======================================================================
+      #
+      # `tmpfs|overlay` was not enough on Docker Desktop, and the alert fired on a
+      # filesystem nobody had heard of:
+      #
+      #     DiskSpaceCritical  /host_mnt has under 10% free
+      #     fstype="virtiofs"  device="host"  ratio=0.0967
+      #
+      # Two separate things were true there, and only one was the alert working:
+      #
+      #   1. THE NUMBER IS REAL. `/host_mnt` is the WINDOWS HOST disk shared into
+      #      the WSL2 VM, and it really was at 9.67% free. Docker Desktop keeps
+      #      its VHDX there, so it genuinely matters - and pruning inside the VM
+      #      did not move it, because freeing space in a VHDX does not shrink the
+      #      host file. That part of the alert was correct and must keep firing.
+      #
+      #   2. THE DESCRIPTION WAS WRONG. It said "Postgres will refuse writes" for
+      #      EVERY mountpoint. Postgres data is in a Docker named volume on
+      #      `/var/lib/docker` (ext4, on the VM's own 289G disk at 10% used), not
+      #      on the host share. So the one sentence the operator read described a
+      #      consequence that would not happen on the filesystem that was
+      #      actually full.
+      #
+      # Fixes:
+      #   - `selfowner` added. Docker Desktop's file-sharing MARKERS are not
+      #     filesystems; they are marker files that inherit their parent's numbers,
+      #     so they report a mountpoint nobody configured and can never be fixed.
+      #     `squashfs` and `devtmpfs` added for the same reason.
+      #   - the description below names what is actually ON the mount instead of
+      #     asserting one consequence for all of them.
+      #
+      # `/var/lib` - where Postgres actually lives - is deliberately NOT excluded,
+      # and is the mountpoint whose full disk really would stop the database.
+      #
+      # VERIFY IT FIRED FOR THE RIGHT REASON before trusting it:
+      #
+      #     curl -s 'http://localhost:9090/api/v1/query?query=
+      #       node_filesystem_avail_bytes%7Bfstype!~"tmpfs|overlay"%7D
+      #       / node_filesystem_size_bytes%7Bfstype!~"tmpfs|overlay"%7D'
       - alert: DiskSpaceCritical
         expr: >-
-          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"}
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|selfowner|devtmpfs"}
           /
-          node_filesystem_size_bytes{fstype!~"tmpfs|overlay"}
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|selfowner|devtmpfs"}
           < 0.10
         for: 10m
         labels:
@@ -357,5 +398,21 @@ groups:
         annotations:
           summary: "{{ $labels.mountpoint }} has under 10% free"
           description: >-
-            Postgres will refuse writes and then refuse to start once the
-            disk is full.
+            {{ $labels.mountpoint }} (fstype {{ $labels.fstype }}) is under 10% free.
+            What that breaks depends on the mount, so check which one this is
+            before acting:
+
+            /var/lib - the Docker volume Postgres writes to. This is the one where
+            the original warning is accurate: Postgres refuses writes and then
+            refuses to start once this is full. Free space here with
+            `docker builder prune -af` and `docker image prune -a`.
+
+            /host_mnt - the WINDOWS HOST disk shared into the VM, not a volume
+            Postgres writes to. Postgres is unaffected. But Docker Desktop's VHDX
+            lives here, so the VM cannot grow, and pruning inside the VM will NOT
+            move this number - a VHDX does not shrink on its own. Free space on the
+            Windows drive, or compact the VHDX.
+
+            Host resource numbers (CPU, memory, container count) are also visible on
+            port 3001 with no credential; that is deliberate, because the dashboard
+            is unusable without them.

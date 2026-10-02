@@ -33,15 +33,35 @@
 -- file after AutoMigrate and fails on any disagreement.
 --
 -- ---- IDEMPOTENT ----
--- `psql -f` se manually chalti hai (koi runner nahi), isliye dobara chalana
--- routine hai. `CREATE TABLE IF NOT EXISTS` + `CREATE INDEX IF NOT EXISTS`.
+-- `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`,
+-- `ADD COLUMN IF NOT EXISTS`. Every statement is a no-op on a second run.
+--
+-- The runner in `internal/database/migrator.go` applies this file inside its own
+-- transaction and records it in `schema_migrations`, so a normal boot will not
+-- re-apply it at all. These guards are for the OTHER case - a database that was
+-- built by hand, which is every existing deployment - where the chain is applied
+-- to tables AutoMigrate has already created.
 --
 -- Hinglish: refresh token ka hash store karo, raw token kabhi nahi
 -- ============================================================================
 
 BEGIN;
 
-CREATE TABLE refresh_tokens (
+-- ---- THE `IF NOT EXISTS` THAT WAS MISSING ----
+--
+-- This file's own header said "it was rewritten to be idempotent" and then
+-- declared `CREATE TABLE refresh_tokens` with no `IF NOT EXISTS`.
+--
+-- The comment documented the fix; the statement never received it. That is the
+-- same failure migration 011 had, and it is invisible for as long as nobody
+-- provisions a database - because on an EXISTING database AutoMigrate has
+-- already created the table, so a manual re-run is where you would see it, and a
+-- re-run is the case the comment was claiming to handle.
+--
+-- It was found by `TestMigrationChainReplays`, which had never actually reached
+-- this file: the test was failing at step 1 on a view whose table did not exist
+-- yet, so no amount of passing at step 1 proved anything about steps 2 and 3.
+CREATE TABLE IF NOT EXISTS refresh_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
   -- ON DELETE CASCADE: user delete hote hi tokens hat jaate hain. Bina iske
@@ -60,20 +80,47 @@ CREATE TABLE refresh_tokens (
 );
 
 -- Lookup path: every refresh attempt resolves a token by its hash.
-CREATE UNIQUE INDEX idx_refresh_tokens_token_hash
+CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash
   ON refresh_tokens (token_hash);
 
 -- Listing a user's sessions, and revoking all of them on rollover.
-CREATE INDEX idx_refresh_tokens_user_id
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user_id
   ON refresh_tokens (user_id);
 
 -- Cleanup worker scans on expiry.
-CREATE INDEX idx_refresh_tokens_expires_at
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires_at
   ON refresh_tokens (expires_at);
 
--- Refresh token hashes for the JWT refresh flow. Raw tokens are never stored;
--- token_hash holds a SHA-256 digest. The token_hash column must never contain
--- the token itself. revoked_at is set when the token is rotated, revoked, or
--- invalidated by a PIN/password change; NULL means still valid.
+-- ---- session_id: migration 013 ----
+--
+-- The COLUMN only. The foreign key is 013's job, deliberately, and adding an
+-- inline `REFERENCES` here was a mistake worth recording:
+--
+-- An inline `REFERENCES sessions(id) ON DELETE CASCADE` makes PostgreSQL name the
+-- constraint `refresh_tokens_session_id_fkey` - and then 013 adds a SECOND
+-- constraint on the same column, `fk_refresh_tokens_session`. Two foreign keys,
+-- one column, both cascading: correct by accident and confusing on purpose.
+--
+-- Worse, the reason this file has no FK at all is not tidiness. GORM's
+-- AutoMigrate runs FIRST and creates `fk_refresh_tokens_session` from
+-- `model.RefreshToken` with no delete rule, which is exactly the constraint name
+-- 013's original guard looked for - so that guard skipped on every database and
+-- the CASCADE never landed anywhere. 013 now compares the RULE, and the model
+-- carries `constraint:OnDelete:CASCADE`. One owner per constraint.
+ALTER TABLE refresh_tokens
+  ADD COLUMN IF NOT EXISTS session_id UUID;
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_session_id
+  ON refresh_tokens (session_id)
+  WHERE session_id IS NOT NULL;
+
+COMMENT ON COLUMN refresh_tokens.token_hash IS
+  'SHA-256 digest of the refresh token. The token itself must never be stored here: a dump of this table must not be enough to impersonate anyone.';
+
+COMMENT ON COLUMN refresh_tokens.revoked_at IS
+  'Set when the token is rotated, revoked, or invalidated by a PIN or password change. NULL means still valid. A timestamp rather than a boolean so the reason and time survive for audit.';
+
+COMMENT ON COLUMN refresh_tokens.session_id IS
+  'The session this token belongs to, which is what makes "log out of THIS device only" expressible. NULL for tokens minted before migration 013; their access token is still dead on logout, but the row cannot be attributed to a device until it expires.';
 
 COMMIT;

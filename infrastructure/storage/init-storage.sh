@@ -236,7 +236,107 @@ verify_denied "change the covers bucket policy" \
 verify_denied "read the IAM admin API" \
     mc admin user info local "$MINIO_ROOT_USER"
 
-# Cleanup: /tmp/probe.png is still referenced by the write-denial checks above,
+# ============================================================================
+# 4b. The TRANSCODE service account
+# ============================================================================
+#
+# Separate from `MINIO_AUTH_ACCESS_KEY` on purpose, and NOT a reuse of it.
+#
+# `transcoding-service` was running on `MINIO_ROOT_USER` - the full-storage
+# takeover credential - in the one service that reads every user's source video
+# and writes HLS renditions. It had the widest key of anything in the stack.
+#
+# It cannot share the auth-service account either: that account is scoped to
+# `avatars` and `covers`, and granting it `video` would put source media in the
+# hands of the service that mints profile-image URLs. Least privilege means the
+# transcoder gets its OWN account, scoped to the one bucket it needs and
+# provably nothing else.
+TRANSCODE_POLICY_NAME="${MINIO_TRANSCODE_POLICY_NAME:-wideo11-transcode-video}"
+TRANSCODE_POLICY_FILE="${MINIO_TRANSCODE_POLICY_FILE:-/policies/transcode-video.json}"
+
+if [ -z "${MINIO_TRANSCODE_ACCESS_KEY:-}" ] || [ -z "${MINIO_TRANSCODE_SECRET_KEY:-}" ]; then
+    die "MINIO_TRANSCODE_ACCESS_KEY / MINIO_TRANSCODE_SECRET_KEY are required.
+      transcoding-service will NOT be given MINIO_ROOT credentials - a service that
+      reads every user's source media does not need storage-wide access.
+      Generate a secret with: openssl rand -base64 32 | tr -d '/+='"
+fi
+
+if [ ! -f "$TRANSCODE_POLICY_FILE" ]; then
+    die "policy file not found: ${TRANSCODE_POLICY_FILE}"
+fi
+
+if mc admin policy create local "$TRANSCODE_POLICY_NAME" "$TRANSCODE_POLICY_FILE" >/dev/null 2>&1; then
+    log "policy applied: ${TRANSCODE_POLICY_NAME}"
+else
+    die "could not create policy ${TRANSCODE_POLICY_NAME} from ${TRANSCODE_POLICY_FILE}"
+fi
+
+# Unconditional, for the same reason as the auth account: it is what makes a
+# secret rotation in .env actually PUSH the new value to MinIO.
+if out="$(mc admin user add local "$MINIO_TRANSCODE_ACCESS_KEY" "$MINIO_TRANSCODE_SECRET_KEY" 2>&1)"; then
+    log "transcode IAM user ready: ${MINIO_TRANSCODE_ACCESS_KEY}"
+else
+    die "could not create/refresh transcode IAM user: ${out}"
+fi
+
+if mc admin user info local "$MINIO_TRANSCODE_ACCESS_KEY" 2>/dev/null | grep -q "$TRANSCODE_POLICY_NAME"; then
+    log "policy already attached (idempotent): ${TRANSCODE_POLICY_NAME}"
+elif mc admin policy attach local "$TRANSCODE_POLICY_NAME" --user "$MINIO_TRANSCODE_ACCESS_KEY" >/dev/null 2>&1; then
+    log "policy attached to ${MINIO_TRANSCODE_ACCESS_KEY}"
+else
+    die "could not attach ${TRANSCODE_POLICY_NAME} to ${MINIO_TRANSCODE_ACCESS_KEY}"
+fi
+
+# ============================================================================
+# 5b. Prove the TRANSCODE account is restricted
+# ============================================================================
+#
+# Same reasoning as the auth account's denials, and it matters more here. A
+# transcode account that could read `avatars`, or delete a bucket, would be a
+# quieter problem than the auth one: nothing would look wrong until it was used.
+#
+# Asserted by ATTEMPTING and expecting denial, not by reading the policy back -
+# the policy is the intent, the denial is the behaviour.
+#
+# The alias is set under an explicit guard because this script runs `set -eu`:
+# an unguarded `mc alias set ... >/dev/null 2>&1` that failed would kill the
+# whole container with NO message, which is exactly what happened - the init
+# exited 1 having printed nothing after "policy attached".
+# `MINIO_ENDPOINT` ALREADY carries the scheme (`http://minio:9000`), exactly as
+# the `local` and `scoped` aliases above use it. Prefixing another `http://` here
+# produced `http://http://minio:9000` and mc rejected it - which is the kind of
+# error that is invisible until something like this guard prints it.
+if ! out="$(mc alias set transcode "$MINIO_ENDPOINT" "$MINIO_TRANSCODE_ACCESS_KEY" "$MINIO_TRANSCODE_SECRET_KEY" 2>&1)"; then
+    die "could not authenticate the transcode account against ${MINIO_ENDPOINT}: ${out}"
+fi
+
+verify_denied_transcode() {
+    desc="$1"
+    shift
+    if "$@" >/dev/null 2>&1; then
+        die "SECURITY: the transcode account CAN $desc. Its policy is too broad - fix"
+    fi
+    log "denied as expected: $desc"
+}
+
+verify_denied_transcode "read the avatars bucket" \
+    mc ls "transcode/${MINIO_AVATAR_BUCKET}"
+verify_denied_transcode "write into the avatars bucket" \
+    mc cp /tmp/probe.png "transcode/${MINIO_AVATAR_BUCKET}/evil.png"
+verify_denied_transcode "read the covers bucket" \
+    mc ls "transcode/${MINIO_COVER_BUCKET}"
+verify_denied_transcode "write into the covers bucket" \
+    mc cp /tmp/probe.png "transcode/${MINIO_COVER_BUCKET}/evil.png"
+verify_denied_transcode "read the thumbnails bucket" \
+    mc ls "transcode/${MINIO_THUMBNAIL_BUCKET}"
+verify_denied_transcode "create a new bucket" \
+    mc mb "transcode/should-never-exist"
+verify_denied_transcode "delete the video bucket" \
+    mc rb "transcode/${MINIO_VIDEO_BUCKET}"
+verify_denied_transcode "change the video bucket policy" \
+    mc anonymous set download "transcode/${MINIO_VIDEO_BUCKET}"
+verify_denied_transcode "read the IAM admin API" \
+    mc admin user info local "$MINIO_ROOT_USER"
 # so it can only be removed once every check has run.
 rm -f /tmp/probe.png /tmp/roundtrip.png
 

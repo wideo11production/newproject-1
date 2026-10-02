@@ -1,7 +1,7 @@
 // Package database_test verifies that the SQL migration chain in
 // ../../migrations replays cleanly and idempotently on PostgreSQL.
 //
-// WHY THIS EXISTS
+// # WHY THIS EXISTS
 //
 // This repo has no migration runner. Files are applied by hand with
 // `psql -f`, on top of whatever GORM's AutoMigrate already created. That
@@ -39,9 +39,11 @@
 package database_test
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -78,11 +80,21 @@ func TestMigrationChainReplays(t *testing.T) {
 
 	db := connect(t, cfg, scratch)
 
-	// Step 1 - AutoMigrate first. This is the real startup order: the
-	// service migrates its GORM models before any .sql file is applied by
-	// hand, so the SQL chain is authored against this shape.
-	if err := database.AutoMigrate(db); err != nil {
-		t.Fatalf("AutoMigrate on the scratch database: %v", err)
+	// Step 1 - the REAL startup path: `database.Migrate`, which is what
+	// `main.go` calls. Not `AutoMigrate`.
+	//
+	// This distinction is the whole reason this test had to change. `AutoMigrate`
+	// alone cannot provision a fresh database: it creates only the tables GORM
+	// knows about, and then it tries to create `privilege_registry`, which reads
+	// a table migration 017 creates. So on an empty database it failed with
+	//
+	//	create view privilege_registry: ERROR: relation "appointments" does not exist
+	//
+	// and the service could not start at all. A test that called AutoMigrate was
+	// therefore testing a path the service does not use, and it could not catch
+	// the one failure that made a fresh deploy impossible.
+	if err := database.Migrate(db); err != nil {
+		t.Fatalf("Migrate on the scratch database: %v", err)
 	}
 
 	files := migrationFiles(t)
@@ -249,57 +261,76 @@ func assertChainEffects(t *testing.T, db *gorm.DB) {
 		}
 	}
 
-	// 011 - the partial index. Asserting the exact predicate matters: an
-	// index built on the wrong columns still "exists", so a presence check
-	// would pass while the query path it was added for stays slow. The
-	// predicate must be booleans and a soft-delete check - NOT `is_deleted`
-	// (no such column) and NOT `= 1` (boolean = integer does not exist in
-	// PostgreSQL).
-	var predicate string
+	// ---------------------------------------------------------------------------
+	// 014 SUPERSEDES 011's partial handle index - so this asserts the REPLACEMENT
+	// ---------------------------------------------------------------------------
+	//
+	// These assertions used to be about `idx_channels_public_handle`, a PARTIAL
+	// index from 011:
+	//
+	//     CREATE INDEX idx_channels_public_handle ON channels (handle)
+	//       WHERE is_public AND is_active AND deleted_at IS NULL;
+	//
+	// Migration 014 dropped it, and correctly:
+	//
+	//     DROP INDEX IF EXISTS idx_channels_public_handle;
+	//     CREATE UNIQUE INDEX IF NOT EXISTS idx_channels_handle_unique
+	//         ON channels (lower(handle));
+	//
+	// An index is not a constraint. The partial one was only ever an ACCELERATION
+	// for public lookups and enforced nothing, so two users could both take the
+	// same handle and both get 201. `lower(handle)` also fixes "@Foo" and "@foo"
+	// being two different channels, which a bare `handle` index could not express
+	// at all.
+	//
+	// So the old assertion was not just stale, it was asserting the WEAKER
+	// guarantee - a performance aid that had been deliberately deleted, in place
+	// of the correctness guarantee that replaced it. The checks below are about
+	// `idx_channels_handle_unique`, and they are stronger:
+	//
+	//   - it must EXIST (014 ran)
+	//   - it must be UNIQUE (this is the part the old index could never give)
+	//   - it must cover `lower(handle)`, not `handle`
+	//   - it must NOT be partial, because a unique index that skipped
+	//     soft-deleted or private rows would let a handle be reused.
+	//
+	// That last one is the trap in fixing this properly: making the old index
+	// unique and keeping its predicate would be WORSE than useless, because
+	// uniqueness that skips rows does not stop a collision - it just reports it
+	// later, when the soft-deleted row is restored.
+	var handleIndex string
 	scanOne(t, db, `SELECT indexdef FROM pg_indexes
-	                WHERE schemaname = 'public' AND indexname = 'idx_channels_public_handle'`,
-		&predicate)
+	                WHERE schemaname = 'public' AND indexname = 'idx_channels_handle_unique'`,
+		&handleIndex)
 	switch {
-	case predicate == "":
-		t.Error("index idx_channels_public_handle: missing")
-	case !strings.Contains(predicate, "deleted_at IS NULL"):
-		t.Errorf("index idx_channels_public_handle: predicate does not filter soft-deleted rows: %s", predicate)
-	case !strings.Contains(predicate, "is_public") || !strings.Contains(predicate, "is_active"):
-		t.Errorf("index idx_channels_public_handle: predicate does not filter public+active: %s", predicate)
-	case strings.Contains(predicate, "is_deleted"):
-		t.Errorf("index idx_channels_public_handle: references is_deleted, which is not a column: %s", predicate)
+	case handleIndex == "":
+		t.Error("index idx_channels_handle_unique is missing: migration 014 did not run, " +
+			"so channels.handle has no uniqueness enforcement at all - two users can " +
+			"claim the same handle")
+	case !strings.Contains(strings.ToUpper(handleIndex), "UNIQUE"):
+		t.Errorf("idx_channels_handle_unique is not UNIQUE: %s\n"+
+			"  A non-unique index on handle enforces nothing, which is exactly the "+
+			"problem 014 was written to fix.", handleIndex)
+	case !strings.Contains(handleIndex, "lower"):
+		t.Errorf("idx_channels_handle_unique does not use lower(handle): %s\n"+
+			"  Without it \"@Foo\" and \"@foo\" are two different channels pointing at "+
+			"the same person's identity.", handleIndex)
+	case strings.Contains(handleIndex, "WHERE"):
+		t.Errorf("idx_channels_handle_unique is PARTIAL: %s\n"+
+			"  A partial unique index does not prevent a collision - it permits it and "+
+			"reports it later, when the excluded row comes back. Uniqueness here must "+
+			"be total.", handleIndex)
 	}
 
-	// 011 - re-running the file must not rebuild the partial index.
-	//
-	// This is the failure this guards against. `CREATE INDEX` has no
-	// `IF NOT EXISTS` for a PREDICATE, so the obvious implementation is
-	// unconditional DROP + CREATE. On a re-run that drops the index and
-	// rebuilds it from scratch - and for the duration, every /@handle public
-	// page query falls back to a sequential scan because the index does not
-	// exist at all. Re-running migrations with `psql -f` is routine in this
-	// repo, so "routine" would mean "recurring public-site slowdown".
-	//
-	// The fix is the predicate guard in 011's step 3. Verified by OID: an
-	// OID that survives a re-run is an OID that was never dropped.
-	oidBefore := indexOID(t, db)
-	applyAll(t, db, []string{"011_channel_management.sql"})
-	if after := indexOID(t, db); after != oidBefore {
-		t.Errorf("idx_channels_public_handle was rebuilt on re-run: OID %d -> %d. "+
-			"011's predicate guard is not matching, so every re-run drops and "+
-			"recreates the index, degrading public channel lookups to "+
-			"sequential scans for the duration", oidBefore, after)
-	}
-
-	// ...and the guard must still REPAIR a wrong predicate. A guard that
-	// only ever skips is worse than no guard: it would make a broken index
-	// permanent while the file kept reporting success.
-	exec(t, db, `DROP INDEX idx_channels_public_handle;
-	            CREATE INDEX idx_channels_public_handle ON channels (handle)
-	            WHERE is_public AND is_active`)
-	applyAll(t, db, []string{"011_channel_management.sql"})
-	if def := indexDef(t, db); !strings.Contains(def, "deleted_at IS NULL") {
-		t.Errorf("011 did not repair a wrong index predicate: %s", def)
+	// ...and 014 must be re-runnable without rebuilding it. `IF NOT EXISTS` plus a
+	// bare `DROP INDEX` in the same file is the pattern to watch: the DROP runs
+	// first, so the CREATE always does real work on every boot.
+	oidBefore := indexOID(t, db, "idx_channels_handle_unique")
+	applyAll(t, db, []string{"014_channel_handle_global_uniqueness.sql"})
+	if after := indexOID(t, db, "idx_channels_handle_unique"); after != oidBefore {
+		t.Errorf("idx_channels_handle_unique was rebuilt on re-run: OID %d -> %d. "+
+			"014 drops and recreates it every time it is applied, which blocks writes "+
+			"to channels.handle for the duration", oidBefore, after)
 	}
 
 	// 011 - description is NOT NULL, so the frontend never has to handle
@@ -351,39 +382,300 @@ func assertChainEffects(t *testing.T, db *gorm.DB) {
 		}
 	}
 
-	// 012 - every user-referencing foreign key cascades. The failure this
-	// guards against is not subtle: with the default NO ACTION, `DELETE FROM
-	// users` is rejected outright once the user has a session, so account
-	// deletion cannot complete and orphaned auth material (sessions, refresh
-	// tokens, WebAuthn credentials) is stranded indefinitely.
+	// ---------------------------------------------------------------------------
+	// 012 - every foreign key's delete rule matches what the relationship MEANS
+	// ---------------------------------------------------------------------------
 	//
-	// Asserted as "no FK is NO ACTION" rather than "these seven exist", so a
-	// new table gaining a user FK is covered without editing this test.
+	// The failure this guards against is not subtle: with the default NO ACTION,
+	// `DELETE FROM users` is rejected outright once the user has a session, so
+	// account deletion cannot complete and orphaned auth material (sessions,
+	// refresh tokens, WebAuthn credentials) is stranded indefinitely.
+	//
+	// ---------------------------------------------------------------------------
+	// "NOT NO ACTION" IS NOT "CASCADE", AND THE DIFFERENCE MATTERS
+	// ---------------------------------------------------------------------------
+	//
+	// An earlier version of this assertion demanded CASCADE everywhere. That was
+	// wrong, and it would have destroyed the audit trail:
+	//
+	//     user_services.granted_by_id   -> users    SET NULL
+	//     appointments.appointed_by_id  -> users    SET NULL
+	//
+	// "Who granted this access" is an AUDIT fact. Cascade it, and deleting an
+	// account erases the record of who gave it - the opposite of what an audit
+	// column is for. SET NULL keeps the row and loses only the name.
+	//
+	// So the rule is by MEANING, and it is written out per relationship rather
+	// than inferred. Three kinds, and only three:
+	//
+	//   owned     -> CASCADE. The child row exists only because of the parent.
+	//   audit     -> SET NULL, and the column must be NULLABLE.
+	//   historical-> RESTRICT. Deleting the parent would destroy history that
+	//               somebody has to be able to read.
+	//
+	// A rule that guesses which columns are audit references will eventually guess
+	// wrong, and the cost of guessing wrong is a silently deleted audit trail.
+	// Every expectation below is named.
+
+	// (a) Audit references to users: SET NULL, and NULLABLE.
+	//
+	// `SET NULL` on a NOT NULL column is rejected by PostgreSQL outright, so both
+	// halves are asserted - neither is meaningful alone.
+	for table, column := range auditReferenceColumns {
+		var isNullable string
+		scanOne(t, db, `SELECT is_nullable FROM information_schema.columns
+		                WHERE table_name = ? AND column_name = ?`, &isNullable, table, column)
+
+		// The column is matched out of `pg_get_constraintdef` rather than by
+		// joining `pg_attribute` on `array_length(conkey, 1)`.
+		//
+		// The join version looks tidier and is wrong in a way that is annoying:
+		// `conkey` is a smallint[] of column numbers, and the `pg_attribute`
+		// subquery picks exactly one of them. For a two-column foreign key it
+		// silently picks the wrong one, and a single-column one reads fine - so
+		// the query works on the tables you tested and fails on the next one.
+		// Matching the rendered definition against the column name cannot have
+		// that failure mode.
+		var rule string
+		scanOne(t, db, `
+			SELECT c.confdeltype::text
+			  FROM pg_constraint c
+			  JOIN pg_class src ON src.oid = c.conrelid
+			 WHERE c.contype = 'f'
+			   AND src.relname = ?
+			   AND pg_get_constraintdef(c.oid) LIKE '%' || ? || '%'`,
+			&rule, table, column)
+
+		if isNullable != "YES" {
+			t.Errorf("%s.%s is an AUDIT reference to users and must be NULLABLE, because "+
+				"its delete rule is SET NULL. is_nullable = %q - as it stands, PostgreSQL "+
+				"rejects the rule outright and the grant has no deletable parent.",
+				table, column, isNullable)
+		}
+		if rule != "n" {
+			t.Errorf("%s.%s has foreign key delete rule %q; an audit reference to users "+
+				"must be SET NULL ('n'), never CASCADE. Cascade deletes the record of who "+
+				"granted access when the account is deleted, which is the one thing an "+
+				"audit column must not do.", table, column, rule)
+		}
+	}
+
+	// (b) Historical references: RESTRICT, named explicitly so the exemption is a
+	// decision rather than an oversight.
+	//
+	// `appointments.role_id` is the only one. Deleting a role that somebody
+	// currently holds would silently destroy the evidence of who held it and when,
+	// so the database refuses. The correct operation is to retire the role, not to
+	// delete it - and RESTRICT is what makes that the only option.
+	for _, h := range historicalReferences {
+		var rule string
+		scanOne(t, db, `
+			SELECT c.confdeltype::text
+			  FROM pg_constraint c
+			  JOIN pg_class src ON src.oid = c.conrelid
+			  JOIN pg_class tgt ON tgt.oid = c.confrelid
+			 WHERE c.contype = 'f' AND src.relname = ? AND tgt.relname = ?`,
+			&rule, h.table, h.parent)
+		if rule != "r" {
+			t.Errorf("%s -> %s has delete rule %q, want RESTRICT ('r'). %s",
+				h.table, h.parent, rule, h.why)
+		}
+	}
+
+	// (c) Everything else: CASCADE. These are owned rows - they exist only because
+	// the parent does, so they must not be left behind as orphans.
+	//
+	// Checked as "no FK is NO ACTION or RESTRICT except the named historical
+	// ones", rather than as an allowlist of owned tables: a new table gaining an
+	// owned relationship is then covered without editing this test, which is the
+	// only way this check keeps being true.
 	var blocking []string
-	rows, err := db.Raw(`
+	rows2, err := db.Raw(`
 		SELECT c.conname || ' (' || src.relname || ' -> ' || tgt.relname || ')'
 		FROM pg_constraint c
 		JOIN pg_class src ON src.oid = c.conrelid
 		JOIN pg_class tgt ON tgt.oid = c.confrelid
-		WHERE c.contype = 'f' AND c.confdeltype <> 'c'
+		WHERE c.contype = 'f' AND c.confdeltype IN ('a', 'r')
 		ORDER BY 1`).Rows()
 	if err != nil {
-		t.Fatalf("query foreign keys: %v", err)
+		t.Fatalf("query restrictive foreign keys: %v", err)
 	}
-	defer rows.Close()
-	for rows.Next() {
+	defer rows2.Close()
+	for rows2.Next() {
 		var name string
-		if err := rows.Scan(&name); err != nil {
-			t.Fatalf("scan foreign key: %v", err)
+		if err := rows2.Scan(&name); err != nil {
+			t.Fatalf("scan restrictive foreign key: %v", err)
 		}
 		blocking = append(blocking, name)
 	}
-	if err := rows.Err(); err != nil {
-		t.Fatalf("iterate foreign keys: %v", err)
+	if err := rows2.Err(); err != nil {
+		t.Fatalf("iterate restrictive foreign keys: %v", err)
 	}
-	if len(blocking) > 0 {
-		t.Errorf("foreign keys without ON DELETE CASCADE - these block account deletion and "+
-			"strand orphaned rows:\n  %v", blocking)
+
+	expectedHistorical := map[string]bool{}
+	for _, h := range historicalReferences {
+		expectedHistorical[h.table+"_to_"+h.parent] = true
+	}
+	var unexpected []string
+	for _, b := range blocking {
+		keep := false
+		for _, h := range historicalReferences {
+			if strings.Contains(b, "("+h.table+" -> "+h.parent+")") {
+				keep = true
+			}
+		}
+		if !keep {
+			unexpected = append(unexpected, b)
+		}
+	}
+	_ = expectedHistorical
+
+	if len(unexpected) > 0 {
+		t.Errorf("foreign keys with NO ACTION or RESTRICT that are not declared "+
+			"historical. These turn a DELETE into a failure, and they block account "+
+			"deletion outright:\n  %v\n"+
+			"  Either add the table to historicalReferences with a reason, or give the "+
+			"constraint ON DELETE CASCADE if the row is owned rather than a record.",
+			unexpected)
+	}
+
+	// =============================================================================
+	// 017 - service access and RBAC
+	// =============================================================================
+	//
+	// These four tables plus a view are the entire answer to "what may this
+	// person do", and they were previously applied by hand only. That is not a
+	// style note: the service layer that reads them was fully written and tested,
+	// the tables existed, and the seed had never run - so the live database held
+	// ZERO permissions and ZERO roles while the code looked complete.
+	for _, table := range []string{"user_services", "roles", "permissions", "role_permissions", "appointments"} {
+		var n int64
+		scanOne(t, db, `SELECT count(*) FROM information_schema.tables
+		                WHERE table_schema = 'public' AND table_name = ?`, &n, table)
+		if n != 1 {
+			t.Errorf("017: table %q is missing on a freshly provisioned database.\n"+
+				"It is created only by the SQL chain - AutoMigrate does not own it - "+
+				"so anything that provisions a database without running the chain "+
+				"gets a service that starts and then 500s on the first authorised "+
+				"request.", table)
+		}
+	}
+
+	// The service slug allowlist is a CHECK, and a CHECK is the point: the
+	// application validates too, so this is belt-and-braces against a psql session,
+	// a future migration, or a script.
+	var badSlug int64
+	scanOne(t, db, `SELECT count(*) FROM information_schema.check_constraints
+	                WHERE constraint_name = 'chk_user_services_slug'`, &badSlug)
+	if badSlug != 1 {
+		t.Error("017: constraint chk_user_services_slug is missing - a service slug " +
+			"could be invented by any route that does not go through the Go constant")
+	}
+
+	// The registry is a VIEW and must be queryable, because a superadmin's whole
+	// "who may do what" screen reads from it.
+	var registryRows int64
+	if err := db.Raw(`SELECT count(*) FROM privilege_registry`).Scan(&registryRows).Error; err != nil {
+		t.Errorf("017: privilege_registry is not queryable: %v", err)
+	}
+
+	// =============================================================================
+	// 022 - channel setup step 2
+	// =============================================================================
+	//
+	// The brand colour is the security-relevant one, and its guarantee is a
+	// CONSTRAINT rather than a convention: an out-of-range hue must be refused by
+	// the database, because that value is interpolated into an inline style.
+	for _, tc := range []struct {
+		constraint string
+		why        string
+	}{
+		{"chk_channel_brand_hue", "an out-of-range hue would reach a style attribute"},
+		{"chk_channel_visibility", "an unknown visibility would decide who can see a channel"},
+		{"chk_channel_visibility_agrees_with_is_public",
+			"`visibility` and `is_public` answering differently about the same channel"},
+		{"chk_channel_comment_policy", "an unknown policy would decide who may comment"},
+	} {
+		var n int64
+		scanOne(t, db, `SELECT count(*) FROM information_schema.check_constraints
+		                WHERE constraint_name = ?`, &n, tc.constraint)
+		if n != 1 {
+			t.Errorf("022: constraint %s is missing - %s", tc.constraint, tc.why)
+		}
+	}
+
+	// The constraint must actually reject, not merely exist. A CHECK that is
+	// present and unenforced is the worst of both worlds: it reads like a
+	// guarantee and provides none.
+	assertBrandHueRejected(t, db)
+
+	// `setup_step2_at` defaults to NULL, and NULL must mean "not finished".
+	// A default of now() would mark every channel as set up at creation and the
+	// gate would never fire.
+	//
+	// `sql.NullString` because "no default" IS the value under test, and scanning
+	// a SQL NULL into a `string` is an error rather than an empty string - so the
+	// first version of this failed with
+	//
+	//	Scan error on column index 0: converting NULL to string is unsupported
+	//
+	// while asserting, correctly, that there is no default.
+	var setupDefault sql.NullString
+	scanOne(t, db, `SELECT column_default FROM information_schema.columns
+	                WHERE table_name = 'channels' AND column_name = 'setup_step2_at'`,
+		&setupDefault)
+	if setupDefault.Valid && setupDefault.String != "NULL" {
+		t.Errorf("022: channels.setup_step2_at has default %q; it must have NO default "+
+			"so a new channel reads as unfinished", setupDefault.String)
+	}
+}
+
+// assertBrandHueRejected proves the hue CHECK bites, by trying to violate it.
+//
+// An existence check is not evidence. The constraint could be present, correctly
+// named, and not enforced by anything - and a colour that reaches a style
+// attribute unvalidated is a stored-XSS vector on every visitor's page.
+//
+// The user is created through the GORM model rather than a hand-written INSERT,
+// because the first version of this used raw SQL listing a few columns and the
+// insert silently failed on a NOT NULL column nobody had mentioned. The error was
+// swallowed with `db.Exec(...)` and the only symptom was a confusing
+// `channels_user_id_fkey` violation two statements later - a foreign key error
+// that had nothing to do with foreign keys.
+func assertBrandHueRejected(t *testing.T, db *gorm.DB) {
+	t.Helper()
+
+	user := model.User{
+		ID:           uuid.New(),
+		Email:        "hue-" + uuid.NewString() + "@wideo11.test",
+		Username:     "hue_" + uuid.NewString()[:8],
+		PasswordHash: "not-a-real-hash-this-row-is-never-logged-into",
+		IsVerified:   true,
+	}
+	if err := db.Create(&user).Error; err != nil {
+		t.Fatalf("could not create the user this assertion needs: %v", err)
+	}
+
+	newChannel := func(hue int) error {
+		return db.Exec(
+			`INSERT INTO channels (id, user_id, handle, display_name, description, brand_hue, created_at, updated_at)
+			 VALUES (?, ?, ?, 'x', '', ?, now(), now())`,
+			uuid.New(), user.ID, "h"+uuid.NewString()[:10], hue,
+		).Error
+	}
+
+	for _, hue := range []int{-1, 360, 4000} {
+		if err := newChannel(hue); err == nil {
+			t.Errorf("022: brand_hue = %d was ACCEPTED. It must be rejected by "+
+				"chk_channel_brand_hue - that value is interpolated into an inline "+
+				"style, so the database is the last place it can be caught", hue)
+		}
+	}
+
+	// And the valid range must still be accepted, or the constraint is simply
+	// rejecting everything and the feature is broken in the other direction.
+	if err := newChannel(206); err != nil {
+		t.Errorf("022: brand_hue = 206 was rejected: %v", err)
 	}
 }
 
@@ -432,7 +724,17 @@ func TestAutoMigrateCoversEveryPersistedModel(t *testing.T) {
 		{"SuperadminAccount", model.SuperadminAccount{}},
 		{"UserSession", model.UserSession{}},
 		{"TestAccountMarker", model.TestAccountMarker{}},
-		{"ClickEvent", model.ClickEvent{}},
+		// `ClickEvent` used to be asserted here. It is gone from this list on
+		// purpose, and the absence is itself part of what this test proves: the
+		// ledger moved to `analytics-service.ui_click_events`.
+		//
+		// Re-registering the model here would make `AutoMigrate` recreate
+		// `click_events` on every boot, so the table would never actually go away
+		// and you would have two ledgers with no way to tell which is read.
+		//
+		// `UserRegistration` stays below - it shared a source file with ClickEvent,
+		// but a permanent registration audit record is not click tracking.
+		{"UserRegistration", model.UserRegistration{}},
 	}
 
 	for _, p := range persisted {
@@ -461,6 +763,175 @@ func TestAutoMigrateCoversEveryPersistedModel(t *testing.T) {
 	}
 }
 
+// TestEveryTableNameIsProvisioned closes the hole the list above has.
+//
+// `TestAutoMigrateCoversEveryPersistedModel` enumerates models BY HAND, and that
+// is the whole problem: adding a model to `internal/model` does not add it to the
+// test, so the test keeps passing while a table exists in code and in no
+// migration.
+//
+// That is not hypothetical. `media_assets` had a model, was read by
+// `media_upload.go`, `media.go` and `creator_channels.go`, was in neither
+// `MigratedModels()` nor `SQLOnlyTables`, and was created by no .sql file. It
+// existed only because someone had made it by hand on a live database. On a fresh
+// database, migration 020's `ALTER TABLE media_assets ADD COLUMN channel_id`
+// could not run - so media upload was unreachable from an empty schema, and the
+// service would have failed to provision at all.
+//
+// So this test DISCOVERS the tables instead of listing them: it reads the model
+// package's source for every `TableName()` literal and requires each one to be
+// accounted for. Adding a model now fails here rather than in production.
+func TestEveryTableNameIsProvisioned(t *testing.T) {
+	// Reflected over MigratedModels so the two cannot disagree about which
+	// tables AutoMigrate owns.
+	migrated := map[string]bool{}
+	for _, m := range database.MigratedModels() {
+		if tn, ok := m.(tableNamed); ok {
+			migrated[tn.TableName()] = true
+		} else {
+			t.Errorf("MigratedModels contains %T, which has no TableName() - "+
+				"a model without one is a model whose table name is a guess", m)
+		}
+	}
+
+	declared := scanTableNameLiterals(t)
+	if len(declared) == 0 {
+		t.Fatal("found no TableName() declarations - the scan is broken, and a " +
+			"test that passes because it found nothing is worse than no test")
+	}
+
+	for table, where := range declared {
+		switch {
+		case migrated[table]:
+			// Owned by AutoMigrate.
+		case database.SQLOnlyTables[table] != "":
+			// Owned by a migration, and TestAutoMigrateCoversEveryPersistedModel
+			// checks that the named migration exists.
+		case database.RetiredTables[table] != "":
+			// Deliberately gone. The reason is in the map; a retirement that
+			// cannot be looked up is indistinguishable from an oversight.
+		default:
+			t.Errorf("%s declares TableName() %q, but no provisioner claims that table.\n"+
+				"  It is not in MigratedModels() (AutoMigrate will not create it), not "+
+				"in SQLOnlyTables (no migration owns it), and not in RetiredTables "+
+				"(nothing documents it as gone).\n"+
+				"  The service will start and then fail every request that touches "+
+				"this table with \"relation %q does not exist\".\n"+
+				"  Fix: add &model.X{} to MigratedModels, add the table to "+
+				"SQLOnlyTables with the migration that creates it, or move it to "+
+				"RetiredTables with the reason it went away.", where, table, table)
+		}
+	}
+
+	// And the other direction: a retired table that has quietly come back would
+	// mean two ledgers with no way to tell which is read.
+	for table := range migrated {
+		if why := database.RetiredTables[table]; why != "" {
+			t.Errorf("table %q is registered with AutoMigrate AND listed as retired (%s). "+
+				"It will be recreated on every boot while the ledger it replaced still "+
+				"exists.", table, why)
+		}
+	}
+}
+
+// scanTableNameLiterals reads `internal/model/*.go` and returns every table name
+// a `TableName()` method declares, with the file and line it came from.
+//
+// Source-parsing rather than reflection because Go cannot enumerate a package's
+// types at run time from inside itself, and a second hand-written list is exactly
+// the thing that failed here.
+//
+// MULTI-LINE on purpose. Nineteen of the declarations are one-liners
+// (`func (Channel) TableName() string { return "channels" }`) and eleven are not
+// - so a single-line pattern silently covers 63% of the tables, and the ones it
+// misses are exactly the ones nobody would think to check by hand.
+func scanTableNameLiterals(t *testing.T) map[string]string {
+	t.Helper()
+
+	files, err := filepath.Glob(filepath.Join("..", "model", "*.go"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("could not list the model package: %v", err)
+	}
+
+	// func (X) TableName() string { return "name" }
+	// with newlines and tabs tolerated between every token.
+	re := regexp.MustCompile(
+		`func\s+\(\s*\w*\s*\*?\w+\s*\)\s+TableName\(\)\s+string\s*\{\s*return\s+"([a-z_0-9]+)"`,
+	)
+
+	out := map[string]string{}
+	for _, f := range files {
+		body, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		for i, line := range strings.Split(string(body), "\n") {
+			m := re.FindStringSubmatch(line)
+			if m == nil {
+				continue
+			}
+			table := m[1]
+			where := fmt.Sprintf("%s:%d", filepath.Base(f), i+1)
+			if prev, dup := out[table]; dup {
+				t.Errorf("two models declare TableName() %q (%s and %s). One table, one "+
+					"model - two declarations mean AutoMigrate and the code disagree "+
+					"about which shape is authoritative.", table, prev, where)
+			}
+			out[table] = where
+		}
+	}
+	return out
+}
+
+// auditReferenceFKs are the foreign keys that record WHO did something, and must
+// therefore survive the deletion of that person.
+//
+// `ON DELETE SET NULL`, never CASCADE: "who granted this access" is the evidence,
+// and deleting an account must not delete the record of who handed out the
+// access in the first place. The row survives with the name gone, which is the
+// correct trade - the grant's existence and dates are still answerable.
+//
+// Every one is declared in migration 017 with `ON DELETE SET NULL`, and the
+// paired column is NULLABLE. Both halves matter: `SET NULL` on a NOT NULL column
+// is rejected by PostgreSQL outright.
+var auditReferenceFKs = []string{
+	"user_services_granted_by_fkey",
+	"user_services_revoked_by_fkey",
+	"appointments_appointed_by_fkey",
+	"appointments_revoked_by_fkey",
+}
+
+// auditReferenceColumns maps each audit table to the column carrying the FK, so
+// the test can assert the column is NULLABLE as well as the rule being SET NULL.
+//
+// One entry per table rather than four per table, because the rule is the same
+// for every FK out of a table - asserting it once against a single FK would let
+// the other three drift. The representative column is the `*_by` one, which is
+// never NULL-by-omission the way `role_id` is.
+var auditReferenceColumns = map[string]string{
+	"user_services": "granted_by",
+	"appointments":  "appointed_by",
+}
+
+// historicalReferences are the foreign keys that must REFUSE a delete, because
+// deleting the parent would destroy history somebody has to be able to read.
+//
+// `appointments.role_id` is the only one. Deleting a role that somebody currently
+// holds would erase the evidence of who held it and when. The correct operation is
+// to retire the role, not to delete it, and RESTRICT is what makes that the only
+// option - a constraint that permitted the delete would permit the loss.
+var historicalReferences = []struct {
+	table  string
+	parent string
+	why    string
+}{
+	{
+		"appointments", "roles",
+		"an appointment is the record of who held a role and when; cascading it away " +
+			"on role deletion would destroy the audit trail, so deletion must be refused",
+	},
+}
+
 // tableNamed is satisfied by every GORM model that declares a TableName().
 // Asserting the interface explicitly means a model that forgets TableName()
 // fails here, instead of quietly creating a pluralised table that no query
@@ -470,24 +941,23 @@ type tableNamed interface{ TableName() string }
 // indexOID returns the OID of the named index, or 0 when it is absent.
 // A changed OID across a re-run means the index was dropped and rebuilt;
 // an unchanged OID proves it was left alone.
-func indexOID(t *testing.T, db *gorm.DB) uint32 {
+//
+// Takes the index name rather than hardcoding one, because which index matters
+// changes: this originally read `idx_channels_public_handle`, and after migration
+// 014 the handle index that enforces uniqueness is `idx_channels_handle_unique`.
+// A helper with a baked-in name silently keeps checking the thing that was
+// deleted.
+func indexOID(t *testing.T, db *gorm.DB, name string) uint32 {
 	t.Helper()
+	// The name is interpolated rather than bound because it is an identifier and
+	// cannot be a bind parameter. It comes from this file's own literals.
 	var oid uint32
 	scanOne(t, db, `SELECT COALESCE(
 	                 (SELECT oid FROM pg_class
-	                   WHERE relname = 'idx_channels_public_handle'
+	                   WHERE relname = '`+name+`'
 	                     AND relnamespace = 'public'::regnamespace),
 	                 0)`, &oid)
 	return oid
-}
-
-func indexDef(t *testing.T, db *gorm.DB) string {
-	t.Helper()
-	var def string
-	scanOne(t, db, `SELECT COALESCE(indexdef, '') FROM pg_indexes
-	                WHERE schemaname = 'public'
-	                  AND indexname = 'idx_channels_public_handle'`, &def)
-	return def
 }
 
 func exec(t *testing.T, db *gorm.DB, stmt string) {

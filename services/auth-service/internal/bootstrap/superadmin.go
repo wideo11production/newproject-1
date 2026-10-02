@@ -2,18 +2,18 @@
 //
 // YE CODE JAAN BOOJH KAR design kiya gaya hai:
 //
-// 1. PASSWORD PLAINTEXT ME STORED NAHI HAI. Sirf BCRYPT HASH hai, cost 12.
-//    Isse koi binary `strings` command chala kar password nahi nikal sakta.
-//    (Agar plaintext hota, to wo seedha binary me readable hota.)
+//  1. PASSWORD PLAINTEXT ME STORED NAHI HAI. Sirf BCRYPT HASH hai, cost 12.
+//     Isse koi binary `strings` command chala kar password nahi nikal sakta.
+//     (Agar plaintext hota, to wo seedha binary me readable hota.)
 //
-// 2. ENV OVERRIDE KA RAASTA BHI HAI. Agar SECURITY_SUPERADMIN_PASSWORD set ho,
-//    to wo use hoga aur hardcoded hash ignore hoga. Isse password rotate
-//    karna possible hai bina code change kiye.
+//  2. ENV OVERRIDE KA RAASTA BHI HAI. Agar SECURITY_SUPERADMIN_PASSWORD set ho,
+//     to wo use hoga aur hardcoded hash ignore hoga. Isse password rotate
+//     karna possible hai bina code change kiye.
 //
-// 3. VERIFICATION LOG: har startup par ye check karta hai ki database ka
-//    stored hash abhi bhi wahi hai ya nahi (kisi ne change kiya ya nahi).
-//    Agar mismatch hua to SECURITY VIOLATION log hota hai - ye "staff trap"
-//    ka backend half hai.
+//  3. VERIFICATION LOG: har startup par ye check karta hai ki database ka
+//     stored hash abhi bhi wahi hai ya nahi (kisi ne change kiya ya nahi).
+//     Agar mismatch hua to SECURITY VIOLATION log hota hai - ye "staff trap"
+//     ka backend half hai.
 //
 // Hinglish comments: har block ka arth
 package bootstrap
@@ -45,6 +45,7 @@ const DefaultSuperadminEmail = "advchashampalup@gmail.com"
 // hai (bcrypt slow hai isliye aasan nahi). Isliye:
 //   - SECURITY_SUPERADMIN_PASSWORD env se override kar sakte ho (recommended)
 //   - Production me ye hash ROTATE karna chahiye
+//
 // Hinglish: password ka hash hai binary me, plain password nahi
 const DefaultSuperadminPasswordHash = "$2a$12$dxQxGmx/hnsusyk6jliqLO0xEX9grzBnNdPNn23X6O/Ay36WCDQJ2"
 
@@ -59,12 +60,12 @@ type SuperadminResult struct {
 // EnsureSuperadmin master root account ko DB me ensure karta hai.
 //
 // Logic:
-//   1. Agar SECURITY_SUPERADMIN_PASSWORD env set hai -> uska hash banao
-//   2. Nahi to default bcrypt hash use karo
-//   3. Agar user exist nahi karta -> create karo (IsActive + IsVerified = true,
-//      kyunki superadmin ko email verification nahi karni)
-//   4. Agar user exist karta hai -> VERIFY karo ki uska stored hash
-//      expected hash se match karta hai ya nahi
+//  1. Agar SECURITY_SUPERADMIN_PASSWORD env set hai -> uska hash banao
+//  2. Nahi to default bcrypt hash use karo
+//  3. Agar user exist nahi karta -> create karo (IsActive + IsVerified = true,
+//     kyunki superadmin ko email verification nahi karni)
+//  4. Agar user exist karta hai -> VERIFY karo ki uska stored hash
+//     expected hash se match karta hai ya nahi
 //
 // Hinglish: superadmin account ka hamesha hona chahiye - create ya verify
 func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, error) {
@@ -203,7 +204,6 @@ func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, erro
 	log.Printf("[SUPERADMIN] Master root account verified: %s", DefaultSuperadminEmail)
 	return result, nil
 }
-
 
 // RegisterMasterSuperadminRole master root account ko superadmin_accounts me register karta hai.
 //

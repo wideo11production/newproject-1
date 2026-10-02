@@ -58,6 +58,13 @@ type SecurityService struct {
 	// (ON, 3) maanta hai, taaki config bhool jane par bhi security ghat na ho.
 	deviceLimitEnabled bool
 	maxAccountsDevice  int
+
+	// deviceSlots caps how many DEVICES a lifetime plan may be used from. It is a
+	// different axis from the account-per-device cap above, and both come from the
+	// same table - see device_slots.go.
+	//
+	// May be nil; the per-device account cap is unaffected either way.
+	deviceSlots *DeviceSlotService
 }
 
 // NewSecurityService naya security service banata hai
@@ -81,6 +88,19 @@ func NewSecurityService(db *gorm.DB, cfg *config.Config) *SecurityService {
 	if cfg != nil {
 		s.deviceLimitEnabled = cfg.DeviceLimit.Enabled
 		s.maxAccountsDevice = cfg.DeviceLimit.MaxAccounts
+
+		// ---- Lifetime device slots (Phase 5) ----
+		//
+		// A DIFFERENT axis from the cap above: that one is "accounts per device",
+		// this one is "devices per user". Both read the same `device_accounts`
+		// table - see device_slots.go for why that is deliberate.
+		//
+		// Wired here rather than injected later because the constructor already
+		// takes the config, and a second wiring path for the same object is one
+		// more thing that can be forgotten.
+		s.deviceSlots = NewDeviceSlotService(s.db, NewEntitlementService(
+			s.db, cfg.Plans,
+		))
 	}
 
 	// Invalid/zero/negative cap ko SPEC value par reset kar do. Warna `0` ka
@@ -677,6 +697,22 @@ func (s *SecurityService) RegisterDeviceAccount(
 	}
 	if existing > 0 {
 		return nil // already registered, noop
+	}
+
+	// ---- LIFETIME DEVICE SLOTS, checked BEFORE the row is written ----
+	//
+	// Order is the whole point. If the row were written first and the slot
+	// check refused afterwards, the refused device would still be in
+	// `device_accounts` - and would then count towards the very limit it
+	// violated, so a user who typed a wrong device once could be permanently
+	// one short.
+	//
+	// A refusal here returns before `recordDeviceAccount` is ever reached, so a
+	// refused device leaves no trace at all.
+	if s.deviceSlots != nil {
+		if err := s.deviceSlots.CheckSlot(ctx, userID, fingerprint); err != nil {
+			return err
+		}
 	}
 
 	// DEVICE LIMIT enforce karo.

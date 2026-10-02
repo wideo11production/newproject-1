@@ -4,7 +4,7 @@
 //   - content -> app-specific globs (har app ka apna structure rahega)
 // Hinglish: theme shared hai, structure har app ka apna hai
 import type { Config } from 'tailwindcss';
-import { enterpriseTheme } from '../../packages/ui/src/enterprise-theme';
+import { enterpriseTheme } from '@wideo11/ui/enterprise-theme';
 
 const config: Config = {
   darkMode: 'class',

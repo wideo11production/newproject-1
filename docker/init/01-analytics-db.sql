@@ -1,0 +1,19 @@
+-- =============================================================================
+-- Analytics database bootstrap
+-- =============================================================================
+--
+-- Run by postgres's own entrypoint on a FRESH data directory.
+--
+-- WHY THIS EXISTS
+-- ---------------
+-- The databases in this stack were being created by hand, one `psql` at a time,
+-- as services were adopted. That is fine until somebody rebuilds the volume and
+-- discovers a service that silently has no database - it starts, fails its first
+-- query, and logs something about a missing relation.
+--
+-- So the database list is declared here instead, next to the compose file that
+-- needs it.
+--
+-- The UI click ledger and the ad/content analytics tables live here. Owned by
+-- `analytics-service`.
+CREATE DATABASE analytics_service;

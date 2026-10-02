@@ -56,9 +56,10 @@ export const dynamic = 'force-dynamic';
 
 export type GateState =
   | { state: 'out' }
-  | { state: 'needs_verification'; email: string }
-  | { state: 'needs_setup'; email: string }
-  | { state: 'ready'; email: string; role: string };
+  | { state: 'needs_verification'; email: string; avatarUrl: string }
+  | { state: 'needs_setup'; email: string; avatarUrl: string }
+  | { state: 'ready'; email: string; role: string; avatarUrl: string };
+// `{ state: 'out' }` carries no avatar - there is nobody to draw.
 
 export async function GET() {
   const noStore = { 'Cache-Control': 'no-store' } as const;
@@ -77,7 +78,7 @@ export async function GET() {
   // `out`, which is exactly right.
   const authHeaders = { Authorization: `Bearer ${token}` };
 
-  let profile: { email?: string; is_verified?: boolean; is_active?: boolean } | null = null;
+  let profile: { email?: string; is_verified?: boolean; is_active?: boolean; avatar_url?: string } | null = null;
   let setupComplete = false;
 
   try {
@@ -135,17 +136,17 @@ export async function GET() {
   // account is never told to set up a 6-digit PIN.
   if (profile.is_verified !== true) {
     return NextResponse.json(
-      { state: 'needs_verification', email },
+      { state: 'needs_verification', email, avatarUrl: profile.avatar_url ?? '' },
       { headers: noStore }
     );
   }
 
   if (!setupComplete) {
-    return NextResponse.json({ state: 'needs_setup', email }, { headers: noStore });
+    return NextResponse.json({ state: 'needs_setup', email, avatarUrl: profile.avatar_url ?? '' }, { headers: noStore });
   }
 
   return NextResponse.json(
-    { state: 'ready', email, role: 'user' },
+    { state: 'ready', email, role: 'user', avatarUrl: profile.avatar_url ?? '' },
     { headers: noStore }
   );
 }

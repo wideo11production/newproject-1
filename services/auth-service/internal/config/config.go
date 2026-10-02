@@ -8,13 +8,13 @@ import (
 )
 
 type Config struct {
-	Server       ServerConfig
-	Database     DatabaseConfig
-	Redis        RedisConfig
+	Server   ServerConfig
+	Database DatabaseConfig
+	Redis    RedisConfig
 	// NATS - security event audit stream (see NATSConfig for the failure
 	// policy: audit only, never an auth decision)
-	NATS NATSConfig
-	JWT  JWTConfig
+	NATS         NATSConfig
+	JWT          JWTConfig
 	Log          LogConfig
 	Verification VerificationConfig
 	Email        EmailConfig
@@ -24,6 +24,16 @@ type Config struct {
 	Storage StorageConfig
 	// Security - response headers + CORS allowlist (Phase A / gap #2)
 	Security SecurityConfig
+
+	// Plans is the CAPABILITY catalogue - what each plan GRANTS, seeded into
+	// entitlement_grants at boot.
+	//
+	// Deliberately separate from billing-service's subscription_plans, which is the
+	// PRICE catalogue. Pricing moves when marketing does; capabilities move when
+	// the product does. One table for both would make every price change a
+	// migration on the entitlements table.
+	Plans PlansConfig
+
 	// DeviceLimit - "max N accounts per device" ka on/off switch
 	//
 	// NOTE: `mapstructure` tag ZAROORI hai. mapstructure field-name se key
@@ -278,6 +288,13 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var cfg Config
+	// Plan catalogue read explicitly rather than through Unmarshal.
+	//
+	// These are flat scalar keys and reading them here means every price and
+	// limit appears in ONE file where a reader can check them all at once.
+	// A struct here would spread them across seven nested types.
+	cfg.Plans = LoadPlans()
+
 	if err := viper.Unmarshal(&cfg); err != nil {
 		return nil, err
 	}

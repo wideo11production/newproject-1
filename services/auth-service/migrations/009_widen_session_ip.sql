@@ -40,9 +40,14 @@ DROP VIEW IF EXISTS active_user_sessions;
 
 -- Widen. Do galtiyan is line me ho sakti thi, dono ab avoid hain:
 --
---   1. `TYPE` keyword zaroori hai. `ALTER COLUMN ip_address VARCHAR(64)`
+--   1. `TYPE` keyword ZAROORI hai. `ALTER COLUMN ip_address VARCHAR(64)`
 --      Postgres me SYNTAX ERROR deta hai ("syntax error at or near
 --      VARCHAR") - yehi galti is file me pehle thi.
+--
+--      Ye comment pehle bhi yehi kehta tha, par statement me `TYPE` nahi tha.
+--      Wahi pattern jo migration 003, 004 aur 019 me bhi mila: comment ne
+--      fix document kar diya, statement ko fix kabhi mila hi nahi - aur koi
+--      database pe execute nahi hua, isliye kisi ko pata nahi chala.
 --   2. Sirf WIDEN karna safe hai. Chhota -> bada kabhi data nahi todta,
 --      aur same width par dobara apply karna no-op hai. Isiliye koi
 --      `IF character_maximum_length < 64` guard ki zaroorat nahi - woh
@@ -51,10 +56,10 @@ DROP VIEW IF EXISTS active_user_sessions;
 -- GORM ka `Session.IPAddress` already `size:64` ke saath AutoMigrate hota
 -- hai, isliye fresh DB par ye no-op hai aur purane DB par fix hai.
 ALTER TABLE sessions
-  ALTER COLUMN ip_address VARCHAR(64);
+  ALTER COLUMN ip_address TYPE VARCHAR(64);
 
--- PostgreSQL-specific column comment intentionally omitted to keep this
--- migration compatible with the SQL dialect used by the current tooling.
+COMMENT ON COLUMN sessions.ip_address IS
+  'Client IP, stored as text rather than inet because a session can be created from a proxy address that is not a bare client IP. VARCHAR(64) fits IPv6 with a full IPv4-mapped prefix and port.';
 
 COMMIT;
 

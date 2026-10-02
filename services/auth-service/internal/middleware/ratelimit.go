@@ -159,7 +159,7 @@ var (
 	// LimitLogin: 8 per 1 min (per IP+email pair), aur 30 per 15 min
 	// (sustained). Do windows chahiye: sirf short window se attacker har
 	// minute limit reset karke unlimited total kar sakta hai.
-	LimitLogin = Policy{Name: "login", Max: 8, Window: time.Minute, KeyFunc: ipAndEmail}
+	LimitLogin          = Policy{Name: "login", Max: 8, Window: time.Minute, KeyFunc: ipAndEmail}
 	LimitLoginSustained = Policy{Name: "login_sustained", Max: 30, Window: 15 * time.Minute, KeyFunc: ipAndEmail}
 
 	// LimitLoginPerAccount: 10 per 15 min per EMAIL (IP se independent).

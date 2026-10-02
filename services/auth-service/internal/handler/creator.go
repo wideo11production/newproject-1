@@ -22,6 +22,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -323,6 +324,48 @@ func (h *AuthHandler) GetPublicChannel(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"channel": channel})
 }
 
+// GetPublicChannelMedia returns the published videos and reels for a channel.
+//
+// PUBLIC, like `GetPublicChannel`, and for the same reasons: it is a channel's
+// public page, the service filters to public-and-active and to `ready` media, and
+// a private channel answers 404 exactly like a missing one.
+//
+// `kind` narrows to `video` or `reel`; absent means both. The page has separate
+// tabs for the two, so the client asks twice rather than fetching everything and
+// splitting it - one request instead of one request plus a large discard.
+func (h *AuthHandler) GetPublicChannelMedia(c *gin.Context) {
+	handle := c.Param("handle")
+
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	if limit == 0 {
+		limit = 24
+	}
+	offset, _ := strconv.Atoi(c.Query("offset"))
+
+	items, total, err := h.authService.ListPublicChannelMedia(
+		c.Request.Context(), handle, c.Query("kind"), limit, offset,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown media kind") {
+			// 400 rather than a 404: the HANDLE may be perfectly valid and the
+			// FILTER is what is wrong. Those are different problems and the status
+			// should say so.
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid_kind",
+				"message": "kind must be video or reel.",
+			})
+			return
+		}
+		writeChannelError(c, err)
+		return
+	}
+
+	if items == nil {
+		items = []service.PublicChannelMedia{}
+	}
+	c.JSON(http.StatusOK, gin.H{"media": items, "count": len(items), "total": total})
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/v1/channels/public   (discovery list - NO auth)
 // ---------------------------------------------------------------------------
@@ -336,16 +379,39 @@ func (h *AuthHandler) ListPublicChannels(c *gin.Context) {
 		}
 	}
 
-	channels, err := h.authService.ListPublicChannels(c.Request.Context(), limit)
+	// `?type=` filters by category, which is what turns a list into something
+	// browsable. Validated in the service against the closed set, so an unknown
+	// value is a 400 rather than a silently empty page - "this category has no
+	// channels" and "you asked for a category that does not exist" look identical
+	// otherwise, and only one of them is a bug.
+	channels, stats, err := h.authService.ListPublicChannels(
+		c.Request.Context(), limit, c.Query("type"),
+	)
 	if err != nil {
+		if errors.Is(err, model.ErrChannelTypeInvalid) {
+			// 400, not 500. The caller sent something that is not a channel type;
+			// that is a client mistake, not a server fault.
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid_channel_type",
+				"message": err.Error(),
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load channels"})
 		return
 	}
 	if channels == nil {
 		channels = []model.PublicChannelResponse{}
+		stats = []service.PublicChannelStats{}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"channels": channels, "count": len(channels)})
+	// The counts are a PARALLEL array, not a nested object per channel, so the
+	// existing card shape does not have to change shape either.
+	c.JSON(http.StatusOK, gin.H{
+		"channels": channels,
+		"stats":    stats,
+		"count":    len(channels),
+	})
 }
 
 // writeChannelError - channel service errors ko HTTP status me map karta hai.
@@ -368,9 +434,43 @@ func writeChannelError(c *gin.Context, err error) {
 			"message": model.ErrHandleInvalid.Error(),
 		})
 	case errors.Is(err, model.ErrHandleTaken):
+		// Message reworded. It used to say "already used by ONE OF YOUR
+		// channels", which was accurate - and which was the bug. The check was
+		// scoped to `user_id`, so two different accounts could both create the
+		// same handle, and the public URL then served one of them at random.
+		//
+		// The check is global now, so the message must not imply ownership: the
+		// handle belongs to nobody in particular as far as this caller is
+		// concerned, and implying otherwise tells a creator to go looking through
+		// their own channels for something that is not there.
 		c.JSON(http.StatusConflict, gin.H{
 			"error":   "handle_taken",
-			"message": "That handle is already used by one of your channels.",
+			"message": "That handle is already in use. Handles are unique across the whole platform.",
+		})
+	case errors.Is(err, model.ErrHandleRetired):
+		// A DISTINCT error, not a variant of `handle_taken`, and the difference is
+		// actionable: "taken" means try another one, "retired" means this one will
+		// NEVER be available. Collapsing them would have people retrying a handle
+		// that cannot succeed.
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "handle_retired",
+			"message": model.ErrHandleRetired.Error(),
+		})
+	case errors.Is(err, model.ErrChannelTypeRequired),
+		errors.Is(err, model.ErrChannelTypeInvalid),
+		errors.Is(err, model.ErrMatureContentRequired),
+		errors.Is(err, model.ErrMatureContentInvalid),
+		errors.Is(err, model.ErrMadeForKidsRequired),
+		errors.Is(err, model.ErrContactEmailInvalid),
+		errors.Is(err, model.ErrCountryInvalid):
+		// 400, and the message NAMES the field.
+		//
+		// These are wizard steps, not server faults. A 500 would tell the creator
+		// to retry, which cannot help, and a single "invalid request" would leave
+		// them guessing which of five questions they got wrong.
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid_channel",
+			"message": err.Error(),
 		})
 	case errors.Is(err, model.ErrDisplayNameInvalid):
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -419,3 +519,22 @@ func (h *AuthHandler) ListMySessions(c *gin.Context) {
 
 // compile-time: service package imported hota hai (errors.Is ke liye)
 var _ = service.ErrInvalidUsername
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/auth/dashboard/stats  (aggregated dashboard statistics)
+// ---------------------------------------------------------------------------
+func (h *AuthHandler) GetDashboardStats(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	stats, err := h.authService.GetDashboardStats(c.Request.Context(), uuidFromString(uid))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load dashboard stats"})
+		return
+	}
+
+	c.JSON(http.StatusOK, stats)
+}

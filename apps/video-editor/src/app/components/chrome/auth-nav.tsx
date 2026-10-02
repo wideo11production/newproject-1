@@ -268,7 +268,29 @@ export function AuthNav() {
         title={`${session.email} (${session.role})`}
         className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors hover:bg-sky-500"
       >
-        {initials(session.email)}
+        {/*
+          The uploaded avatar, or initials.
+
+          The editor drew initials while the web profile drew the photo, so the
+          same person had two faces depending on the app. An uploaded picture is
+          the picture everywhere.
+
+          `onError` hides a BROKEN image URL rather than leaving the browser's
+          broken-image glyph inside the green ring, which looks worse than
+          letters would.
+        */}
+        {session.avatarUrl ? (
+          <img
+            src={session.avatarUrl}
+            alt=""
+            className="h-full w-full rounded-full object-cover"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : (
+          <span aria-hidden="true">{initials(session.email)}</span>
+        )}
         <span
           className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface-raised bg-green-500 motion-safe:animate-pulse"
           aria-hidden="true"
