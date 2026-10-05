@@ -51,8 +51,28 @@ func main() {
 	// Setup Gin router
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()
-	router.Use(gin.Recovery())
+	// ---- Middleware chain ----
+	//
+	// `handler.RecoveryMiddleware()` REPLACES gin.Recovery():
+	// same panic containment, but the response is JSON (the
+	// contract every other error path in this service uses)
+	// instead of gin's default HTML 500. It sat in
+	// `internal/handler` defined-but-never-registered - a
+	// safety net that was never wired to the router.
+	//
+	// `handler.ErrorMiddleware(logger)` turns `c.Error(...)`
+	// calls from the handler chain into logged, uniform 500
+	// JSON. It was also defined-but-never-registered, so
+	// handler errors escaped as bare 500s with no log line.
+	//
+	// Order matters: Recovery outermost (catches panics from
+	// everything below it), then Logger (so it logs the FINAL
+	// status code, including the 500 ErrorMiddleware writes),
+	// then Error, then CORS (its headers must already be set
+	// before any error response is written).
+	router.Use(handler.RecoveryMiddleware())
 	router.Use(handler.LoggerMiddleware(logger))
+	router.Use(handler.ErrorMiddleware(logger))
 	router.Use(handler.CORSMiddleware())
 
 	// Health check

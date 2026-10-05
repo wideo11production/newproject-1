@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -12,6 +13,12 @@ type Config struct {
 	Port                 int
 	Database             DatabaseConfig
 	DashboardServiceURL  string
+	// JWTSecretKey is the auth-service signing secret
+	// (SSOT: the host's .env). Bound from
+	// JWT_SECRET_KEY so this service can validate the
+	// SAME tokens auth-service issues, instead of
+	// keeping a second, drift-prone secret.
+	JWTSecretKey         string
 	LogLevel             string
 	Environment          string
 }
@@ -34,6 +41,7 @@ func Load() (*Config, error) {
 	cfg := &Config{
 		Port:                getEnvAsInt("PORT", 8081),
 		DashboardServiceURL: getEnv("DASHBOARD_SERVICE_URL", "http://dashboard-service:8080"),
+		JWTSecretKey:        getEnv("JWT_SECRET_KEY", ""),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		Environment:         getEnv("ENVIRONMENT", "development"),
 		Database: DatabaseConfig{
@@ -47,6 +55,18 @@ func Load() (*Config, error) {
 			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
 			ConnMaxLifetime: time.Duration(getEnvAsInt("DB_CONN_MAX_LIFETIME", 300)) * time.Second,
 		},
+	}
+
+	// ---- Fail fast on a missing signing secret in production ----
+	//
+	// Ye secret auth-service ke tokens validate karne
+	// ke liye hai. Production me ek empty secret ka
+	// matlab hai service kisi bhi token ko validate
+	// nahi kar sakti - silently request handle karna
+	// nahi, fail fast karna chahiye, taaki galat
+	// config chupke se live na jaye.
+	if cfg.Environment == "production" && cfg.JWTSecretKey == "" {
+		return nil, fmt.Errorf("JWT_SECRET_KEY must be set when ENVIRONMENT=production")
 	}
 
 	return cfg, nil

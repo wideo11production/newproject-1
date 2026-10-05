@@ -171,6 +171,18 @@ services:
       DB_SSL_MODE: disable
       PROMETHEUS_URL: http://prometheus:9090
       NATS_URL: nats://nats:4222
+      # ---- Browser origin allowlist (CORS + WebSocket) ----
+      #
+      # CORSMiddleware aur WebSocket upgrader DONO isi list
+      # se origins allow karte hain. `Access-Control-Allow-
+      # Origin: *` + `Allow-Credentials: true` together INVALID
+      # hote hain (browser reject kar deta hai), isliye ye
+      # allowlist reflect hoti hai - sirf yahan dii hui
+      # origins cookies aur WS connections le sakti hain.
+      # Local stack: monitor app (3001) aur web (3000) dono
+      # dashboard ke HTTP/WS endpoint use karte hain.
+      # Production me .env se sirf apne origins do.
+      DASHBOARD_ALLOWED_ORIGINS: ${DASHBOARD_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001}
       # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
       LOG_LEVEL: debug
@@ -938,7 +950,17 @@ services:
       DB_NAME: webhook_receiver
       DB_SSL_MODE: disable
       DASHBOARD_SERVICE_URL: http://dashboard-service:8080
-      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
+      # ---- JWT secret (pehle sirf ek COMMENT thi, ab LIVE binding) ----
+      #
+      # Ye line pehle "JWT secret: ... .env se" likha
+      # ek comment tha - par variable bind hi nahi tha,
+      # to service kabhi secret receive hi nahi karti
+      # thi. Ab host ke .env se bind hoti hai (SSOT:
+      # auth-service jisse sign karta hai). Go config
+      # (internal/config/config.go) isko padhti hai aur
+      # ENVIRONMENT=production me missing secret par
+      # fail-fast karti hai.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - webhook-receiver validates auth-service tokens with it}
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:

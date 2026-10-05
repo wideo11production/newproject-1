@@ -100,7 +100,8 @@ import {
 import { useSettings, setSettings, getSettings, hydrateSettings } from '../lib/engine/settings';
 import { nextMarkerId, nextMarker, prevMarker, type Marker } from '../lib/engine/markers';
 import { MIN_CLIP_FRAMES, rippleTrim, roll, slide, slip, extendBranding } from '../lib/engine/edits';
-import { attach, candidatesFor } from '../lib/engine/attach';
+import { attach } from '../lib/engine/attach';
+import { buildCompositorSources } from '../lib/engine/sources';
 import {
   loadProject,
   saveProject,
@@ -1650,39 +1651,14 @@ if (!mod) {
   /**
    * Everything the compositor can be asked to draw, by clip `mediaId`.
    *
-   * ---- WHY BRANDING CLIPS ARE IN HERE AND NOT ONLY MEDIA ITEMS ----
-   *
-   * The compositor resolves a clip's picture through `sources`, and `sources` was
-   * built from the media bin alone. A branding clip is not a media item — it holds a
-   * channel's logo URL directly, because a channel is not a file the user imported —
-   * so its id was never in the map, and `paintBranding` returned on its very first
-   * line for every frame of every project. The track existed, the clip existed, the
-   * export path existed, and the logo was never drawn once.
-   *
-    * Reading the URL off the clip is what makes a CHANNEL logo survive a
-    * reload: no IndexedDB copy is involved, so there is nothing to restore
-    * and nothing that can come back as a missing file. A SPONSOR logo is a
-    * real file, so it lives in the store - and the store's re-minted URL is
-    * the live one. The clip's own URL is a blob: from the previous document,
-    * dead after a reload, so it is only used when the store has no entry.
-    *
-    * The same map is rebuilt in `preview-canvas.tsx`. They MUST agree — if only one
-    * has it, the logo shows in the export and not in the preview, which is worse than
-    * not having it at all.
-    */
-    const compositorSources = useMemo(() => {
-      const map = new Map<string, { url: string; kind: string }>();
-      for (const item of media.items) map.set(item.id, { url: item.url, kind: item.kind });
-      for (const track of tracks) {
-        if (track.type !== 'branding') continue;
-        for (const clip of track.clips) {
-          if (clip.url && !map.has(clip.mediaId)) {
-            map.set(clip.mediaId, { url: clip.url, kind: 'image' });
-          }
-        }
-      }
-      return map;
-    }, [media.items, tracks]);
+   * Built by `buildCompositorSources` - shared with `preview-canvas.tsx`, so
+   * the preview and the export can never disagree about which clips resolve.
+   * See `lib/engine/sources.ts` for why branding clips are in the map.
+   */
+  const compositorSources = useMemo(
+    () => buildCompositorSources(media.items, tracks),
+    [media.items, tracks]
+  );
 
   const compositorState = useMemo(
     () => ({

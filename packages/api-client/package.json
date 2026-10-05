@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@types/react": "catalog:",
+    "@wideo11/tsconfig": "workspace:*",
     "typescript": "catalog:",
     "ts-node-dev": "^2.0.0"
   }

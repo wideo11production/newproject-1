@@ -59,7 +59,7 @@ export interface FrameSpan {
   sourceOutFrame: number;
 }
 
-export function spanFrames(clip: TimelineClip, fps: number): FrameSpan {
+function spanFrames(clip: TimelineClip, fps: number): FrameSpan {
   const start = Math.round(clip.startTime * fps);
   const end = Math.round(clipEnd(clip) * fps);
   return {
@@ -72,7 +72,7 @@ export function spanFrames(clip: TimelineClip, fps: number): FrameSpan {
 }
 
 /** Rewrite a clip onto a new frame span. The caller supplies frames. */
-export function withSpan(clip: TimelineClip, fps: number, start: number, length: number): TimelineClip {
+function withSpan(clip: TimelineClip, fps: number, start: number, length: number): TimelineClip {
   const startSeconds = start / fps;
   const lengthSeconds = length / fps;
   // The source in point is tracked in SOURCE frames, so trimming the head moves
@@ -383,24 +383,4 @@ export function slide(
       return replace(t, clips);
     }),
   };
-}
-
-// ---------------------------------------------------------------------------
-// Finding the neighbours an edge edit applies to
-// ---------------------------------------------------------------------------
-
-/** The clip that starts where `clip` ends on the same track, or null. */
-export function neighbourAfter(track: TimelineTrack, clipId: string, fps: number): TimelineClip | null {
-  const clip = track.clips.find((c) => c.id === clipId);
-  if (!clip) return null;
-  const end = Math.round(clipEnd(clip) * fps);
-  return track.clips.find((c) => c.id !== clipId && Math.round(c.startTime * fps) === end) ?? null;
-}
-
-/** The clip that ends where `clip` starts on the same track, or null. */
-export function neighbourBefore(track: TimelineTrack, clipId: string, fps: number): TimelineClip | null {
-  const clip = track.clips.find((c) => c.id === clipId);
-  if (!clip) return null;
-  const start = Math.round(clip.startTime * fps);
-  return track.clips.find((c) => c.id !== clipId && Math.round(clipEnd(c) * fps) === start) ?? null;
 }

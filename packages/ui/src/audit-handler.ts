@@ -90,7 +90,7 @@ import { identityHeaders } from './jwt-payload';
  * `updatedtodo.md` Session 16.
  */
 const ANALYTICS_URL =
-  process.env.ANALYTICS_INTERNAL_URL ?? 'http://analytics-service:8091';
+  process.env['ANALYTICS_INTERNAL_URL'] ?? 'http://analytics-service:8091';
 
 /**
  * Shared secret for the telemetry service.
@@ -103,7 +103,7 @@ const ANALYTICS_URL =
  * would look identical to "nobody is clicking", which is the one conclusion you
  * must never be able to draw from a tracking outage.
  */
-const INTERNAL_TOKEN = process.env.ANALYTICS_INTERNAL_TOKEN ?? '';
+const INTERNAL_TOKEN = process.env['ANALYTICS_INTERNAL_TOKEN'] ?? '';
 
 /** Canonical form of the session cookie, same name the web app sets. */
 const SESSION_COOKIE = 'wideo11_session';
@@ -190,7 +190,7 @@ function normalizePage(raw: unknown): string {
  * `port-3002` was silently labelling every editor click.
  */
 const SERVER_SURFACE =
-  process.env.SERVER_SURFACE ?? process.env.NEXT_PUBLIC_APP_SURFACE ?? 'unknown';
+  process.env['SERVER_SURFACE'] ?? process.env['NEXT_PUBLIC_APP_SURFACE'] ?? 'unknown';
 
 // -----------------------------------------------------------------------------
 // Abuse control
@@ -436,14 +436,14 @@ async function resolveIdentity(token: string | null): Promise<{ token: string | 
   // Fail closed: with no secret configured NOTHING can be verified, so nothing is
   // claimed to be. A gate that authorises with no key is not a gate; the same rule
   // applies to a label that says "trust this row's user id".
-  const secret = process.env.JWT_SECRET_KEY;
+  const secret = process.env['JWT_SECRET_KEY'];
   if (!secret) return { token: null, attribution: 'anonymous' };
 
   try {
     const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
       audience: 'wideo11-api',
     });
-    const userId = String(payload.user_id ?? payload.sub ?? '');
+    const userId = String(payload['user_id'] ?? payload.sub ?? '');
     if (!userId) return { token: null, attribution: 'forged' };
     return { token, attribution: 'verified' };
   } catch {

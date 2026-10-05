@@ -46,7 +46,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-const AUTH_INTERNAL = process.env.AUTH_INTERNAL_URL ?? 'http://auth-service:8085';
+const AUTH_INTERNAL = process.env['AUTH_INTERNAL_URL'] ?? 'http://auth-service:8085';
 
 /** Session cookie, set by the apps' own `/api/auth/login`. */
 const SESSION_COOKIE = 'wideo11_session';
@@ -106,7 +106,10 @@ export async function forwardPresence(
   // would leave auth-service with two credentials for one identity.
   const presenceCookie = jar.get(PRESENCE_COOKIE)?.value;
   if (presenceCookie) {
-    headers.Cookie = `${PRESENCE_COOKIE}=${presenceCookie}`;
+    // Bracket access: the headers object is an index-signature
+    // type, and `noPropertyAccessFromIndexSignature` forbids
+    // dot access on it.
+    headers['Cookie'] = `${PRESENCE_COOKIE}=${presenceCookie}`;
   }
 
   // ---- Device identity ----
@@ -163,6 +166,9 @@ export async function forwardPresence(
     if (setCookie) {
       for (const raw of splitSetCookie(setCookie)) {
         const [pair] = raw.split(';');
+        // `split` can yield `undefined` entries under
+        // `noUncheckedIndexedAccess`, so skip empty ones.
+        if (!pair) continue;
         const eq = pair.indexOf('=');
         if (eq === -1) continue;
         const name = pair.slice(0, eq).trim();
@@ -175,7 +181,7 @@ export async function forwardPresence(
             value,
             httpOnly: true,
             sameSite: 'lax',
-            secure: process.env.NODE_ENV === 'production',
+            secure: process.env['NODE_ENV'] === 'production',
             path: '/',
             maxAge: isClear ? 0 : 8 * 60 * 60,
           });

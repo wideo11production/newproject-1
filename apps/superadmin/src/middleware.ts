@@ -114,9 +114,6 @@ const gate = createGate({
   // ENUMERATED, NOT A PREFIX, so that `/api/auth/logout` stays private and any
   // future route under this path is closed by default. A bare `/api/auth` entry
   // would open both of those the moment somebody typed them.
-  // ENUMERATED, NOT A PREFIX, so that `/api/auth/logout` stays private and any
-  // future route under this path is closed by default. A bare `/api/auth` entry
-  // would open both of those the moment somebody typed them.
   publicApiPrefixes: ['/api/live', '/api/auth/login', '/api/auth/refresh'],
 
   // `/login` is public, for the same reason the credential-exchange routes are: a

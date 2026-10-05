@@ -72,11 +72,6 @@ export function prevMarker(markers: Marker[], frame: number): Marker | null {
   return null;
 }
 
-/** The markers bracketing `frame`, for the loop region read-out. */
-export function bracketing(markers: Marker[], frame: number): { before: Marker | null; after: Marker | null } {
-  return { before: prevMarker(markers, frame), after: nextMarker(markers, frame) };
-}
-
 /** Transitions double as snap targets: a join is as findable as a marker. */
 export function transitionFrames(transitions: Transition[], fps: Fps): number[] {
   return transitions.map((t) => Math.round(t.atTime * fps));

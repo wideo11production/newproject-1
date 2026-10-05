@@ -1,4 +1,8 @@
 {
+  "name": "@wideo11/tsconfig",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared TypeScript base configs (base, library, react-library, nextjs, node). Consumed via tsconfig `extends: \"@wideo11/tsconfig/<file>.json\"` - every consumer MUST declare this package in its devDependencies so pnpm links it and the extends path resolves.",
   "compilerOptions": {
     "target": "ES2020",
     "module": "commonjs",

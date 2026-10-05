@@ -93,3 +93,52 @@ editor-full-light.png
 # output, not source, and docker compose build produces the real binary.
 *.exe
 services/transcoding-service/transcoding-service
+
+# ---- Compiled Go service binaries (untracked 2026-10-05) ----
+#
+# Har Go service ka Dockerfile SOURCE se build karta hai
+# (`go build` in the builder stage, `COPY --from=builder`), to
+# in-tree binary kisi build me use hi nahi hota. Ye 8 files
+# ~154 MB the, git me tracked:
+#
+#   services/billing-service/billing-service       21.3 MB
+#   services/config-service/config-service         40.0 MB
+#   services/currency-service/currency-service     19.4 MB
+#   services/currency-service/currency-service.exe 20.1 MB
+#   services/dashboard-service/dashboard-service   32.2 MB
+#   services/minio-exporter/minio-exporter.exe     11.3 MB
+#   services/video/video-service                   21.2 MB
+#   services/webhook-receiver/webhook-receiver     29.4 MB
+#
+# Same two costs as the transcoding ones above - every clone
+# pays for them, and a stale binary in the tree can be run
+# INSTEAD of the built one. A Windows .exe inside Linux
+# service directories (minio-exporter, currency-service) is
+# the clearest sign these were built by accident on a Windows
+# shell rather than produced by the build.
+services/billing-service/billing-service
+services/config-service/config-service
+services/currency-service/currency-service
+services/dashboard-service/dashboard-service
+services/video/video-service
+services/webhook-receiver/webhook-receiver
+services/minio-exporter/minio-exporter
+
+# ---- Database dumps (untracked 2026-10-05) ----
+#
+# `infrastructure/backups/` me 7 `pg_dump -Fc` dumps tracked the
+# (2026-10-03 ke wipe se pehle liye gaye, README.md me documented).
+# Ye LOCAL backup hai - single-node Postgres ke against, koi retention
+# policy nahi, koi off-site copy nahi. Git me:
+#   - har clone 0.3 MB payega, aur har future commit un binary
+#     diffs ko re-dikhega
+#   - backup ko git me daalne se false security milta hai -
+#     "humne backup liya" ke bahane off-site copy banane se
+#     log chuke hain (R4/Phase D3 ka asli backup service abhi
+#     bhi nahi bana)
+#
+# Files disk par stay karti hain (README.md ki restore
+# instructions `docker cp infrastructure/backups/...` use karti
+# hain) - sirf tracking band hai. Asli backup service banne par
+# ye files migrate ho jayengi aur delete ho sakengi.
+infrastructure/backups/*.dump

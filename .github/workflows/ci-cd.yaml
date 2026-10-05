@@ -17,27 +17,56 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
+      # ---- pnpm, not npm ----
+      #
+      # Ye monorepo pnpm-only hai: root package.json me
+      #   "preinstall": "npx only-allow pnpm"
+      #   "packageManager": "pnpm@9.7.0"
+      # aur pnpm-lock.yaml hai, pnpm-workspace.yaml + catalog: deps.
+      #
+      # Pehle yahan `npm ci` / `npm test` tha - dono BREAK the:
+      #   - `npm ci` root par packageManager field ko ignore karta
+      #     hai aur npm ki apni lockfile chahiye (npm-lock.yaml),
+      #     jo is repo me exist hi nahi karta -> fail
+      #   - `find . -name package.json -execdir npm ci` har package
+      #     ko ALAG-ALAG install karta hai, jo pnpm workspace ke
+      #     symlinks tod deta hai - @wideo11/ui jaise workspace:*
+      #     deps resolve nahi hote
+      # `pnpm/action-setup` version `packageManager` field se leta
+      # hai, to CI aur local ek hi pnpm par hain.
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        # No version: reads packageManager from package.json.
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # pnpm ka cache: ~/.pnpm-store. 'npm' ka cache knob
+          # node_modules/.cache par point karta hai, jo pnpm store
+          # ko cache NAHI karta.
+          cache: 'pnpm'
 
+      # ---- ONE install at the root ----
+      #
+      # pnpm workspaces me dependencies ROOT se install hoti hain -
+      # `pnpm install` pnpm-workspace.yaml padhta hai aur sabhi
+      # packages (apps/*, packages/*, services ke Node parts) ko
+      # ek saath, workspace links ke saath resolve karta hai.
+      # Per-package `npm ci` ka equivalent isme koi nahi, aur hona
+      # bhi nahi chahiye.
+      #
+      # --frozen-lockfile: CI me lockfile ko UPDATE na kare. Agar
+      # package.json aur pnpm-lock.yaml disagree kare, install fail
+      # ho jayega - jo CHAHIYE, kyunki CI me silently lockfile
+      # badalna hai hi nahi.
       - name: Install dependencies
-        run: |
-          # Install root dependencies if any
-          npm ci
-          # Install workspace dependencies (if using npm workspaces)
-          # Or we can install per package, but we'll do a simple install at root if there's a package.json
-          # If there's no root package.json, we'll skip and rely on package-specific
-          if [ -f package.json ]; then
-            npm ci
-          fi
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
 
       - name: Run Go build and vet for all Go services
         run: |
@@ -46,11 +75,21 @@ jobs:
           find . -name go.mod -not -path "./node_modules/*" -execdir go build ./... \;
           find . -name go.mod -not -path "./node_modules/*" -execdir go vet ./... \;
 
-      - name: Run npm build and test for all Node.js packages
-        run: |
-          # We'll find all package.json and run npm ci and npm test if test script exists
-          find . -name package.json -not -path "./node_modules/*" -execdir npm ci \;
-          find . -name package.json -not -path "./node_modules/*" -execdir npm test \;
+      # ---- pnpm test / typecheck ----
+      #
+      # Root scripts: "test": "turbo run test", "typecheck":
+      # "turbo run typecheck". Turbo har package ka script run
+      # karta hai jo DEFINE karta hai; jo define na kare, skip.
+      # Isliye `pnpm test` sabhi apps + packages ke tests ek saath,
+      # aur packages bina test script ke silently skip hote hain -
+      # `find -execdir npm test` ki tarah har directory me fail
+      # nahi hota (wo script-less packages me "missing script"
+      # error deta tha).
+      - name: Run tests (turbo, all packages)
+        run: pnpm test
+
+      - name: Typecheck (turbo, all packages)
+        run: pnpm typecheck
 
       - name: Security Scan (Example: using GitHub CodeQL)
         uses: github/codeql-action/init@v2

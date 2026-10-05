@@ -103,7 +103,14 @@ export function initialsOf(email: string): string {
   const name = (email.split('@')[0] ?? '').trim();
   if (!name) return '?';
   const parts = name.split(/[._-]+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  // `parts[0]`/`parts[1]` are `string | undefined` under
+  // noUncheckedIndexedAccess even after a length check, so
+  // bind them to locals and test both before indexing.
+  const first = parts[0];
+  const second = parts[1];
+  // `charAt` always returns a string; index access would
+  // be `string | undefined` under noUncheckedIndexedAccess.
+  if (first && second) return (first.charAt(0) + second.charAt(0)).toUpperCase();
   return name.slice(0, 2).toUpperCase();
 }
 

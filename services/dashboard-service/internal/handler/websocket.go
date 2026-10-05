@@ -16,7 +16,18 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	// ---- Origin check (was: `return true`) ----
+	//
+	// `CheckOrigin: return true` lets ANY website open a
+	// WebSocket to this service with the victim's cookies -
+	// a CSRF-shaped hole: a malicious page could drive
+	// real-time dashboard connections as the user. Reusing
+	// the CORS allowlist (DASHBOARD_ALLOWED_ORIGINS) keeps
+	// the HTTP and WebSocket origin policy one deployment
+	// fact, in one place.
+	CheckOrigin: func(r *http.Request) bool {
+		return isAllowedOrigin(r.Header.Get("Origin"))
+	},
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 }

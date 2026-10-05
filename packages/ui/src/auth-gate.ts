@@ -16,9 +16,19 @@ import { jwtVerify } from 'jose';
  * WHY THIS FILE EXISTS
  * ============================================================================
  *
- * `apps/web` has a working 725-line middleware. `apps/monitor` and `apps/admin`
- * each have a 49-line copy of the same idea, and `currency`, `billing`,
- * `analytics` and `superadmin` have none at all. Six of eight apps.
+ * Every app's "is this request allowed" decision lives here, once.
+ * `apps/web` - the one app with PRODUCT rules beyond a session: an
+ * auth-endpoint rate limiter, an email-verification gate, a mandatory
+ * security-setup gate, and a privileged `/superadmin` corner inside an
+ * otherwise any-session app - kept a 746-line hand-rolled middleware
+ * until the gate grew the opt-in options below. Its middleware is now
+ * configuration over this implementation, like every other app, and
+ * the product rules it owns are enforced here in the order the spec
+ * demands them.
+ *
+ * `apps/monitor` and `apps/admin` each had a 49-line copy of the same
+ * idea, and `currency`, `billing`, `analytics` and `superadmin` had
+ * none at all. Six of eight apps.
  *
  * The monitor/admin copy was this:
  *
@@ -113,14 +123,93 @@ export type GateOptions = {
   publicAssets?: readonly string[];
 
   /**
-   * Skip the security-setup gate.
+   * Runs FIRST, before the public allow, on every request -
+   * including public ones.
    *
-   * `apps/web` needs it and must not set it: its own security-setup page is behind
-   * the gate, so gating on "setup complete" would lock the creator out of the page
-   * that completes it. This flag exists so that one app's rule does not become
-   * everyone's.
+   * Returns a response to short-circuit with (a 429, say), or
+   * `null` to let the gate continue. This is where an app puts
+   * its auth-endpoint rate limiter: a brute-force guard must see
+   * the login attempt itself, so it cannot live behind the public
+   * allow - the login route IS public.
    */
-  checkSecuritySetup?: boolean;
+  rateLimit?: (request: NextRequest) => NextResponse | null;
+
+  /**
+   * Require the email-verified flag, read through
+   * `securitySetupStatus`.
+   *
+   * The claim is NOT in the JWT - auth-service does not put it
+   * there - so it arrives on the same setup-status call as the
+   * security-setup flag. Fails closed: an unreachable auth-service
+   * means "unverified".
+   */
+  requireEmailVerified?: boolean;
+
+  /** Where an unverified PAGE request is sent. Default `/auth/verify`. */
+  verifyPath?: string;
+
+  /**
+   * Require completed security setup (PIN, biometric, questions).
+   *
+   * The deadlock rule is built in: `sessionOnlyApiPrefixes` are
+   * the endpoints that COMPLETE the setup, and they demand a
+   * session but not a completed one - otherwise the gate would
+   * block the very requests that would satisfy it.
+   */
+  requireSecuritySetup?: boolean;
+
+  /** Where an incomplete-setup PAGE request is sent. Default `/auth/security-setup`. */
+  securitySetupPath?: string;
+
+  /**
+   * API prefixes that need a valid session but NOT a completed
+   * security setup. Exact or whole-segment prefix, like the other
+   * lists.
+   */
+  sessionOnlyApiPrefixes?: readonly string[];
+
+  /**
+   * The setup-status lookup, supplied by the app that owns the
+   * auth-service call and its cache.
+   *
+   * Injected rather than assumed because the call is a PRODUCT
+   * fact - which endpoint, which fields, what to cache - that only
+   * the owning app knows, and because the cache carries a safety
+   * property (only POSITIVE results are cached, never a blocking
+   * `false`) that belongs to its author. The gate owns the ordering
+   * and the enforcement; the app owns the lookup. Fail-closed on
+   * throw.
+   */
+  securitySetupStatus?: (token: string) => Promise<SecuritySetupState>;
+
+  /**
+   * A role gate scoped to specific paths, for an app that is
+   * otherwise any-session but keeps a privileged corner (web's
+   * `/superadmin`).
+   *
+   * `requireRole` gates the WHOLE app; this one gates only the
+   * listed paths, and sends an unauthorized PAGE visitor to
+   * `pageRedirect` rather than a bare 403, because that visitor
+   * already holds a working session and has a home to go back to.
+   */
+  roleGate?: {
+    paths: readonly string[];
+    roles: readonly string[];
+    /** Where an unauthorized PAGE request goes. Default: `loginPath`. */
+    pageRedirect?: string;
+  };
+};
+
+/**
+ * What `securitySetupStatus` reports back.
+ *
+ * Both flags fail closed. A caller that cannot reach auth-service
+ * returns `{ emailVerified: false, setupComplete: false }`, which
+ * the gate treats as "not verified, not set up" - the safe answer.
+ */
+export type SecuritySetupState = {
+  emailVerified: boolean;
+  setupComplete: boolean;
 };
 
 /**
@@ -190,7 +279,7 @@ async function verifySessionDetailed(req: NextRequest): Promise<{
   session: VerifiedSession | null;
   reason: 'ok' | 'no-secret' | 'no-cookie' | 'expired' | 'invalid';
 }> {
-  const secret = process.env.JWT_SECRET_KEY;
+  const secret = process.env['JWT_SECRET_KEY'];
   // Fail CLOSED. A gate with no secret cannot verify anything, so it authorises
   // nothing.
   if (!secret) return { session: null, reason: 'no-secret' };
@@ -204,12 +293,16 @@ async function verifySessionDetailed(req: NextRequest): Promise<{
       // service in this monorepo being replayed here.
       audience: 'wideo11-api',
     });
-    const userId = String(payload.user_id ?? payload.sub ?? '');
+    // Bracket access: the JWT payload is an index-signature
+    // type, and `noPropertyAccessFromIndexSignature` forbids
+    // dot access on it.
+    const userId = String(payload['user_id'] ?? payload.sub ?? '');
     if (!userId) return { session: null, reason: 'invalid' };
+    const role = payload['role'];
     return {
       session: {
         userId,
-        role: typeof payload.role === 'string' ? payload.role : null,
+        role: typeof role === 'string' ? role : null,
       },
       reason: 'ok',
     };
@@ -287,7 +380,7 @@ async function refreshIfExpiring(
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
   if (!refreshToken) return null;
 
-  const authInternal = process.env.AUTH_INTERNAL_URL ?? 'http://auth-service:8085';
+  const authInternal = process.env['AUTH_INTERNAL_URL'] ?? 'http://auth-service:8085';
 
   try {
     const res = await fetch(`${authInternal}/api/v1/auth/refresh`, {
@@ -317,7 +410,7 @@ async function refreshIfExpiring(
           value: '',
           httpOnly: true,
           sameSite: 'lax',
-          secure: process.env.NODE_ENV === 'production',
+          secure: process.env['NODE_ENV'] === 'production',
           path: '/',
           maxAge: 0,
         });
@@ -336,7 +429,7 @@ async function refreshIfExpiring(
     if (!access) return null;
 
     const out = NextResponse.next();
-    const secure = process.env.NODE_ENV === 'production';
+    const secure = process.env['NODE_ENV'] === 'production';
 
     out.cookies.set({
       name: SESSION_COOKIE,
@@ -449,12 +542,45 @@ export function createGate(options: GateOptions = {}) {
     publicAssets = [],
     loginPath = '/auth/login',
     requireRole,
-    checkSecuritySetup = false,
+    rateLimit,
+    requireEmailVerified = false,
+    verifyPath = '/auth/verify',
+    requireSecuritySetup = false,
+    securitySetupPath = '/auth/security-setup',
+    sessionOnlyApiPrefixes = [],
+    securitySetupStatus,
+    roleGate,
   } = options;
 
   return async function gate(request: NextRequest): Promise<NextResponse> {
     const { pathname } = request.nextUrl;
     const isApi = pathname.startsWith('/api/');
+
+    // ---- Auth-endpoint rate limit, BEFORE the public allow ----
+    //
+    // A brute-force guard must see the login attempt itself, so it
+    // runs before anything is allowed through - including the
+    // public routes, because the login route IS public.
+    const limited = rateLimit?.(request);
+    if (limited) return limited;
+
+    // Session-required-but-setup-not-required APIs. Computed once
+    // here because the setup gate and the response headers both
+    // read it.
+    const isSessionOnlyApi = matches(pathname, sessionOnlyApiPrefixes);
+
+    // The session-only marker, for apps that split "has a session"
+    // from "has finished security setup". Set on EVERY passing
+    // response - the allow and the renewals alike - so a downstream
+    // service can tell the two apart without re-asking auth-service.
+    const markSessionOnly = (res: NextResponse): void => {
+      if (sessionOnlyApiPrefixes.length > 0) {
+        res.headers.set(
+          'x-wideo11-security',
+          isSessionOnlyApi ? 'session-only' : 'complete'
+        );
+      }
+    };
 
     // ---- Public surface? Allow. ----
     if (
@@ -506,6 +632,7 @@ export function createGate(options: GateOptions = {}) {
     if (renewed) {
       renewed.headers.set('x-wideo11-auth', 'session-valid');
       renewed.headers.set('x-wideo11-refreshed', '1');
+      markSessionOnly(renewed);
       return renewed;
     }
 
@@ -517,6 +644,7 @@ export function createGate(options: GateOptions = {}) {
     if (proactive) {
       proactive.headers.set('x-wideo11-auth', 'session-valid');
       proactive.headers.set('x-wideo11-refreshed', '1');
+      markSessionOnly(proactive);
       return proactive;
     }
 
@@ -542,13 +670,14 @@ export function createGate(options: GateOptions = {}) {
       // Dropping it means somebody bounced from a deep link lands on the dashboard
       // after logging in and has no idea what they were trying to reach.
       //
-      // Only forwarded when it is a same-origin PATH. An absolute URL or a
-      // protocol-relative `//host` here is an OPEN REDIRECT: a link of the form
-      // `/login?next=https://evil.example` would bounce a signed-in user off-site
-      // the moment they touched anything. That check is why this is not a
-      // straight copy of `searchParams.get('next')`.
-      const next = request.nextUrl.searchParams.get('next');
-      if (next && next.startsWith('/') && !next.startsWith('//')) {
+      // `safeNext` is the shared open-redirect guard, and it lives HERE - in the
+      // one place the rule exists - rather than being re-implemented per app: an
+      // absolute URL, a protocol-relative `//host`, or a disguised `/\host` here
+      // is an OPEN REDIRECT, a link of the form
+      // `/login?next=https://evil.example` that bounces a signed-in user off-site
+      // the moment they touch anything.
+      const next = safeNext(request.nextUrl.searchParams.get('next'));
+      if (next) {
         loginUrl.searchParams.set('next', next);
       }
 
@@ -557,6 +686,90 @@ export function createGate(options: GateOptions = {}) {
       // redirect and get re-presented on the next attempt.
       res.cookies.delete(SESSION_COOKIE);
       return res;
+    }
+
+    // ==========================================================================
+    // EMAIL VERIFY FIRST, SECURITY SETUP SECOND
+    // ==========================================================================
+    //
+    // Two PRODUCT rules that only `apps/web` turns on, whose ORDER is
+    // the whole point:
+    //
+    //   1. EMAIL VERIFY FIRST. Register hands out a valid session
+    //      token immediately, so a session check alone cannot tell a
+    //      verified user from one who still owes the product a
+    //      verification click. Checking setup first would send that
+    //      user to the PIN form and skip the step the spec puts
+    //      first. This check also runs on the session-only APIs, or
+    //      an unverified user could set a PIN straight from the API
+    //      and bypass verification entirely.
+    //
+    //   2. THEN SECURITY SETUP, with the deadlock exception: the
+    //      APIs that COMPLETE the setup must stay reachable with a
+    //      session alone, or the gate blocks the only requests that
+    //      could satisfy it.
+    //
+    // The state comes from the app-owned `securitySetupStatus` - the
+    // gate does not know how to ask auth-service, and the caller's
+    // positive-only cache is part of its contract. Any error is a
+    // fail-CLOSED `false`: an unreachable auth-service must not
+    // become a bypass of either gate.
+    if (
+      (requireEmailVerified || requireSecuritySetup) &&
+      securitySetupStatus
+    ) {
+      let state: SecuritySetupState = {
+        emailVerified: false,
+        setupComplete: false,
+      };
+      try {
+        const token = request.cookies.get(SESSION_COOKIE)?.value;
+        if (token) state = await securitySetupStatus(token);
+      } catch {
+        // Unreachable or broken: fail CLOSED, not open.
+        state = { emailVerified: false, setupComplete: false };
+      }
+
+      if (requireEmailVerified && !state.emailVerified) {
+        if (isApi) {
+          return NextResponse.json(
+            {
+              error: 'email_verification_required',
+              message:
+                'Verify your email address before continuing. Use the link we sent you, or request a new one.',
+            },
+            { status: 403 }
+          );
+        }
+
+        // Pages keep the `next` parameter, so the verification click
+        // still lands the user where they were going. `/auth/verify`
+        // is itself public, so this redirect cannot loop.
+        const verifyUrl = new URL(verifyPath, request.url);
+        const next = safeNext(request.nextUrl.searchParams.get('next'));
+        if (next) verifyUrl.searchParams.set('next', next);
+        return NextResponse.redirect(verifyUrl);
+      }
+
+      if (requireSecuritySetup && !isSessionOnlyApi && !state.setupComplete) {
+        if (isApi) {
+          return NextResponse.json(
+            {
+              error: 'security_setup_required',
+              message:
+                'Complete your mandatory security setup (PIN, biometric, security questions) before using this endpoint.',
+            },
+            { status: 403 }
+          );
+        }
+
+        // No `next` here, on purpose: the setup flow is a wizard with
+        // its own finish line, and a preserved destination would let a
+        // half-finished setup redirect mid-flight.
+        return NextResponse.redirect(
+          new URL(securitySetupPath, request.url)
+        );
+      }
     }
 
     // ---- Role gate ----
@@ -576,15 +789,29 @@ export function createGate(options: GateOptions = {}) {
       }
     }
 
-    // ---- Security setup ----
+    // ---- Path-scoped role gate ----
     //
-    // Off by default, and `apps/web` is the only app that turns it on. It is a
-    // PRODUCT rule about creators, not a security rule, and baking it into the
-    // shared gate would mean an admin app demanded a PIN from a superadmin.
-    if (checkSecuritySetup && !isApi) {
-      // Left as a hook point rather than half-implemented: `apps/web` owns the
-      // call to auth-service and the positive-only cache that makes it safe. See
-      // its own middleware, which is unchanged.
+    // For an app that is otherwise any-session: only the listed paths
+    // demand a role. The role is the SIGNED claim `verifySessionDetailed`
+    // already extracted, so it is authenticated - a caller cannot
+    // promote themselves by editing anything they can reach. A page
+    // visitor who fails goes to `pageRedirect`, not a bare 403: they
+    // hold a working session and have a home to return to.
+    if (roleGate && matches(pathname, roleGate.paths)) {
+      if (!session.role || !roleGate.roles.includes(session.role)) {
+        if (isApi) {
+          return NextResponse.json(
+            {
+              error: 'forbidden',
+              message: 'This area is restricted to superadmins.',
+            },
+            { status: 403 }
+          );
+        }
+        return NextResponse.redirect(
+          new URL(roleGate.pageRedirect ?? loginPath ?? '/', request.url)
+        );
+      }
     }
 
     const res = NextResponse.next();
@@ -593,6 +820,7 @@ export function createGate(options: GateOptions = {}) {
     // e.g. a cached page served without re-running the gate.
     res.headers.set('x-wideo11-auth', 'session-valid');
     if (session.role) res.headers.set('x-wideo11-role', session.role);
+    markSessionOnly(res);
     return res;
   };
 }

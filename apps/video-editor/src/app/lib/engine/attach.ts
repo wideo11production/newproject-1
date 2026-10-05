@@ -129,7 +129,7 @@ export function attach(tracks: TimelineTrack[], clipId: string): AttachResult {
 }
 
 /** Detach a clip from its partner. Both sides are cleared. */
-export function detach(tracks: TimelineTrack[], clipId: string): AttachResult {
+function detach(tracks: TimelineTrack[], clipId: string): AttachResult {
   const all = tracks.flatMap((t) => t.clips);
   const clip = all.find((c) => c.id === clipId);
   if (!clip) return { tracks, label: 'That clip is gone', ok: false };

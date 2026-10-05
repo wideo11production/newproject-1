@@ -42,7 +42,12 @@ export function jwtPayload(token: string | undefined | null): SessionClaims | nu
   if (parts.length !== 3) return null;
 
   try {
-    const json = Buffer.from(parts[1], 'base64url').toString('utf8');
+    // noUncheckedIndexedAccess: `parts[1]` is `string |
+    // undefined` even after the length check, and
+    // `Buffer.from` does not accept undefined.
+    const encoded = parts[1];
+    if (encoded === undefined) return null;
+    const json = Buffer.from(encoded, 'base64url').toString('utf8');
     const claims = JSON.parse(json);
     // A decoded payload could be any JSON. Only an object with at least a string
     // subject is worth believing even as an attribution label.

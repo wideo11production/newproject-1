@@ -100,6 +100,7 @@
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@wideo11/tsconfig": "workspace:*",
     "autoprefixer": "catalog:",
     "eslint": "catalog:",
     "postcss": "catalog:",
