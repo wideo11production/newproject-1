@@ -31,15 +31,43 @@ BEGIN;
 -- syntax error deta tha. `ADD COLUMN IF NOT EXISTS` wahi guarantee deta hai
 -- bina block ke, aur `sys.*` catalog jisne wo guard likha tha wo catalog
 -- PostgreSQL me exist hi nahi karta.
-IF NOT EXISTS (
-  SELECT 1
-  FROM sys.columns
-  WHERE object_id = OBJECT_ID(N'dbo.users')
-    AND name = 'username'
-)
-BEGIN
-  ALTER TABLE users ADD username VARCHAR(100);
-END;
+--
+-- -----------------------------------------------------------------------------
+-- THE COMMENT ABOVE DESCRIBED THIS FIX. THE CODE BELOW IT WAS STILL T-SQL.
+-- -----------------------------------------------------------------------------
+--
+-- Lines 29-33 have explained the correct statement since before this session.
+-- The statement they describe was never actually written — the T-SQL block was
+-- still there underneath, so every replay of this file failed with:
+--
+--     ERROR: syntax error at or near "IF" (SQLSTATE 42601)
+--
+-- This is the repository's own recurring lesson, and this is occurrence six:
+--
+--   1. ticket.upload_url - a comment-level drift between two copies
+--   2. ALTER COLUMN ... TYPE - a comment saying "TYPE added", statement had none
+--   3. a # security_profile comment justifying an omitted COMMENT ON
+--   4. prometheusUrl - a comment explaining why it must not be sent, on the
+--      line above the statement sending it
+--   5. TestFinishAuthenticationIssuesASession - a comment mentioning the call
+--      that had been deleted
+--   6. THIS MIGRATION - a comment describing the correct SQL, directly above the
+--      wrong SQL
+--
+-- Why it went unnoticed for so long: every existing database already has the
+-- `username` column, and the migrator records applied versions in
+-- `schema_migrations`, so this file is skipped on every deployed instance. It
+-- only runs on a SCRATCH database - which is to say, it only runs when somebody
+-- builds a new environment from scratch.
+--
+-- That is the worst possible place for a migration to be broken: the failure is
+-- invisible in production and total on a fresh deploy. `AUTH_MIGRATION_REPLAY=1`
+-- in `internal/database` is what exercises it, and it is opt-in, so `go test
+-- ./...` without the flag never sees it.
+--
+-- `ADD COLUMN IF NOT EXISTS` gives exactly the guarantee the T-SQL guard was
+-- reaching for: add the column if absent, do nothing if present, no block needed.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100);
 
 -- ---- Step 2: backfill ----
 -- Sirf un rows ke liye jinka username abhi NULL/empty hai.
@@ -152,47 +180,71 @@ WHERE users.id = d.id
   AND (users.username IS NULL OR users.username = '');
 
 -- ---- Step 3: unique index (agar pehle se nahi hai) ----
+--
 -- CONCURRENTLY nahi use kiya - `CREATE INDEX CONCURRENTLY` transaction block
 -- ke andar nahi chal sakta, aur ye ek chhoti dev table hai.
-CREATE UNIQUE INDEX idx_users_username ON users (username);
+--
+-- -----------------------------------------------------------------------------
+-- `IF NOT EXISTS`, BECAUSE THE HEADER PROMISES RE-RUNNING IS ROUTINE
+-- -----------------------------------------------------------------------------
+--
+-- Lines 18-20 of this file say the whole thing: "ye script `psql -f` se dobara
+-- chalana routine hai" - re-running this file with `psql -f` is routine. Bare
+-- `CREATE UNIQUE INDEX` is not re-runnable: the second run fails with
+--
+--     ERROR: relation "idx_users_username" already exists (SQLSTATE 42P07)
+--
+-- and, because the file wraps itself in `BEGIN; ... COMMIT;`, that error aborts
+-- the transaction - so the second run undoes the backfill too. A migration
+-- documented as safe to re-run, which is not, fails in the way that looks like
+-- data loss rather than like a syntax problem.
+--
+-- `CREATE UNIQUE INDEX IF NOT EXISTS` is supported from PostgreSQL 9.5 and gives
+-- exactly the "create if absent" guarantee the header promises. It is NOT a
+-- validity check, though: if an index of that name already exists with a
+-- DIFFERENT definition, PostgreSQL skips it silently and you get no warning. That
+-- is acceptable here because the name and definition are both fixed in this file
+-- and nothing else creates it.
+--
+-- The alternative - a `DO $$ ... IF NOT EXISTS (SELECT 1 FROM pg_indexes ...) $$
+-- END $$;` block - would notice that case, at the cost of a block that cannot be
+-- written in plain SQL and therefore does not survive being pasted into psql by
+-- hand. The simple form is the better trade for a table this size.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users (username);
 
 -- ---- Step 4: describe the column ----
 --
--- SQL Server me column description extended property ke roop me stored hoti hai.
--- `sp_addextendedproperty` / `sp_updateextendedproperty` ka pair idempotent
--- script banata hai.
-IF EXISTS (
-  SELECT 1
-  FROM sys.extended_properties ep
-  JOIN sys.columns c
-    ON c.object_id = ep.major_id
-   AND c.column_id = ep.minor_id
-  WHERE ep.major_id = OBJECT_ID(N'dbo.users')
-    AND c.name = N'username'
-    AND ep.name = N'MS_Description'
-)
-BEGIN
-  EXEC sys.sp_updateextendedproperty
-    @name = N'MS_Description',
-    @value = N'Public creator handle. Nullable only for legacy rows created before migration 003; new registrations require it via API validation.',
-    @level0type = N'SCHEMA',
-    @level0name = N'dbo',
-    @level1type = N'TABLE',
-    @level1name = N'users',
-    @level2type = N'COLUMN',
-    @level2name = N'username';
-END
-ELSE
-BEGIN
-  EXEC sys.sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Public creator handle. Nullable only for legacy rows created before migration 003; new registrations require it via API validation.',
-    @level0type = N'SCHEMA',
-    @level0name = N'dbo',
-    @level1type = N'TABLE',
-    @level1name = N'users',
-    @level2type = N'COLUMN',
-    @level2name = N'username';
-END;
+-- -----------------------------------------------------------------------------
+-- THIS WAS PURE SQL SERVER AND IT NEVER RAN
+-- -----------------------------------------------------------------------------
+--
+-- The original Step 4 was:
+--
+--   IF EXISTS (SELECT 1 FROM sys.extended_properties ep JOIN sys.columns c ...)
+--   BEGIN EXEC sys.sp_updateextendedproperty ... END
+--   ELSE
+--   BEGIN EXEC sys.sp_addextendedproperty  ... END
+--
+-- None of that exists in PostgreSQL. Not `sys.*`, not `OBJECT_ID`, not
+-- `sp_addextendedproperty`, not the `ELSE` after a bare `IF`. So this file could
+-- not possibly have run to completion, on any database, ever.
+--
+-- Same shape as Step 1 above, and the same lesson: the PostgreSQL version was
+-- described in a neighbouring comment and never written.
+--
+-- The equivalent is `COMMENT ON COLUMN`, which is:
+--
+--   - idempotent by construction. Re-running it REPLACES the comment rather than
+--     erroring, so the `IF EXISTS / ELSE` fork that SQL Server needed has no
+--     analogue and none is required. A migration that is safe to re-run is what
+--     the `IF EXISTS` pair was reaching for.
+--   - `COMMENT ON ... IS NULL` removes a comment, so there is no third branch to
+--     write either.
+--   - transaction-safe, which matters here because the file wraps itself in
+--     `BEGIN; ... COMMIT;`.
+--
+-- `psql -f` is documented as the routine way to re-run this file, and the old
+-- form would have thrown on the second run even if it had parsed at all.
+COMMENT ON COLUMN users.username IS 'Public creator handle. Nullable only for legacy rows created before migration 003; new registrations require it via API validation.';
 
 COMMIT;

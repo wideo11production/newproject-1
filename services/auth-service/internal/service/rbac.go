@@ -378,6 +378,26 @@ func (r *RBAC) HighestRank(ctx context.Context, userID uuid.UUID) (int, error) {
 //	         into a role carrying ten more", which rank alone does not catch.
 //
 // FAILS CLOSED. A database error means the appointment does not happen.
+// RoleIDByName resolves a role name to its id.
+//
+// Exists because registration needs to appoint the `creator` role and cannot reach
+// `r.db` from another package. Case-insensitive to match `Seed`, which is what
+// defines the names — a lookup that disagreed with the seeder on capitalisation
+// would fail only for roles whose name happens to differ in case, which is the
+// worst time to find out.
+func (r *RBAC) RoleIDByName(ctx context.Context, name string) (uuid.UUID, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).
+		Where("lower(name) = lower(?)", name).
+		First(&role).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return uuid.Nil, fmt.Errorf("%w: role %q", ErrUnknownRole, name)
+		}
+		return uuid.Nil, err
+	}
+	return role.ID, nil
+}
+
 func (r *RBAC) Appoint(
 	ctx context.Context,
 	granterID, userID, roleID uuid.UUID,

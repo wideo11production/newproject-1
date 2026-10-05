@@ -24,7 +24,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-export type MediaKind = 'video' | 'audio' | 'image' | 'text';
+export type MediaKind = 'video' | 'audio' | 'image' | 'text' | 'branding';
 
 export interface MediaItem {
   id: string;
@@ -47,14 +47,36 @@ interface MediaStoreValue {
   items: MediaItem[];
   byId: Map<string, MediaItem>;
   addFiles: (files: FileList | File[]) => Promise<MediaItem[]>;
+  /**
+   * Register media this app just CAPTURED, with its duration already known.
+   *
+   * `addFiles` is the wrong tool for a recording, for two reasons that both
+   * matter:
+   *
+   * 1. It reads the duration back from a media element, which cannot work for
+   *    `MediaRecorder` output. A recorded WebM has no duration in its header, so
+   *    `video.duration` is `Infinity`, `readDuration` rejects it as non-finite and
+   *    returns `null` — and the clip lands with the 5-second fallback length
+   *    instead of the length the user actually recorded. The recorder already
+   *    knows the real length from the wall clock, so it is passed in rather than
+   *    re-derived from a value that is not there.
+   *
+   * 2. Without this method there was NO way to get a recording into the store at
+   *    all, and everything downstream resolves media through the store. A clip
+   *    whose `mediaId` is not in here has no source, so the compositor draws a
+   *    placeholder instead of the picture, the filmstrip extractor gets an empty
+   *    list and the lane shows no frames, the waveform is never requested, and the
+   *    bytes are never written to IndexedDB — so the clip is gone after a reload.
+   */
+  addRecorded: (input: { name: string; kind: MediaKind; blob: Blob; duration: number }) => MediaItem;
   remove: (id: string) => void;
   clear: () => void;
   setPoster: (id: string, poster: string | null) => void;
   setPeaks: (id: string, peaks: number[] | null) => void;
   /**
    * Re-add a blob read back from IndexedDB, WITHOUT reading its duration.
-   * Used when a saved project is opened: the bytes are already on disk, and
-   * the duration is in the saved clip data.
+   * Used when a saved project is opened: the bytes are already on disk, and the
+   * duration is in the saved clip data.
    */
   restore: (entries: Array<{ id: string; name: string; kind: MediaKind; blob: Blob }>) => void;
 }
@@ -145,6 +167,33 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
     return added;
   }, []);
 
+  const addRecorded = useCallback(
+    (input: { name: string; kind: MediaKind; blob: Blob; duration: number }) => {
+      // The store owns the URL, so it is registered for revocation like any other.
+      // The recorder's own URL is NOT reused: handing ownership over cleanly is
+      // what keeps the "who revokes this" question from having two answers.
+      const url = URL.createObjectURL(input.blob);
+      urlsRef.current.push(url);
+      const item: MediaItem = {
+        id: `m-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: input.name,
+        kind: input.kind,
+        url,
+        // Guarded rather than passed through: a zero-length take would make
+        // `lenFrames` 0 and produce a clip with no length at all.
+        duration: Number.isFinite(input.duration) && input.duration > 0 ? input.duration : undefined,
+        sizeBytes: input.blob.size,
+        file: input.blob,
+        poster: null,
+        peaks: null,
+        createdAt: Date.now(),
+      };
+      setItems((prev) => [item, ...prev]);
+      return item;
+    },
+    []
+  );
+
   const remove = useCallback((id: string) => {
     setItems((prev) => {
       const hit = prev.find((i) => i.id === id);
@@ -205,8 +254,8 @@ export function MediaStoreProvider({ children }: { children: React.ReactNode }) 
   const byId = useMemo(() => new Map(items.map((i) => [i.id, i])), [items]);
 
   const value = useMemo<MediaStoreValue>(
-    () => ({ items, byId, addFiles, remove, clear, setPoster, setPeaks, restore }),
-    [items, byId, addFiles, remove, clear, setPoster, setPeaks, restore]
+    () => ({ items, byId, addFiles, addRecorded, remove, clear, setPoster, setPeaks, restore }),
+    [items, byId, addFiles, addRecorded, remove, clear, setPoster, setPeaks, restore]
   );
 
   return <MediaStoreContext.Provider value={value}>{children}</MediaStoreContext.Provider>;

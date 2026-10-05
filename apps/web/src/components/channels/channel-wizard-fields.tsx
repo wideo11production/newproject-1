@@ -80,7 +80,49 @@ ull means NOT YET ANSWERED, which is not the same as alse. */
 }
 
 export const EMPTY_WIZARD: ChannelWizardExtras = {
-  channelType: '',
+  // ---- `channelType` USED TO BE `''` ----
+  //
+  // That produced a form which looked complete and submitted an INVALID value:
+  // `JSON.stringify` keeps the empty string, the server rejects it with
+  //
+  //     channel_type must be one of: gaming, music, podcast, education, howto,
+  //                                   sports, news, film, people, comedy, autos, other
+  //
+  // and the creator sees a server error for a field they were never told was
+  // required. That is the whole bug: an empty string is a value, and the server
+  // correctly refused it.
+  //
+  // ---- WHY `'other'` AND NOT A POPULAR CATEGORY ----
+  //
+  // Two reasons, and they point opposite ways from each other:
+  //
+  //   * Guessing wrong is worse than admitting ignorance. `channel_type` selects
+  //     upload defaults and which features surface, so a creator silently put on
+  //     `gaming` because it was listed first gets a channel that behaves wrong and
+  //     has no way to tell why. `other` is the honest answer when nobody has
+  //     chosen yet.
+  //
+  //   * It keeps the form ALWAYS SUBMITTABLE. A required-with-error field is the
+  //     right pattern once somebody has to pick; a form that silently sends a
+  //     wrong answer is not. The picker is right above it and one click replaces
+  //     the default, so nothing is lost by having a safe one in place.
+  //
+  // `'other'` is a REAL member of the allowlist - it is not a sentinel that would
+  // fail the same validation, which is the mistake `'unspecified'` or `''` would
+  // have been.
+  channelType: 'other',
+
+  // ---- `matureContent` STAYS EMPTY, ON PURPOSE ----
+  //
+  // The sibling field below is NOT defaulted, and the difference is the point.
+  //
+  // `mature_content` is a COMPLIANCE answer about a specific clip, so "I have not
+  // answered" and "no" are genuinely different and the wire format already carries
+  // `null` for unanswered. Defaulting it to `'no'` would state as fact something
+  // nobody chose.
+  //
+  // `channel_type` is a CATEGORISATION, and an uncategorised channel is a perfectly
+  // valid channel. Defaulting it is labelling, not claiming.
   matureContent: '',
   madeForKids: null,
   contactEmail: '',

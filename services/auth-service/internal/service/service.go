@@ -449,6 +449,29 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	// ho jati thi. Device optional hai, isliye device nil rehne dena sahi hai.
 	// Hinglish: fingerprint nahi hai to device record banate hi nahi
 
+	return s.issueSession(ctx, user, device)
+}
+
+// ---------------------------------------------------------------------------
+// issueSession - EVERY session in the system is created here
+// ---------------------------------------------------------------------------
+//
+// This was the back half of `Login`, inlined. It is extracted because a second
+// caller now needs it, and a second copy of this block is exactly how the two
+// paths start to disagree: the password path would get a revocation entry and
+// the passkey path would not, or one would set `refresh_tokens.session_id` and
+// the other would not, and "log out of this device only" would silently work for
+// some logins and not others.
+//
+// It is deliberately NOT a second login method. It performs no authentication at
+// all - the caller has already proved identity, by password or by a verified
+// WebAuthn signature. That separation is the safety property: the list of things
+// that can call this is the list of things that have already authenticated, and
+// it is short enough to read.
+//
+// SECURITY: `issueSession` never checks a password. Adding one here would make
+// every caller's authentication strength irrelevant.
+func (s *AuthService) issueSession(ctx context.Context, user *model.User, device *model.Device) (*model.User, *model.TokenPair, error) {
 	ip, ua := clientInfoFromContext(ctx)
 	// Create session and tokens
 	session := &model.Session{
@@ -548,6 +571,117 @@ func (s *AuthService) Login(ctx context.Context, req *model.LoginRequest, device
 	}
 
 	return user, tokenPair, nil
+}
+
+// ---------------------------------------------------------------------------
+// LoginWithWebAuthn - a SECOND FACTOR, at login, that issues a real session
+// ---------------------------------------------------------------------------
+//
+// ----------------------------------------------------------------------------
+// WHAT THIS FIXES
+// ----------------------------------------------------------------------------
+//
+// Until this existed, the passkey flow was a DEAD END. `FinishAuthentication`
+// verified a real WebAuthn signature - genuinely strong, phishing-resistant,
+// nothing to steal and nothing to phish - and then returned:
+//
+//     {"verified": true, "email": "...", "message": "..."}
+//
+// No token. No session. No way to become logged in from the result. So the
+// strongest authentication this product can do was verified and then thrown
+// away, and the ONLY way to get a session was a password. That is the worst
+// possible shape: the user is offered a strong option, it does nothing, and the
+// weak one is the only one that works.
+//
+// The old doc comment said "ye password se zyada secure aur phishing-resistant
+// hai". That was true of the signature and false of the product.
+//
+// ----------------------------------------------------------------------------
+// WHY THIS IS NOT "PASSWORD PLUS PASSKEY" AND WHY IT MATTERS
+// ----------------------------------------------------------------------------
+//
+// This issues a session on a passkey ALONE. Password + passkey (true 2FA) is
+// strictly stronger against a stolen passkey, and it is the right design for
+// most products.
+//
+// It is not the right design here, for one specific reason: this product ALREADY
+// requires a passkey. `security_profiles.biometric_opted_out` gates the
+// dashboard behind the PIN -> questions -> biometric gate, and the biometric step
+// is only skippable when the browser reports no platform authenticator at all.
+// For those users there is no second factor to combine with, so requiring one
+// would lock them out of their own account rather than protect it.
+//
+// What this therefore delivers is the property that was actually missing: **the
+// passkey stops being a dead end and becomes a login method**, and the session it
+// issues is identical in every respect to a password session - same TTL, same
+// revocation, same session_id linkage, same device record, same audit event.
+//
+// Two routes, one session. `requirePermission`/`requireService` and the step-up
+// work in `SYSTEM-PLAN.md` phase 0 are where true two-factor is layered on top.
+//
+// ----------------------------------------------------------------------------
+// THE SECURITY RULES THIS ENFORCES
+// ----------------------------------------------------------------------------
+//
+//  1. It does not take a password, so it cannot be downgraded to "the passkey was
+//     optional".
+//  2. It re-checks `IsActive` and `IsVerified` at issuance time, not just at
+//     challenge time. A passkey enrolled before an account was deactivated, or
+//     before an email was verified, must not be able to mint a session now.
+//  3. It requires the caller to have already verified the signature. There is no
+//     path here that skips `FinishLogin`.
+//  4. It records an audit event with the same detail a password login does, so a
+//     passkey login is visible in the security timeline rather than invisible.
+func (s *AuthService) LoginWithWebAuthn(
+	ctx context.Context,
+	user *model.User,
+	deviceInfo model.DeviceInfo,
+) (*model.User, *model.TokenPair, error) {
+	// Re-check state HERE, not where the challenge was issued.
+	//
+	// Between `BeginAuthentication` and `FinishAuthentication` an operator can
+	// deactivate an account, or a user can discover an address was never really
+	// theirs. A passkey is long-lived by design - it outlives any single session -
+	// so trusting the state observed minutes or hours ago is trusting a stale
+	// answer to a question that has changed.
+	if !user.IsActive {
+		return nil, nil, ErrUserInactive
+	}
+	if !user.IsVerified {
+		return nil, nil, ErrUserNotVerified
+	}
+
+	// Same device handling as the password path, via the same repository call, so
+	// "log out of this device only" and the device panel behave identically
+	// whichever way the user signed in.
+	var device *model.Device
+	if deviceInfo.Fingerprint != "" {
+		dev, err := s.deviceRepo.GetByFingerprint(ctx, deviceInfo.Fingerprint)
+		if err != nil {
+			if errors.Is(err, repository.ErrDeviceNotFound) {
+				device = &model.Device{
+					UserID:      user.ID,
+					DeviceName:  deviceInfo.DeviceName,
+					DeviceType:  deviceInfo.DeviceType,
+					Platform:    deviceInfo.Platform,
+					Browser:     deviceInfo.Browser,
+					Fingerprint: deviceInfo.Fingerprint,
+					// Higher than a password login's 50: the assertion was
+					// cryptographically bound to this device.
+					TrustScore: 80,
+				}
+				if err := s.deviceRepo.Create(ctx, device); err != nil {
+					return nil, nil, err
+				}
+			} else {
+				return nil, nil, err
+			}
+		} else {
+			device = dev
+		}
+	}
+
+	return s.issueSession(ctx, user, device)
 }
 
 func (s *AuthService) RefreshToken(ctx context.Context, req *model.RefreshTokenRequest) (*model.TokenPair, error) {

@@ -109,6 +109,29 @@ type UIClickEvent struct {
 	// answerable without guessing.
 	SessionID *uuid.UUID `gorm:"type:uuid;index" json:"session_id,omitempty"`
 
+	// ---- How this row was attributed ----
+	//
+	// The three values, and why "forged" is the one that matters:
+	//
+	//	verified  - the sending app checked the session cookie's SIGNATURE. Trust
+	//	            the UserID/UserEmail on this row; it came from a real session.
+	//	anonymous - no session cookie. A signed-out visitor on a public page. This
+	//	            is the majority of rows on a landing site and is NOT suspicious.
+	//	forged    - a session cookie WAS presented and it FAILED signature
+	//	            verification. Nobody browsing normally produces this: the browser
+	//	            holds an httpOnly cookie it cannot rewrite, so the only way to
+	//	            send a bad one is to construct the request by hand.
+	//
+	// This is the field that makes click FRAUD visible. Before it existed, a
+	// forged cookie produced a row indistinguishable from a real one, and the
+	// "who pressed export" answer could be manufactured by anyone with curl. Now a
+	// single `WHERE attribution = 'forged'` isolates every attempt, and the count
+	// of `verified` rows is a number that means something.
+	//
+	// A user cannot influence this value: it is set by the sending app's server
+	// after a signature check, not by the browser.
+	Attribution string `gorm:"size:16;not null;default:'anonymous';index" json:"attribution"`
+
 	// ---- When ----
 	//
 	// Two timestamps, and the difference is deliberate. `OccurredAt` is when the

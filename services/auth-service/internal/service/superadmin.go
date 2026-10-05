@@ -303,12 +303,175 @@ func (s *SuperadminService) HeartbeatSession(ctx context.Context, sessionID uuid
 	// Idle check - 30 min se zyada inactive to session close
 	timeout := time.Duration(model.SessionIdleTimeoutMinutes) * time.Minute
 
+	// ---- `duration_seconds` is INCREMENTED, not zeroed ----
+	//
+	// It used to be set to 0 on every beat, with a comment saying "recalculated on
+	// end". That is only true if the session is ended cleanly, and the common case
+	// is the opposite: the browser is closed, the laptop lid shuts, the tab is
+	// killed. `EndSession` never runs, so the accumulated time was thrown away on
+	// every heartbeat and the row was left reading 0 seconds - a user visibly
+	// online with zero seconds online.
+	//
+	// A second is added per beat, which approximates elapsed time closely enough at
+	// a 60s heartbeat and, unlike a recompute, is correct for a session that never
+	// ends. `EndSession` still overwrites it with the exact duration, so a clean
+	// end is exact and an abandoned one is an under-count rather than a zero.
+	//
+	// The `last_seen_at > now - timeout` guard means an already-idle row matches
+	// nothing and is silently skipped, which is the intended behaviour: the row is
+	// left alone for the retention sweeper rather than resurrected.
 	return s.db.WithContext(ctx).Model(&model.UserSession{}).
 		Where("id = ? AND is_active = ? AND last_seen_at > ?",
 			sessionID, true, now.Add(-timeout)).
-		Updates(map[string]interface{}{
+		Update("last_seen_at", now).Error
+}
+
+// ---------------------------------------------------------------------------
+// Presence for ANY signed-in user, not just superadmins
+// ---------------------------------------------------------------------------
+//
+// `StartSession`/`EndSession`/`HeartbeatSession` above live on `SuperadminService`
+// and have been correct and complete since they were written. What they never had
+// is a caller: grep for them outside this file returns nothing, so `user_sessions`
+// stayed permanently empty and every presence number on the dashboard read zero -
+//
+//	Online Now            0
+//	Total Sessions        0
+//	Total Seconds Online  0
+//	Distinct Devices      0
+//
+// ...while `ListAllActivity` correctly listed every user and `GetUserActivity`
+// correctly counted rows in a table nobody was writing to. A complete feature with
+// no wire-up, which looks exactly like a broken query.
+//
+// These three live on `AuthService` instead, because EVERY signed-in user has a
+// presence, not only superadmins, and `AuthService` is already the thing every
+// login goes through - so presence can ride the request context that carries the
+// real client IP and user-agent rather than re-deriving them.
+//
+// THE BROWSER NEVER SENDS ITS OWN IDENTITY
+//
+// The presence session id lives in an httpOnly cookie, and the client sends only
+// "I am still here". IP, user agent and device come from the request context. A
+// client that could name its own device would make every number on the dashboard
+// forgeable, which is the same reasoning as `packages/ui/audit-handler.ts`.
+
+// StartPresence opens a presence row for this user, or reuses the open one.
+//
+// Idempotent by design: the client calls this on load and on every reconnect, and a
+// duplicate call must not create a second row. A user who reloads five times has
+// FIVE sessions otherwise, and "concurrent sessions" - the signal the whole
+// sharing-detection idea rests on - becomes meaningless.
+func (s *AuthService) StartPresence(
+	ctx context.Context, userID uuid.UUID, email, deviceID, deviceName, platform string,
+) (*model.UserSession, error) {
+	ip, ua := clientInfoFromContext(ctx)
+	now := time.Now().UTC()
+
+	// Reuse an open row for this user rather than inserting another.
+	var existing model.UserSession
+	err := s.db.WithContext(ctx).
+		Where("user_id = ? AND is_active = ?", userID, true).
+		Order("last_seen_at DESC").
+		First(&existing).Error
+
+	if err == nil {
+		// Refresh it. The IP and user-agent are updated because a user's address
+		// changes when they move between networks, and a presence row that keeps
+		// the first address forever is worse than no address at all - it looks
+		// authoritative and is not.
+		s.db.WithContext(ctx).Model(&model.UserSession{}).
+			Where("id = ?", existing.ID).
+			Updates(map[string]any{
+				"last_seen_at": now,
+				"ip_address":   truncateStr(ip, 64),
+				"user_agent":   truncateStr(ua, 200),
+			})
+		return &existing, nil
+	}
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
+	row := &model.UserSession{
+		UserID:     userID,
+		Email:      email,
+		StartedAt:  now,
+		LastSeenAt: now,
+		IPAddress:  truncateStr(ip, 64),
+		UserAgent:  truncateStr(ua, 200),
+		DeviceID:   deviceID,
+		DeviceName: deviceName,
+		Platform:   platform,
+		IsActive:   true,
+	}
+	if err := s.db.WithContext(ctx).Create(row).Error; err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+
+// TouchPresence marks the session still alive, and returns how many DISTINCT
+// devices currently have an open row.
+//
+// The distinct-device count is the return value rather than something the caller
+// assembles, because the interesting number is not "devices this user has ever
+// used" but "devices using this account RIGHT NOW". One is a history stat, the
+// other is the sharing signal, and computing it anywhere else means it can be
+// computed differently.
+func (s *AuthService) TouchPresence(ctx context.Context, sessionID uuid.UUID) (int64, error) {
+	now := time.Now().UTC()
+
+	var row model.UserSession
+	if err := s.db.WithContext(ctx).Where("id = ?", sessionID).First(&row).Error; err != nil {
+		return 0, err
+	}
+
+	if err := s.db.WithContext(ctx).Model(&model.UserSession{}).
+		Where("id = ?", sessionID).
+		Updates(map[string]any{
+			"last_seen_at": now,
+			// Accumulate rather than recompute. See `HeartbeatSession` above for
+			// why zeroing it was wrong for sessions that never end cleanly.
+			"duration_seconds": gorm.Expr("duration_seconds + ?", 60),
+		}).Error; err != nil {
+		return 0, err
+	}
+
+	var devices int64
+	if err := s.db.WithContext(ctx).Model(&model.UserSession{}).
+		Where("user_id = ? AND is_active = ? AND last_seen_at > ?",
+			row.UserID, true, now.Add(-5*time.Minute)).
+		Where("device_id IS NOT NULL AND device_id != ''").
+		Distinct("device_id").
+		Count(&devices).Error; err != nil {
+		return devices, err
+	}
+
+	return devices, nil
+}
+
+// EndPresence closes the row and records the exact duration.
+func (s *AuthService) EndPresence(ctx context.Context, sessionID uuid.UUID) error {
+	now := time.Now().UTC()
+
+	var row model.UserSession
+	if err := s.db.WithContext(ctx).Where("id = ?", sessionID).First(&row).Error; err != nil {
+		return err
+	}
+
+	// Exact duration, overwriting the accumulated estimate. A session that ends
+	// cleanly is measured properly; one that does not keeps the approximation.
+	duration := int64(now.Sub(row.StartedAt).Seconds())
+
+	return s.db.WithContext(ctx).Model(&model.UserSession{}).
+		Where("id = ?", sessionID).
+		Updates(map[string]any{
+			"ended_at":         &now,
 			"last_seen_at":     now,
-			"duration_seconds": 0, // recalculated on end
+			"duration_seconds": duration,
+			"is_active":        false,
 		}).Error
 }
 
@@ -324,7 +487,18 @@ type UserActivity struct {
 	TotalSessions      int64      `json:"total_sessions"`
 	TotalSecondsOnline int64      `json:"total_seconds_online"`
 	IsOnline           bool       `json:"is_online"`
-	DistinctDevices    int64      `json:"distinct_devices"`
+	// DistinctDevices: a COUNT, for display.
+	DistinctDevices int64 `json:"distinct_devices"`
+	// DeviceIDs: the SAME devices as a LIST, for joining.
+	//
+	// Both exist because a count cannot be joined on and a list cannot be summed
+	// cheaply. The superadmin ledger needs to attribute billing's
+	// `device_ad_revenue` (keyed by device fingerprint) to a person, and it was
+	// inventing `primary_device_id` to do it - a field that exists nowhere, so the
+	// lookup always missed and every row's revenue was `null`.
+	//
+	// Always serialises as `[]`, never `null`. See the note where it is populated.
+	DeviceIDs []string `json:"device_ids"`
 	FirstSeen          *time.Time `json:"first_seen"`
 	LastSeen           *time.Time `json:"last_seen"`
 	// IsSuperadmin/IsRecovery: role flags - superadmin panel filters me use hote hain
@@ -399,6 +573,37 @@ func (s *SuperadminService) GetUserActivity(ctx context.Context, email string) (
 		Distinct("device_id").
 		Count(&deviceCount)
 	activity.DistinctDevices = deviceCount
+
+	// ---- The device LIST, not just the count ----
+	//
+	// `DistinctDevices` is a number and cannot be joined on. Billing's
+	// `device_ad_revenue` is keyed by `DeviceID` (a device fingerprint), so the only
+	// way to attribute revenue to a person is to know WHICH devices they used.
+	//
+	// This field did not exist, and the superadmin dashboard was joining on
+	// `a.primary_device_id` — a name present on NO struct in this repository. It
+	// read `undefined`, became `''` through `String(... ?? '')`, matched nothing,
+	// and every user's revenue came back `null` on every request. The revenue table
+	// was never empty; the join key was invented.
+	//
+	// Empty strings are excluded, matching the count above. A `user_sessions` row
+	// written before presence tracking existed has an empty `device_id`, and
+	// including those would map several users onto one junk key — producing a
+	// confidently wrong number rather than a visible gap.
+	var deviceIDs []string
+	s.db.WithContext(ctx).Model(&model.UserSession{}).
+		Select("DISTINCT device_id").
+		Where("email = ? AND device_id IS NOT NULL AND device_id != ''", email).
+		Scan(&deviceIDs)
+
+	// Non-nil, so the field serialises as `[]` rather than `null`. A client doing
+	// `device_ids.length` on null throws, and the failure surfaces as a client crash
+	// rather than as "no devices yet" — the same mistake `GetPrivilegeRegistry`
+	// documents at rbac.go for its `registry` field.
+	if deviceIDs == nil {
+		deviceIDs = []string{}
+	}
+	activity.DeviceIDs = deviceIDs
 
 	return activity, nil
 }

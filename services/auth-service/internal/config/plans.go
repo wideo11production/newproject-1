@@ -89,6 +89,49 @@ type PlanConfig struct {
 	Grants     map[string]int64
 }
 
+// DefaultPlanNames is the human-readable label per plan, keyed by code.
+//
+// It exists because the labels USED to live in a `switch` in
+// `internal/service/creator.go` which matched `lifetime_1` while the real code is
+// `lifetime1`. All three lifetime plans therefore fell through to `default` and
+// displayed the raw code to paying customers.
+//
+// A second list of codes is what caused that, so this one is keyed off the SAME
+// constants the seeder uses and validated against them by
+// `plans_test.go`. A typo here becomes a failing test rather than a broken
+// dashboard.
+//
+// Ordered by the plan progression, which is also the order a pricing page shows.
+var DefaultPlanNames = map[string]string{
+	"trial":      "Free Trial (3 days)",
+	"starter":    "Starter",
+	"pro":        "Pro",
+	"studio":     "Studio",
+	"lifetime1":  "Lifetime 1",
+	"lifetime5":  "Lifetime 5",
+	"lifetime10": "Lifetime 10",
+}
+
+// PlanDisplayName returns the human-readable label for a plan code.
+//
+// Package-level rather than only a method because the lookup is needed in places
+// that do not hold a `PlanConfig` - a stored `entitlements.plan_code` is a bare
+// string, and reconstructing a whole config object just to format a label is
+// backwards. `PlanConfig.DisplayName` delegates here so both paths agree.
+//
+// An unknown code returns itself VERBATIM. That is deliberate: an operator
+// debugging a bad `plan_code` needs to see the bad value, and a friendly fallback
+// label would hide the value that caused the problem.
+func PlanDisplayName(code string) string {
+	if name, ok := DefaultPlanNames[code]; ok {
+		return name
+	}
+	return code
+}
+
+// DisplayName is the label to show a user for this plan.
+func (p PlanConfig) DisplayName() string { return PlanDisplayName(p.Code) }
+
 // PlansConfig is every plan, keyed by code.
 type PlansConfig struct {
 	Plans []PlanConfig
@@ -124,6 +167,38 @@ func (p PlansConfig) Codes() []string {
 // `def` is written out at every call site rather than hidden behind a default
 // table, because the point of these numbers is that they are all visible in one
 // place. A default buried in a helper is a default nobody reads.
+// `DEFAULT_FREE_TRIAL_DAYS` first, legacy `PLANS_TRIAL_TRIAL_DAYS` second.
+//
+// Takes `code` and `def` rather than the spec struct, because that struct is
+// declared INSIDE `LoadPlans` and a package-level function cannot see a local type.
+// Split out of the composite literal because it needs a THREE-state result —
+// "preferred set", "legacy set", "neither set" — and `envInt64` collapses the last
+// two. That collapse is the whole bug this replaces: a missing key and a key set to
+// zero are the same value to it, and "no configuration" has to be distinguishable
+// from "configured as zero".
+func trialDaysFor(code string, def int) int64 {
+	if v, ok := envInt64Present("DEFAULT_FREE_TRIAL_DAYS"); ok {
+		return v
+	}
+	if v, ok := envInt64Present(planKey(code, "trial_days")); ok {
+		return v
+	}
+	return int64(def)
+}
+
+// envInt64Present is `envInt64` with a THIRD state.
+//
+// `envInt64` returns the default for a missing key, so "not configured" and
+// "configured to the default" are indistinguishable. Anything that needs to know
+// whether an operator actually set a value — such as preferring one name and
+// falling back to another — has to ask that question directly.
+func envInt64Present(key string) (int64, bool) {
+	if !viper.IsSet(key) {
+		return 0, false
+	}
+	return viper.GetInt64(key), true
+}
+
 func envInt64(key string, def int64) int64 {
 	if !viper.IsSet(key) {
 		return def
@@ -254,8 +329,27 @@ func LoadPlans() PlansConfig {
 			PriceMinor: envInt64(planKey(s.code, "price_minor"), s.priceMinor),
 			Currency:   envStr(planKey(s.code, "currency"), s.currency),
 			Cycle:      envStr(planKey(s.code, "cycle"), s.cycle),
-			TrialDays:  int(envInt64(planKey(s.code, "trial_days"), int64(s.trialDays))),
-			Grants:     make(map[string]int64, len(s.defs)),
+			// ---- `DEFAULT_FREE_TRIAL_DAYS`, falling back to the legacy key ----
+			//
+			// `DEFAULT_FREE_TRIAL_DAYS` is the name an operator expects, and it is now
+			// the PREFERRED one: it reads first, and `PLANS_TRIAL_TRIAL_DAYS` is
+			// consulted only when it is absent.
+			//
+			// WHY A FALLBACK RATHER THAN A RENAME
+			//
+			// Renaming a variable that every deployed `.env` already contains is a
+			// SILENT break. `envInt64` falls back to the built-in default when a key is
+			// missing, so a deployment that set only the old name would come up with a
+			// 3-day trial and no error, no log line, and nothing visibly wrong. The
+			// feature would quietly stop honouring a value somebody believed was
+			// configured — the same failure as the published JWT defaults, and the
+			// reason those are now refused rather than defaulted.
+			//
+			// ORDER IS THE WHOLE POINT: preferred first, legacy second. Legacy FIRST
+			// would make the new name un-overridable by anyone who happened to set the
+			// old one.
+			TrialDays: int(trialDaysFor(s.code, s.trialDays)),
+			Grants:    make(map[string]int64, len(s.defs)),
 		}
 
 		for capability, def := range s.defs {

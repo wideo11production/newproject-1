@@ -55,7 +55,6 @@ COPY apps/web/package.json ./apps/web/package.json
 # kyunki monorepo me ye packages doosre apps declare karte hain
 
 COPY packages/api-client ./packages/api-client
-COPY packages/auth ./packages/auth
 COPY packages/charts ./packages/charts
 COPY packages/config ./packages/config
 COPY packages/constants ./packages/constants
@@ -185,8 +184,25 @@ USER nextjs
 EXPOSE 3004
 
 # Health check for Kubernetes liveness/readiness probes
+#
+# `/api/live`, NEVER `/`.
+#
+# This probed `/`, which `src/middleware.ts` gates behind a session. A container
+# with no session answers 401, the probe reads that as "unhealthy", and Docker
+# restarts a perfectly healthy app - then the probe fails again, forever. The
+# documented symptom was six containers in a restart loop and a stack that looked
+# broken while serving traffic correctly.
+#
+# A liveness probe has exactly one question to answer: is this process still
+# able to serve? It must not query anything that can change for a reason
+# unrelated to that, because then it restarts things it cannot fix. `/api/live`
+# returns `{"status":"ok"}` with no dependency, no version and no uptime, so the
+# only thing that can make it fail is the process being unable to respond.
+#
+# The same trap is why `/api/health-check` (dependency fan-out, answers 200 even
+# when degraded) is a separate endpoint - see `@wideo11/ui/health-handler`.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3004/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3004/api/live || exit 1
 
 # Start Next.js production server from standalone bundle
 # Monorepo me tracing root repo root hota hai, isliye standalone server.js nested path me hota hai

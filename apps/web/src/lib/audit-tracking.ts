@@ -1,41 +1,50 @@
 // Click Tracking + Security Audit (frontend)
 //
 // YE KYA KARTA HAI:
-// 1. Har user mouse click ko capture karta hai (auth screens + global)
-// 2. Microsecond-precision timestamp ke saath store karta hai
-// 3. "Staff trap": agar hardcoded security config CHANGE ya VIOLATE hoti hai
-//    to ek alert generate hota hai jo master dashboard par RED dikhta hai
+// 1. `reportSecurityViolation` - security event report karta hai
+// 2. Click capture NAHI - wo `GlobalActivityTracker` karta hai
 //
-// DESIGN CHOICES (jo maine consciously kiye):
-// - Tracking batched hai (har click turant nahi, 10 clicks ya 5s me flush)
-//   taaki network spam na ho aur performance na gire
-// - User identity + timestamp + target (CSS selector) capture hota hai
-// - Data localStorage me bhi rakha jaata hai (offline resilience), server
-//   par bhi bheja jaata hai
+// ----------------------------------------------------------------------------
+// YE FILE CLICK CAPTURE KE LIYE AB USE NAHI HOTI. AUR YE JAAN-BOJH KAR HAI.
+// ----------------------------------------------------------------------------
 //
-// Hinglish comments: har block ka arth
+// Ye hook pehle `document` par ek TEESRA capture-phase `click` listener lagati
+// thi - jabki `apps/web/src/app/layout.tsx:65` par `GlobalActivityTracker` pehle
+// se mounted hai. Dono same phase me sunte hain, dono same queue bharte hain, dono
+// `/api/audit` par POST karte hain.
+//
+// Matlab `/auth/login`, `/auth/register` aur `/auth/security-setup` - teeno pages
+// par HAR CLICK DO BAAR LIKHI JA RAHI THI. Ye bug dikhta nahi: ledger bhari hui
+// lagti hai, dashboard "clicks aa rahe hain" dikhata hai, aur koi test fail nahi
+// hota. Sirf `COUNT(*)` galat hota hai - aur wahi number jo product decisions
+// liy jaate hain.
+//
+// Doosri wajah se ye schema bhi galat thi. Ye `surface` aur `element_id` bhejti
+// hi nahi thi, jabki dono `ClickEventInput` me NON-OPTIONAL hain. Matlab in teen
+// pages ke rows `surface: undefined` ke saath likhte the - exactly wahi collision
+// jisse `surface` column add kiya gaya tha. Ek copy sahi thi aur ek nahi, aur
+// jis par bharosa tha wahi galat thi.
+//
+// ----------------------------------------------------------------------------
+// AB YE FILE KYA KARTA HAI
+// ----------------------------------------------------------------------------
+//
+// Sirf `reportSecurityViolation`, jo security events bhejta hai - config tamper,
+// rate-limit bypass attempt, auth-failure spike. Ye
+// `@wideo11/ui/audit-handler` se jaata hai, wahi path se jaisa clicks, aur
+// `identityHeaders` wala verified session use karta hai.
+//
+// Click capture ke liye SAHI jagah: `@wideo11/ui/activity-tracker`, jo app layout
+// me ek baar mount hota hai aur poori app ke liye capture karta hai.
+//
+// Ek capture path. Ek schema. Ek jagah.
+//
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { API_ENDPOINT as AUDIT_ENDPOINT } from './audit-endpoint';
 
-// ---- Types ----
-export interface ClickEvent {
-  /** Click ka unique ID */
-  id: string;
-  /** Kab hua - ISO string with microseconds */
-  timestamp: string;
-  /** Clicked element ka simple description (CSS selector) */
-  target: string;
-  /** Element ka text content (trimmed) */
-  label: string;
-  /** Screen coordinates */
-  x: number;
-  y: number;
-  /** Current page URL */
-  page: string;
-  /** User agent (device fingerprint ke liye) */
-  userAgent: string;
-}
+// ---- Config ----
+const VIOLATION_KEY = 'wideo11_security_violations';
 
 export interface SecurityViolation {
   id: string;
@@ -47,121 +56,6 @@ export interface SecurityViolation {
   /** Kahan se aaya */
   page: string;
   userAgent: string;
-}
-
-// ---- Config ----
-const API_ENDPOINT = '/api/audit';
-const BATCH_SIZE = 10;
-const FLUSH_INTERVAL_MS = 5000;
-const STORAGE_KEY = 'wideo11_click_audit';
-const VIOLATION_KEY = 'wideo11_security_violations';
-
-/**
- * buildSelector - element ka readable CSS selector banata hai
- * (tag + id + class - debugging ke liye kaafi hai)
- */
-function buildSelector(el: Element | null): string {
-  if (!el) return 'unknown';
-  let sel = el.tagName.toLowerCase();
-  if (el.id) sel += `#${el.id}`;
-  const cls = Array.from(el.classList).slice(0, 3).join('.');
-  if (cls) sel += `.${cls}`;
-  return sel;
-}
-
-/**
- * useClickTracking - ye hook component me daalo, tracking auto-start ho jayegi
- *
- * @param pageName - kis page par track karna hai (label ke liye)
- */
-export function useClickTracking(pageName: string) {
-  const queue = useRef<ClickEvent[]>([]);
-
-  useEffect(() => {
-    /**
-     * onClick - har click capture karo
-     * NOTE: capture phase me listen karte hain taaki page ka apna
-     * click handler chalne se PEHLE hum event capture kar sakein.
-     * Isse koi bhi component apna tracking bypass nahi kar sakta.
-     */
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as Element;
-      const event: ClickEvent = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        // Microsecond precision: ISO string me milliseconds + random suffix
-        timestamp: new Date().toISOString(),
-        target: buildSelector(target),
-        label: (target.textContent ?? '').trim().slice(0, 60),
-        x: e.clientX,
-        y: e.clientY,
-        page: pageName,
-        userAgent: navigator.userAgent.slice(0, 200),
-      };
-
-      queue.current.push(event);
-
-      // Batch full ho gaya -> flush
-      if (queue.current.length >= BATCH_SIZE) {
-        flush(queue);
-      }
-    };
-
-    // Periodic flush - chahe batch full na bhi hua
-    const interval = setInterval(() => flush(queue), FLUSH_INTERVAL_MS);
-
-    document.addEventListener('click', onClick, true); // capture phase
-
-    // Cleanup - memory leak na ho
-    return () => {
-      document.removeEventListener('click', onClick, true);
-      clearInterval(interval);
-      flush(queue); // pending events bhej do
-    };
-  }, [pageName]);
-}
-
-/**
- * flush - queued events ko SERVER par bhejta hai
- *
- * PERSISTENCE FIX: pehle ye localStorage + memory buffer me store karta tha, jo
- * RESTART par gayab ho jata tha. Ab ye `/api/audit` par POST karta hai, jo
- * `analytics-service` ke `ui_click_events` table me Postgres me likhta hai - to
- * restart-safe hai aur superadmin dashboard par dikhta hai.
- *
- * NOTE: ye localStorage me KOI click data nahi rakhta. Pehle rakhta tha, jo
- * privacy ka poora alag problem hai (browser disk par PII, aur logout par bhi
- * pada rehta hai). Ab sirf event queue memory me hai, aur pagehide par flush
- * ho jata hai.
- *
- * Hinglish: ab clicks database me jaati hain - restart karne par bhi rahengi
- */
-async function flush(queue: { current: ClickEvent[] }) {
-  if (queue.current.length === 0) return;
-
-  const batch = [...queue.current];
-  queue.current = [];
-
-  // ---- Server (persistent) ----
-  try {
-    await fetch('/api/audit', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        events: batch.map((e) => ({
-          timestamp: e.timestamp,
-          page: e.page,
-          target: e.target,
-          label: e.label,
-          x: e.x,
-          y: e.y,
-          referrer: typeof window !== 'undefined' ? document.referrer : '',
-        })),
-      }),
-      keepalive: true,
-    });
-  } catch {
-    // Network fail - silently drop (click tracking critical nahi hai)
-  }
 }
 
 /**
@@ -198,12 +92,33 @@ export async function reportSecurityViolation(
     // ignore
   }
 
-  // Server ko bhejo
+  // Server ko bhejo. `/api/audit` se - wahi endpoint jo clicks use karte hain, taaki
+  // ek hi schema, ek hi rate limit aur ek hi verified-attribution path ho.
+  //
+  // Pehle ye `${API_ENDPOINT}/violation` bhejta tha, jiska route KISI app me
+  // exist nahi karta tha. Iska matlab: 404, silently swallowed, aur violation
+  // server par KABHI nahi pohochti. Local storage me dikhti thi, dashboard par
+  // nahi - yaani wo security alert jo "master dashboard par RED dikhta hai" wo
+  // kabhi bhi kisi ko nahi dikhta tha.
   try {
-    await fetch(`${API_ENDPOINT}/violation`, {
+    await fetch(`${AUDIT_ENDPOINT}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(violation),
+      body: JSON.stringify({
+        events: [
+          {
+            timestamp: violation.timestamp,
+            page: violation.page,
+            surface: 'web',
+            target: `security:${violation.type}`,
+            label: violation.detail,
+            element_id: '',
+            x: 0,
+            y: 0,
+            referrer: '',
+          },
+        ],
+      }),
       keepalive: true,
     });
   } catch {
@@ -220,18 +135,6 @@ export function getSecurityViolations(): SecurityViolation[] {
   if (typeof window === 'undefined') return [];
   try {
     return JSON.parse(localStorage.getItem(VIOLATION_KEY) ?? '[]');
-  } catch {
-    return [];
-  }
-}
-
-/**
- * getClickEvents - local click history padho (audit trail)
- */
-export function getClickEvents(): ClickEvent[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]');
   } catch {
     return [];
   }

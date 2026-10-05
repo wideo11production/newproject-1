@@ -1,0 +1,42 @@
+<!--
+  Animated tab icon — Wideo11 Admin (port 3004).
+
+  Same brand "W" and same 16px-legible arc as `apps/superadmin/src/app/icon.svg`.
+  Read that file's header for why the stroke is 5 and why the gradient does not
+  reach zero opacity — both are corrections for the fact that a favicon is drawn
+  at 16 pixels, which is the only size this is ever seen at.
+
+  Blue accent, to match this app's chrome.
+
+  ONLY THREE APPS USE THE BRAND W. `apps/monitor` and `apps/video-editor` ship
+  bespoke artwork — a chart line and a video camera — and putting a rotating brand
+  ring around an unrelated glyph would read as a mistake and move for no reason.
+
+  Safari does not run SMIL in a favicon, so there this renders as a good static
+  icon. The motion is additive, never load-bearing.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Wideo11 Admin">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="100%" stop-color="#7b5cf6"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="8" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="45%"  stop-color="#dbeafe" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#7dd3fc" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#wg)"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#accent)"
+          stroke-width="5" stroke-linecap="round"
+          stroke-dasharray="46 117" stroke-dashoffset="0">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0 32 32" to="360 32 32"
+                      dur="2.6s" repeatCount="indefinite"/>
+  </circle>
+  <path d="M13 21 L22 43 L30 29 L37 43 L46 21"
+        fill="none" stroke="#ffffff" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

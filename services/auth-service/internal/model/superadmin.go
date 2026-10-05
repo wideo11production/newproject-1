@@ -48,6 +48,46 @@ func IsSuperadmin(role string) bool {
 	return role == RoleSuperadmin
 }
 
+// IsStaffRole reports whether an account exists to OPERATE the platform rather
+// than to USE it.
+//
+// "Staff" here means every non-creator role: master root, recovery, and staff. That
+// is the question "should this account appear in the creator count?", and it is
+// asked in more than one place - the awareness totals, and anything else that
+// reports how many people are on the platform.
+//
+// WHY IT IS A FUNCTION AND NOT A LIST AT EACH CALL SITE
+//
+// Because the failure mode of a hand-written list is a role being added to this
+// const block, working correctly everywhere it is checked as a permission, and
+// then being silently counted as a creator in the one query that forgot. A role
+// that is not in the list is treated as a creator, so the list has to be
+// COMPLETE - and completeness is exactly what a duplicated list stops being the
+// moment somebody adds a fifth role.
+//
+// One definition, one place to update. `RoleUser` is deliberately NOT in it:
+// anything that is not explicitly staff is treated as a creator, which is the
+// right default for a metric ("how many people use this") and means an
+// unrecognised role counts as a user rather than silently vanishing from the
+// total.
+func IsStaffRole(role string) bool {
+	switch role {
+	case RoleSuperadmin, RoleSuperadminRecovery, RoleStaff:
+		return true
+	default:
+		return false
+	}
+}
+
+// StaffRoleStrings is every role for which `IsStaffRole` is true.
+//
+// Exists so a SQL `WHERE role <> ALL(?)` uses the SAME list as the Go predicate.
+// Passing the array from `IsStaffRole` would not compile in Go, so the two are
+// kept adjacent deliberately: a new staff role has to be added in one place, and
+// the compiler forces this array to exist rather than letting a caller invent its
+// own.
+var StaffRoleStrings = []string{RoleSuperadmin, RoleSuperadminRecovery, RoleStaff}
+
 // SuperadminAccount - superadmin/recovery account ki registry
 //
 // KYUN ALAG TABLE: In accounts ko special treatment chahiye -

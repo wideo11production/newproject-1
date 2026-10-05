@@ -723,6 +723,7 @@ func TestAutoMigrateCoversEveryPersistedModel(t *testing.T) {
 		{"SecurityEvent", model.SecurityEvent{}},
 		{"SuperadminAccount", model.SuperadminAccount{}},
 		{"UserSession", model.UserSession{}},
+		{"TrialDevice", model.TrialDevice{}},
 		{"TestAccountMarker", model.TestAccountMarker{}},
 		// `ClickEvent` used to be asserted here. It is gone from this list on
 		// purpose, and the absence is itself part of what this test proves: the

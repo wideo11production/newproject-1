@@ -128,10 +128,55 @@ func (s *AuthService) GetAwarenessOverview(ctx context.Context) (*AwarenessOverv
 	}
 
 	// ---- Headline counts (users table se, REAL) ----
+	//
+	// ---- WHY STAFF AND SUPERADMIN ROLES ARE EXCLUDED ----
+	//
+	// These totals feed the analytics dashboard's "total users", "verified",
+	// "unverified" and "verified rate" figures. Those are PRODUCT metrics - how
+	// many creators are on the platform - and a staff or superadmin account is not
+	// a creator. Counting them inflated every one of those numbers by however many
+	// staff accounts exist, which on a small deployment is a large fraction of the
+	// total: 8 users where 7 are creators is a 14% overstatement, and it silently
+	// flatters every conversion-style metric derived from it.
+	//
+	// THE ALTERNATIVE WAS TO DELETE THE ACCOUNT, AND THAT IS WRONG
+	//
+	// `bootstrap.EnsureSuperadmin` runs at EVERY auth-service start. It looks the
+	// master root up by email and, not finding one, creates it with a fresh
+	// `uuid.New()`. So deleting the row does not remove the account - it removes it
+	// until the next restart, at which point it is back and the count is wrong
+	// again.
+	//
+	// Worse, `RegisterMasterSuperadminRole` matches `superadmin_accounts` by EMAIL
+	// and only re-asserts `is_active`; it never repairs `user_id`. So a
+	// delete-and-recreate leaves `superadmin_accounts.user_id` pointing at a UUID
+	// that no longer exists - a dangling reference in the one table that defines
+	// who the master root is.
+	//
+	// A filter is permanent, reversible, destroys nothing, and fixes the number
+	// rather than racing the process that keeps restoring the row.
+	//
+	// `role <> ALL(...)` rather than a chain of `OR role = ...`, because the set of
+	// non-creator roles can grow and a `NOT IN` needs editing in one place when it
+	// does.
+	//
+	// `model.StaffRoleStrings` is the same list `model.IsStaffRole` uses, so the SQL
+	// filter and the Go predicate cannot drift apart. That matters because a role
+	// which is correct everywhere it is checked as a permission and missing here
+	// ends up silently counted as a creator - the exact bug this whole change is
+	// fixing, reappearing one role addition later.
+	//
+	// `<> ALL` rather than `NOT IN` because `NOT IN` with a NULL on either side
+	// yields NULL - unknown, not true - and silently matches nothing. `role` is
+	// NOT NULL today, so the two behave identically, but `NOT IN` is one schema
+	// change away from quietly returning zero and `<> ALL` is not.
+	nonCreator := s.db.WithContext(ctx).Model(&model.User{}).
+		Where("role <> ALL(?)", model.StaffRoleStrings)
+
 	row := struct {
 		Total, Verified, Unverified int64
 	}{}
-	if err := s.db.WithContext(ctx).Model(&model.User{}).
+	if err := nonCreator.
 		Select("COUNT(*) as total, COUNT(*) FILTER (WHERE is_verified) as verified, COUNT(*) FILTER (WHERE NOT is_verified) as unverified").
 		Scan(&row).Error; err != nil {
 		return nil, err

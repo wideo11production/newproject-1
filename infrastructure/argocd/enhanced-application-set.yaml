@@ -55,9 +55,15 @@ spec:
           - name: api-client
             path: packages/api-client
             type: helm
-          - name: auth
-            path: packages/auth
-            type: helm
+          # NOTE: `packages/auth` was removed from this list because the package
+          # was deleted. It persisted the access token AND the refresh token to
+          # `localStorage`, which hands a complete live session to any XSS on any
+          # page that imported it - deliberately bypassing the protection `httpOnly`
+          # exists to provide. Its only consumer, `apps/analytics`, now reads the
+          # httpOnly cookie server-side like every other app.
+          #
+          # If a shared auth package is ever reintroduced, it must NOT store tokens
+          # in any browser-reachable storage. Session = cookie, server-side only.
           - name: video-player
             path: packages/video-player
             type: helm

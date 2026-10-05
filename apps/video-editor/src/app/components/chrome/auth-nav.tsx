@@ -228,7 +228,20 @@ export function AuthNav() {
   // hai; jo cheez is app se BAHAR le jaati hai, wo menu me rehti hai. Ise
   // hamesha dikhane se ek accidental click se user editor se nikal jaata.
   return (
-    <div className="relative shrink-0" ref={menuRef}>
+    // `min-h-8` on the wrapper so the cluster has a height of its own.
+    //
+    // The wrapper was `relative shrink-0` with no height, so it inherited whatever
+    // the toolbar gave it. In a flex row, a child with no intrinsic height and no
+    // explicit one is sized by its CONTENT — and the absolutely-positioned status
+    // dot hangs below the avatar, so the dot contributed height that the avatar did
+    // not have. That is the asymmetry that makes the avatar look like it is escaping
+    // while the box around it stays the right size.
+    //
+    // Declaring the height on the WRAPPER rather than raising the toolbar: the
+    // toolbar is `h-10` and is shared with four other controls that are sized
+    // correctly. Changing a shared bar to fix one child is how the other four go
+    // wrong next.
+    <div className="relative box-border flex min-h-8 w-9 shrink-0 items-center justify-center" ref={menuRef}>
       {/*
         THE AVATAR - and the only place in this app where green means
         "you are signed in".
@@ -266,7 +279,7 @@ export function AuthNav() {
         aria-expanded={menuOpen}
         aria-label={`Account menu for ${session.email}`}
         title={`${session.email} (${session.role})`}
-        className="relative flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors hover:bg-sky-500"
+        className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-sky-600 text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors hover:bg-sky-500"
       >
         {/*
           The uploaded avatar, or initials.
@@ -278,6 +291,10 @@ export function AuthNav() {
           `onError` hides a BROKEN image URL rather than leaving the browser's
           broken-image glyph inside the green ring, which looks worse than
           letters would.
+
+          `h-full w-full` on the image, so a photo fills the smaller circle rather
+          than overflowing it — the image is the one child that could exceed the
+          button's box if the parent's sizing ever changed.
         */}
         {session.avatarUrl ? (
           <img
@@ -292,7 +309,13 @@ export function AuthNav() {
           <span aria-hidden="true">{initials(session.email)}</span>
         )}
         <span
-          className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface-raised bg-green-500 motion-safe:animate-pulse"
+          // `h-2 w-2` not `h-2.5 w-2.5`, and inset by 1px rather than 2px.
+          //
+          // The dot was sized for a 32px circle. On a 28px one it sat further out
+          // proportionally and the `border-2` around it added a further 2px, so the
+          // indicator poked outside the button's own bounds — which is what reads as
+          // "the avatar is bursting out of the header".
+          className="absolute bottom-0 right-0 box-border h-2 w-2 rounded-full border border-surface-raised bg-green-500 motion-safe:animate-pulse"
           aria-hidden="true"
         />
       </button>

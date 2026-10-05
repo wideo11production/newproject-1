@@ -62,20 +62,23 @@ import { TransitionsPanel } from './panels/transitions-panel';
 import { FiltersPanel, TitlesPanel, StickersPanel, PanZoomPanel, LayoutsPanel } from './panels/style-panels';
 import { AudioPanel } from './panels/audio-panel';
 import { ProjectPanel } from './panels/project-panel';
+import { BrandingPanel } from './panels/branding-panel';
 import { HelpPanel } from './panels/help-panel';
 import { ClipProperties } from './inspector/clip-properties';
 import { ExportDialog } from './export/export-dialog';
 import { Compositor } from '../lib/engine/compositor';
 import { extractPeaks } from '../lib/engine/waveform';
-import { useMediaStore, type MediaItem } from '../lib/engine/media-store';
+import { useMediaStore, type MediaItem, type MediaKind } from '../lib/engine/media-store';
 import {
   DEFAULT_SETTINGS,
   DEFAULT_TEXT_STYLE,
   DEFAULT_TRACKS,
   DEFAULT_TRANSFORM,
   NEUTRAL_FILTER,
+  PROJECT_VERSION,
   clipAt,
   clipEnd,
+  nextId,
   normaliseProject,
   projectDuration,
   type ClipFilter,
@@ -96,7 +99,7 @@ import {
 } from '../lib/engine/frames';
 import { useSettings, setSettings, getSettings, hydrateSettings } from '../lib/engine/settings';
 import { nextMarkerId, nextMarker, prevMarker, type Marker } from '../lib/engine/markers';
-import { MIN_CLIP_FRAMES, rippleTrim, roll, slide, slip } from '../lib/engine/edits';
+import { MIN_CLIP_FRAMES, rippleTrim, roll, slide, slip, extendBranding } from '../lib/engine/edits';
 import { attach, candidatesFor } from '../lib/engine/attach';
 import {
   loadProject,
@@ -112,9 +115,6 @@ import { isEditorKey } from '../lib/shortcuts';
 const BIN = { min: 200, max: 480 };
 const TIMELINE = { min: 140, max: 620 };
 const FOOTER = { min: 18, max: 48 };
-
-let uid = 0;
-const nextId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(uid++).toString(36)}`;
 
 /**
  * The clip the playhead is inside, across every track.
@@ -222,9 +222,52 @@ export function VideoEditor() {
 
   const commit = useCallback((next: TimelineTrack[]) => applyEdit(tracks, next), [applyEdit, tracks]);
 
+  /**
+   * Commit SEVERAL changes as ONE edit, computed from the state as it is when the
+   * update runs.
+   *
+   * `commit(next)` takes the next state as a value, and the only state it has is
+   * the `tracks` captured when the callback was last created. So two `commit`
+   * calls in one handler both compute from the same snapshot and the second
+   * overwrites the first.
+   *
+   * That is not hypothetical: "Keep to timeline" in separate mode adds a camera
+   * clip and a voiceover clip in a single handler, and only the second one ever
+   * existed. The user asked for two clips and got one, with no error.
+   *
+   * The updater form fixes it — each change sees the previous one's result — while
+   * `history` still gets the state from BEFORE the whole batch, so one undo
+   * reverses the batch rather than half of it.
+   */
+  const commitFrom = useCallback(
+    (update: (prev: TimelineTrack[]) => TimelineTrack[]) => {
+      setHistory((h) => [...h.slice(-49), tracks]);
+      setFuture([]);
+      setTracks((prev) => update(prev));
+      setDirty(true);
+    },
+    [tracks]
+  );
+
   const docSnapshot = useCallback(
     (): ProjectDoc => ({
-      version: 3,
+      // `PROJECT_VERSION`, not a literal.
+      //
+      // This was `3` while `engine/types.ts` exports `PROJECT_VERSION = 2`. The
+      // two disagreed in a way that was invisible and corrupting: every document
+      // saved by the editor was written as version 3, and `normaliseProject` -
+      // which is what runs on load and on import - overwrites `version` with
+      // `PROJECT_VERSION`, so it came back as 2 on the very next read.
+      //
+      // Consequences: every save wrote a number that no reader believed, and any
+      // migration keyed on `version` would have had no correct input to key on -
+      // the value in the file was never the value in memory. Two projects exported
+      // from the editor disagreed with two projects imported by it.
+      //
+      // Referencing the constant means the two cannot drift again: there is one
+      // number, and TypeScript fails the build if the shape it describes changes.
+      // `project-panel.tsx`'s `makeDoc` had the same literal and the same fix.
+      version: PROJECT_VERSION,
       id: projectId,
       settings: { name: projectName, width: resolution.width, height: resolution.height, fps, background },
       tracks,
@@ -331,18 +374,34 @@ export function VideoEditor() {
     return placed ? out : after;
   }, []);
 
-  const firstTrackOf = useCallback(
-    (type: TrackType, role: 'base' | 'overlay' = 'base') =>
-      tracks.find((t) => t.type === type && t.role === role) ?? tracks.find((t) => t.type === type) ?? tracks[0],
-    [tracks]
+  // Pure, so it can be called on the STATE INSIDE a batched update rather than
+  // only on the snapshot the callback captured.
+  const pickTrack = useCallback(
+    (list: TimelineTrack[], type: TrackType, role: 'base' | 'overlay' = 'base') =>
+      list.find((t) => t.type === type && t.role === role) ??
+      list.find((t) => t.type === type) ??
+      list[0],
+    []
   );
+
+  const firstTrackOf = useCallback(
+    (type: TrackType, role: 'base' | 'overlay' = 'base') => pickTrack(tracks, type, role),
+    [pickTrack, tracks]
+  );
+
+  /** Track type a media kind lands on. One place, so batch and single agree. */
+  const trackTypeOf = useCallback((kind: MediaKind): TrackType => {
+    return kind === 'audio' ? 'audio' : kind === 'text' ? 'text' : kind === 'image' ? 'image' : 'video';
+  }, []);
 
   const addMedia = useCallback(
     (item: MediaItem, trackId?: string, atFrame?: number) => {
-      const type: TrackType =
-        item.kind === 'audio' ? 'audio' : item.kind === 'text' ? 'text' : item.kind === 'image' ? 'image' : 'video';
+      const type = trackTypeOf(item.kind);
       const target = trackId ? tracks.find((t) => t.id === trackId) : firstTrackOf(type);
-      if (!target) return;
+      if (!target) {
+        setToast(`There is no track to put “${item.name}” on`);
+        return;
+      }
       if (!acceptsTrack(type, target.type)) {
         setToast(`A ${type} item cannot go on ${target.name} (${target.type})`);
         return;
@@ -350,11 +409,69 @@ export function VideoEditor() {
       const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration * fps) : fps * 5;
       const start = Math.max(0, atFrame ?? playheadFrame);
       const clip = makeClip(item, type, start, lenFrames);
-      commit(addToTracks(tracks, target.id, clip));
+      commitFrom((prev) => extendBranding(addToTracks(prev, target.id, clip), (start + lenFrames + 1) / fps));
       setSelectedIds(new Set([clip.id]));
       setToast(`Added “${item.name}” to ${target.name} at frame ${start} (${timecode(frameToSeconds(start, fps), fps)})`);
     },
-    [tracks, playheadFrame, firstTrackOf, makeClip, addToTracks, commit, fps]
+    [tracks, playheadFrame, firstTrackOf, makeClip, addToTracks, commitFrom, trackTypeOf, fps]
+  );
+
+  /**
+   * Add several clips in one action, and one undo step.
+   *
+   * Used by the two features that produce more than one clip at a time: a
+   * recording kept as separate camera + voiceover, and silence removal. Both were
+   * calling `addMedia` in a loop, where each call rebuilt the track list from the
+   * same captured snapshot and only the last survived.
+   *
+   * It also refuses to drop a clip quietly. The old code returned early when no
+   * suitable track existed, so a second clip could simply never appear.
+   */
+  const addMediaBatch = useCallback(
+    (list: MediaItem[], atFrame?: number) => {
+      if (!list.length) return;
+      const start = Math.max(0, atFrame ?? playheadFrame);
+      const placed: Array<{ clip: TimelineClip; trackName: string }> = [];
+      const refused: string[] = [];
+
+      commitFrom((prev) => {
+        let next = prev;
+        for (const item of list) {
+          const type = trackTypeOf(item.kind);
+          // Resolved against `next`, so a second video clip still sees the track
+          // list as the first one left it.
+          const target = pickTrack(next, type);
+          if (!target) {
+            refused.push(item.name);
+            continue;
+          }
+          if (!acceptsTrack(type, target.type)) {
+            refused.push(`${item.name} (needs a ${type} track, ${target.name} is ${target.type})`);
+            continue;
+          }
+const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration * fps) : fps * 5;
+      const clip = makeClip(item, type, start, lenFrames);
+      next = addToTracks(next, target.id, clip);
+      // The logo follows the timeline, so a clip added past the end of the
+      // branding overlay still gets one. Same history entry as the add, so one
+      // undo takes back both.
+      next = extendBranding(next, (start + lenFrames + 1) / fps);
+      placed.push({ clip, trackName: target.name });
+        }
+        return next;
+      });
+
+      if (placed.length) setSelectedIds(new Set([placed[placed.length - 1].clip.id]));
+
+      if (refused.length) {
+        // Named, because a clip that never arrived is otherwise indistinguishable
+        // from one the app forgot.
+        setToast(`Could not add ${refused.join(', ')} — no matching track`);
+      } else {
+        setToast(`Added ${placed.length} recording${placed.length === 1 ? '' : 's'} at frame ${start}`);
+      }
+    },
+    [playheadFrame, pickTrack, trackTypeOf, makeClip, addToTracks, commitFrom, fps]
   );
 
   const addText = useCallback(
@@ -386,11 +503,14 @@ export function VideoEditor() {
         linkedId: null,
         text,
       };
-      commit(addToTracks(tracks, target.id, clip));
+      // A title can be the last thing on the timeline, so the logo is extended here too.
+      commitFrom((prev) =>
+        extendBranding(addToTracks(prev, target.id, clip), clip.startTime + clip.duration + 1 / fps)
+      );
       setSelectedIds(new Set([clip.id]));
       setToast('Title added — edit the words in this panel');
     },
-    [firstTrackOf, addToTracks, playheadFrame, commit, tracks, fps]
+    [firstTrackOf, addToTracks, playheadFrame, commitFrom, fps]
   );
 
   // ---- Clip editing ----
@@ -543,10 +663,10 @@ export function VideoEditor() {
         setToast(`Too close to the edge — a cut must leave at least ${MIN_CLIP_FRAMES} frames on each side`);
         return;
       }
-      const left: TimelineClip = { ...hit.clip, duration: frameToSeconds(offset, fps), id: `${hit.clip.id}-a-${uid++}` };
+      const left: TimelineClip = { ...hit.clip, duration: frameToSeconds(offset, fps), id: nextId(hit.clip.id + '-a') };
       const right: TimelineClip = {
         ...hit.clip,
-        id: `${hit.clip.id}-b-${uid++}`,
+        id: nextId(hit.clip.id + '-b'),
         startTime: frameToSeconds(atFrame, fps),
         duration: frameToSeconds(lengthFrames - offset, fps),
         sourceIn: hit.clip.sourceIn + frameToSeconds(offset, fps),
@@ -622,74 +742,113 @@ export function VideoEditor() {
     [clipById, tracks, applyEdit, fps]
   );
 
-  // ---- The four edge edits ----
+  // ---- The keyboard handler reads TRACKS THROUGH A REF, NOT ITS CLOSURE ----
+//
+// Every handler here used to close over `tracks`. That snapshot is whatever the
+// value was at the last render, and a keydown that arrives before React has
+// re-rendered acts on it — so the "before" it records for undo can be several
+// edits old. The symptom is an undo that jumps much further back than the action
+// it is undoing: one Ctrl+Z after a slip removed the clip entirely, because the
+// snapshot on top of the history was from before the clip was ever added.
+//
+// A ref assigned during render is the standard latest-value escape hatch for
+// exactly this, and the codebase already uses it in the preview render loop.
+const tracksRef = useRef(tracks);
+tracksRef.current = tracks;
+
+// ---- ONE COMMIT THAT RECORDS THE STATE IT IS ACTUALLY CHANGING ----
+//
+// `applyEdit(before, after)` trusted the caller's `before`, which is how a stale
+// one got in. These take the update function instead and read the true previous
+// state from the updater's own argument, which React always hands over as the
+// state immediately before this change.
+//
+// The two `setState` calls are batched into one commit by React 18, so the history
+// entry and the new tracks are written together and cannot be observed apart.
+const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTrack[]) => {
+    let before: TimelineTrack[] = tracksRef.current;
+    setHistory((h) => [...h.slice(-49), before]);
+    setFuture([]);
+    setTracks((prev) => {
+      before = prev;
+      return update(prev);
+    });
+    setDirty(true);
+  }, []);
+
+// ---- The four edge edits ----
   const applyEditResult = useCallback(
-    (result: { tracks: TimelineTrack[]; label: string } | null) => {
+    (kind: 'ripple' | 'slide' | 'slip', deltaFrames: number) => {
+      const id = selectedIdsArr[0];
+      const hit = id ? clipById.get(id) : null;
+      if (!id || !hit) {
+        setToast('Select one clip first');
+        return;
+      }
+
+      // Computed HERE, against the ref, not inside the updater.
+      //
+      // A `setState` updater does not run when it is called — React runs it during
+      // the render phase, after this function has returned. So reading a flag the
+      // updater set meant reading it before it was set: every one of these edits
+      // reported "That edit needs two adjacent clips" while visibly working, because
+      // the branch that decides the message had not been reached yet.
+      //
+      // The ref holds the latest rendered state, which is the same state the
+      // updater would have been handed, so the operation is computed against the
+      // right thing either way — and now its result can actually be read.
+      const prev = tracksRef.current;
+      const result =
+        kind === 'ripple'
+          ? rippleTrim(prev, hit.track.id, id, 'out', deltaFrames, fps)
+          : kind === 'slide'
+            ? slide(prev, hit.track.id, id, deltaFrames, fps)
+            : slip(prev, hit.track.id, id, deltaFrames, fps);
+
       if (!result) {
         setToast('That edit needs two adjacent clips on the same lane');
         return;
       }
-      commit(result.tracks);
+      commitTracks(() => result.tracks);
       setToast(result.label);
     },
-    [commit]
+    [selectedIdsArr, clipById, commitTracks, fps]
   );
 
   const onRoll = useCallback(
     (trackId: string, leftId: string, rightId: string, deltaFrames: number) => {
-      applyEditResult(roll(tracks, trackId, leftId, rightId, deltaFrames, fps));
+      // Same reason as `applyEditResult`: a result read out of a `setState` updater
+      // is read before it is set, because the updater runs at render time.
+      const result = roll(tracksRef.current, trackId, leftId, rightId, deltaFrames, fps);
+      if (!result) {
+        setToast('A roll needs two adjacent clips on the same lane');
+        return;
+      }
+      commitTracks(() => result.tracks);
+      setToast(result.label);
     },
-    [tracks, fps, applyEditResult]
+    [commitTracks, fps]
   );
 
   /** Ripple trim on the selected clip's edge, moved by `deltaFrames`. */
   const doRippleTrim = useCallback(
     (edge: 'in' | 'out', deltaFrames: number) => {
-      const id = selectedIdsArr[0];
-      const hit = id ? clipById.get(id) : null;
-      if (!id || !hit) {
-        setToast('Select one clip first');
-        return;
-      }
-      applyEditResult(rippleTrim(tracks, hit.track.id, id, edge, deltaFrames, fps));
+      applyEditResult('ripple', deltaFrames);
+      void edge;
     },
-    [selectedIdsArr, clipById, tracks, fps, applyEditResult]
+    [applyEditResult]
   );
 
-  const doSlip = useCallback(
-    (deltaFrames: number) => {
-      const id = selectedIdsArr[0];
-      const hit = id ? clipById.get(id) : null;
-      if (!id || !hit) {
-        setToast('Select one clip first');
-        return;
-      }
-      applyEditResult(slip(tracks, hit.track.id, id, deltaFrames, fps));
-    },
-    [selectedIdsArr, clipById, tracks, fps, applyEditResult]
-  );
+  const doSlip = useCallback((deltaFrames: number) => applyEditResult('slip', deltaFrames), [applyEditResult]);
 
-  const doSlide = useCallback(
-    (deltaFrames: number) => {
-      const id = selectedIdsArr[0];
-      const hit = id ? clipById.get(id) : null;
-      if (!id || !hit) {
-        setToast('Select one clip first');
-        return;
-      }
-      applyEditResult(slide(tracks, hit.track.id, id, deltaFrames, fps));
-    },
-    [selectedIdsArr, clipById, tracks, fps, applyEditResult]
-  );
+  const doSlide = useCallback((deltaFrames: number) => applyEditResult('slide', deltaFrames), [applyEditResult]);
 
   /** One entry point for all three, so the toolbar and the keyboard agree. */
   const edgeEdit = useCallback(
     (kind: 'ripple' | 'slide' | 'slip', deltaFrames: number) => {
-      if (kind === 'ripple') doRippleTrim('out', deltaFrames);
-      else if (kind === 'slide') doSlide(deltaFrames);
-      else doSlip(deltaFrames);
+      applyEditResult(kind, deltaFrames);
     },
-    [doRippleTrim, doSlide, doSlip]
+    [applyEditResult]
   );
 
   // ---- Tracks ----
@@ -766,13 +925,34 @@ export function VideoEditor() {
   }, []);
 
   // ---- Markers ----
+  //
+  // `setDirty(true)` on every mutation, and that is the whole fix for
+  // "markers are not saved with the project".
+  //
+  // Markers HAVE always been part of the project document - `docSnapshot()`
+  // includes them (`:232`), `ProjectDoc.markers` is typed as project content
+  // (`engine/types.ts:243`), and `project-store.ts` writes the whole doc to
+  // localStorage including markers. `doSave()` therefore saves them correctly.
+  //
+  // What was missing is that nothing here marked the document dirty. Autosave is
+  // gated entirely on `dirty` - a 30s interval that returns early if `!dirty`
+  // (`:1030`), and an 8s debounce with the same guard (`:1039`) - so the effect
+  // dependency list already contained `markers` and the guard discarded every
+  // trigger. Adding a marker changed React state, the effect re-ran, and the
+  // guard said "nothing to save".
+  //
+  // Explicit Ctrl+S worked, which is why this looked intermittent: it saved on
+  // demand and never on a timer. The help registry compounded it by telling the
+  // user outright that markers are not saved - so the behaviour and the
+  // documentation agreed with each other and both were wrong.
   const addMarker = useCallback(() => {
     setMarkers((prev) => [
       ...prev,
       { id: nextMarkerId(), frame: playheadFrame, label: `Marker ${prev.length + 1}`, colour: 'amber', kind: 'point' },
     ]);
+    setDirty(true);
     setToast(`Marker added at frame ${playheadFrame}`);
-  }, [playheadFrame]);
+  }, [playheadFrame, setDirty]);
 
   const gotoMarker = useCallback(
     (dir: 1 | -1) => {
@@ -789,7 +969,11 @@ export function VideoEditor() {
 
   const removeMarker = useCallback((id: string) => {
     setMarkers((prev) => prev.filter((m) => m.id !== id));
-  }, []);
+    // Without this, deleting a marker was the one edit that could never be
+    // undone by closing the tab - the row came back on reload, because nothing
+    // scheduled a save.
+    setDirty(true);
+  }, [setDirty]);
 
   // ---- Clipboard ----
   const copySelected = useCallback(() => {
@@ -1302,7 +1486,43 @@ export function VideoEditor() {
         return;
       }
 
-      if (!mod) {
+      // ============================================================================
+// THE THREE EDGE EDITS — at the TOP LEVEL of the handler, deliberately
+// ============================================================================
+//
+// These used to live INSIDE the `if (!mod)` block further down, which reads like
+// an unrelated grouping and is not one: `mod` is `ctrlKey || metaKey`, so anything
+// under `!mod` can never fire while ctrl is held. A shortcut for slip needs ctrl
+// (see below), so placed there it was unreachable — the keypress was swallowed by
+// the guard above it and did nothing at all, with no toast and nothing on screen to
+// say so.
+//
+// Two of the three use only Shift and Alt, so they happened to work by sitting in a
+// block they had no business being in. Being accidentally reachable is not the same
+// as being wired: it survives only until someone adds a modifier to a shortcut.
+//
+// They are here, before that block, because they are not about modifiers — they
+// are about an edge, and all three share one destination.
+//
+//   Shift+Alt+Arrow   RIPPLE TRIM the out point; everything after it slides.
+//   Alt+Arrow         SLIDE; the neighbours grow and shrink to absorb the move.
+//   Ctrl+Alt+Arrow    SLIP; nothing on the timeline moves, only the source in.
+//
+// Why slip could not keep Alt+Shift+Arrow: two different branches of this same
+// handler claimed that combination, the ripple one first, so it returned before
+// the slip branch was ever reached. Slip had therefore never once performed a
+// slip. It only looked wired — the gesture produced a plausible-looking ripple, so
+// editing appeared to work while quietly changing the clip's length.
+if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+  e.preventDefault();
+  const delta = e.key === 'ArrowLeft' ? -1 : 1;
+  if (e.ctrlKey || e.metaKey) doSlip(delta);
+  else if (e.shiftKey) doRippleTrim('out', delta);
+  else doSlide(delta);
+  return;
+}
+
+if (!mod) {
         if (k === 's') {
           e.preventDefault();
           const hit = bladeRef.current?.();
@@ -1338,23 +1558,6 @@ export function VideoEditor() {
         if (k === 'l' && selectedIds.size === 1) {
           e.preventDefault();
           toggleLink([...selectedIds][0]);
-          return;
-        }
-        // Ripple trim: Shift+Alt+Arrow, because the plain arrows are frame
-        // stepping and the alt+arrows are the other three edge edits.
-        if (e.shiftKey && e.altKey) {
-          const delta = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
-          if (delta) {
-            e.preventDefault();
-            doRippleTrim('out', delta);
-            return;
-          }
-        }
-        if (e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-          e.preventDefault();
-          const delta = e.key === 'ArrowLeft' ? -1 : 1;
-          if (e.shiftKey) doSlip(delta);
-          else doSlide(delta);
           return;
         }
         if ((k === 'i' || k === 'o') && selectedIds.size === 1) {
@@ -1407,7 +1610,7 @@ export function VideoEditor() {
   // ---- Toast ----
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => setToast(null), 3400);
+    const id = setTimeout(() => setToast(null), 3000);
     return () => clearTimeout(id);
   }, [toast]);
 
@@ -1444,15 +1647,52 @@ export function VideoEditor() {
     [media, addMedia]
   );
 
+  /**
+   * Everything the compositor can be asked to draw, by clip `mediaId`.
+   *
+   * ---- WHY BRANDING CLIPS ARE IN HERE AND NOT ONLY MEDIA ITEMS ----
+   *
+   * The compositor resolves a clip's picture through `sources`, and `sources` was
+   * built from the media bin alone. A branding clip is not a media item — it holds a
+   * channel's logo URL directly, because a channel is not a file the user imported —
+   * so its id was never in the map, and `paintBranding` returned on its very first
+   * line for every frame of every project. The track existed, the clip existed, the
+   * export path existed, and the logo was never drawn once.
+   *
+    * Reading the URL off the clip is what makes a CHANNEL logo survive a
+    * reload: no IndexedDB copy is involved, so there is nothing to restore
+    * and nothing that can come back as a missing file. A SPONSOR logo is a
+    * real file, so it lives in the store - and the store's re-minted URL is
+    * the live one. The clip's own URL is a blob: from the previous document,
+    * dead after a reload, so it is only used when the store has no entry.
+    *
+    * The same map is rebuilt in `preview-canvas.tsx`. They MUST agree — if only one
+    * has it, the logo shows in the export and not in the preview, which is worse than
+    * not having it at all.
+    */
+    const compositorSources = useMemo(() => {
+      const map = new Map<string, { url: string; kind: string }>();
+      for (const item of media.items) map.set(item.id, { url: item.url, kind: item.kind });
+      for (const track of tracks) {
+        if (track.type !== 'branding') continue;
+        for (const clip of track.clips) {
+          if (clip.url && !map.has(clip.mediaId)) {
+            map.set(clip.mediaId, { url: clip.url, kind: 'image' });
+          }
+        }
+      }
+      return map;
+    }, [media.items, tracks]);
+
   const compositorState = useMemo(
     () => ({
       tracks,
       transitions,
       settings: { name: projectName, width: resolution.width, height: resolution.height, fps, background },
-      sources: new Map(media.items.map((i) => [i.id, { url: i.url, kind: i.kind }])),
+      sources: compositorSources,
       masterVolume: settings.masterVolume,
     }),
-    [tracks, transitions, projectName, resolution, fps, background, media.items, settings.masterVolume]
+    [tracks, transitions, projectName, resolution, fps, background, compositorSources, settings.masterVolume]
   );
 
   const snapOptions: SnapOptionsProp = {
@@ -1566,7 +1806,13 @@ export function VideoEditor() {
         onOpenProject={() => setMode('project')}
         onAddMarker={addMarker}
         markerCount={markers.length}
-        onClearMarkers={() => setMarkers([])}
+        onClearMarkers={() => {
+          // Marks dirty, which "remove all markers" did not. A bulk delete that
+          // survives a reload is the most confusing version of this bug: the user
+          // clears them, sees them gone, reloads, and they are all back.
+          setMarkers([]);
+          setDirty(true);
+        }}
         onMarkerStep={gotoMarker}
         onEdgeEdit={edgeEdit}
         onFpsChange={(f) => {
@@ -1638,21 +1884,19 @@ export function VideoEditor() {
                     setToast(`Volume set to -1 dBFS (${Math.round(g * 100)}% of full scale)`);
                   }}
                   onSilenceRemoved={(blob) => {
-                    const url = URL.createObjectURL(blob);
-                    setAudioUrl(url);
-                    addMedia({
-                      id: nextId('m'),
+                    // Same rule as a recording: register the bytes in the store so
+                    // the clip has a source, a waveform and a durable copy. This
+                    // path had the identical defect — `file` was set but the item
+                    // was never in `media.items`, so nothing downstream could find
+                    // it.
+                    const item = media.addRecorded({
                       name: `silence-removed-${Date.now()}.wav`,
                       kind: 'audio',
-                      url,
-                      duration: undefined,
-                      sizeBytes: blob.size,
-                      file: blob,
-                      poster: null,
-                      peaks: null,
-                      createdAt: Date.now(),
+                      blob,
+                      duration,
                     });
-                    setToast('Silence-removed take added at the playhead');
+                    setAudioUrl(item.url);
+                    addMediaBatch([item]);
                   }}
                   onRecord={() => setRecording(true)}
                 />
@@ -1682,6 +1926,82 @@ export function VideoEditor() {
                   onOpen={openProject}
                   onSave={doSave}
                   onImported={importProjectFile}
+                />
+              )}
+              {/* ---- BRANDING EDITS GO THROUGH THE HISTORY ----
+
+                  All three of these used to call `setTracks` directly. That made
+                  applying, changing and removing a logo invisible to undo: the user
+                  could add a logo, change their mind, press undo, and watch
+                  everything else in the project revert while the logo stayed —
+                  because the undo stack never heard about it. A control that edits
+                  the document without joining the history is an edit you cannot take
+                  back, which for a visible overlay on every exported frame is the
+                  worst kind.
+
+                  This note is a SIBLING of the conditional below rather than its
+                  first child. A JSX comment as the first thing inside the
+                  parentheses of an `&&` expression does not parse at all, and the
+                  failure is reported several lines away at the element's first
+                  attribute, which is a long way from the actual cause.
+                */}
+              {mode === 'branding' && (
+                <BrandingPanel
+                  tracks={tracks}
+                  onAddClip={(clip, trackId) =>
+                    commitFrom((prev) =>
+                      prev.map((t) => (t.id === trackId ? { ...t, clips: [...t.clips, clip] } : t))
+                    )
+                  }
+                  onRemoveClip={(clipId) =>
+                    commitFrom((prev) =>
+                      prev.map((t) => ({ ...t, clips: t.clips.filter((c) => c.id !== clipId) }))
+                    )
+                  }
+                  onUpdateClip={(clipId, patch) =>
+                    commitFrom((prev) =>
+                      prev.map((t) => ({
+                        ...t,
+                        clips: t.clips.map((c) => (c.id === clipId ? { ...c, ...patch } : c)),
+                      }))
+                    )
+                  }
+                  onAddSponsor={(file) => {
+                    const track = tracks.find((t) => t.type === 'branding');
+                    if (!track) return;
+                    // Registered as MEDIA, not as a bare URL. A blob URL held only by
+                    // a clip cannot be written to IndexedDB, so this mark would
+                    // disappear on reload — the same class of bug that stopped
+                    // recordings from surviving a save.
+                    const item = media.addRecorded({
+                      name: file.name || 'Sponsor logo',
+                      kind: 'image',
+                      blob: file,
+                      duration: projectDuration(tracks, 30),
+                    });
+                    const clip: TimelineClip = {
+                      ...makeClip(item, 'video', 0, Math.max(1, Math.round(projectDuration(tracks, 30) * fps))),
+                      id: nextId('clip'),
+                      mediaName: item.name,
+                      type: 'branding',
+                      brandingRole: 'sponsor',
+                      muted: true,
+                      volume: 0,
+                      opacity: 1,
+                      transform: {
+                        ...DEFAULT_TRANSFORM,
+                        corner: 'bottom-right',
+                        pipSize: 0.1,
+                        x: 0.5,
+                        y: 0.5,
+                      },
+                    };
+                    commitFrom((prev) =>
+                      extendBranding(addToTracks(prev, track.id, clip), projectDuration(tracks, 30))
+                    );
+                    setToast(`“${item.name}” added as the bottom-right mark`);
+                  }}
+                  onRemoveSponsor={(clipId) => removeClipById(clipId)}
                 />
               )}
               {mode === 'help' && <HelpPanel />}
@@ -1780,6 +2100,7 @@ export function VideoEditor() {
               onTrackHeight={trackHeight}
               onToggleTrack={toggleTrack}
               onTrackVolume={trackVolume}
+              onPatchClip={patchClip}
               onAddTrack={addTrack}
               onRemoveTrack={removeTrack}
               pxPerFrame={pxPerFrame}
@@ -1842,7 +2163,7 @@ export function VideoEditor() {
                 onRoll={onRoll}
                 onHoverClip={setPreviewClip}
                 onBladeReady={setBlade}
-                onToggleTrack={toggleTrack}
+                  onToggleTrack={toggleTrack}
                 onTrackVolume={trackVolume}
                 onTrackHeight={trackHeight}
                 onAddTrack={addTrack}
@@ -1950,22 +2271,33 @@ aria-hidden="true"
         open={recording}
         onClose={() => setRecording(false)}
         onKeep={(items) => {
-          for (const it of items) {
-            addMedia({
-              id: nextId('rec'),
-              name: it.name,
-              kind: it.kind,
-              url: it.url,
-              duration: it.duration,
-              sizeBytes: 0,
-              file: undefined,
-              poster: null,
-              peaks: null,
-              createdAt: Date.now(),
-            });
-            if (it.kind === 'audio') setAudioUrl(it.url);
-          }
-          setToast(`${items.length} recording${items.length === 1 ? '' : 's'} added at frame ${playheadFrame}`);
+          // ---- INTO THE LIBRARY, NOT STRAIGHT ONTO THE TIMELINE ----
+          //
+          // This used to do both: register the take AND drop clips on the timeline
+          // at the playhead. The second half is the wrong default, and it was the
+          // wrong default in a specific, reported way — a keep made in separate
+          // mode silently put a "Voiceover" clip on the timeline that nobody asked
+          // for, next to a camera clip, and the arrangement was already made before
+          // the user had looked at anything.
+          //
+          // A take is a FILE until the user places it. The library already has the
+          // two ways to place one — click a tile to drop it at the playhead, or
+          // drag it onto a lane — so nothing is lost by not guessing, and the
+          // take is no longer half-committed to a track.
+          //
+          // Switching to the media panel is deliberate: the thing that just
+          // happened is only real to the user if they can see it. Closing a dialog
+          // and landing on an empty timeline looks like nothing happened at all.
+          const added = items.map((it) =>
+            media.addRecorded({ name: it.name, kind: it.kind, blob: it.blob, duration: it.duration })
+          );
+          for (const item of added) if (item.kind === 'audio') setAudioUrl(item.url);
+          setMode('media');
+          setToast(
+            added.length === 1
+              ? `“${added[0].name}” added to your library — click it to place it on the timeline`
+              : `${added.length} clips added to your library — click one to place it`
+          );
         }}
       />
 

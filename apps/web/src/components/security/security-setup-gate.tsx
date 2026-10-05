@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@wide
 import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 import { AlertCircle, CheckCircle2, Fingerprint, KeyRound, Loader2, ShieldCheck, HelpCircle } from 'lucide-react';
-import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+import { reportSecurityViolation } from '@/lib/audit-tracking';
 // `BiometricDiagnostics` type chahiye state declare karne ke liye.
 // `diagnoseBiometrics` runtime pe dynamic import hota hai (load() ke andar)
 // taaki ye sirf tab load ho jab gate render ho.
@@ -66,7 +66,8 @@ export default function SecuritySetupGate({
   onComplete: () => void;
 }) {
   const router = useRouter();
-  useClickTracking('security/setup-gate');
+  // Click tracking: `GlobalActivityTracker` in `app/layout.tsx` already captures
+  // this page. A second listener here wrote every click twice.
 
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [step, setStep] = useState(1);

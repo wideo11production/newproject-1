@@ -51,6 +51,7 @@ const KIND_STYLE: Record<MediaKind, { ring: string; chip: string; label: string 
   audio: { ring: 'ring-violet-500/30', chip: 'bg-violet-500/15 text-violet-300', label: 'Audio' },
   image: { ring: 'ring-emerald-500/30', chip: 'bg-emerald-500/15 text-emerald-300', label: 'Image' },
   text: { ring: 'ring-amber-500/30', chip: 'bg-amber-500/15 text-amber-300', label: 'Text' },
+  branding: { ring: 'ring-pink-500/30', chip: 'bg-pink-500/15 text-pink-300', label: 'Branding' },
 };
 
 function fmtDuration(seconds?: number): string {

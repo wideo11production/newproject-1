@@ -421,7 +421,29 @@ services:
       REDIS_PASSWORD: ""
       REDIS_DB: 0
       # SSOT: ye sab values .env se aati hain, code me hardcoded kuch nahi
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+      #
+      # ---- `:?`, NOT `:-`, AND IT MATTERS MORE HERE THAN ANYWHERE ELSE ----
+      #
+      # Ye `:-dev-only-insecure-secret-change-me` tha. Wo fallback value REPO ME
+      # COMMITTED hai, to `.env` me `JWT_SECRET_KEY` missing hone ka matlab tha:
+      # "har JWT ka signing key ek public string hai".
+      #
+      # `JWT_SECRET_KEY` hi wo key hai jo HAR session sign karti hai - web app ka
+      # gate bhi isi se verify karta hai. Isliye ye value known hona matlab hai:
+      # koi bhi ye 3 lines likh sakta hai
+      #
+      #   header.payload.signature   (signature = HMAC(payload, "dev-only-insecure-secret-change-me"))
+      #
+      # aur ek token bana sakta hai jisme `role: "superadmin"` ho, `aud:
+      # "wideo11-api"` ho, `exp` future ho. Gate usse PASS karega. Ye login
+      # bypass nahi hai - ye "koi bhi user" hai.
+      #
+      # Fail-open (`:-`) yahan galat choice hai: `docker compose up` chup-chaap
+      # chalta hai, har app healthy dikhta hai, har test pass hota hai, aur system
+      # production me khula hota hai. Fail-closed (`:?`) me `docker compose up`
+      # ruk kar bolta hai "JWT_SECRET_KEY is required" - jo ek galti hai, aur ek
+      # galti theek hoti hai.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - it signs every session in the product and this fallback value is committed to the repo}
 
       # ---- DEVICE-PER-ACCOUNT LIMIT: ON / OFF SWITCH ----
       #
@@ -809,6 +831,11 @@ services:
         # Browser se hit hone wala URL (container name nahi, localhost chahiye
         # kyunki ye browser me khulta hai - internal DNS browser ko nahi dikhta)
         NEXT_PUBLIC_CURRENCY_API: ${CURRENCY_PUBLIC_API:-http://localhost:8086}
+        # Server-authoritative click-ledger surface. The value in the REQUEST BODY
+        # is ignored by @wideo11/ui/audit-handler and this is used instead, so a
+        # caller cannot relabel editor traffic as currency traffic in the
+        # analytics breakdown.
+        SERVER_SURFACE: currency
     depends_on:
       currency-service:
         condition: service_healthy
@@ -870,6 +897,11 @@ services:
       # Is service ka koi `NEXT_PUBLIC_APP_URL` nahi tha, isliye anchor yahan
       # `NEXTAUTH_SECRET` ke baad rakha hai.
       NEXT_PUBLIC_APP_SURFACE: superadmin
+      # Server-authoritative click-ledger surface. The value in the REQUEST BODY
+      # is ignored by @wideo11/ui/audit-handler and this is used instead, so a
+      # caller cannot relabel editor traffic as superadmin traffic in the
+      # analytics breakdown.
+      SERVER_SURFACE: superadmin
     depends_on:
       auth-service:
         condition: service_healthy
@@ -984,6 +1016,10 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_APP_SURFACE: monitor  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: monitor
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -1344,6 +1380,10 @@ services:
       NEXT_PUBLIC_MINIO_PUBLIC_HOST: http://localhost:9000
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_APP_SURFACE: web  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: web
       # Next.js image optimiser ke liye. Production build me apna khud ka
       # loader use karta hai; ye sirf sharp/Next image bhi chalata rahe.
       NEXT_SHARP_PATH: /usr/lib/node_modules/sharp
@@ -1365,7 +1405,32 @@ services:
       # DHYAN: root `.env` me padha jaata hai sirf VARIABLE SUBSTITUTION ke liye -
       # container ke andar bahar nahi jaata. Isliye ye line auth-service wale
       # pattern se copy ki gayi hai, taake dono ek hi source se padhen.
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-dev-only-insecure-secret-change-me}
+      #
+      # ---- `:?` INSTEAD OF `:-`, AND THIS IS A SECURITY FIX ----
+      #
+      # Ye line pehle `:-dev-only-insecure-secret-change-me` thi. Matlab `.env`
+      # me `JWT_SECRET_KEY` MISSING hone par compose chup-chaap ek KNOWN value use
+      # kar leti thi - aur ye fallback value hi repo me committed hai.
+      #
+      # Uska matlab: `JWT_SECRET_KEY` bhoolne wala koi bhi deployment ek aisi
+      # system chala raha hota jisme koi bhi JWT forge kar sakta hai. Gate
+      # `jose` se verify karta hai, signature sahi hai, `aud` sahi hai, `exp`
+      # sahi hai - aur phir bhi token BANANA possible hai, kyunki signing key
+      # public hai. Koi user nahi, koi role check nahi, koi rate limit nahi.
+      #
+      # `:?` MATLAB "unset ho to compose khud fail ho". Ye SAHI trade-off hai:
+      #
+      #   - fail-open (`:-`): chup-chaap chalti hai, attacker ke liye free hai
+      #   - fail-closed (`:?`): `docker compose up` ruk jaata hai aur bolta hai
+      #     "JWT_SECRET_KEY is required"
+      #
+      # Doosre saat apps pehle se `:?` use kar rahe the. `web` akela `:-` tha -
+      # yaani sabse bada app, jiske users hain, sabse kam safe config par.
+      #
+      # Ye fail-closed hai JAAN-BOOJH KAR. Gate ka rule bhi yahi hai: `JWT_SECRET_KEY`
+      # ke bina kuch verify nahi hota, to kuch authorise bhi nahi hota. Compose ko
+      # wahi rule par rokna consistent hai.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - without it every session in this product can be forged by anyone who reads this file}
     depends_on:
       auth-service:
         condition: service_healthy
@@ -1396,6 +1461,29 @@ services:
         # me host-reachable `localhost` defaults sahi hain, inhe wahi rehne
         # dena hai.
         NEXT_PUBLIC_APP_SURFACE: ${NEXT_PUBLIC_APP_SURFACE_EDITOR:-editor}
+        # ---- These THREE had to move here from `environment:` ----
+        #
+        # `NEXT_PUBLIC_*` is INLINED by `next build`. Compose's `environment:`
+        # block sets variables at RUNTIME, so a `NEXT_PUBLIC_` var set there is
+        # `undefined` in the browser bundle - the build already happened.
+        #
+        # These three are read by CLIENT code (`chrome/auth-nav.tsx` and
+        # `chrome/access-gate.tsx`), so each one silently fell back to its
+        # hardcoded `localhost:3000` default. The symptom was that the editor's
+        # sign-in buttons pointed at the web app's port regardless of how the
+        # stack was configured - which happens to be correct in local dev and
+        # wrong everywhere else, so it looks fine until it is deployed.
+        #
+        # Nothing errored. `??` swallowed the undefined, the fallback was a
+        # plausible URL, and the misconfiguration was invisible.
+        #
+        # They belong in `args:` because the browser is the consumer. Server-side
+        # `NEXT_PUBLIC_*` is still wrong for a different reason - the value ends
+        # up in the bundle - but these three are public URLs, so inlining is
+        # exactly what is wanted.
+        NEXT_PUBLIC_LOGIN_URL: ${NEXT_PUBLIC_LOGIN_URL:-http://localhost:3000/auth/login}
+        NEXT_PUBLIC_REGISTER_URL: ${NEXT_PUBLIC_REGISTER_URL:-http://localhost:3000/auth/register}
+        NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-http://localhost:3000/dashboard}
     container_name: wideo11-video-editor
     ports:
       - "3002:3002"
@@ -1419,6 +1507,10 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_APP_SURFACE: editor  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: editor
       # ---- Navbar session awareness ----
       #
       # AuthNav session POOCHTA hai, token padhta nahi - session ek httpOnly
@@ -1428,13 +1520,16 @@ services:
       # hai; browser use nahi chhoon sakta. Isliye HOST-mapped port diya gaya
       # hai (compose me 8085:8085 published hai).
       NEXT_PUBLIC_AUTH_API_URL: http://localhost:8085
-      # Web app container me nahi, host pe pnpm dev se chalti hai - ye upar
-      # comment me bhi likha hai. Isliye login/register/dashboard URLs env se
-      # aate hain: web kabhi 3006 pe chali gayi to editor ko ek line
-      # badalna padega, code me nahi.
-      NEXT_PUBLIC_LOGIN_URL: http://localhost:3000/auth/login
-      NEXT_PUBLIC_REGISTER_URL: http://localhost:3000/auth/register
-      NEXT_PUBLIC_DASHBOARD_URL: http://localhost:3000/dashboard
+      # `NEXT_PUBLIC_LOGIN_URL`, `NEXT_PUBLIC_REGISTER_URL` and
+      # `NEXT_PUBLIC_DASHBOARD_URL` used to live HERE. That is the wrong block:
+      # `NEXT_PUBLIC_*` is inlined at BUILD time, so a runtime value never
+      # reaches the browser bundle and every read fell through to its
+      # hardcoded default. They are build args now - see the `args:` block above.
+      #
+      # Kept as documentation of intent rather than deleted silently: the comment
+      # above the `args:` entries explains the same thing, and this is where
+      # somebody looking for "why is the editor's login button pointing at 3000"
+      # will look first.
       NEXT_PUBLIC_WS_URL: ws://dashboard-service:8080
     depends_on:
       dashboard-service:
@@ -1542,6 +1637,10 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://billing-service:8082
       NEXT_PUBLIC_APP_SURFACE: billing  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: billing
     depends_on:
       billing-service:
         condition: service_healthy
@@ -1594,6 +1693,10 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_APP_SURFACE: admin  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: admin
     depends_on:
       dashboard-service:
         condition: service_healthy
@@ -1645,6 +1748,10 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - the session gate cannot verify tokens without it}
       NEXT_PUBLIC_API_URL: http://dashboard-service:8080
       NEXT_PUBLIC_APP_SURFACE: analytics  # click ledger: which app sent the event (see SYSTEM-PLAN.md phase 0)
+      # Server-authoritative click-ledger surface.
+      # The value in the REQUEST BODY is ignored by @wideo11/ui/audit-handler and this is used instead,
+      # so a caller cannot relabel editor traffic as admin traffic in the analytics breakdown.
+      SERVER_SURFACE: analytics
     depends_on:
       dashboard-service:
         condition: service_healthy

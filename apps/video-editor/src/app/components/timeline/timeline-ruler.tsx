@@ -106,6 +106,34 @@ function labelFor(frame: number, fps: number, pxPerFrame: number): string {
   return frameToTimecode(frame, fps).slice(3, 8);
 }
 
+export /**
+ * Pointer travel, in pixels, before a ruler drag becomes a PAN rather than a
+ * SCRUB.
+ *
+ * Four pixels. Not one, and not ten.
+ *
+ * One would make every click a pan, because a mouse click always emits at least one
+ * `pointermove` with sub-pixel travel — and on a trackpad that "click" is the
+ * entire gesture.
+ *
+ * Ten would be noticeable. Scrubbing across a short region is a fast gesture, and
+ * ten pixels of dead zone at the start of it feels like the ruler ignoring you.
+ *
+ * Four is roughly the threshold at which intent is unambiguous and still below the
+ * distance a person covers in the first frame of a deliberate drag.
+ */
+const PAN_THRESHOLD_PX = 4;
+
+/**
+ * Which half of the ruler does a PRESS mean?
+ *
+ * Top 55% scrubs; below it measures.
+ *
+ * Fixed at PRESS time and re-read only on the next gesture: deciding it again
+ * inside the move handler would let a drag that wanders vertically change what it
+ * means halfway through, which is the worst possible moment for a gesture to change
+ * its meaning.
+ */
 export function TimelineRuler({
   duration,
   currentFrame,
@@ -176,6 +204,57 @@ export function TimelineRuler({
     return clientY - box.top <= box.height * 0.55 ? 'scrub' : 'measure';
   }, []);
 
+  // =============================================================================
+  // SCRUB vs PAN
+  // =============================================================================
+  //
+  // THE BUG THIS FIXES, AS REPORTED: "ruler fix karo, clips audio aur title scroll
+  // upar-neche ho, matlab ruler fixed rehta hai — use se pata nahi chalta."
+  //
+  // The ruler is NOT fixed, and that was worth checking first. It has no
+  // `overflow-x` of its own, so it lives inside the shared scroll strip and
+  // scrolls natively with the tracks. The marks are positioned by
+  // `frame * pxPerFrame` inside a `width: laneWidth` wrapper, so they move with
+  // the content by construction.
+  //
+  // What actually happens is worse than being fixed: **you cannot scroll the
+  // timeline by dragging the ruler.** `beginScrub` calls `preventDefault()` and
+  // then, on every `pointermove`, calls `onSeek()`. So a horizontal drag across
+  // the ruler does not scroll — it drags the PLAYHEAD. Every attempt to scroll by
+  // the most natural gesture, the one every NLE supports, moves the cursor
+  // thousands of frames sideways instead.
+  //
+  // THE FIX: distinguish the two by INTENT, using distance rather than direction.
+  //
+  // A threshold, not a direction test. Direction alone is ambiguous here: a
+  // diagonal drag is both a scrub and a pan, and a rule that treats it as one or
+  // the other is wrong half the time. Distance is unambiguous — under 4px the
+  // pointer has not moved far enough for the user to have meant anything, so it is
+  // a click; over 4px they have.
+  //
+  // `pointerId` is tracked rather than `buttons`, because on a drag the buttons
+  // may already be released by the time the last move arrives, and a drag that
+  // stops being a drag mid-gesture is a gesture whose meaning changes under the
+  // user's hand — the same failure `beginScrub`'s own comment warns about for the
+  // band decision.
+  //
+  // WHY THE SHARED STRIP IS FOUND BY WALKING UP, NOT PASSED IN
+  //
+  // Because the ruler is rendered INSIDE that strip by `video-editor.tsx`, and the
+  // strip is `position: relative` above it. Walking to the nearest ancestor with
+  // horizontal overflow is self-contained, needs no signature change, and keeps
+  // working if the ruler is reused elsewhere. The alternative — threading a ref
+  // through two components to pass one element — is more code for less clarity.
+  const scrollHost = useCallback((): HTMLElement | null => {
+    let node: HTMLElement | null = ref.current?.parentElement ?? null;
+    while (node) {
+      const style = getComputedStyle(node);
+      if (/(auto|scroll)/.test(style.overflowX)) return node;
+      node = node.parentElement;
+    }
+    return null;
+  }, []);
+
   const beginScrub = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -190,12 +269,40 @@ export function TimelineRuler({
     // EITHER direction instead of always extending to the right.
     const anchor = frameAt(e.clientX);
 
+    // ---- Pan bookkeeping. See the note above for why this is distance and not
+    // direction, and why `pointerId` and not `buttons`. ----
+    const startX = e.clientX;
+    const host = scrollHost();
+    const scrollAtStart = host?.scrollLeft ?? 0;
+    let panning = false;
+
+    // Apply the threshold to the first move too, so a click that jitters two
+    // pixels does not turn into a pan. Without it, the very first `pointermove`
+    // after a press decides, and trackpads emit one for a plain click.
+    const maybeStartPan = (clientX: number) => {
+      if (panning || Math.abs(clientX - startX) < PAN_THRESHOLD_PX) return false;
+      panning = true;
+      // The seek that `beginScrub` already performed is undone by scrolling back to
+      // where the strip was, so a pan never leaves the playhead somewhere the user
+      // did not put it.
+      if (host) host.scrollLeft = scrollAtStart;
+      return true;
+    };
+
     if (startBand === 'scrub') onSeek(anchor / fps);
     else onSetMeasure(anchor, anchor);
 
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pid) return;
+
       if (startBand === 'scrub') {
+        if (maybeStartPan(ev.clientX)) {
+          // PAN. Move the shared strip by the pointer delta, negated because
+          // dragging content right scrolls it left - the same relationship as
+          // dragging a physical strip of film.
+          if (host) host.scrollLeft = scrollAtStart - (ev.clientX - startX);
+          return;
+        }
         onSeek(frameAt(ev.clientX) / fps);
       } else {
         const head = frameAt(ev.clientX);
@@ -288,7 +395,14 @@ export function TimelineRuler({
       onPointerDown={beginScrub}
       onKeyDown={onKey}
       style={{ width: laneWidth, height: RULER_HEIGHT }}
-      className="group relative shrink-0 cursor-ew-resize select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500"
+      // `cursor-ew-resize` on the WHOLE ruler was half the problem: it advertised
+      // "drag me to resize", so the cursor confirmed the wrong expectation and the
+      // drag confirmed it too.
+      //
+      // The ruler is now BOTH: a short drag scrubs, a long drag pans. There is no
+      // single cursor that can say both honestly, so it says the safer one —
+      // `grab` — and the behaviour is discoverable by doing rather than by looking.
+      className="group relative shrink-0 cursor-grab select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500 active:cursor-grabbing"
     >
       {/* ---- The baseline. A hard edge along the bottom is what makes a strip
            of dashes read as a ruler rather than as a broken border. ---- */}

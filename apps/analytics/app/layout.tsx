@@ -1,4 +1,5 @@
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 import { ReactNode, Suspense } from 'react';
 // Google font REMOVED - air-gapped Grafana font stack use ho raha hai.
 // Kyun: "next/font/google" build time par network se font fetch karta tha, aur
@@ -44,6 +45,10 @@ export default function RootLayout({
       <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }} suppressContentEditableWarning>
         {/* Global activity capture (Awareness grid ka data source) */}
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
         <Providers>
           <div className="flex h-screen overflow-hidden bg-background">
             <nav className="w-64 border-r border-border bg-card overflow-y-auto flex-shrink-0">

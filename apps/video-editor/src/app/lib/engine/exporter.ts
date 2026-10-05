@@ -144,7 +144,13 @@ export async function renderToFile(opts: ExportOptions): Promise<ExportResult> {
   // already hearing is the mix that gets recorded.
   let silent = true;
   for (const track of state.tracks) {
-    if (track.type === 'text') continue;
+    // Text is skipped because it carries no audio. Branding is skipped for the same
+    // reason and one more: it now RESOLVES in `sources` (that is the fix that makes
+    // the logo draw at all), so this loop would find a source, decide the project
+    // was not silent, and pull the master audio graph into the recording — turning
+    // a silent video into one carrying an audio track nobody asked for. A logo is a
+    // picture; it has nothing to do with whether the export has sound.
+    if (track.type === 'text' || track.type === 'branding') continue;
     for (const clip of track.clips) {
       if (state.sources.get(clip.mediaId)?.url) {
         silent = false;

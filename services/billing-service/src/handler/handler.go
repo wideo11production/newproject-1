@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"newproject/services/billing-service/src/middleware"
 	"newproject/services/billing-service/src/model"
 	"newproject/services/billing-service/src/repository"
 	"newproject/services/billing-service/src/service"
@@ -19,51 +20,134 @@ func NewHandler(svc *service.BillingService) *Handler {
 	return &Handler{svc: svc}
 }
 
+// RegisterRoutes wires billing's HTTP surface.
+//
+// -----------------------------------------------------------------------------
+// WHY THIS FUNCTION CHANGED SHAPE
+// -----------------------------------------------------------------------------
+//
+// Every one of these routes was registered on the bare engine with only
+// `gin.Logger()` and `gin.Recovery()`:
+//
+//	r := gin.New()
+//	r.Use(gin.Logger())
+//	r.Use(gin.Recovery())
+//	h.RegisterRoutes(r)          // <- no auth anywhere
+//	payoutProtected.Use(middleware.AuthRequired())   // <- only the payouts
+//
+// So the whole money surface was reachable by anyone who could reach the port,
+// with `user_id` taken from the REQUEST BODY:
+//
+//	POST   /subscriptions      subscribe yourself to anything
+//	POST   /plans              create a plan, including its price
+//	PUT    /plans/:id          change that price
+//	POST   /invoices           issue an invoice
+//	POST   /invoices/payments  mark it paid
+//	PUT    /payments/:id/refund
+//
+// That is not a missing feature. It is a self-service store with a free refund
+// button, and it is the most severe finding in this codebase. `middleware.AuthRequired`
+// and `middleware.RequireAdmin` both already existed and were applied to exactly
+// one group.
+//
+// The split below is by WHO, not by HTTP verb:
+//
+//	PUBLIC        the plan catalogue. A pricing page has to render for a signed-out
+//	              visitor, and it contains no PII - that is the definition of the
+//	              public surface, rather than "GETs happen to be harmless".
+//
+//	PERSONAL      the caller's OWN subscriptions, invoices and payments. The user
+//	              id comes from the VERIFIED TOKEN, never from a path or a body.
+//	              `/subscriptions/user/:user_id/cancel` taking the id from the URL
+//	              is how one user cancels another's plan; the handler ignores the
+//	              path value and reads the token.
+//
+//	ADMIN         anything that creates or moves money: the catalogue, taxes,
+//	              invoice issue, payment recording, REFUNDS. A refund is the most
+//	              dangerous route here and is admin-only for that reason.
+//
+// A superadmin token satisfies `RequireAdmin`, so the superadmin dashboard keeps
+// working unchanged.
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	// ---- PUBLIC: the plan catalogue ----
+	// Pricing has to be visible before sign-in, and a plan row contains no PII.
 	plans := r.Group("/plans")
 	{
-		plans.POST("", h.CreatePlan)
 		plans.GET("", h.ListPlans)
 		plans.GET("/:id", h.GetPlan)
 		plans.GET("/code/:code", h.GetPlanByCode)
-		plans.PUT("/:id", h.UpdatePlan)
+
+		// Creating and EDITING the catalogue is an ADMIN action, not a public one.
+		// `PUT /plans/:id` used to let anyone rewrite the price of every plan in
+		// the product.
+		//
+		// `AuthRequired` is chained explicitly, not assumed. These three routes
+		// were the only ones carrying `RequireAdmin` on its own, so no identity was
+		// ever placed in the context and the role check read an empty role. They
+		// now refuse anonymous callers with 401 and a `role=user` token with 403.
+		plans.POST("", middleware.AuthRequired(), middleware.RequireAdmin(), h.CreatePlan)
+		plans.PUT("/:id", middleware.AuthRequired(), middleware.RequireAdmin(), h.UpdatePlan)
 	}
 
-	subs := r.Group("/subscriptions")
+	// ---- PERSONAL: the caller's own subscription ----
+	subs := r.Group("/subscriptions", middleware.AuthRequired())
 	{
 		subs.POST("", h.Subscribe)
 		subs.GET("/:id", h.GetSubscription)
+		// `user_id` in the path is retained for backwards compatibility with
+		// existing callers, but the handlers read the id from the TOKEN and
+		// ignore the path. See `selfUserID`.
 		subs.GET("/user/:user_id", h.GetSubscriptionByUser)
 		subs.PUT("/user/:user_id/cancel", h.CancelSubscription)
-		subs.GET("/expiring", h.GetExpiringSubscriptions)
+		// Expiry reporting is operational data across all accounts, not a personal
+		// view - an admin-only route.
+		subs.GET("/expiring", middleware.RequireAdmin(), h.GetExpiringSubscriptions)
 	}
 
+	// ---- TAX RATES: read public, write admin ----
 	taxes := r.Group("/taxes")
 	{
-		taxes.POST("", h.CreateTaxRate)
 		taxes.GET("", h.ListTaxRates)
 		taxes.GET("/:code", h.GetTaxRate)
+		// A tax rate is the multiplier on every invoice. An unauthenticated
+		// writer here can set it to zero and nothing downstream re-checks it.
+		//
+		// Chained with `AuthRequired` for the same reason as the plan routes.
+		taxes.POST("", middleware.AuthRequired(), middleware.RequireAdmin(), h.CreateTaxRate)
 	}
 
-	invoices := r.Group("/invoices")
+	// ---- INVOICES: read your own, write admin ----
+	invoices := r.Group("/invoices", middleware.AuthRequired())
 	{
-		invoices.POST("", h.CreateInvoice)
 		invoices.GET("/:id", h.GetInvoice)
 		invoices.GET("/uuid/:uuid", h.GetInvoiceByUUID)
 		invoices.GET("/number/:number", h.GetInvoiceByNumber)
 		invoices.GET("/user/:user_id", h.ListInvoices)
-		invoices.GET("/overdue", h.GetOverdueInvoices)
 		invoices.GET("/:id/items", h.GetInvoiceItems)
-		invoices.PUT("/:id/issue", h.IssueInvoice)
-		invoices.POST("/payments", h.RecordPayment)
+
+		// Issuing is an accounting act, and the tax amount is computed AT ISSUE
+		// (see Phase 18). Whoever can do it is choosing what the record says.
+		invoices.POST("", middleware.RequireAdmin(), h.CreateInvoice)
+		invoices.PUT("/:id/issue", middleware.RequireAdmin(), h.IssueInvoice)
+		// Recording a payment is the write that makes an invoice "paid". Admin
+		// only: a self-service "mark my invoice paid" is how revenue becomes
+		// fictional.
+		invoices.POST("/payments", middleware.RequireAdmin(), h.RecordPayment)
+
+		// Overdue is a portfolio view, not a personal one.
+		invoices.GET("/overdue", middleware.RequireAdmin(), h.GetOverdueInvoices)
 	}
 
-	payments := r.Group("/payments")
+	payments := r.Group("/payments", middleware.AuthRequired())
 	{
 		payments.GET("/:id", h.GetPayment)
 		payments.GET("/uuid/:uuid", h.GetPaymentByUUID)
 		payments.GET("/invoice/:invoice_id", h.GetPaymentsByInvoice)
-		payments.PUT("/:id/refund", h.RefundPayment)
+		// REFUND. Admin only, and the most dangerous route in this file.
+		//
+		// Unauthenticated, this was: POST a payment, mark an invoice paid, then
+		// refund it - a complete round trip with no credential at any point.
+		payments.PUT("/:id/refund", middleware.RequireAdmin(), h.RefundPayment)
 	}
 }
 
@@ -154,16 +238,52 @@ func (h *Handler) UpdatePlan(c *gin.Context) {
 }
 
 func (h *Handler) Subscribe(c *gin.Context) {
+	// ---- The user is the CALLER, not whatever the body says ----
+	//
+	// `req.UserID` used to be bound from the request body with
+	// `binding:"required"`. With no auth middleware on this route that meant
+	// anyone could subscribe ANYONE to any plan by putting their id in the JSON.
+	//
+	// The field is still accepted and still optional, because a client that
+	// sends it must not break. It is then IGNORED. A body field that is
+	// validated, required, and discarded is worse than one that was never
+	// accepted: the caller believes it did something.
+	//
+	// `selfUserID` reads the token claim that `AuthRequired` verified.
+	verified, ok := selfUserID(c)
+	if !ok {
+		return
+	}
+
 	var req struct {
-		UserID     uint             `json:"user_id" binding:"required"`
-		PlanCode   string           `json:"plan_code" binding:"required"`
-		AutoRenew  bool             `json:"auto_renew"`
+		// Accepted for backwards compatibility. NOT trusted - see above.
+		UserID    uint `json:"user_id"`
+		PlanCode  string `json:"plan_code" binding:"required"`
+		AutoRenew bool   `json:"auto_renew"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	sub, err := h.svc.Subscribe(c.Request.Context(), req.UserID, req.PlanCode, req.AutoRenew)
+
+	// The billing model stores `UserID uint`. The token carries a UUID, so the
+	// cast can fail for a real user.
+	//
+	// It is left failing LOUDLY rather than defaulting to 0. A silent 0 matches
+	// no rows, so the user is told "you have no subscriptions" instead of an
+	// error - and that reads as "billing is broken for me", which is worse than a
+	// 400 they can report. See `identity.go` for why the mismatch is not fixed
+	// here.
+	parsed, err := strconv.ParseUint(verified, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "user_id_not_resolvable",
+			"message": "This service's user id space does not match the auth service's. See identity.go.",
+		})
+		return
+	}
+
+	sub, err := h.svc.Subscribe(c.Request.Context(), uint(parsed), req.PlanCode, req.AutoRenew)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -190,7 +310,12 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 }
 
 func (h *Handler) GetSubscriptionByUser(c *gin.Context) {
-	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	// From the TOKEN. `:user_id` is ignored - see `identity.go`.
+	verified, ok := selfUserID(c)
+	if !ok {
+		return
+	}
+	userID, err := strconv.ParseUint(verified, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
@@ -208,11 +333,24 @@ func (h *Handler) GetSubscriptionByUser(c *gin.Context) {
 }
 
 func (h *Handler) CancelSubscription(c *gin.Context) {
-	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	// From the TOKEN, not from `:user_id`.
+	//
+	// This route used to parse the user id out of the URL path, which is the
+	// caller's to choose. Authenticated as anybody, you could cancel anybody's
+	// subscription by editing one path segment.
+	//
+	// `:user_id` is still in the route - removing it would 404 every existing
+	// client - and it is ignored.
+	verified, ok := selfUserID(c)
+	if !ok {
+		return
+	}
+	userID, err := strconv.ParseUint(verified, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
+
 	var req struct {
 		Reason string `json:"reason"`
 	}
@@ -350,7 +488,15 @@ func (h *Handler) GetInvoiceByNumber(c *gin.Context) {
 }
 
 func (h *Handler) ListInvoices(c *gin.Context) {
-	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	// From the TOKEN. `:user_id` is ignored - see `identity.go`.
+	//
+	// This was a full invoice disclosure: authenticated as anybody, request
+	// `/invoices/user/<anyone-else>` and read their billing history.
+	verified, ok := selfUserID(c)
+	if !ok {
+		return
+	}
+	userID, err := strconv.ParseUint(verified, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return

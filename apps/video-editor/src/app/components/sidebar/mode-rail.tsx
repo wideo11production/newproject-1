@@ -50,6 +50,8 @@ import {
   Magnet,
   Sun,
   Moon,
+  Badge,
+  User,
 } from 'lucide-react';
 
 export type EditorMode =
@@ -65,7 +67,8 @@ export type EditorMode =
   | 'help'
   | 'callouts'
   | 'stabilize'
-  | 'chroma';
+  | 'chroma'
+  | 'branding';
 
 interface ModeDef {
   id: EditorMode;
@@ -86,6 +89,7 @@ const MODES: ModeDef[] = [
   { id: 'panzoom', label: 'Pan & Zoom', Icon: Move, status: 'ready', hint: 'A slow push in or pull out across a clip. The presets are the two-keyframe envelopes from the sample resources.' },
   { id: 'layouts', label: 'Overlays', Icon: LayoutGrid, status: 'ready', hint: 'Picture-in-picture and split-screen. These need a second video track — add one with + on the Tracks header.' },
   { id: 'audio', label: 'Audio', Icon: Music, status: 'ready', hint: 'Web Audio effects, level matching and local silence removal. Nothing here uploads your audio.' },
+  { id: 'branding', label: 'Branding', Icon: Badge, status: 'ready', hint: 'Select a channel to auto-apply its logo, colour and position to the branding track.' },
   { id: 'project', label: 'Project', Icon: FolderOpen, status: 'ready', hint: 'New, open, save, autosave, recent projects, and the resolution and frame rate everything else follows.' },
   { id: 'help', label: 'Help', Icon: HelpCircle, status: 'ready', hint: 'Every keyboard shortcut and mouse gesture, generated from the same table the editor uses.' },
   {

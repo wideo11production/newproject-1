@@ -1,4 +1,5 @@
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 import type { Metadata } from 'next';
 // Google font REMOVED - air-gapped Grafana font stack use ho raha hai.
 // Kyun: "next/font/google" build time par network se Inter fetch karta tha aur
@@ -63,6 +64,10 @@ export default function RootLayout({
             NOTE: ye <body> ke ANDAR hona zaroori hai - bahar rakhne par
             invalid HTML ban jata hai aur hydration fail hoti hai. */}
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
         <Providers>
           {/* ---- SESSION IDENTITY (avatar/username app-wide) ----
               Requirement: "session se har jagah uski profile image jaha bhi

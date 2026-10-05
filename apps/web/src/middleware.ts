@@ -136,7 +136,29 @@ const PUBLIC_PAGE_PREFIXES = ['/channel'];
  * Ye teen zaroori hain:
  *   - register/login/verify: PRE-auth hote hi to session hoga hi nahi
  *   - webauthn/*: register form biometric enroll karta hai, login se PEHLE
- *   - audit/telemetry/health: public landing page bhi ye beacons bhejti hai
+ *   - audit/telemetry: public landing page bhi ye beacons bhejti hai
+ *
+ * ---- `/api/health-check` YAHAN SE HATA DAYA GYA HAI (was public) ----
+ *
+ * Ye pehle is list me tha, is liye koi bhi anonymous caller ise hit kar sakta tha.
+ * Ye route server-side fan-out hai, aur wo WITHOUT a credential ye sab leak karta
+ * tha:
+ *
+ *   - internal service ke naam ("Recommendation Service", "Bot Service")
+ *   - internal URLs - ek baar config se, aur doosri baar `error.message` ke
+ *     andar jab fetch fail ho
+ *   - poori box ka port map (8082, 8080), names ke saath
+ *   - aur un services ka free up/down oracle jinke baare me caller ko jaanna
+ *     nahi chahiye
+ *
+ * "health check" naam hone se wo harmless lagta hai. Naam ye batata hai ki route
+ * KARTA kya hai, ye nahi ki wo BATA kya deta hai.
+ *
+ * Ab ye `@wideo11/ui/health-handler` hai: ek implementation, session-gated, service
+ * names ki closed list, aur raw error message ki jagah stable error CODES.
+ *
+ * Load balancer ke liye `/api/live` public hai - wo sirf `{"status":"ok"}` deta
+ * hai, koi dependency, version, hostname ya uptime nahi.
  */
 const PUBLIC_API_PREFIXES = [
   '/api/auth/register',
@@ -147,7 +169,6 @@ const PUBLIC_API_PREFIXES = [
   '/api/auth/logout', // logout session ke bina bhi callable hona chahiye
   '/api/audit',
   '/api/telemetry',
-  '/api/health-check',
   // ---- Public channel discovery (Phase B1) ----
   //
   // `/api/v1/public/channels` (Go) jaan-boojh kar auth group ke BAHAR hai aur

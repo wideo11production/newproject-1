@@ -9,7 +9,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
+	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/model"
 	"github.com/wideo11/auth-service/internal/service"
 )
@@ -18,6 +20,37 @@ import (
 type SuperadminHandler struct {
 	svc     *service.SuperadminService
 	authSvc *service.AuthService
+
+	// ---- Added for the entitlement admin surface (`entitlement_admin.go`) ----
+	//
+	// `entitlements` and `plans` come from `AuthHandler` rather than being
+	// constructed again. Two `EntitlementService` instances over one database
+	// would each hold their own `plans` snapshot, and a plan added between the two
+	// constructions would be visible to one and not the other — so a grant could
+	// be refused by a handler that the rest of the product believes accepts it.
+	//
+	// One catalogue, one service, passed in. `SetEntitlementAdmin` follows the
+	// `SetEntitlementService` pattern already used by `AuthHandler`.
+	db          *gorm.DB
+	entitlements *service.EntitlementService
+	plans       config.PlansConfig
+}
+
+// SetEntitlementAdmin wires the entitlement dependencies.
+//
+// A setter rather than a constructor argument because `NewSuperadminHandler` is
+// called in one place with two arguments today, and adding three more to a
+// constructor that is only used by `main.go` trades a contained change for a wider
+// one. The established convention in this package is `SetEntitlementService`, so
+// this matches it.
+func (h *SuperadminHandler) SetEntitlementAdmin(
+	db *gorm.DB,
+	entitlements *service.EntitlementService,
+	plans config.PlansConfig,
+) {
+	h.db = db
+	h.entitlements = entitlements
+	h.plans = plans
 }
 
 // NewSuperadminHandler naya handler banata hai
@@ -66,9 +99,31 @@ func (h *SuperadminHandler) RequireSuperadminMiddleware() gin.HandlerFunc {
 }
 
 // RegisterRoutes superadmin routes register karta hai
-func (h *SuperadminHandler) RegisterRoutes(r *gin.RouterGroup, authMW gin.HandlerFunc) {
+func (h *SuperadminHandler) RegisterRoutes(r *gin.RouterGroup, authMW gin.HandlerFunc, extraMW ...gin.HandlerFunc) {
 	sa := r.Group("/admin")
 	sa.Use(authMW)
+
+	// `CheckRevoked` was MISSING on this group, and it is the worst-placed of the
+	// four gaps.
+	//
+	// These are the most powerful endpoints in the product: every user's security
+	// events, every user's session history, the device lock that can cut off
+	// accounts, and account purging. `authMW` verifies the token's signature and
+	// expiry, and a token revoked at logout still passes both - revocation lives
+	// in the Redis denylist that `authMW` does not read.
+	//
+	// So a superadmin who logged out - or whose session was revoked remotely -
+	// kept full administrative access to every user in the system until the token
+	// expired on its own. Revoking a superadmin session was the documented
+	// incident-response action, and on this group it did not take effect.
+	//
+	// Passed as `extraMW` rather than constructed here so this package does not
+	// need to know about the revocation store, and so the call site in `main.go`
+	// is the single place that decides what guards `/admin/*` - which is the same
+	// reason every other protected group registers its checks there.
+	for _, mw := range extraMW {
+		sa.Use(mw)
+	}
 
 	// ---- SUPERADMIN ROLE GATE (CRITICAL SECURITY FIX) ----
 	//
@@ -86,6 +141,18 @@ func (h *SuperadminHandler) RegisterRoutes(r *gin.RouterGroup, authMW gin.Handle
 
 	// ---- Awareness: security events ----
 	sa.GET("/security-events", h.SecurityEvents)
+
+	// ---- Alert acknowledgement (see security_alert_ack.go for why these are a
+	// separate table and not columns on the event row) ----
+	//
+	// Registered HERE, on `sa`, which already carries AuthMiddleware +
+	// RequireSuperadmin + CheckRevoked. Not re-guarded per route: a second check
+	// is a second thing to forget.
+	h.registerSecurityAlertRoutes(sa)
+
+	// ---- Plan grants (see entitlement_admin.go for why nothing could be paid for
+	// before this existed) ----
+	h.registerEntitlementRoutes(sa)
 
 	// ---- Awareness: per-user activity (sessions, online time) ----
 	sa.GET("/activity", h.Activity)

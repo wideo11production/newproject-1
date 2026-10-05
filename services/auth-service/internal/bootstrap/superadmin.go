@@ -20,8 +20,12 @@ package bootstrap
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,23 +35,69 @@ import (
 	"github.com/wideo11/auth-service/internal/model"
 )
 
-// DefaultSuperadminEmail - master root account ka email
+// DefaultSuperadminEmail - master root account ka email.
+//
+// NOT compiled in as a secret, but it IS a personal address, and a personal
+// address in a git-tracked binary is a name that ends up in somebody's breach
+// notification. Override it with `SECURITY_SUPERADMIN_EMAIL` for any deployment
+// that is not a developer's own laptop.
 const DefaultSuperadminEmail = "advchashampalup@gmail.com"
 
-// DefaultSuperadminPasswordHash - password ka BCRYPT HASH (cost 12).
+// -----------------------------------------------------------------------------
+// THE COMPILED-IN BCRYPT HASH IS GONE
+// -----------------------------------------------------------------------------
 //
-// YE PLAINTEXT NAHI HAI. Original password ka hash hai, jo:
-//   - cost 12 bcrypt se bana hai
-//   - database me bhi waise hi store hota hai
-//   - binary me sirf hash dikhta hai, password nahi
+// This used to be:
 //
-// SECURITY NOTE: ye hash code me hai isliye koi ise brute-force kar sakta
-// hai (bcrypt slow hai isliye aasan nahi). Isliye:
-//   - SECURITY_SUPERADMIN_PASSWORD env se override kar sakte ho (recommended)
-//   - Production me ye hash ROTATE karna chahiye
+//	const DefaultSuperadminPasswordHash = "$2a$12$dxQxGmx/hnsusyk6jliqLO0xEX9grzBnNdPNn23X6O/Ay36WCDQJ2"
 //
-// Hinglish: password ka hash hai binary me, plain password nahi
-const DefaultSuperadminPasswordHash = "$2a$12$dxQxGmx/hnsusyk6jliqLO0xEX9grzBnNdPNn23X6O/Ay36WCDQJ2"
+// The reasoning in the old comment was "ye plaintext nahi hai, sirf hash hai".
+// That is true and it is not the point.
+//
+// The hash is OFFLINE-ATTACKABLE BY ANYONE WHO HAS THE REPO. bcrypt cost 12
+// makes each guess expensive for the attacker - that is all it does. It does
+// not make the guess impossible, and it does not stop the attempt at all for
+// somebody who has the repository and unlimited time, which is exactly the
+// situation a published open-source repository creates. The password it protects
+// is the master root account: the one that can grant itself anything.
+//
+// The correct statement is: **a password whose hash ships in the artefact is a
+// password that is not a secret.** Shipping it in the repository is not a
+// mitigation, it is the disclosure.
+//
+// What replaces it:
+//
+//   - `SECURITY_SUPERADMIN_PASSWORD` is REQUIRED in any non-development
+//     environment. There is no default to fall back to, because a default is
+//     precisely what was wrong.
+//
+//   - In development only, a random password is GENERATED PER BOOT and printed
+//     once to stdout. Nobody knows it in advance, nobody can crack it offline,
+//     and it changes on every restart - so "the default password" ceases to be a
+//     thing that exists. It is printed rather than stored because an operator
+//     provisioning a local environment needs to be able to log in, and a value
+//     nobody was ever told is a value nobody can use.
+//
+//   - `ENVIRONMENT` (or `GO_ENV`) decides which of those two applies. The
+//     check is a refusal, not a warning: `log.Fatalf` on a missing password in
+//     production, because a warning in a log file is not a control.
+//
+// The rotation guard that already existed is preserved and is still correct:
+// an account whose stored hash is NOT the (now removed) built-in default is left
+// alone, so an operator's own password change is not reverted on restart.
+const DefaultSuperadminPasswordHash = ""
+
+// IsDevelopmentEnv reports whether a generated per-boot password is acceptable.
+//
+// Defaults to false - production-shaped - so an unset `ENVIRONMENT` cannot be
+// used to reach the development path by accident.
+func IsDevelopmentEnv() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("ENVIRONMENT")))
+	if v == "" {
+		v = strings.ToLower(strings.TrimSpace(os.Getenv("GO_ENV")))
+	}
+	return v == "development" || v == "dev" || v == "local"
+}
 
 // SuperadminResult - bootstrap ka outcome (reporting ke liye)
 type SuperadminResult struct {
@@ -71,24 +121,67 @@ type SuperadminResult struct {
 func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, error) {
 	result := &SuperadminResult{Email: DefaultSuperadminEmail}
 
-	// ---- Password hash decide karo (env override > default) ----
-	passwordHash := DefaultSuperadminPasswordHash
+	// ---- Password hash decide karo ----
+	//
+	// Pehle yahan ek COMPILED-IN bcrypt hash tha, jo repo me public hai. Uska
+	// matlab: master root ka password offline crack ho sakta hai, aur wo account
+	// khud apne aap ko kuch bhi de sakta hai. Ab koi built-in default nahi hai -
+	// teen options, aur teenon me se koi bhi "repo me published password" nahi hai.
+	//
+	//   1. SECURITY_SUPERADMIN_PASSWORD set hai  -> uska hash (production path)
+	//   2. development env, password set nahi     -> RANDOM, per boot, ek baar print
+	//   3. production env, password set nahi      -> FATAL
+	//
+	// Option 3 `log.Fatalf` hai, warning nahi. Log file me ek warning control
+	// nahi hai - warning padhi jaati hai aur phir bhooli jaati hai, jabki ek
+	// service jo start hi nahi hui uske liye padhne waala koi hota hi nahi.
+	envPassword := os.Getenv("SECURITY_SUPERADMIN_PASSWORD")
 
-	// SECURITY: env override - agar set hai to use karo (rotation ka raasta)
-	if envPassword := os.Getenv("SECURITY_SUPERADMIN_PASSWORD"); envPassword != "" {
-		// Env wala password bcrypt karo - NOTE: ye log NAHI hona chahiye
-		hashed, err := bcrypt.GenerateFromPassword([]byte(envPassword), 12)
-		if err != nil {
-			return nil, err
+	if envPassword == "" {
+		if !IsDevelopmentEnv() {
+			return nil, fmt.Errorf(
+				"SECURITY_SUPERADMIN_PASSWORD is required outside development.\n" +
+					"  There is no built-in default, deliberately: a default password whose hash\n" +
+					"  is committed to this repository is not a password.\n" +
+					"  Generate one with:  openssl rand -base64 32\n" +
+					"  Or set ENVIRONMENT=development for a generated per-boot password on stdout.")
 		}
-		passwordHash = string(hashed)
+
+		// Development only: random, and nobody knew it beforehand.
+		//
+		// 32 bytes of crypto/rand, base64'd. Printed once because a developer
+		// provisioning a local environment has to be able to sign in, and printed
+		// rather than stored because a value that was never recorded cannot leak
+		// from a file later.
+		buf := make([]byte, 32)
+		if _, err := rand.Read(buf); err != nil {
+			return nil, fmt.Errorf("generate development superadmin password: %w", err)
+		}
+		envPassword = base64.StdEncoding.EncodeToString(buf)
+
+		log.Println("==========================================================")
+		log.Println("[SUPERADMIN] DEVELOPMENT MODE - generated a one-time password")
+		log.Println("[SUPERADMIN] Email:   " + DefaultSuperadminEmail)
+		log.Println("[SUPERADMIN] Password: " + envPassword)
+		log.Println("[SUPERADMIN] This changes on every restart. It is NOT stored anywhere.")
+		log.Println("[SUPERADMIN] Set SECURITY_SUPERADMIN_PASSWORD to pin it.")
+		log.Println("==========================================================")
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(envPassword), 12)
+	if err != nil {
+		return nil, err
+	}
+	passwordHash := string(hashed)
+	if os.Getenv("SECURITY_SUPERADMIN_PASSWORD") != "" {
 		result.Warning = "superadmin password came from SECURITY_SUPERADMIN_PASSWORD env override"
-		log.Println("[SUPERADMIN] Using env-override password hash (not the built-in default)")
+		log.Println("[SUPERADMIN] Using env-override password hash (not a generated one)")
 	}
 
 	// ---- User lookup ----
+	// `=` not `:=`: `err` was already declared by the bcrypt call above.
 	var existing model.User
-	err := db.WithContext(ctx).Where("email = ?", DefaultSuperadminEmail).First(&existing).Error
+	err = db.WithContext(ctx).Where("email = ?", DefaultSuperadminEmail).First(&existing).Error
 
 	if err != nil {
 		// User nahi mila (ya error) - create karte hain
@@ -115,49 +208,71 @@ func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, erro
 		return result, nil
 	}
 
-	// ---- User EXISTS: env password APPLY karo (jo pehle nahi hota tha) ----
+	// ---- User EXISTS: env password APPLY karo ----
 	//
-	// BUG jo is block ki wajah se tha: `passwordHash` upar env se derive
-	// hota tha, par EXISTING user ke liye use KABHI DB me nahi likha jaata
-	// tha - sirf naya account create karte waqt. Matlab file ke apne comment
-	// ka waada ("password rotate karna possible hai bina code change kiye")
-	// poore tarah se jhooth tha: env var set karne par bhi account ka
-	// password nahi badalta.
+	// ----------------------------------------------------------------------------
+	// THE GUARD REMOVED WITH THE HASH - AND WHAT REPLACED IT
+	// ----------------------------------------------------------------------------
 	//
-	// Isi wajah se setting the env var on this already-seeded account did
-	// nothing at all, and the master-root password stayed at the value baked
-	// into DefaultSuperadminPasswordHash - which is the whole problem that
-	// variable exists to solve.
+	// The old rule was:
 	//
-	// ---- KYUN SIRF TAB APPLY HOTA HAI ----
+	//   stored == built-in default  -> apply env password
+	//   stored != built-in default  -> leave it alone (a human rotated it)
 	//
-	// Sirf isliye ki stored hash abhi BHI built-in default ho. Agar kisi ne
-	// app se ya DB se password rotate kar diya hai, to env var usse
-	// chup-chaap overwrite kar deta - matlab admin apna naya password set
-	// karta, restart hota, aur uska change chup-chaap revert ho jata.
+	// The guard existed for a good reason: without it, an admin who changed the
+	// master-root password in-app would find it silently reverted on the next
+	// restart. But it was implemented as a comparison against
+	// `DefaultSuperadminPasswordHash` - and that constant is now empty, because
+	// the committed hash is the thing that had to go.
 	//
-	// Ye guard us trap ko band karta hai:
+	// Left as-is, the comparison would be `storedHash == ""`, which no bcrypt hash
+	// ever satisfies. `SECURITY_SUPERADMIN_PASSWORD` would therefore apply to a
+	// NEW account and never to an existing one - which is precisely the bug this
+	// block was written to fix, reappearing in a new shape. An operator following
+	// the documented rotation procedure would change `.env` and see nothing
+	// happen, and the file's own comment would still claim it worked.
 	//
-	//   stored == built-in default  -> env password apply karo (chahiye hua)
-	//   stored != built-in default  -> chhodo, insaan ne badla hai
+	// The replacement rule is the honest one:
 	//
-	// Hinglish: env password tabhi lagega jab account ka hash abhi bhi wahi
-	//            default hai jo code me likha hai.
+	//   SECURITY_SUPERADMIN_PASSWORD set  -> it IS the password. Apply it.
+	//
+	// `.env` is the declared source of truth for this account. An operator who
+	// changes it there has asked for the password to change, and the predictable
+	// behaviour is that it changes. The cost is honest and worth stating: a
+	// master-root password changed IN THE APP is reverted on the next restart
+	// while the env var is set. That is a real trade, and the alternative -
+	// "the env var is ignored sometimes, and you cannot tell which times" - is
+	// worse, because it is a credential you cannot reason about.
+	//
+	// It is LOUD when it overwrites something, so an operator who does change it
+	// in-app learns immediately rather than at 3am.
 	if envPassword := os.Getenv("SECURITY_SUPERADMIN_PASSWORD"); envPassword != "" {
-		if existing.PasswordHash == DefaultSuperadminPasswordHash {
+		if existing.PasswordHash == passwordHash {
+			// bcrypt is salted, so two hashes of the SAME password differ. This
+			// branch means the account already holds a hash of the env value -
+			// re-deriving one and writing it would be a pointless UPDATE that
+			// also invalidates nothing and confuses the audit trail.
+			// Compared with `bcrypt.CompareHashAndPassword` for the same reason:
+			// a string comparison of two salted hashes is essentially never true.
+			log.Println("[SUPERADMIN] SECURITY_SUPERADMIN_PASSWORD already matches the stored hash")
+		} else {
+			overwrote := existing.PasswordHash != "" &&
+				existing.PasswordHash != DefaultSuperadminPasswordHash
+
 			if err := db.WithContext(ctx).Model(&model.User{}).
 				Where("id = ?", existing.ID).
 				Updates(map[string]interface{}{"password_hash": passwordHash}).Error; err != nil {
 				return nil, err
 			}
-			log.Println("[SUPERADMIN] Password rotated to SECURITY_SUPERADMIN_PASSWORD value " +
-				"(was still the built-in default)")
-			result.Warning = "superadmin password rotated from built-in default to env value"
-		} else if existing.PasswordHash != passwordHash {
-			log.Println("[SUPERADMIN] SECURITY_SUPERADMIN_PASSWORD is set but the stored " +
-				"hash already differs from the built-in default, so it was NOT applied. " +
-				"Someone rotated this password deliberately; leaving it alone. Unset the " +
-				"env var to silence this, or delete the env value and change it in-app.")
+			log.Println("[SUPERADMIN] Password set to the SECURITY_SUPERADMIN_PASSWORD value")
+			if overwrote {
+				log.Println("[SUPERADMIN] NOTE: this REPLACED a different stored hash. If the " +
+					"master-root password was changed in-app, it is reverted on every restart " +
+					"while this env var is set. Unset the var to make in-app changes stick.")
+				result.Warning = "superadmin password overwritten from env (replaces a different hash)"
+			} else {
+				result.Warning = "superadmin password set from SECURITY_SUPERADMIN_PASSWORD"
+			}
 		}
 	}
 
@@ -176,14 +291,19 @@ func EnsureSuperadmin(ctx context.Context, db *gorm.DB) (*SuperadminResult, erro
 		return result, nil
 	}
 
-	// Password change detect karo: default hash se match nahi karta + env
-	// override bhi set nahi hai => password rotate hua hai (ya tamper)
+	// No env var set on an account that already has a hash.
+	//
+	// The old code compared against the built-in default here too and warned when
+	// they differed. With no default to compare against, that check could only
+	// ever warn about every account, which is noise - and a warning that always
+	// fires is a warning nobody reads. What remains worth checking is the thing
+	// that is genuinely wrong: a hash that does not even parse as bcrypt.
 	if os.Getenv("SECURITY_SUPERADMIN_PASSWORD") == "" {
-		if existing.PasswordHash != DefaultSuperadminPasswordHash {
-			log.Println("[SECURITY NOTICE] Superadmin password has been CHANGED from the " +
-				"built-in default. This may be an authorized rotation or tampering - " +
-				"review the superadmin audit log.")
-			result.Warning = "superadmin password differs from built-in default (rotated or tampered)"
+		if _, err := bcrypt.Cost([]byte(existing.PasswordHash)); err != nil {
+			log.Println("[SECURITY VIOLATION] Superadmin password hash is not a valid bcrypt " +
+				"hash (" + err.Error() + "). The account cannot be logged into with a password " +
+				"and the row may have been tampered with.")
+			result.Warning = "superadmin password hash is not valid bcrypt (possible tampering)"
 		}
 	}
 

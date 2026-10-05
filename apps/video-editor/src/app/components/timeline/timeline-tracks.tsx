@@ -63,6 +63,7 @@ import {
   Wand2,
   ChevronDown,
   Flag,
+  Badge,
 } from 'lucide-react';
 import { frameToTimecode, timecodeCompact } from '../../lib/engine/frames';
 import { clipEnd, type TimelineClip, type TimelineTrack, type TrackType, type Transition } from '../../lib/engine/types';
@@ -107,10 +108,12 @@ const MAX_TRACK_HEIGHT = 200;
  *
  * A picture and a video share a lane: a still dropped on Video 1 is normal in
  * every NLE, and refusing it would be a rule with no purpose.
+ * Branding track only accepts branding clips.
  */
 export function acceptsTrack(clipType: TrackType, trackType: TrackType): boolean {
   if (clipType === trackType) return true;
   const visual = (t: TrackType) => t === 'video' || t === 'image';
+  if (clipType === 'branding' || trackType === 'branding') return clipType === trackType;
   return visual(clipType) && visual(trackType);
 }
 
@@ -132,6 +135,7 @@ export function TrackHeaders({
   trackHeights,
   onTrackHeight,
   onToggleTrack,
+  onPatchClip,
   onTrackVolume,
   onAddTrack,
   onRemoveTrack,
@@ -144,6 +148,8 @@ export function TrackHeaders({
   onTrackHeight: (trackId: string, height: number) => void;
   onToggleTrack: (trackId: string, key: 'muted' | 'visible' | 'locked' | 'solo') => void;
   onTrackVolume: (trackId: string, volume: number) => void;
+  /** Patch a clip from a track-header control — currently the branding opacity. */
+  onPatchClip?: (clipId: string, patch: Partial<TimelineClip>) => void;
   onAddTrack: (type: TrackType) => void;
   onRemoveTrack: (trackId: string) => void;
   pxPerFrame: number;
@@ -303,16 +309,43 @@ export function TrackHeaders({
             </div>
 
             {/* Remove, on hover. It is destructive and rare, so it does not get
-                permanent space. */}
-            <button
-              type="button"
-              onClick={() => onRemoveTrack(track.id)}
-              aria-label={`Remove ${track.name}`}
-              title={`Remove ${track.name} and the clips on it`}
-              className="absolute right-0.5 top-0.5 rounded p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
-            >
-              <Trash2 className="h-2 w-2" />
-            </button>
+                permanent space. Branding track cannot be removed. */}
+            {track.type !== 'branding' && (
+              <button
+                type="button"
+                onClick={() => onRemoveTrack(track.id)}
+                aria-label={`Remove ${track.name}`}
+                title={`Remove ${track.name} and the clips on it`}
+                className="absolute right-0.5 top-0.5 rounded p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
+              >
+                <Trash2 className="h-2 w-2" />
+              </button>
+            )}
+
+            {/* Opacity control for branding track.
+                The handler used to be EMPTY — the slider moved, `opacity` was
+                computed, and then nothing happened. A control that looks live and
+                is not is worse than no control: the user drags it, sees no change
+                in the preview, and concludes the logo is broken rather than the
+                slider being unwired. */}
+            {track.type === 'branding' && track.clips[0] && (
+              <div className="absolute right-0.5 top-0.5 flex items-center gap-1 px-1.5 py-0.5 bg-surface/80 rounded border border-edge">
+                <span className="text-[8px] text-fg-muted">Opacity</span>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round((track.clips[0]?.opacity ?? 1) * 100)}
+                  onChange={(e) => {
+                    const clip = track.clips[0];
+                    if (!clip || !onPatchClip) return;
+                    onPatchClip(clip.id, { opacity: parseInt(e.target.value, 10) / 100 });
+                  }}
+                  className="h-1.5 w-20 accent-pink-500"
+                  aria-label="Branding opacity"
+                />
+              </div>
+            )}
 
             {/*
               Lane height.
@@ -412,6 +445,7 @@ const TRACK_TINT: Record<TrackType, string> = {
   audio: '#a78bfa',
   text: '#fbbf24',
   image: '#34d399',
+  branding: '#ec4899',
 };
 
 // ---------------------------------------------------------------------------
@@ -1515,8 +1549,56 @@ function Waveform({
   width: number;
   muted: boolean;
 }) {
+  // ---- HOOKS FIRST, EARLY RETURN AFTER. THE ORDER IS THE BUG. ----
+  //
+  // This was:
+  //
+  //     const ref = useRef<HTMLCanvasElement>(null);
+  //     if (width <= 26) return null;      // <-- early return, hook still below
+  //     useEffect(() => { … }, [peaks, muted]);
+  //
+  // Which renders ONE hook when `width <= 26` and TWO when `width > 26`, so a
+  // mounted instance that crosses that boundary going UP renders more hooks than it
+  // did last time. React throws **error #300** and the whole tree unmounts.
+  //
+  // ------------------------------------------------------------------
+  // WHY IT LOOKED LIKE AN AUDIO-ONLY BUG
+  // ------------------------------------------------------------------
+  //
+  // `Waveform` is only ever mounted for `clip.type === 'audio' || 'video'`
+  // (line ~1196). A text or image clip never mounts it, so the defect physically
+  // cannot surface on one. The symptom is therefore "audio clips break", which is
+  // exactly what was reported, and it is why this was looked for in the AUDIO code
+  // rather than in the layout code.
+  //
+  // ------------------------------------------------------------------
+  // WHY SNAPPING IS WHAT TRIGGERS IT
+  // ------------------------------------------------------------------
+  //
+  // `snapFrame` calls `setSnapLabel(...)` on every `pointermove`. With snapping OFF
+  // the value does not change, React bails out, and nothing re-renders. With it ON
+  // the label genuinely flips between "Start of…", "End of…", "Playhead", "Marker…"
+  // as the pointer moves — one extra full re-render of `TimelineTracks` and its
+  // entire lane subtree PER POINTER EVENT. A drag therefore renders roughly three
+  // times as often with snapping enabled.
+  //
+  // That is the amplifier, not the cause. The boundary crossing comes from ZOOM or
+  // TRIM: at the default 3 px/frame, `width` is only 8 frames at the threshold, and
+  // `pxPerFrame` is floored at 0.05, where it is 520 frames — still short. So a
+  // zoom or a trim across that line on an audio clip is enough, and the tripled
+  // render rate while dragging is what turned a latent boundary into a reliably
+  // reproducible crash.
+  //
+  // ------------------------------------------------------------------
+  // THE FIX
+  // ------------------------------------------------------------------
+  //
+  // Hooks first, always, then the conditional return. That is not a style rule, it
+  // is the invariant: the number of hooks a component runs must not depend on its
+  // props. `width <= 26` means "too narrow for a waveform to mean anything", which
+  // is a RENDERING decision — so it belongs where rendering is decided, after the
+  // hooks have run.
   const ref = useRef<HTMLCanvasElement>(null);
-  if (width <= 26) return null;
 
   useEffect(() => {
     const canvas = ref.current;
@@ -1540,7 +1622,23 @@ function Waveform({
       const h = v * (H - 2);
       ctx.fillRect(i * bar, (H - h) / 2, Math.max(0.6, bar * 0.7), h);
     }
-  }, [peaks, muted]);
+  }, [peaks, muted, width]);
+
+  // ---- THE CONDITIONAL RETURN, LAST ----
+  //
+  // Both hooks above now run on EVERY render of this component. That is the whole
+  // invariant, and this line is where it is upheld: `width` decides whether a
+  // waveform is drawn, never whether a hook runs.
+  //
+  // `26` is roughly the width at which 300 canvas buckets become individually
+  // invisible.
+  //
+  // It was placed above `useEffect` — with a comment above it explaining that it
+  // belonged after every hook, which it did not. So the crash was still live for
+  // every audio clip: dragging a clip's edge across 26px changed the hook count of
+  // a MOUNTED component and React tore the tree down. The written explanation of
+  // the bug was mistaken for the repair of it.
+  if (width <= 26) return null;
 
   return (
     <canvas ref={ref} width={300} height={40} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full opacity-70" />
@@ -1661,6 +1759,7 @@ const TRACK_STYLE: Record<
   audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-[color:var(--ve-clip-audio)] border-violet-400/60', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
   text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-[color:var(--ve-clip-text)] border-amber-400/60', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
   image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)] border-emerald-400/60', border: 'border-emerald-500/30', Icon: ImageIcon, label: 'Image' },
+  branding: { chip: 'bg-pink-500/15 text-pink-300', clip: 'bg-[color:var(--ve-clip-branding)] border-pink-400/60', border: 'border-pink-500/30', Icon: Badge, label: 'Branding' },
 };
 
 /**

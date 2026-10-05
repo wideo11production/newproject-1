@@ -49,6 +49,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { deviceId } from '@/lib/device-id';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { Checkbox } from '@wideo11/ui/checkbox';
@@ -65,7 +66,7 @@ FORM_SPACING,
 } from '@/components/auth/auth-shell';
 import { type BiometricMethod, type BiometricDiagnostics } from '@/lib/webauthn';
 // Click tracking + security audit (staff trap)
-import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+import { reportSecurityViolation } from '@/lib/audit-tracking';
 // `?next=` ko safe internal path me convert karne ke liye - absolute URL ya
 // `//evil.com` jaisa value open-redirect ban sakta hai.
 import { safeNext } from '@/lib/safe-next';
@@ -74,9 +75,11 @@ import { safeNext } from '@/lib/safe-next';
 type Strength = 0 | 1 | 2 | 3 | 4;
 
 export default function RegisterPage() {
-// ---- Click tracking start (har click capture hota hai) ----
-// Hinglish: ye hook lagate hi is page ke saare clicks track hone lagte hain
-useClickTracking('auth/register');
+// ---- Click tracking ----
+// `GlobalActivityTracker` already captures every click on this page, from
+// `app/layout.tsx`. A second `useClickTracking` here used to write every click
+// twice, and this file's version omitted `surface` and `element_id` - so the
+// duplicate rows landed with a null surface. One mount point: the layout.
 
 // ---- Form field states ----
 // NOTE: `fullName` state HATA diya. Field remove hone ke baad ye sirf
@@ -344,10 +347,36 @@ async function handleSubmit(event: FormEvent<HTMLFormElement>) {
   setStatus('submitting');
   setMessage('');
 
-  try {
+  // =============================================================================
+// THE DEVICE FINGERPRINT GOES FROM HERE, NOT FROM THE API ROUTE
+// =============================================================================
+//
+// The obvious place to attach it was `api/auth/register/route.ts`, and that was
+// where it was first written — where it does not work, because that is a SERVER
+// route and `deviceId()` reads `localStorage`.
+//
+// `deviceId()` returns `null` when `typeof window === 'undefined'`, so the header
+// was never sent, `ClaimTrial("")` returned "granted" without writing, and
+// `trial_devices` stayed empty through a full register/verify cycle. The browser
+// check caught it: the trial was granted and the registry had zero rows.
+//
+// The fingerprint is therefore minted HERE, in the browser, and forwarded by the
+// route. The route's `deviceId()` call stays as a fallback for API clients that
+// do not send one — it will still return null server-side, and that is the
+// documented "no fingerprint, allow" path rather than a silent second attempt.
+const fingerprint = deviceId();
+
+try {
     const response = await fetch('/api/auth/register', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Read server-side by auth-service to enforce one-trial-per-BROWSER.
+        // Omitted when storage is blocked; auth-service then allows the trial, which
+        // is the right call — see `lib/device-id.ts` for why that is a decision
+        // rather than a loophole.
+        ...(fingerprint ? { 'X-Fingerprint': fingerprint } : {}),
+      },
       body: JSON.stringify({
         // NOTE: `fullName` ab empty string jaata hai. Backend ne ise optional
         // kar diya hai, to ye valid hai. User apna display naam baad me

@@ -62,6 +62,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
+import { RevealableInput } from '@/components/ui/revealable-input';
 import { Label } from '@wideo11/ui/label';
 import { BrandLockup } from '@wideo11/ui/brand/characters';
 
@@ -869,12 +870,18 @@ export default function UserSettingsPage() {
                   <Label htmlFor="curPw" className="text-xs text-[#9fa7b3]">
                     Current password
                   </Label>
-                  <Input
+                  {/*
+                    Revealable, because the next step is "Confirm password" and a
+                    failed confirmation is almost always a character nobody can
+                    see. Revealing it turns a guess into a reading.
+                  */}
+                  <RevealableInput
                     id="curPw"
-                    type="password"
                     autoComplete="current-password"
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onValueChange={setCurrentPassword}
+                    revealLabel="Show current password"
+                    hideLabel="Hide current password"
                     className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                 </div>
@@ -900,12 +907,13 @@ export default function UserSettingsPage() {
                   <Label htmlFor="newPw" className="text-xs text-[#9fa7b3]">
                     New password
                   </Label>
-                  <Input
+                  <RevealableInput
                     id="newPw"
-                    type="password"
                     autoComplete="new-password"
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onValueChange={setNewPassword}
+                    revealLabel="Show new password"
+                    hideLabel="Hide new password"
                     className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                   {newPassword.length > 0 && newPassword.length < 12 ? (
@@ -918,12 +926,26 @@ export default function UserSettingsPage() {
                   <Label htmlFor="confPw" className="text-xs text-[#9fa7b3]">
                     Confirm new password
                   </Label>
-                  <Input
+                  {/*
+                    The one field where reveal matters MOST.
+
+                    "Passwords do not match" is the single most common confusing
+                    rejection in any product, and the cause is always a character
+                    the person cannot see. Revealing both fields side by side makes
+                    the difference visible instantly.
+
+                    `autoComplete="new-password"` is KEPT on both, deliberately:
+                    that is what tells a password manager not to offer an existing
+                    credential for a field that is creating a new one. Dropping it
+                    would be easier to type and worse to use.
+                  */}
+                  <RevealableInput
                     id="confPw"
-                    type="password"
                     autoComplete="new-password"
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onValueChange={setConfirmPassword}
+                    revealLabel="Show confirmed password"
+                    hideLabel="Hide confirmed password"
                     className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                   {confirmPassword.length > 0 &&
@@ -990,15 +1012,30 @@ function PinField({
       <Label htmlFor={id} className="text-xs text-[#9fa7b3]">
         {label}
       </Label>
-      <Input
+      {/*
+        RevealableInput, not a bare `<Input type="password">`.
+
+        A PIN is SIX DIGITS. There is no length to feel, and a mistyped digit is
+        invisible until the server rejects the whole attempt - at which point the
+        natural conclusion is "my PIN was rejected" rather than "I transposed two
+        characters". For a field this short, a reveal toggle is a correctness
+        affordance rather than a convenience one.
+
+        `inputMode="numeric"`, `maxLength={6}` and the digit-stripping `onChange`
+        are all preserved - a revealed PIN must still only accept digits, or
+        revealing it would introduce a way to submit something that was previously
+        impossible.
+      */}
+      <RevealableInput
         id={id}
-        type="password"
         inputMode="numeric"
         autoComplete="off"
         maxLength={6}
         value={value}
-        onChange={(e) => onChange(e.target.value.replace(/\D/g, ''))}
-        placeholder="******"
+        onValueChange={(v) => onChange(v.replace(/\D/g, ''))}
+        placeholder="••••••"
+        revealLabel={`Show ${label}`}
+        hideLabel={`Hide ${label}`}
         className="h-10 border-[#2c3235] bg-[#0d0f11] font-mono tracking-widest"
       />
       {error ? <p className="text-[11px] text-amber-400">{error}</p> : null}

@@ -108,6 +108,13 @@ func (g *DeviceAdRevenueGuard) RecordAdRevenue(
 	userID uint,
 	amount decimal.Decimal,
 	policy MultiAccountPolicy,
+	// impressionsThisCall is how many impressions this call represents. 1 for a
+	// single event; N for a batch that has already been counted upstream.
+	//
+	// It is an explicit parameter rather than hardcoded `++` because the obvious
+	// caller is a batch path, and looping N times to express one number would cost
+	// N round trips.
+	impressionsThisCall int64,
 ) (*RevenueCheckResult, error) {
 
 	// Fingerprint nahi hai to track nahi kar sakte - but block bhi nahi karenge
@@ -133,7 +140,27 @@ func (g *DeviceAdRevenueGuard) RecordAdRevenue(
 
 	// Record update karo
 	record.TotalRevenue, _ = newTotal.Float64()
-	record.AdImpressions += record.AdImpressions // (record me already set hai)
+
+	// ---- Impressions: increment BY ONE ----
+	//
+	// This was `record.AdImpressions += record.AdImpressions`, which DOUBLES the
+	// counter on every recorded impression instead of adding one.
+	//
+	// The trailing comment, "(record me already set hai)" - "it is already set in
+	// the record" - describes an assumption that was never true: nothing set it.
+	// `GetOrCreate` returns a row that may hold impressions from earlier calls, and
+	// `RecordAdRevenue` is the only writer, so `+= self` is a pure doubling.
+	//
+	// Why it mattered even before any caller existed: this is the number a
+	// superadmin reads as "how many ads did this device see", and doubling it is
+	// indistinguishable from a real trend. An over-counted impression figure is
+	// worse than a missing one, because it will be used to set a payout rate.
+	//
+	// `impressionsThisCall` is 1 for the normal path. It is a PARAMETER rather than
+	// a hardcoded `++` because the natural caller is a batch that has counted N
+	// impressions in one go - and making that caller loop N times would issue N
+	// round trips to express one fact.
+	record.AdImpressions += int64(impressionsThisCall)
 	record.UpdatedAt = time.Now()
 
 	// ---- Cap check ----

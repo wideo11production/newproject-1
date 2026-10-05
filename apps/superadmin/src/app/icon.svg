@@ -1,0 +1,110 @@
+<!--
+  Animated tab icon — Wideo11 Superadmin (port 3008).
+
+  WHY THE ARC LOOKS THE WAY IT DOES — THE 16px PROBLEM
+
+  A favicon is drawn at 16 pixels. Everything in this file is sized for 16, not for
+  how it looks on a 128px design canvas.
+
+  The previous version had a 3-unit arc stroke fading to `stop-opacity: 0`. At 16px
+  a 3-unit stroke is 0.75 device pixels, and the fade put most of it below the
+  threshold where a browser draws a stroke cleanly rather than as a translucent
+  smear. It looked correct at 64 and at 128 — the two sizes you can inspect a file
+  at — and looked STATIC in the only size it is used at. That is what "the tab icon
+  is dull" means, and no amount of reading the source could find it, because nothing
+  in the file is wrong.
+
+  Found by rendering every icon at 16 / 32 / 128 side by side
+  (`tools/render-icons.mjs`) and looking at it.
+
+  THE THREE FIXES
+
+    stroke 3 -> 5        5 units at 64 is 1.25px at 16, above the smear threshold.
+                         3 units cannot be rescued by colour at 16px — it is below
+                         one device pixel, and no palette fixes geometry.
+
+    fade 0 -> 0.25       the old gradient ran to fully transparent, so the tail of
+                         the sweep was never drawn and the visible arc was under a
+                         third of the ring. Still directional, so it reads as a
+                         sweep of light, but every part of it is actually drawn.
+
+    mid -> near-white    a mid-tone arc on a mid-tone gradient is two similar values
+                         adjacent to each other, which is low contrast by
+                         construction. A near-white core is the brightest thing on
+                         the icon at every size.
+
+  WHAT IS DELIBERATELY UNCHANGED
+
+  The brand gradient and the W. Rendered at 16px the W reads well — the screenshot
+  above is the evidence — and chasing an arc problem by changing the mark would have
+  made the icon worse.
+
+  2.6s per revolution. A favicon repaints continuously for as long as the tab is
+  open, and a fast spinner in a tab strip reads as "something is loading",
+  permanently, whether or not anything is. Slow reads as alive.
+
+  BROWSER SUPPORT, STATED PLAINLY
+
+  Chrome and Firefox run SMIL in a favicon. Safari does NOT — there this renders
+  as a good static icon, which is why the static composition stands on its own and
+  the motion is purely additive.
+
+  A NOTE ON THE COMMENT ABOVE THIS ONE
+
+  Em-dashes are real em-dashes, never two hyphens. XML forbids a doubled hyphen
+  anywhere inside a comment, and an earlier version of this file used a run of
+  hyphens as an underline. That made the browser reject the ENTIRE document: it
+  served HTTP 200 with `image/svg+xml`, passed every structural check, and rendered
+  no icon at all.
+
+  This paragraph is the fourth time that rule has been broken in this repository by
+  someone DOCUMENTING the rule, which is why it is stated here at all. The first
+  version of this file broke it with an underline; this version broke it by quoting
+  the forbidden sequence while explaining that it is forbidden.
+
+  Two regression tests guard it: `tools/check-icon-svg.mjs` for the comment rule,
+  and `tools/check-icon-decodes.mjs` which asks the browser to actually draw it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Wideo11 Superadmin">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="100%" stop-color="#7b5cf6"/>
+    </linearGradient>
+    <!--
+      Near-white core, warm tail.
+
+      `gradientUnits="userSpaceOnUse"` is required. An objectBoundingBox gradient
+      does not rotate with a rotating shape, so the fade would stay fixed while the
+      arc spun around it — which reads as the highlight detaching from the stroke.
+    -->
+    <linearGradient id="accent" x1="8" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="45%"  stop-color="#ffe4e6" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#fb7185" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#wg)"/>
+
+  <!--
+    r=26 with a 5px stroke puts the outer edge at 28.5 from the centre.
+
+    The rounded square's boundary is 32 on the axes but about 39.5 on the
+    diagonals, so the axes are the tightest part and 28.5 clears both. It also
+    clears the mark itself, which reaches about 22 at its widest stroke — which is
+    what lets the arc sweep BEHIND the letter instead of through it.
+  -->
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#accent)"
+          stroke-width="5" stroke-linecap="round"
+          stroke-dasharray="46 117" stroke-dashoffset="0">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0 32 32" to="360 32 32"
+                      dur="2.6s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Drawn last, so the overlap with the arc is what reads as depth. -->
+  <path d="M13 21 L22 43 L30 29 L37 43 L46 21"
+        fill="none" stroke="#ffffff" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

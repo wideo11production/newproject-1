@@ -260,22 +260,70 @@ export function slip(
   // multiplier is the difference between "slip a frame" and "slip a frame of
   // the clip", which are not the same gesture.
   const sourceStep = deltaFrames * clip.speed;
-  const maxIn = -span.sourceInFrame;
+
   // The out point cannot pass the end of the file. Without the media's real
   // length this is only known once playback reaches it, so the clamp is
   // one-sided (the head) and the tail is left to the decoder, which is the
   // honest limit of a non-destructive slip.
-  const applied = Math.max(maxIn, deltaFrames);
-  void sourceStep;
+  //
+  // ---- THE CLAMP IS IN SOURCE FRAMES, LIKE THE MOVE ----
+  //
+  // It used to clamp `deltaFrames`, which are TIMELINE frames, while the move it
+  // was guarding is in source frames. At 2x those differ by a factor of two, so the
+  // clamp let a slip run past the head of the file by twice the intended amount.
+  const maxIn = -span.sourceInFrame;
+  const applied = Math.max(maxIn, sourceStep);
 
   return {
     label: `Slip ${applied > 0 ? '+' : ''}${applied}f`,
     tracks: tracks.map((t) =>
       t.id === trackId
-        ? { ...t, clips: t.clips.map((c) => (c.id === clipId ? { ...c, sourceIn: Math.max(0, c.sourceIn + applied / fps) } : c)) }
+        ? {
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId ? { ...c, sourceIn: Math.max(0, c.sourceIn + applied / fps) } : c
+            ),
+          }
         : t
     ),
   };
+}
+
+/**
+ * Make the branding overlay long enough to still be there at `endSeconds`.
+ *
+ * ---- WHY THIS EXISTS ----
+ *
+ * "A new clip gets the logo automatically" cannot be satisfied by a fixed-length
+ * overlay. The clip is created one hour long, so it covered everything until the
+ * timeline passed the hour mark — at which point the logo quietly stopped appearing
+ * partway through the user's own video, with nothing on screen to say why. A long
+ * project lost its branding silently, and only on export.
+ *
+ * So coverage is derived from the timeline rather than assumed. Called from the
+ * places the timeline grows, which means the logo is present by the time the user
+ * looks for it, and it is one fewer thing for them to remember.
+ *
+ * A branding clip is only ever EXTENDED. Shortening one would remove the logo from
+ * part of an edit the user has already made, which is not what "keep it covered"
+ * means and is not something they asked for.
+ *
+ * Returns the same array shape, so it composes inside any `commitFrom` update.
+ */
+export function extendBranding(tracks: TimelineTrack[], endSeconds: number): TimelineTrack[] {
+  const need = Math.max(0, endSeconds);
+  return tracks.map((t) => {
+    if (t.type !== 'branding' || !t.clips.length) return t;
+    let changed = false;
+    const clips = t.clips.map((c) => {
+      // A clip that starts later needs its own length to reach the end.
+      const required = Math.max(0, need - c.startTime);
+      if (c.duration >= required) return c;
+      changed = true;
+      return { ...c, duration: required };
+    });
+    return changed ? { ...t, clips } : t;
+  });
 }
 
 // ---------------------------------------------------------------------------

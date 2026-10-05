@@ -62,6 +62,17 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # mil jata.
 ARG NEXT_PUBLIC_APP_SURFACE=superadmin
 ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
+# `NEXT_PUBLIC_AUTH_LOGIN_URL` was here, for a bare "Sign in" link that pointed at
+# `localhost:3000`. It is removed because the link is gone: the not-signed-in
+# screen is now a real form posting to THIS app's `/api/auth/login`.
+#
+# That is not only a cleanup. The link made port 3008 impossible to authenticate
+# at all - you had to sign in on another origin and navigate back by hand, which
+# reads as a broken login. Cookies are scoped by domain and not by port, so
+# signing in here signs you in on every app.
+#
+# Removing it from here as well as from the page means there is no second place to
+# go looking for a variable that controls nothing.
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ---- Runner ----
@@ -99,6 +110,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/superadmin/.next/static ./ap
 
 USER nextjs
 EXPOSE 3008
+
+# ---- WHY THIS PROBES `/api/live` AND NOT `/` ----
+#
+# `/` is gated behind a session in this app's middleware. A container with no
+# session answers 401 there, the probe reads that as "unhealthy", and Docker
+# restarts a healthy process - then the probe fails again, forever. Six healthy
+# containers sat in exactly that restart loop while serving traffic correctly.
+#
+# A liveness probe answers one question: can this process still respond? It must
+# not consult anything that can change for an unrelated reason, or it restarts
+# things it cannot fix. `/api/live` has no dependency, no version and no uptime,
+# so the only thing that fails it is the process being unable to answer.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:3008/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:3008/api/live || exit 1
 CMD ["node", "apps/superadmin/server.js"]

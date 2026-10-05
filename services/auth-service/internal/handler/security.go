@@ -394,6 +394,22 @@ func (h *SecurityHandler) SecurityEvents(c *gin.Context) {
 		model.EventDeviceLimitExceeded: true,
 		model.EventConfigTamper:        true,
 		model.EventPINFailed:           true,
+
+		// TRIAL_BLOCKED_DEVICE is CRITICAL, and that is a PRODUCT decision rather
+		// than a severity judgement.
+		//
+		// A refused trial means one browser has already collected a free offer. Once
+		// is somebody's family member on a shared laptop — the innocent case the cap
+		// was specifically designed NOT to punish. Repeatedly is an operation.
+		//
+		// The attempt COUNT rides in the event detail, because the type alone cannot
+		// separate those two, and an operator reading a wall of identical events
+		// learns nothing. See `service.TrialBlockedDetail`.
+		//
+		// Being CRITICAL also means it needed NO new alert machinery: it flows into
+		// the superadmin red banner and the acknowledgement list through the existing
+		// path. One map entry was the whole feature.
+		model.EventTrialBlockedDevice: true,
 	}
 
 	var out []flagged

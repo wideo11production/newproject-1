@@ -123,16 +123,73 @@ func AuthRequired() gin.HandlerFunc {
 }
 
 // RequireAdmin - sirf admin/superadmin accounts (superadmin panel ke liye)
+//
+// -----------------------------------------------------------------------------
+// WHY IT NOW VERIFIES INSTEAD OF ASSUMING AuthRequired RAN
+// -----------------------------------------------------------------------------
+//
+// The original comment said "Pehle AuthRequired chalna chahiye (ye uske baad
+// lagta hai)" - AuthRequired must run first, and this is added after it. That was
+// a REQUIREMENT stated in a comment, and it was not satisfied: several money
+// routes were registered as `middleware.RequireAdmin()` on their own.
+//
+// The failure it produced was subtle. `RequireAdmin` reads the `role` that
+// `AuthRequired` sets; with no `AuthRequired` ahead of it, `role` is empty, the
+// role check fails, and the route answers **403** to an ANONYMOUS caller.
+//
+// 403 for a caller who has not identified themselves is the wrong answer in both
+// directions. It tells an anonymous prober "this route exists and you are not
+// allowed", where 401 says "we do not know who you are" - a strictly smaller
+// disclosure. And it makes the log say "forbidden" for what is really
+// "unauthenticated", which sends whoever reads it looking in the wrong place.
+//
+// So the check is no longer a comment-dependent convention:
+//
+//   - no identity in the context  -> 401, and this route cannot be reached
+//   - identity but wrong role      -> 403
+//
+// That makes it impossible to register `RequireAdmin` in the wrong order, which
+// is the only way this can go wrong again.
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Pehle AuthRequired chalna chahiye (ye uske baad lagta hai)
+		// ---- Identity first ----
+		raw, present := c.Get("user_id")
+		userID, _ := raw.(string)
+
+		if !present || userID == "" {
+			// Exactly the body `AuthRequired` uses, so the two refusals are
+			// indistinguishable to a client by accident. Duplicated deliberately
+			// rather than calling AuthRequired's closure, which is not reachable
+			// from here without refactoring the whole file for one call.
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"error":   "unauthorized",
+				"message": "Missing or unverified identity.",
+			})
+			return
+		}
+
 		role, _ := c.Get("role")
 		roleStr, _ := role.(string)
 
+		// ---- Then role ----
+		//
+		// `superadmin_recovery` is included because auth-service uses that exact
+		// string; `admin` is included because it is the conventional name and
+		// appears in billing-service's own comments. Neither is currently
+		// assigned by auth-service - its roles are user / staff / superadmin /
+		// superadmin_recovery - so the list is forward-compatible rather than
+		// load-bearing.
+		//
+		// The role comes from a VERIFIED token claim. It is not read from a header
+		// the caller controls, which is the property that makes this a guard
+		// rather than a suggestion.
 		if roleStr != "admin" && roleStr != "superadmin" && roleStr != "superadmin_recovery" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "forbidden",
 				"message": "Admin access required",
+				// Echoed so a legitimate operator can see WHY they were refused.
+				// It is their own role, read from their own verified token.
+				"role": roleStr,
 			})
 			return
 		}

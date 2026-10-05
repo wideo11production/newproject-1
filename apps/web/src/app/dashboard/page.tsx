@@ -34,6 +34,7 @@ import {
   type ChannelWizardExtras,
 } from '@/components/channels/channel-wizard-fields';
 import Link from 'next/link';
+import { TrialCountdown } from '../../components/dashboard/trial-countdown';
 
 /**
  * Where the video editor lives.
@@ -335,8 +336,39 @@ export default function CreatorDashboard() {
     setChannelErr('');
     // Client-side format check (UX). Backend bhi SAME rule validate karta hai
     // (aur DB constraint bhi) - teen jagah ek jaisa rule.
-    if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
-      setChannelErr('Handle must be 3-30 characters: a-z, 0-9, _ . or -');
+if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
+    setChannelErr('Handle must be 3-30 characters: a-z, 0-9, _ . or -');
+    return;
+    }
+
+    // ---- The two COMPLIANCE questions must be answered before submit ----
+    //
+    // `mature_content` and `made_for_kids` are required by the API
+    // (`ErrMatureContentRequired`, `ErrMadeForKidsRequired`) and both default to
+    // empty in `EMPTY_WIZARD` — deliberately, because defaulting a legal
+    // classification would be the product asserting something the creator never said.
+    //
+    // So the field cannot be defaulted and the form cannot be submitted empty, which
+    // means the CREATOR has to be asked. That is the correct resolution of the two
+    // constraints, and it is why this is a client-side gate with a specific message
+    // rather than a server error the creator cannot act on:
+    //
+    //     "pick the kind of channel this is"
+    //     "answer yes, no, or audience"
+    //
+    // were both reaching a first-time creator who had never been told the fields
+    // existed. `channel_type` is NOT checked here because it defaults to `other`,
+    // which is a real answer rather than a missing one.
+    if (!wizard.matureContent) {
+      setChannelErr(
+        'Answer the content rating question — "no", "yes" or "audience". It is required, and we will not pick it for you.'
+      );
+      return;
+    }
+    if (wizard.madeForKids === null) {
+      setChannelErr(
+        'Answer whether this channel is made for kids. It is a legal classification, separate from the content rating.'
+      );
       return;
     }
     if (!displayName.trim()) {
@@ -598,6 +630,14 @@ export default function CreatorDashboard() {
           </div>
         ) : (
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+
+        {/* ---- PLAN / TRIAL COUNTDOWN ----
+            Above everything, because it is the one thing on this page with a
+            deadline attached. Under an hour it becomes a live amber timer; over an
+            hour it is one quiet line. The component owns that decision and reads
+            `trial_expiring_soon` from the SERVER rather than picking its own
+            threshold - see `trial-countdown.tsx` for why. */}
+        <TrialCountdown />
 
         {/* ==================================================================
             PANEL 1: PROFILE  (avatar + change image)

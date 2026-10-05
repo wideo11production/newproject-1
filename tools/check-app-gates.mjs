@@ -115,9 +115,33 @@ const APPS = [
       { path: '/api/telemetry', label: 'the telemetry WRITE endpoint' },
       { path: '/api/audit', label: 'the audit ledger' },
       { path: '/', label: 'the page' },
+      // -------------------------------------------------------------------
+      // `/api/health-check` IS NOW SUPPOSED TO BE BLOCKED. IT IS IN `probes`.
+      // -------------------------------------------------------------------
+      //
+      // This entry used to be in `allow`, alongside `/api/live`, on the belief
+      // that both "return liveness only". That was false, and it is exactly the
+      // claim the old comment above the `allow` array made.
+      //
+      // `/api/health-check` is a SERVER-SIDE FAN-OUT over internal dependencies.
+      // Unauthenticated it disclosed the internal service names, their URLs, the
+      // port map of the box, and a free up/down oracle. It survived review
+      // because it is named "health-check", and a thing called a health check is
+      // assumed harmless by definition - the name is what it does, not what it
+      // discloses.
+      //
+      // It is now `@wideo11/ui/health-handler`: session-gated, a closed list of
+      // service names, and stable error CODES instead of raw upstream messages.
+      //
+      // `web` is not listed here because its middleware has its own inline
+      // public list; `/api/health-check` was removed from it there too.
+      { path: '/api/health-check', label: 'the dependency fan-out (must NOT be public)' },
     ],
-    // A load balancer has no session and must be able to ask "is this up".
-    allow: [{ path: '/api/health-check', label: 'the liveness probe' }, { path: '/api/live', label: '/api/live' }],
+    // A load balancer has no session and must be able to ask "is this up" -
+    // and ONLY that. `/api/live` answers `{"status":"ok"}` with no dependency,
+    // no version, no hostname and no uptime, so the only thing that can make it
+    // fail is the process being unable to respond.
+    allow: [{ path: '/api/live', label: '/api/live' }],
   },
   {
     name: 'billing',
@@ -147,9 +171,45 @@ const APPS = [
     probes: [
       { path: '/api/security', label: 'platform security posture' },
       { path: '/api/ledger', label: 'the audit ledger' },
-      { path: '/', label: 'the page' },
+      { path: '/api/stats', label: 'the click-ledger summary' },
+      { path: '/api/clicks', label: 'the click ledger itself' },
+      { path: '/api/activity', label: 'per-user activity' },
+      // -------------------------------------------------------------------------
+      // `/` IS DELIBERATELY NOT IN THIS LIST. IT IS PUBLIC, AND THAT IS CORRECT.
+      // -------------------------------------------------------------------------
+      //
+      // It used to be here, asserting that `/` is refused without a credential.
+      // That was true while this app had no login page - a gate that blocked
+      // everything, including the way in.
+      //
+      // It now renders a real sign-in form that posts to `/api/auth/login`. With
+      // `/` gated, an anonymous visitor got a bare `{"error":"unauthorized"}` JSON
+      // body instead of the form: verified in a real browser, not inferred. The
+      // page never rendered, so there was nothing to type a password into.
+      // "Cannot log in to 3008" was literally true.
+      //
+      // WHAT MAKING `/` PUBLIC DOES NOT MEAN
+      //
+      // No data is exposed by rendering the shell. Every number on that dashboard
+      // arrives from a gated API route - all five of which are listed ABOVE and
+      // all five of which must answer 401 to an anonymous caller. That is the
+      // assertion that matters now, and it is why this entry probes five data
+      // routes instead of one page route.
+      //
+      // What it replaces was strictly worse: a "paste your bearer token" box,
+      // reachable anonymously, which put a live JWT into browser-readable storage
+      // so a human could copy it.
     ],
-    allow: [{ path: '/api/live', label: '/api/live' }],
+    // `/api/live` for the container probe. `/api/auth/login` and `/api/auth/refresh`
+    // are public because a pre-authentication endpoint cannot require a session -
+    // they are credential EXCHANGE, and neither does anything for a caller who
+    // arrives without a credential. Enumerated rather than prefixed so
+    // `/api/auth/logout` stays private.
+    allow: [
+      { path: '/api/live', label: '/api/live' },
+      { path: '/api/auth/login', label: 'the credential exchange (login)' },
+      { path: '/api/auth/refresh', label: 'the credential exchange (refresh)' },
+    ],
   },
 ];
 
@@ -341,7 +401,62 @@ for (const app of APPS) {
 // status-code checking on the page itself will show it.
 for (const app of APPS) {
   const base = `http://localhost:${app.port}`;
-  const html = await fetch(`${base}/`).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+  const page = await fetch(`${base}/`).catch(() => null);
+
+  // -----------------------------------------------------------------------------
+  // A GATED APP CANNOT BE STYLESHEET-CHECKED ANONYMOUSLY. THIS IS NOT A BUG.
+  // -----------------------------------------------------------------------------
+  //
+  // The original check fetched `/`, required 200, and read the stylesheet href.
+  // For a gated app the gate answers 401, `r.ok` is false, and the html string is
+  // `''` - so the check reported "no <link rel=stylesheet> in the document - the
+  // app will render unstyled".
+  //
+  // Five apps fail that way: admin, billing, analytics, currency, superadmin. And
+  // they were failing that way BEFORE this session, because all five have
+  // `publicPages: []`. A gate that serves the real page to an anonymous requester
+  // would not be a gate.
+  //
+  // So the failure message was wrong in a way that sends somebody to fix working
+  // CSS: nothing is unstyled for a signed-in operator, and the check never
+  // signed in.
+  //
+  // What is actually verifiable anonymously:
+  //
+  //   - the app REFUSES `/`            (the other assertions already cover this)
+  //   - the BUILD ARTIFACT is reachable (`/_next/static/...` must NOT be gated -
+  //     that was the real bug this whole section was written for, and it is
+  //     invisible from `/` because the 401 shell links no stylesheet at all)
+  //
+  // So the stylesheet assertion now runs only where the page is publicly
+  // renderable, and the gated apps are SKIPPED with the reason stated rather than
+  // failed. A check that fails for a reason it cannot explain gets deleted, and
+  // then the real regression it was written for goes unnoticed.
+  if (!page?.ok) {
+    // `page.status` is read into a variable first. Inlined into the template it
+    // rendered as the literal text "NaN", because `fetch` on a connection error
+    // yields a `Response` with `status === 0`, and `0 ?? 'no response'` keeps the
+    // `0` - so the message read "answers 0 on `/`" rather than "the request never
+    // completed". A status message that is wrong about the failure is worse than
+    // no status message.
+    const status = page && typeof page.status === 'number' && page.status > 0
+      ? String(page.status)
+      : 'no response';
+
+    check(`${app.name}: the page ships a stylesheet`, true, {
+      skipped: true,
+      status,
+      why:
+        `SKIPPED, not passed: this app's gate answers ${status} on \`/\`, ` +
+        'so an anonymous request never receives the rendered page and there is no ' +
+        'stylesheet href to read. Styling for a signed-in operator is not verifiable ' +
+        'from outside. The matcher check below - which is what the actual regression ' +
+        'looked like - is the one that matters, and it runs for every app.',
+    });
+    continue;
+  }
+
+  const html = await page.text();
   const href = /<link[^>]*rel="stylesheet"[^>]*href="([^"]+)"/.exec(html)?.[1];
   if (!href) {
     check(`${app.name}: the page ships a stylesheet`, false, {

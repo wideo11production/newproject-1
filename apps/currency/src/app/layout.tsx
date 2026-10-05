@@ -8,6 +8,7 @@ import { FONT_SANS_CLASS, FONT_SANS_STACK } from '@wideo11/ui/font';
 // bhi activity ledger me nahi jaati thi. Currency rates dikhna ek real user
 // journey hai (multi-currency phase 9 ka hissa), to uska data chahiye.
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 import './globals.css';
 import type { ReactNode } from 'react';
 
@@ -21,6 +22,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }}>
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
         {children}
       </body>
     </html>

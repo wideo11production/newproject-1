@@ -77,7 +77,6 @@ COPY apps/web/package.json ./apps/web/package.json
 # kyunki monorepo me ye packages doosre apps declare karte hain
 
 COPY packages/api-client ./packages/api-client
-COPY packages/auth ./packages/auth
 COPY packages/charts ./packages/charts
 COPY packages/config ./packages/config
 COPY packages/constants ./packages/constants
@@ -191,8 +190,20 @@ USER nextjs
 EXPOSE 3003
 
 # Health check for Kubernetes liveness/readiness probes
+
+# ---- WHY THIS PROBES `/api/live` AND NOT `/` ----
+#
+# `/` is gated behind a session in this app's middleware. A container with no
+# session answers 401 there, the probe reads that as "unhealthy", and Docker
+# restarts a healthy process - then the probe fails again, forever. Six healthy
+# containers sat in exactly that restart loop while serving traffic correctly.
+#
+# A liveness probe answers one question: can this process still respond? It must
+# not consult anything that can change for an unrelated reason, or it restarts
+# things it cannot fix. `/api/live` has no dependency, no version and no uptime,
+# so the only thing that fails it is the process being unable to answer.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3003/ || exit 1
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3003/api/live || exit 1
 
 # Start Next.js production server from standalone bundle
 # Monorepo me tracing root repo root hota hai, isliye standalone server.js nested path me hota hai

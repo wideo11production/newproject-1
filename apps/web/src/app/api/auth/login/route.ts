@@ -37,6 +37,42 @@ function shouldBeSecure(req: Request, nextUrl: URL): boolean {
   return nextUrl.protocol === 'https:';
 }
 
+/**
+ * Seconds until the refresh token's own expiry, capped at 7 days.
+ *
+ * Decoded rather than taken from a response field, because `auth-service` returns
+ * `expires_in` only for the ACCESS token. Sizing the refresh cookie from the access
+ * token's TTL would cap a 7-day cookie at 15 minutes - which is a bug that would look
+ * exactly like "refresh is not working", and would be found by somebody blaming the
+ * gate.
+ *
+ * The floor matters more than it looks: a `maxAge` of 0 DELETES a cookie. Returning
+ * 0 for a token that is merely CLOSE to expiry would destroy a working 7-day session
+ * a few seconds early, once per login, for no reason.
+ */
+function refreshCookieMaxAge(refreshToken: string): number {
+  const SEVEN_DAYS = 7 * 24 * 60 * 60;
+
+  try {
+    const payload = JSON.parse(
+      Buffer.from(refreshToken.split('.')[1] ?? '', 'base64url').toString('utf8')
+    ) as { exp?: number };
+
+    if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) {
+      return SEVEN_DAYS;
+    }
+
+    const secondsLeft = payload.exp - Math.floor(Date.now() / 1000);
+    if (secondsLeft <= 60) return SEVEN_DAYS;
+    return Math.min(secondsLeft, SEVEN_DAYS);
+  } catch {
+    // An unreadable token still works: the gate will try it, auth-service will
+    // accept or reject it on the signature, and the failure mode is one extra
+    // login rather than a cookie sized to zero.
+    return SEVEN_DAYS;
+  }
+}
+
 export async function POST(request: Request) {
   // Used to decide whether the session cookie may be marked Secure.
   const nextUrl = new URL(request.url);
@@ -122,6 +158,56 @@ export async function POST(request: Request) {
         path: '/',
         maxAge: expiresInSec,
       });
+
+      // -----------------------------------------------------------------------------
+      // THE REFRESH TOKEN, IN ITS OWN COOKIE
+      // -----------------------------------------------------------------------------
+      //
+      // auth-service has always returned a 7-day refresh token here. This route
+      // **threw it away**, kept only the 15-minute access token, and so every
+      // creator was signed out every 15 minutes - silently, with no error anywhere.
+      //
+      // It was not obvious because this app LOOKED fine: it was the only app with a
+      // login form, and `auth-service` has always advertised a 7-day refresh token,
+      // so "sessions last 7 days" read as true from both ends of the system while
+      // nothing on the other end read it.
+      //
+      // The seven-day refresh token was the LONGEST-LIVED credential in the product
+      // and had exactly one consumer, which was nobody.
+      //
+      // WHY A SEPARATE COOKIE, NOT A LONGER `maxAge` ON THE SESSION COOKIE
+      //
+      //   session = 15 min, refreshed -> a leaked access token is useless within a
+      //                                  quarter of an hour. The user still feels
+      //                                  permanently signed in.
+      //   session = 7 days            -> a leaked token is a 7-day takeover, and
+      //                                  nothing but the denylist revokes it early.
+      //
+      // Identical experience, completely different blast radius. So the access
+      // cookie stays short and `@wideo11/ui/gate` renews it silently from this one
+      // when it is within 90 seconds of expiry.
+      //
+      // Cookies are scoped by DOMAIN and not by port, so a session established here
+      // is what the other seven apps see. That is why fixing this ONE route is what
+      // gives the whole stack 7-day sessions.
+      const refreshToken = payload?.tokens?.refresh_token;
+      if (refreshToken) {
+        res.cookies.set({
+          name: 'wideo11_refresh',
+          value: String(refreshToken),
+          httpOnly: true,
+          sameSite: 'lax',
+          secure: shouldBeSecure(request, nextUrl),
+          path: '/',
+          // Read from the token's own `exp` where possible, so the cookie cannot
+          // outlive the credential it holds. A cookie that outlives its token turns
+          // "about to expire" into "already broken" instead of a silent renewal.
+          //
+          // Decoding is safe HERE SPECIFICALLY: this sizes a cookie, it authorises
+          // nothing, and the signature is checked by auth-service on every real use.
+          maxAge: refreshCookieMaxAge(String(refreshToken)),
+        });
+      }
     }
 
     return res;

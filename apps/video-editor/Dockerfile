@@ -54,7 +54,6 @@ COPY apps/web/package.json ./apps/web/package.json
 # kyunki monorepo me ye packages doosre apps declare karte hain
 
 COPY packages/api-client ./packages/api-client
-COPY packages/auth ./packages/auth
 COPY packages/charts ./packages/charts
 COPY packages/config ./packages/config
 COPY packages/constants ./packages/constants
@@ -146,7 +145,6 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # ko default dene ke liye hai.
 ARG NEXT_PUBLIC_APP_SURFACE=editor
 ARG NEXT_PUBLIC_AUTH_API_URL=http://localhost:8085
-ARG NEXT_PUBLIC_AUTH_INTERNAL_URL=http://auth-service:8085
 ARG NEXT_PUBLIC_API_URL=http://localhost:8080
 ARG NEXT_PUBLIC_DASHBOARD_URL=http://localhost:3000/dashboard
 ARG NEXT_PUBLIC_LOGIN_URL=http://localhost:3000/auth/login
@@ -156,7 +154,6 @@ ARG NEXT_PUBLIC_SECURITY_SETUP_URL=http://localhost:3000/auth/security-setup
 
 ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
 ENV NEXT_PUBLIC_AUTH_API_URL=$NEXT_PUBLIC_AUTH_API_URL
-ENV NEXT_PUBLIC_AUTH_INTERNAL_URL=$NEXT_PUBLIC_AUTH_INTERNAL_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_DASHBOARD_URL=$NEXT_PUBLIC_DASHBOARD_URL
 ENV NEXT_PUBLIC_LOGIN_URL=$NEXT_PUBLIC_LOGIN_URL

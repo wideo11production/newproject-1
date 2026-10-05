@@ -64,6 +64,7 @@ export const HELP: HelpEntry[] = [
     id: 'ripple',
     title: 'Ripple trim',
     category: 'Editing',
+    keys: 'Shift+Alt+← / →',
     what: 'Trims an edge and slides everything after it by the same amount, so no gap is left.',
     use: 'Tightening a talking head without ever re-timing the clips that follow.',
     good: 'Keeps a cutlist gap-free automatically. The single biggest time saver in a spoken-word edit.',
@@ -82,6 +83,7 @@ export const HELP: HelpEntry[] = [
     id: 'slip',
     title: 'Slip',
     category: 'Timeline',
+    keys: 'Ctrl+Alt+← / →',
     what: 'Slides the SOURCE inside the clip. The clip does not move and its length does not change.',
     use: 'Starting a clip on the right word, or on the first beat instead of the second.',
     good: 'The only edge edit that leaves everything around it completely untouched.',
@@ -91,6 +93,7 @@ export const HELP: HelpEntry[] = [
     id: 'slide',
     title: 'Slide',
     category: 'Timeline',
+    keys: 'Alt+← / →',
     what: 'Moves a clip between its neighbours, which grow and shrink to fill the space.',
     use: 'Nudging a middle clip a few frames without disturbing the rest of the timeline.',
     good: 'Only the three clips involved move. The rest of the edit is untouched.',
@@ -121,7 +124,22 @@ export const HELP: HelpEntry[] = [
     what: 'A labelled point on the timeline. Drop one with M, step between them with , and .',
     use: 'Marking where something is wrong, so you can come back to it after fixing three other things.',
     good: 'Snapping targets as well as notes, so a clip lands on a marker instead of near one.',
-    cost: 'Markers are not saved with the project yet — a refresh loses them, which is the one thing a note is for.',
+    // WAS: 'Markers are not saved with the project yet - a refresh loses them,
+    // which is the one thing a note is for.'
+    //
+    // That sentence was false, and it was false in a way that made the bug look
+    // intentional. Markers have always been part of the project document
+    // (`ProjectDoc.markers`, written by `project-store.ts` and included in
+    // `docSnapshot()`). What was missing was `setDirty(true)` on the marker
+    // mutations, so autosave - which is gated entirely on `dirty` - never
+    // scheduled a save. Explicit Ctrl+S worked, which is why it looked
+    // intermittent rather than broken.
+    //
+    // The help text is the reason it survived: the documentation agreed with the
+    // observed behaviour, so anyone investigating concluded the feature was
+    // unfinished and stopped. A user-facing string asserting a data-loss bug is
+    // not a disclaimer - it is a bug report written in the voice of the product.
+    cost: 'Markers save with the project, but they store a label and a frame only. A marker is a position you can find again, not a description of what you saw.',
   },
   {
     id: 'filmstrip',

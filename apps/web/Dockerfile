@@ -55,7 +55,6 @@ COPY apps/web/package.json ./apps/web/package.json
 # kyunki monorepo me ye packages doosre apps declare karte hain
 
 COPY packages/api-client ./packages/api-client
-COPY packages/auth ./packages/auth
 COPY packages/charts ./packages/charts
 COPY packages/config ./packages/config
 COPY packages/constants ./packages/constants

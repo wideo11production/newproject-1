@@ -1,4 +1,5 @@
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 import "./globals.css";
 import type { Metadata } from "next";
 import { config } from "@wideo11/config";
@@ -73,6 +74,10 @@ export default function Layout({
       >
         {/* Global activity capture (Awareness grid ka data source) */}
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
     <div className="flex h-screen bg-gray-900 text-gray-100">
       {/* Main dashboard area: @metrics parallel slot */}
       <main className="flex-1 overflow-auto">{metrics}</main>

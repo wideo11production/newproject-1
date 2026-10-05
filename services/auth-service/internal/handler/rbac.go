@@ -135,19 +135,86 @@ func (h *AuthHandler) GetPrivilegeRegistry(c *gin.Context) {
 // Middleware
 // ---------------------------------------------------------------------------
 
-// requirePermission returns a middleware that admits only callers holding the
+// SuperadminDeniedPermissions is the CLOSED set of capabilities a superadmin may
+// never hold, no matter what.
+//
+// -----------------------------------------------------------------------------
+// WHY THIS EXISTS, WHICH IS A SEPARATION-OF-DUTIES REQUIREMENT
+// -----------------------------------------------------------------------------
+//
+// `requirePermission` gives a superadmin a blanket bypass - it is the platform's
+// break-glass account and is expected to administer everything. That is right for
+// most capabilities and wrong for the CREATOR ones.
+//
+// The reason is not least privilege in the abstract. It is that the superadmin is
+// the identity that reads every security event, every session list, every click
+// ledger row and every payout figure in the product. An account that both
+// administers the system AND acts as a normal creator in it has no separation
+// between the two, so:
+//
+//   - its own actions appear in the ledger it audits
+//   - "no administrator created this channel" stops being a meaningful statement
+//   - a compromised superadmin token gets both the keys and the contents
+//
+// So the bypass is allowed for everything EXCEPT this list, and the list is
+// checked BEFORE the bypass rather than after it. Checking after would mean the
+// bypass wins, which is the whole thing being fixed.
+//
+// A closed set rather than a "creator permissions" category, because a category
+// would have to be kept in sync with `rbac.go`'s role definitions, and a new role
+// could add a creator capability that nobody remembered to exclude.
+var SuperadminDeniedPermissions = map[string]string{
+	service.PermChannelCreate: "superadmin accounts operate the platform and do not create channels",
+	service.PermChannelEdit:   "superadmin accounts do not edit creator channels",
+	service.PermMediaUpload:   "superadmin accounts do not upload media",
+	service.PermProjectSave:   "superadmin accounts do not author projects",
+}
+
+// IsSuperAdminDenied reports whether a permission is barred for the superadmin
+// role, and why.
+//
+// The reason is returned so a 403 can tell the caller WHICH rule refused them.
+// "Forbidden" with no explanation sends an administrator to look at their own
+// account settings, when the answer is a policy about their role.
+func IsSuperAdminDenied(permission string) (string, bool) {
+	reason, denied := SuperadminDeniedPermissions[permission]
+	return reason, denied
+}
+
+// RequirePermission returns a middleware that admits only callers holding the
 // named permission.
 //
-// Used as `protected.GET("/x", h.requirePermission("billing.read_invoices"), h.X)`
-// rather than inside a handler, so the refusal happens before the handler runs -
-// a handler that forgets to call the check cannot leak.
+// -----------------------------------------------------------------------------
+// IT WAS UNEXPORTED, THEREFORE UNUSED
+// -----------------------------------------------------------------------------
 //
-// SUPERADMIN BYPASS, and that is stated rather than implied: a superadmin is the
-// platform's break-glass account and is expected to be able to administer every
-// capability. The bypass is `IsSuperAdmin` on the DATABASE, not a role claim on
-// the token, so it reflects a revoked slot within one request rather than at token
-// expiry.
-func (h *AuthHandler) requirePermission(permission string) gin.HandlerFunc {
+// This was `requirePermission`, a lowercase method on `AuthHandler`. An
+// unexported method in package `handler` cannot be called from package `main`,
+// which is where every route is registered - so it had no reachable call site from
+// the only place a call site could live.
+//
+// Its own comment claimed it was "applied per-route where it is used, so a handler
+// cannot forget to call it". It was applied nowhere. `grep` for it found two
+// mentions, both inside comments.
+//
+// The consequence was not a latent bug. It was that the entire permission model -
+// fifteen capabilities in `rbac.go`, four ranked system roles, an anti-escalation
+// check in `Appoint` - never ran. Every gate in the product checked a ROLE and
+// nothing else. `channel.create` existed, `creator` was seeded with it, and no code
+// path anywhere asked whether a caller held it.
+//
+// Exported so `main.go` can register it. That is the whole reason for the rename.
+//
+// -----------------------------------------------------------------------------
+// WHY A MIDDLEWARE AND NOT AN IN-HANDLER CHECK
+// -----------------------------------------------------------------------------
+//
+// Because a handler that forgets to call the check cannot leak. That was the
+// original argument and it is the correct one - but it only holds once the
+// middleware is reachable, and for this long as a lowercase method it was
+// unreachable, which is the strongest argument in this repository for checking
+// whether a security control is actually wired.
+func (h *AuthHandler) RequirePermission(permission string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid, ok := userIDFromToken(c)
 		if !ok {
@@ -176,7 +243,22 @@ func (h *AuthHandler) requirePermission(permission string) gin.HandlerFunc {
 			c.Abort()
 			return
 		}
+
+		// ---- Separation of duties, checked BEFORE the bypass ----
 		if isSuper {
+			if reason, denied := IsSuperAdminDenied(permission); denied {
+				c.JSON(http.StatusForbidden, gin.H{
+					"error":      "forbidden_by_policy",
+					"message":    reason,
+					"permission": permission,
+					// So the client can tell "you lack the capability" from "your
+					// ROLE is barred from it", which need different responses: one
+					// is fixable by an admin, the other is not fixable at all.
+					"policy": "superadmin_separation_of_duties",
+				})
+				c.Abort()
+				return
+			}
 			c.Next()
 			return
 		}
@@ -206,19 +288,17 @@ func (h *AuthHandler) requirePermission(permission string) gin.HandlerFunc {
 	}
 }
 
-// requireService admits callers who have been granted access to one of the
-// eight apps in migration 017's slug allowlist.
+// RequireService is `requireService`, exported so `main.go` can register it.
 //
-// This is the SECOND gate, and the two answer different questions:
-//
-//	requireService   "may this person OPEN this app"        (session 17 piece 5)
-//	requirePermission "may this person DO this thing"        (granular capability)
+// Same unreachability problem as `RequirePermission`: an unexported method in
+// package `handler` cannot be called from `main`, so it had no call site and the
+// service-grant model never ran either.
 //
 // Having both is deliberate. A service grant is how a user gets into an app at
 // all; a permission is what they may do once inside. Collapsing them would mean
 // either "any user who opens billing can read invoices" or "nobody without an
 // explicit permission can open billing", and both are wrong.
-func (h *AuthHandler) requireService(serviceSlug string) gin.HandlerFunc {
+func (h *AuthHandler) RequireService(serviceSlug string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid, ok := userIDFromToken(c)
 		if !ok {

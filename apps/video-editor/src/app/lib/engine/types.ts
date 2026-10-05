@@ -18,7 +18,11 @@
 
 import type { Marker } from './markers';
 
-export type TrackType = 'video' | 'audio' | 'text' | 'image';
+let uid = 0;
+/** Generate a short unique ID with a prefix. */
+export const nextId = (prefix: string) => `${prefix}-${Date.now().toString(36)}-${(uid++).toString(36)}`;
+
+export type TrackType = 'video' | 'audio' | 'text' | 'image' | 'branding';
 
 /**
  * `base` is the bottom lane - its absence is black, and it carries picture
@@ -165,6 +169,25 @@ export interface TimelineClip {
   /** The audio clip bound to this one, or vice versa. Movavi calls this a
    *  linked track: move one, the other follows. */
   linkedId?: string | null;
+
+  /**
+   * Which branding slot this clip occupies, on the branding track.
+   *
+   * The track carries up to two marks: the channel's own logo, and a sponsor (or a
+   * second personal logo) in another corner. They are the same kind of thing — a
+   * corner-anchored image over the video — so they share a track and a draw path,
+   * and the role is what tells them apart.
+   *
+   * ABSENT MEANS CHANNEL. Every clip made before this field existed is a channel
+   * logo, and a project saved before it has no value here at all. Treating the
+   * absent case as the channel slot is what lets those projects open with their
+   * logo intact instead of silently losing it.
+   *
+   * A second track type would have been the tidier answer and a far larger one: a
+   * track type, a tint, drag rules and an `acceptsTrack` rule, all to distinguish
+   * two images that draw identically.
+   */
+  brandingRole?: 'channel' | 'sponsor';
 }
 
 export interface TimelineTrack {
@@ -232,6 +255,77 @@ export const DEFAULT_SETTINGS: ProjectSettings = {
   background: '#000000',
 };
 
+/** Project presets for common aspect ratios. */
+export interface ProjectPreset {
+  id: string;
+  label: string;
+  width: number;
+  height: number;
+  /** Human-readable description of the use case. */
+  hint: string;
+}
+
+/** Available project presets. */
+export const PROJECT_PRESETS: ProjectPreset[] = [
+  { id: 'desktop', label: 'Desktop (16:9)', width: 1920, height: 1080, hint: 'YouTube, Vimeo, standard widescreen' },
+  { id: 'mobile', label: 'Mobile (9:16)', width: 1080, height: 1920, hint: 'Shorts, Reels, TikTok, Stories' },
+  { id: 'square', label: 'Square (1:1)', width: 1080, height: 1080, hint: 'Instagram feed, LinkedIn, Twitter' },
+  { id: 'cinema', label: 'Cinema (21:9)', width: 2560, height: 1080, hint: 'Ultra-wide cinematic' },
+  { id: 'portrait-4-5', label: 'Portrait (4:5)', width: 1080, height: 1350, hint: 'Instagram portrait posts' },
+];
+
+/**
+ * Where a channel logo sits for a given delivery target.
+ *
+ * ---- WHY THE EDITOR OWNS THIS TABLE ----
+ *
+ * It looks like channel setup should decide this, and `branding-panel.tsx` reads
+ * `logo_position` / `logo_auto_size` off the channel. Those two fields DO NOT EXIST
+ * on the backend: there is no column for them, they are absent from the setup
+ * response struct, and they are absent from the update request struct. They appear
+ * in exactly two TSX files and nowhere in the service.
+ *
+ * So the panel was reading `undefined` on every channel and silently falling back to
+ * `bottom-right` at 12%. Every user got the same position regardless of what the
+ * dashboard showed them, and a PATCH carrying those fields would be accepted and
+ * dropped.
+ *
+ * Position is therefore a property of the PROJECT, not of the channel — which is the
+ * more honest model anyway: the same channel is published to a widescreen upload and
+ * a vertical one, and the logo belongs in a different corner in each. It lives on the
+ * branding clip's transform, so it saves, reloads and undoes like everything else.
+ */
+export interface BrandingPreset {
+  id: string;
+  label: string;
+  hint: string;
+  /** Corner the logo sits in. */
+  corner: ClipTransform['corner'];
+  /** Logo width as a fraction of the frame width. */
+  size: number;
+}
+
+export const BRANDING_PRESETS: BrandingPreset[] = [
+  { id: 'widescreen', label: '16:9 landscape', hint: 'YouTube, Vimeo — logo top right', corner: 'top-right', size: 0.15 },
+  { id: 'vertical', label: '9:16 vertical', hint: 'Shorts, Reels, TikTok — logo top left', corner: 'top-left', size: 0.22 },
+  { id: 'square', label: '1:1 square', hint: 'Instagram feed — logo top right', corner: 'top-right', size: 0.18 },
+];
+
+export function getBrandingPreset(id: string): BrandingPreset {
+  return BRANDING_PRESETS.find((p) => p.id === id) ?? BRANDING_PRESETS[0];
+}
+
+/** Find a preset by id, or return the desktop preset as fallback. */
+export function getPreset(id: string): ProjectPreset {
+  return PROJECT_PRESETS.find((p) => p.id === id) ?? PROJECT_PRESETS[0];
+}
+
+/** Create default project settings from a preset. */
+export function settingsFromPreset(presetId: string, name = 'Untitled project'): ProjectSettings {
+  const p = getPreset(presetId);
+  return { name, width: p.width, height: p.height, fps: 30, background: '#000000' };
+}
+
 /** A saved project. Media bytes live in IndexedDB, keyed by `mediaId`. */
 export interface ProjectDoc {
   /** Bumped when the shape changes so old saves can be migrated, not misread. */
@@ -259,6 +353,7 @@ export const DEFAULT_TRACKS: TimelineTrack[] = [
   { id: 'v1', name: 'Video 1', type: 'video', role: 'base', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
   { id: 'a1', name: 'Audio 1', type: 'audio', role: 'base', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
   { id: 't1', name: 'Text 1', type: 'text', role: 'overlay', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
+  { id: 'b1', name: 'Branding', type: 'branding', role: 'overlay', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: true },
 ];
 
 /**
@@ -292,6 +387,13 @@ export function normaliseClip(raw: Partial<TimelineClip> & { id: string }): Time
     text: raw.text ? { ...DEFAULT_TEXT_STYLE, ...raw.text } : undefined,
     peaks: raw.peaks,
     linkedId: raw.linkedId ?? null,
+    // ---- MUST BE LISTED ----
+    //
+    // This function rebuilds a clip from an explicit field list, so a field that is
+    // added to the interface but not here is dropped every time a project is
+    // opened. A field that silently disappears on reload is worse than one that was
+    // never added: the value is there while you are editing and gone after.
+    brandingRole: raw.brandingRole === 'sponsor' ? 'sponsor' : 'channel',
   };
 }
 
@@ -300,7 +402,7 @@ export function normaliseTrack(raw: Partial<TimelineTrack> & { id: string }): Ti
     id: raw.id,
     name: raw.name ?? 'Track',
     type: raw.type ?? 'video',
-    role: raw.role ?? (raw.type === 'video' ? 'base' : 'overlay'),
+    role: raw.role ?? (raw.type === 'video' ? 'base' : raw.type === 'branding' ? 'overlay' : 'overlay'),
     clips: (raw.clips ?? []).map((c) => normaliseClip(c)),
     volume: raw.volume ?? 1,
     muted: raw.muted ?? false,

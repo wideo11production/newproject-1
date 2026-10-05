@@ -122,7 +122,24 @@ export async function extractFilmstrip(clip: TimelineClip): Promise<string[]> {
     }
     try {
       const frames = await compositor.captureFilmstrip(clip.id, count);
-      cache.set(key, frames);
+
+      // ---- AN EMPTY RESULT IS NOT A RESULT ----
+      //
+      // `captureFilmstrip` returns `[]` whenever the clip's element is not decodable
+      // *yet* — the video has not seeked, the blob is still being handed over, the
+      // compositor has not caught up with the edit that just happened.
+      //
+      // That emptiness used to be cached like any other answer. And because the
+      // cache is consulted first, every later request for that key was a hit on the
+      // FAILURE: the clip stayed blank for the rest of the session, with nothing on
+      // screen to explain why. Trimming, splitting or undoing a clip was enough to
+      // get there, which is why "the clip has no frames" kept arriving attached to
+      // edits rather than to imports.
+      //
+      // Not caching it means the next attempt tries again, and a strip that is
+      // merely not ready yet becomes a strip that arrives a moment later. The
+      // diagnostic below counts populated entries separately for the same reason.
+      if (frames.length) cache.set(key, frames);
       return frames;
     } finally {
       inFlight.delete(key);
@@ -159,9 +176,16 @@ export function useFilmstrip(clip: TimelineClip): string[] {
     }
     setFrames([]);
     let alive = true;
-    void extractFilmstrip(clip).then((result) => {
-      if (alive) setFrames(result);
-    });
+    // The `catch` is not optional: an extraction that throws would otherwise become
+    // an unhandled rejection, which takes the whole subtree down instead of leaving
+    // one clip without a strip.
+    void extractFilmstrip(clip)
+      .then((result) => {
+        if (alive) setFrames(result);
+      })
+      .catch(() => {
+        if (alive) setFrames([]);
+      });
     return () => {
       alive = false;
     };

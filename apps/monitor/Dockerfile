@@ -55,7 +55,6 @@ COPY apps/web/package.json ./apps/web/package.json
 # kyunki monorepo me ye packages doosre apps declare karte hain
 
 COPY packages/api-client ./packages/api-client
-COPY packages/auth ./packages/auth
 COPY packages/charts ./packages/charts
 COPY packages/config ./packages/config
 COPY packages/constants ./packages/constants
@@ -154,6 +153,22 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # mil jata.
 ARG NEXT_PUBLIC_APP_SURFACE=monitor
 ENV NEXT_PUBLIC_APP_SURFACE=$NEXT_PUBLIC_APP_SURFACE
+# `NEXT_PUBLIC_APP_URL` was MISSING from this block, and monitor's layout reads it
+# (`src/app/layout.tsx:32` -> `packages/config`). The fallback in
+# `packages/config/src/index.ts` is `http://localhost:3000` - which is WEB's
+# port, not monitor's 3001.
+#
+# So the monitor dashboard was building absolute links to itself using the web
+# app's origin: "open in app" pointed at the wrong application entirely. No error,
+# no warning, and the value looked plausible because it was a real, running app.
+#
+# This is the exact failure the comment above describes for the click ledger -
+# a hardcoded fallback that happens to be right in local dev, silently wrong
+# elsewhere - except here the fallback names a DIFFERENT app, so it is wrong
+# everywhere including local dev. It just never showed up because nothing in
+# monitor's own test path clicks a link built from it.
+ARG NEXT_PUBLIC_APP_URL=http://localhost:3001
+ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ------------------------------------------------------------

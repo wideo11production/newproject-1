@@ -182,6 +182,53 @@ func main() {
 	defer cancelWorker()
 	purgeWorker.Start(workerCtx)
 
+	// ---------------------------------------------------------------------------
+	// PII RETENTION SWEEPER
+	// ---------------------------------------------------------------------------
+	//
+	// Ye pehle BILKUL nahi tha, jabki `SYSTEM-PLAN.md` §3.3 30-day retention
+	// specify karta hai. Jo bhi delete nahi karta tha. Jo gap tha wo sirf
+	// telemetry ka nahi tha - ye tables bhi har row me PII rakhti hain:
+	//
+	//	sessions          ip_address, user_agent
+	//	refresh_tokens    user_id, expires_at
+	//	user_sessions     ip_address, user_agent, duration_seconds
+	//	security_events   email, ip_address, user_agent, detail
+	//
+	// Aur ye kabhi delete nahi hote the. Do consequences, dono serious:
+	//
+	//  1. Koi DB backup chura le to uske paas SAARE users ka historical IP aur
+	//     exact user-agent hai - "kaun kab kis machine se login tha" ka poora
+	//     record.
+	//  2. Account delete karne par ye rows ZALTI REH JAATI THI. Migration 012 ne
+	//     FK rules theek kiye taaki `DELETE FROM users` chale, par ye worker nahi
+	//     tha - to ek erasure request "user row gaya, uski IP history nahi" ka
+	//     result de sakti thi.
+	//
+	// Ye `purgeWorker` se ALAG rakha gaya hai. Wo ek product rule hai (user ko
+	// email jaata hai), ye ek data-lifecycle rule hai (koi user-visible effect
+	// nahi). Ek flag do rules control kare, to ek ki galti doosre ko chupke se
+	// band kar deti hai - aur compliance window chupke se infinite ho jaati hai.
+	retentionWindows := purge.RetentionWindowsFromEnv(os.LookupEnv)
+	retentionWorker := purge.NewRetentionWorker(db, &retentionWindows)
+	retentionWorker.Start(workerCtx)
+	defer retentionWorker.Stop()
+
+	// First sweep SYNCHRONOUSLY, before serving traffic.
+	//
+	// A ticker that only starts sweeping an hour from boot means a fresh
+	// deployment carries a full backlog of expired rows for its first hour of
+	// life. Running it once at startup means the invariant "no expired session
+	// row survives a deploy" holds the moment the service is up, and it also
+	// proves the DELETE works against the real schema - if a table name is wrong
+	// or a column is missing, this is where it surfaces, in a log line, rather
+	// than in a support ticket about disk usage.
+	if retentionWindows.Enabled {
+		if res := retentionWorker.RunOnce(workerCtx); res.Total() > 0 {
+			log.Printf("[RETENTION] startup sweep removed %d expired row(s)", res.Total())
+		}
+	}
+
 	// WebAuthn (biometric/passkey) service initialize karo
 	// RP ID aur origins .env se aati hain - browser se match karne ke liye zaroori
 	webAuthnSvc, err := service.NewWebAuthnService(db, cfg)
@@ -357,6 +404,30 @@ func main() {
 		authHandler.SetDeviceSlotService(service.NewDeviceSlotService(db, entitlementSvc))
 	}
 	authHandler.SetEntitlementService(entitlementSvc)
+
+	// The one-trial-per-BROWSER cap. Without this the table is empty and every
+	// browser gets unlimited trials, which is the failure mode the cap exists to
+	// prevent. See internal/service/trial_device.go.
+	authHandler.SetTrialDeviceService(service.NewTrialDeviceService(db))
+
+	// ---- Give the SUPERADMIN handler the same entitlement service ----
+	//
+	// Without this, `POST /admin/entitlements` has nothing to grant with: `Grant`
+	// had zero production callers, so `entitlements` stayed empty, so every
+	// `Limit()` returned `ErrEntitlementMissing`, so **every quota in the product
+	// resolved to 0** and the upload path failed closed for everybody on every
+	// plan including the paid ones.
+	//
+	// THE SAME INSTANCE as above, not a second `NewEntitlementService`. Two
+	// services over one database would each hold their own `cfg.Plans` snapshot,
+	// and a plan added to `.env` between the two constructions would be accepted
+	// by one handler and refused by another — so a grant could fail on the
+	// endpoint and succeed through the upload path, which is the worst version of
+	// that bug: intermittent, and only for new plans.
+	//
+	// `cfg.Plans` is passed too, because the handler needs the catalogue to render
+	// it and to reject an unknown `plan_code` BEFORE writing anything.
+	superadminHandler.SetEntitlementAdmin(db, entitlementSvc, cfg.Plans)
 
 	// Set up router
 	r := gin.New()
@@ -557,6 +628,31 @@ func main() {
 		// scoped query chalata hai (cross-user leak nahi).
 		auth.GET("/sessions", authHandler.AuthMiddleware(), authHandler.ListMySessions)
 
+	// -----------------------------------------------------------------------
+	// PRESENCE - "who is online right now"
+	// -----------------------------------------------------------------------
+	//
+	// `StartSession` / `EndSession` / `HeartbeatSession` had been written on the
+	// superadmin service, were correct, and had ZERO callers. `user_sessions`
+	// stayed permanently empty, so the dashboard reported, for every user, forever:
+	//
+	//     Online Now 0 · Total Sessions 0 · Seconds Online 0 · Devices 0
+	//
+	// ...while people were demonstrably signed in. `ListAllActivity` listed every
+	// user correctly and `GetUserActivity` counted rows in a table nobody wrote to.
+	//
+	// THIS IS THE FOURTH TIME THIS SHAPE HAS APPEARED, and naming them is the
+	// point: correct code, correct comments, correct tests, and no path by which
+	// anything reaches it. Five copies of `/api/audit`. Three of
+	// `/api/health-check`. `/ui-clicks/targets` with zero callers. And this.
+	//
+	// Attached to `auth` with an explicit `AuthMiddleware()` per route rather than
+	// to `protected`, so each route states its own guard instead of inheriting one.
+	// A presence endpoint reachable anonymously would let anyone mark anyone online,
+	// and "who is on my platform right now" is not a public figure.
+	presenceHandler := handler.NewHandler(db)
+	presenceHandler.RegisterRoutes(auth, authHandler.AuthMiddleware())
+
 		// Protected routes
 		protected := auth.Group("")
 		protected.Use(authHandler.AuthMiddleware())
@@ -582,6 +678,16 @@ func main() {
 			// authorization middleware + guards par hai.
 			protected.GET("/me", authHandler.GetMe)
 
+	// ---- The caller's OWN plan, allowance and expiry ----
+	//
+	// NOT the admin route. A user who is not a superadmin must be able to render
+	// "your trial ends in 2 days", and a route that took the target from the path
+	// would be one refactor away from showing somebody else's allowance.
+	//
+	// No path parameter, no body, no query. The identity is the verified token,
+	// so there is no field to get wrong. See `internal/handler/my_entitlements.go`.
+	protected.GET("/me/entitlements", authHandler.GetMyEntitlements)
+
 			// ---- SECURITY ROLLOVER (Block 2.5 / 2.6) ----
 			// Old credential verify karke naya set karta hai, aur saare
 			// DUSRE sessions + refresh tokens + expired verification tokens
@@ -606,28 +712,106 @@ func main() {
 			protected.POST("/avatar/upload-url", authHandler.AvatarUploadURL)
 			protected.POST("/avatar/finalize", authHandler.AvatarFinalize)
 
-			// ---- Creator dashboard endpoints (migration 005) ----
-			// Sab token-derived user_id par scoped hain.
-			protected.GET("/dashboard/stats", authHandler.GetDashboardStats)
-			protected.GET("/channels", authHandler.ListChannels)
-			protected.POST("/channels", authHandler.CreateChannel)
-			// ---- Phase B1: channel management beyond create ----
-			//
-			// SECURITY: `/:id` wale routes me `user_id` filter service layer par
-			// LAGA HUA HAI aur user_id TOKEN se aata hai. Bina token ke koi
-			// doosre user ka channel read/edit/delete nahi kar sakta (IDOR nahi).
-			protected.GET("/channels/:id", authHandler.GetChannel)
-			protected.PATCH("/channels/:id", authHandler.UpdateChannel)
-			protected.DELETE("/channels/:id", authHandler.DeleteChannel)
-			// ---- Channel cover upload (Phase B1) ----
-			// Same 3-step presigned flow as avatars. Both handlers run an
-			// ownership check on `:id` (channel must belong to the caller)
-			// BEFORE minting a URL or saving anything.
-			protected.POST("/channels/:id/cover/upload-url", authHandler.CoverUploadURL)
-			protected.POST("/channels/:id/cover/finalize", authHandler.CoverFinalize)
-			// Cover upload during channel creation (no channel ID yet).
-			protected.POST("/channels/cover/upload-url", authHandler.CoverUploadURLForCreate)
-			protected.POST("/channels/cover/finalize", authHandler.CoverFinalizeForCreate)
+// ---- Creator dashboard endpoints (migration 005) ----
+		// Sab token-derived user_id par scoped hain.
+		//
+		// NOTE: `/dashboard/stats` is registered ONCE, further down, with
+		// `RequireService("web")` on it. It used to also be registered here, and
+		// having it twice makes `gin` PANIC on start - the whole service refuses to
+		// boot.
+		//
+		// Caught by `TestMainHasNoDuplicateRouteLiterals`, which existed before this
+		// change and would have caught it. Worth stating because the failure mode of
+		// a duplicate route is a total outage with an error that names neither of the
+		// two places you would look.
+
+		// ---- Creator CAPABILITIES. These are the only routes below that ask
+		// "may this ROLE do this", rather than "is this a valid session". ----
+		//
+		// `RequirePermission` par pehle bhi lagaya hua tha - jaisa is block ka
+		// comment BAAD me likhta tha. Wo comment GALAT tha: method UNEXPORTED tha
+		// (`requirePermission`), isliye package `main` use call hi nahi kar sakta
+		// tha. Matlab 15 capabilities, 4 ranked roles aur Appoint() ka anti-escalation
+		// check - sab likhe hue the, aur KABHI CHALE HI NAHI.
+		//
+		// Do alag baatein ab enforce hoti hain, jo easily confuse ho jaati hain:
+		//
+		//   PERMISSION  "kya is ROLE ko channel banana hai"      -> RequirePermission
+		//   OWNERSHIP   "kya is USER ko YEH channel edit karna hai" -> service layer
+		//
+		// Pehle sirf DOOSRA tha (aur wo sahi tha - `DeleteChannel` me
+		// `id = ? AND user_id = ?` hai, to koi doosre ka channel touch nahi kar
+		// sakta). Pehla layer hi missing tha: koi bhi signed-in account channel
+		// bana sakta tha.
+		//
+		// Sirf pehla lagana doosre ko tod deta - koi bhi permitted user kisi ka bhi
+		// channel edit kar lega. Sirf doosra lagana pehle ko nahi rokta - bina
+		// creator capability wala user channel bana hi sakta hai. Dono chahiye the,
+		// aur ek hi tha.
+		//
+		// GET `/channels` list karta hai, channel nahi banata, isliye uspar permission
+		// nahi hai - padhna create karna nahi hai.
+		// `RequireService` answers the OTHER question:
+		//
+		//	RequireService   "kya is person ko ye app KHOLNE ka hai"   -> grant table
+		//	RequirePermission "kya is person ko ye KARNE ka hai"        -> capability
+		//
+	// Dono chahiye, aur dono alag hain. Grant milne se aadmi app ke ANDAR jaata
+	// hai; permission batata hai andar jaakar kya kar sakta hai. Inhe ek kar dene
+	// ka matlab hoga ya to "jo billing kholta hai woh invoice padh sakta hai",
+	// ya "jise billing kholne ka grant nahi hai woh billing khol hi nahi sakta -
+	// superadmin ko bhi nahi".
+		//
+	// `web` par laga hai kyunki creator routes usi app ke andar hain. Ek grant
+	// nahi rakhne wala user `web` open hi nahi kar paata - aur ye `video_editor`
+	// wale user par bhi lagta hai, kyunki wahi `web` par authenticated hota hai.
+		// Grant TABLE rows hain, app nahi - isliye ek hi grant dono ko cover karta
+		// hai, aur ek extra row likhne se dono apps me se ek khul jayegi.
+		protected.GET("/dashboard/stats",
+			authHandler.RequireService("web"),
+			authHandler.GetDashboardStats)
+
+		protected.GET("/channels",
+			authHandler.RequireService("web"),
+			authHandler.ListChannels)
+		protected.POST("/channels",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermChannelCreate),
+			authHandler.CreateChannel)
+
+		protected.GET("/channels/:id",
+			authHandler.RequireService("web"),
+			authHandler.GetChannel)
+		protected.PATCH("/channels/:id",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermChannelEdit),
+			authHandler.UpdateChannel)
+		protected.DELETE("/channels/:id",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermChannelDelete),
+			authHandler.DeleteChannel)
+
+		// Cover / logo media. `media.upload` use kiya, `channel.cover_upload` jaisa
+		// naya member invent nahi kiya - `rbac.go` ki vocabulary ek CLOSED set hai,
+		// aur ek route ke liye member banana hi wo vocabulary ko open karta hai.
+		protected.POST("/channels/:id/cover/upload-url",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermMediaUpload),
+			authHandler.CoverUploadURL)
+		protected.POST("/channels/:id/cover/finalize",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermMediaUpload),
+			authHandler.CoverFinalize)
+
+		// Channel creation ke dauraan cover (channel ID abhi bani nahi).
+		protected.POST("/channels/cover/upload-url",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermChannelCreate),
+			authHandler.CoverUploadURLForCreate)
+		protected.POST("/channels/cover/finalize",
+			authHandler.RequireService("web"),
+			authHandler.RequirePermission(service.PermChannelCreate),
+			authHandler.CoverFinalizeForCreate)
 
 			// ---- CHANNEL SETUP STEP 2 (migration 022) ----
 			//
@@ -784,8 +968,18 @@ func main() {
 		// that DEFINE the privilege model, so they must be able to answer for
 		// themselves.
 		//
-		// `requirePermission` IS a middleware, and is applied per-route where it is
-		// used, so a handler cannot forget to call it.
+		// `RequirePermission` IS a middleware and IS applied per-route below, so a
+		// handler cannot forget to call it.
+		//
+		// That sentence was here before, and it was FALSE for as long as it stood.
+		// The method was unexported (`requirePermission`), so `main` could not call
+		// it, and it was applied to zero routes. A comment asserting that a security
+		// control is wired is not the control, and it is the same failure as the
+		// unwired presence writers in this file's history: correct code, correct
+		// comment, no path by which anything reaches it.
+		//
+		// It is now `RequirePermission`, it is on the channel routes, and
+		// `cmd/auth-service/rbac-wiring_test.go` fails if the wiring is removed.
 		//
 		// These live INSIDE this block because `protected` is block-scoped: a
 		// declaration in one `{ ... }` is not visible in the next one.
@@ -821,6 +1015,25 @@ func main() {
 	// Protected security endpoints - token chahiye
 	secProtected := auth.Group("/security")
 	secProtected.Use(authHandler.AuthMiddleware())
+	// `CheckRevoked` WAS MISSING HERE, and it is the most consequential of the
+	// three gaps it closed.
+	//
+	// `/pin`, `/PUT /pin`, `/questions` and `/biometric/complete` are the endpoints
+	// that CONFIGURE the account's second factor. `AuthMiddleware` checks the
+	// JWT's signature and its expiry - and a token that was revoked at logout
+	// still passes both, because revocation lives in a Redis denylist that
+	// `AuthMiddleware` never reads.
+	//
+	// So: log out on a shared or lost device, and the previous session's token
+	// keeps working until it expires on its own. In that window the holder of that
+	// token can set a new PIN and change the security questions - i.e. take over
+	// the very credentials recovery depends on. The `protected` group 200 lines
+	// above already had this check; this group was simply missed.
+	//
+	// It is one Redis EXISTS. Not having it here is not a saving.
+	if revocationStore != nil {
+		secProtected.Use(middleware.CheckRevoked(revocationStore))
+	}
 	{
 		secProtected.GET("/setup-status", securityHandler.SetupStatus)
 		secProtected.POST("/pin", securityHandler.SetPIN)
@@ -836,7 +1049,22 @@ func main() {
 	// Superadmin routes - awareness, sessions, device lock, test cleanup
 	// NOTE: superadminHandler ke apne requireSuperadmin middleware hai jo
 	// har endpoint pe role check karta hai (superadmin ya recovery)
-	superadminHandler.RegisterRoutes(auth, authHandler.AuthMiddleware())
+	//
+	// `CheckRevoked` passed as an extra guard. It was missing from this group,
+	// which is the worst possible place for it to be missing: `/admin/*` exposes
+	// every user's security events, every user's session history, the device lock
+	// and account purging. Revoking a superadmin session is the documented
+	// incident-response action, and on this group it did not work - the revoked
+	// token still passed the signature and expiry checks and kept full access.
+	//
+	// Passed unconditionally rather than behind a `revocationStore != nil` check:
+	// `CheckRevoked(nil)` passes requests straight through (`revocation.go:145`),
+	// so the nil case is already handled at the point where it matters. The
+	// conditional version needed a `saGuards` slice and a variadic call, which
+	// reads as "the guard is optional" - and that is precisely the belief this
+	// change is removing.
+	superadminHandler.RegisterRoutes(auth, authHandler.AuthMiddleware(),
+		middleware.CheckRevoked(revocationStore))
 
 	// Awareness (Block 3) - REAL user data grid.
 	// NOTE: ye apna route group banata hai aur DONO layers lagata hai
@@ -888,11 +1116,33 @@ func main() {
 	// WebAuthn (biometric/passkey) routes
 	// Sirf tab register karte hain jab WebAuthn service successfully init hua ho
 	if webAuthnSvc != nil {
-		waHandler := handler.NewWebAuthnHandler(webAuthnSvc)
+		// `authSvc` is passed so a verified assertion can ISSUE A SESSION.
+		//
+		// Without it `FinishAuthentication` verified a real WebAuthn signature -
+		// the strongest authentication this product supports - and returned
+		// `{"verified": true}` with no token and no session. There was no possible
+		// next step. The passkey flow was a dead end and a password was the only
+		// way in, which made the "more secure than a password" comment true of the
+		// signature and false of the product.
+		//
+		// `securitySvc` is passed so the passkey login reports the SAME mandatory
+		// gate state the password login reports. A passkey proves WHO you are; it
+		// is not a waiver of what the account must have configured.
+		waHandler := handler.NewWebAuthnHandler(webAuthnSvc, authService, securitySvc)
 
 		// Registration flow (device enroll) - authenticated user hi kar sakta hai
+		//
+		// `CheckRevoked` was missing here, and on the whole group. A session
+		// revoked at logout is in the Redis denylist, but `AuthMiddleware` only
+		// checks the JWT signature and its expiry - both of which a still-
+		// unexpired token passes. So a logged-out device could re-enrol a
+		// credential, and `/credentials` still answered. Every other protected
+		// group already had this check; this one was the omission.
 		waProtected := auth.Group("/webauthn")
 		waProtected.Use(authHandler.AuthMiddleware())
+		// Unconditional for the same reason as `secProtected` - `CheckRevoked(nil)`
+		// passes through, so there is no nil case to guard here.
+		waProtected.Use(middleware.CheckRevoked(revocationStore))
 		{
 			waProtected.POST("/register/begin", waHandler.BeginRegistration)
 			waProtected.POST("/register/finish", waHandler.FinishRegistration)
@@ -902,10 +1152,45 @@ func main() {
 
 		// Authentication flow (login with fingerprint/face)
 		// Ye UNAUTHENTICATED hota hai - kyunki yahi to prove karta hai ki user kaun hai
+		//
+		// ---- RATE LIMITED, AND THIS IS THE POINT OF THE WHOLE BLOCK ----
+		//
+		// These two routes were completely unthrottled while the password login
+		// next to them carries four policies (8/min, 30/15min, 10/15min per
+		// account, 20/5min per IP).
+		//
+		// `/login/begin` takes an email address and returns a distinct error per
+		// case: `no biometric credential registered` versus a real challenge. That
+		// is an EMAIL ENUMERATION ORACLE - it answers "does this address have a
+		// passkey?" for any address on the internet, unlimited times, with no
+		// credential. Before this it was unlimited; that is not a strong factor
+		// with a weak front door, it is a strong factor with an open one.
+		//
+		// `/login/finish` mints the session, so an unthrottled version is an
+		// unthrottled challenge-guessing oracle.
+		//
+		// Same four policies as the password login, because they are the ones
+		// designed for this job - the per-account policy is the one that matters,
+		// since its key is the email and no IP rotation can escape it.
 		waPublic := auth.Group("/webauthn")
 		{
-			waPublic.POST("/login/begin", waHandler.BeginAuthentication)
-			waPublic.POST("/login/finish", waHandler.FinishAuthentication)
+			waPublic.POST("/login/begin",
+				middleware.BodyEmailCapture(),
+				middleware.RateLimit(redisClient, middleware.LimitLogin),
+				middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
+				middleware.RateLimit(redisClient, middleware.LimitLoginPerAccount),
+				middleware.RateLimit(redisClient, middleware.LimitLoginPerIP),
+				waHandler.BeginAuthentication,
+			)
+			waPublic.POST("/login/finish",
+				// The client cannot send an email here reliably - the WebAuthn
+				// assertion payload has no user field the server should trust.
+				// Per-IP is therefore the only key available, which is why the
+				// limit is the tighter per-IP policy.
+				middleware.RateLimit(redisClient, middleware.LimitLoginPerIP),
+				middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
+				waHandler.FinishAuthentication,
+			)
 		}
 	}
 

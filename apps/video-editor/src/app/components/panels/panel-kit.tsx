@@ -262,6 +262,7 @@ export function Button({
   disabled,
   full,
   ariaLabel,
+  className = '',
 }: {
   children: ReactNode;
   onClick: () => void;
@@ -269,6 +270,7 @@ export function Button({
   disabled?: boolean;
   full?: boolean;
   ariaLabel?: string;
+  className?: string;
 }) {
   const styles = {
     default: 'bg-sky-600 text-white hover:bg-sky-500',
@@ -281,9 +283,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${
-        full ? 'w-full' : ''
-      }`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${full ? 'w-full' : ''} ${className}`}
     >
       {children}
     </button>

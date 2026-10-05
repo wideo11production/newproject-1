@@ -5,6 +5,31 @@ import (
 	"testing"
 )
 
+// testJWTSecret is a valid, non-published key for tests that are not about the
+// key itself.
+//
+// It has to be set at all now: `LoadConfig` refuses to return a configuration
+// without `JWT_SECRET_KEY`, which is the behaviour `TestValidateRejectsWeakJWTSecrets`
+// pins. Every other test in this package is about something else - device limits,
+// plan catalogues, verification TTLs - and none of them should have to reason
+// about a signing key.
+//
+// It is deliberately NOT one of `KnownWeakJWTSecrets`. A test suite that ran with
+// a published key would be reproducing the exact condition the validation
+// exists to prevent, and the validation would be the only thing standing between
+// the tests and a false sense of coverage.
+const testJWTSecret = "test-only-not-published-4f2a9c1e8b7d6a5f3e2c1b0a9d8e7f6c"
+
+// requireTestSecret sets the key for a test that needs a loadable config.
+func requireTestSecret(t *testing.T) {
+	t.Helper()
+	// If the ambient environment already provides one, leave it - `t.Setenv`
+	// would otherwise mask a real deployment problem this test is not looking for.
+	if os.Getenv("JWT_SECRET_KEY") == "" {
+		t.Setenv("JWT_SECRET_KEY", testJWTSecret)
+	}
+}
+
 // TestDeviceLimitEnvBinding proves whether `DEVICE_LIMIT_ENABLED` actually
 // reaches `cfg.DeviceLimit.Enabled` through viper's AutomaticEnv + Unmarshal.
 //
@@ -17,6 +42,7 @@ import (
 //
 // So this asserts the real end-to-end binding instead of trusting it.
 func TestDeviceLimitEnvBinding(t *testing.T) {
+	requireTestSecret(t)
 	t.Setenv("DEVICE_LIMIT_ENABLED", "true")
 	t.Setenv("DEVICE_LIMIT_MAX_ACCOUNTS", "7")
 
@@ -38,6 +64,7 @@ func TestDeviceLimitEnvBinding(t *testing.T) {
 // TestDeviceLimitEnvBindingFalse proves the OFF direction also binds, otherwise
 // there would be no way to disable the cap from .env at all.
 func TestDeviceLimitEnvBindingFalse(t *testing.T) {
+	requireTestSecret(t)
 	t.Setenv("DEVICE_LIMIT_ENABLED", "false")
 
 	cfg, err := LoadConfig()
@@ -52,6 +79,7 @@ func TestDeviceLimitEnvBindingFalse(t *testing.T) {
 // TestDeviceLimitUnsetFallsBackToSpec guards the fail-secure default: with no
 // env var at all the cap must still be ON at 3, never off.
 func TestDeviceLimitUnsetFallsBackToSpec(t *testing.T) {
+	requireTestSecret(t)
 	os.Unsetenv("DEVICE_LIMIT_ENABLED")
 	os.Unsetenv("DEVICE_LIMIT_MAX_ACCOUNTS")
 

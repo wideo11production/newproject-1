@@ -30,29 +30,53 @@ import { createGate } from '@wideo11/ui/gate';
  * for the person operating the system, that is the dashboard's entire purpose.
  *
  * =============================================================================
- * WHAT THE OLD NO-OP MIDDLEWARE DID
+ * WHY THE PUBLIC LIST IS ENUMERATED, NOT A PREFIX
  * =============================================================================
  *
- *     const publicPaths = ['/', '/login', '/signup', '/api/auth'];
- *     const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
+ * This file used to say `publicApiPrefixes: ['/api']`. That is functionally the
+ * same as this file today - and it is the wrong shape, for one reason: a prefix
+ * entry is an open grant that nobody has to notice they are making.
  *
- * `'/'` is a prefix of every path, so `isPublicPath` was always true and the guard
- * never fired. It also read a next-auth cookie this product never sets, so
- * `getToken` returned `null` on every request. Two independent reasons it could
- * never have worked - and it produced no error, because a middleware that allows
- * everything looks exactly like a middleware that is working.
+ * `publicApiPrefixes` matches on whole path SEGMENTS, so `/api` covers every API
+ * route that exists now AND every one added later. Someone writes a new
+ * `/api/dump-everything`, ships it, and it is public from the moment it is
+ * registered - because the allowlist said `/api`, not the route. The decision to
+ * expose it was never written down, because there was no decision to make.
  *
- * The one thing it DID get right was its `matcher`, which kept the gate off
- * `/_next/static`. See the note below, because dropping it is what made this page
- * render unstyled.
+ * This is the same class of error as `1px scrollbar rules that never applied` and
+ * `a # comment justifying an omitted COMMENT ON`: the configuration says something
+ * is allowed and the code allows something else. Enumerating the exact routes
+ * means a new route is CLOSED by default, and opening it is a visible edit here
+ * rather than a silent consequence of a prefix.
+ *
+ * Note the asymmetry that made `/api` survive review so long: `publicPages: ['/']`
+ * is matched with `Array.includes`, i.e. EXACTLY, so it matches only the literal
+ * path `/`. Same array type, same call site, completely different semantics. A
+ * reader has to know that to read the file, which is precisely why this comment
+ * exists.
+ *
+ * The four routes below are what the dashboard genuinely needs:
+ *
+ *   /                the page itself (`@metrics`, `@telemetry` route groups)
+ *   /api/metrics     the current-value snapshot both pages render from
+ *   /api/timeseries  the per-panel history behind every chart
+ *   /api/audit       click capture. The tracker runs before sign-in on every app,
+ *                    so a gate here would silently drop the earliest clicks.
+ *   /api/live        the Docker liveness probe. It is the one route that MUST be
+ *                    reachable without a session - see the addendum note in
+ *                    SESSION 19: a probe that answers 401 makes Docker kill a
+ *                    healthy app.
  */
 const gate = createGate({
   loginPath: null,
 
-  // Everything is open, because everything has to be for the dashboard to render.
-  // See the header for why that is the honest answer rather than a gap.
   publicPages: ['/'],
-  publicApiPrefixes: ['/api'],
+  publicApiPrefixes: [
+    '/api/metrics',
+    '/api/timeseries',
+    '/api/audit',
+    '/api/live',
+  ],
 });
 
 export default gate;

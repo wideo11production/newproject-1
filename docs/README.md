@@ -29,9 +29,15 @@ pnpm dev
 
 # Run specific app
 pnpm --filter @wideo11/web dev
-pnpm --filter @wideo11/auth dev
 pnpm --filter @wideo11/editor dev
 ```
+
+> `packages/auth` was deleted. It persisted the access token **and the refresh
+> token** to `localStorage`, which hands a complete live session to any XSS on any
+> page that imported it — deliberately bypassing the protection `httpOnly` exists
+> to provide. Its only consumer, `apps/analytics`, now reads the `httpOnly` cookie
+> server-side like every other app. Do not reintroduce a shared package that
+> stores tokens in browser-reachable storage: session = cookie, server-side only.
 
 ### Build
 ```bash
@@ -68,7 +74,6 @@ pnpm test
 | @wideo11/utils | Shared utilities |
 | @wideo11/constants | SSOT constants |
 | @wideo11/api-client | Typed API client with React Query |
-| @wideo11/auth | Auth hooks, guards, provider |
 | @wideo11/video-player | Custom HLS/DASH player |
 | @wideo11/editor-core | Editor engines |
 | @wideo11/charts | ECharts wrappers |

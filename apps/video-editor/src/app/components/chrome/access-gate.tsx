@@ -165,7 +165,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
         <div className="mb-3 flex items-center gap-2 text-fg-muted">
           {content.icon}
           <span className="text-[8px] font-medium uppercase tracking-wider">
-            Wideo11 Studio
+            WideoCut Pro
           </span>
         </div>
 

@@ -73,6 +73,18 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/currency/.next/static ./apps
 
 USER nextjs
 EXPOSE 3007
+
+# ---- WHY THIS PROBES `/api/live` AND NOT `/` ----
+#
+# `/` is gated behind a session in this app's middleware. A container with no
+# session answers 401 there, the probe reads that as "unhealthy", and Docker
+# restarts a healthy process - then the probe fails again, forever. Six healthy
+# containers sat in exactly that restart loop while serving traffic correctly.
+#
+# A liveness probe answers one question: can this process still respond? It must
+# not consult anything that can change for an unrelated reason, or it restarts
+# things it cannot fix. `/api/live` has no dependency, no version and no uptime,
+# so the only thing that fails it is the process being unable to answer.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD wget -q -O /dev/null http://127.0.0.1:3007/ || exit 1
+  CMD wget -q -O /dev/null http://127.0.0.1:3007/api/live || exit 1
 CMD ["node", "apps/currency/server.js"]

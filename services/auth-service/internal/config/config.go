@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -299,7 +300,76 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
+}
+
+// -----------------------------------------------------------------------------
+// Validate - refuse to start with a configuration that cannot be secure
+// -----------------------------------------------------------------------------
+//
+// `LoadConfig` returns an error on failure, so this is a hard stop: `main`
+// fatals before it binds a port. That ordering is the point - a service that
+// listens before checking its signing key is briefly serving authenticated
+// endpoints to nobody, and a health check that passes during that window is a
+// health check that reported the wrong thing.
+//
+// The alternative - logging a warning - was tried. A warning in a log file is
+// not a control: it is read once, by whoever happens to be looking, and the
+// service then runs for months signing tokens with a public key.
+//
+// Only genuinely-fatal misconfigurations are here. Every optional field keeps a
+// working default, because a validation list that cries wolf gets deleted.
+func (c *Config) Validate() error {
+	// ---- JWT signing key ----
+	//
+	// Required, and additionally checked against the two published values that
+	// have been defaults in this codebase's history. Checking for "empty" alone
+	// would not catch someone who copies an old `.env.example` - which is the
+	// realistic failure, because that file is exactly where somebody looks.
+	if c.JWT.SecretKey == "" {
+		return errors.New(
+			"JWT_SECRET_KEY is not set.\n" +
+				"  This value signs every session in the product and every app's gate verifies\n" +
+				"  against it. Without it there is no authentication, only the appearance of it.\n" +
+				"  Generate one with:  openssl rand -base64 48")
+	}
+	for _, published := range KnownWeakJWTSecrets {
+		if c.JWT.SecretKey == published {
+			return fmt.Errorf(
+				"JWT_SECRET_KEY is set to %q, which is published in this repository.\n"+
+					"  Anyone who has read the source can forge a token with role:\"superadmin\".\n"+
+					"  Generate a real one with:  openssl rand -base64 48", published)
+		}
+	}
+
+	// Too-short keys are rejected rather than warned about: HMAC-SHA256 truncates
+	// silently below its block size, so a 12-character key is accepted by every
+	// library and provides far less than 48 bytes of strength.
+	if len(c.JWT.SecretKey) < 32 {
+		return fmt.Errorf(
+			"JWT_SECRET_KEY is only %d characters. Use at least 32 (openssl rand -base64 48).",
+			len(c.JWT.SecretKey))
+	}
+
+	return nil
+}
+
+// KnownWeakJWTSecrets lists every signing key that has ever been committed here.
+//
+// Checked explicitly rather than pattern-matched on "looks weak", because these
+// are the exact strings that are already in the repository and in everybody's
+// `.env.example`. A substring check would also reject a legitimate key that
+// happened to contain one of them, and a check that produces false positives gets
+// removed.
+//
+// This list is append-only. Removing an entry does not un-publish the key.
+var KnownWeakJWTSecrets = []string{
+	"your-secret-key-change-in-production",
+	"dev-only-insecure-secret-change-me",
 }
 
 func setDefaults() {
@@ -370,7 +440,50 @@ func setDefaults() {
 	viper.SetDefault("nats.url", "nats://nats:4222")
 	viper.SetDefault("redis.db", 0)
 
-	viper.SetDefault("jwt.secret_key", "your-secret-key-change-in-production")
+	// ---- `jwt.secret_key` IS REGISTERED, BUT WITH NO USABLE DEFAULT ----
+	//
+	// It used to default to "your-secret-key-change-in-production". Every other
+	// default in this function is a convenience; that one was a vulnerability with
+	// a friendly name.
+	//
+	// The mechanism is worth being precise about, because it is not obvious from
+	// the code. If `JWT_SECRET_KEY` is unset, viper yields the default string, and
+	// the service starts and signs tokens with it. It logs no warning, all health
+	// checks pass, every test passes, and the app works. And then, because that
+	// string is committed in this file, anyone who has read the repository can
+	// forge a token:
+	//
+	//   payload = {"user_id": "...", "role": "superadmin", "aud": "wideo11-api", "exp": <future>}
+	//   token   = base64url(header) + "." + base64url(payload) + "." + HMAC_SHA256(payload, "your-secret-key-change-in-production")
+	//
+	// The signature verifies. `aud` matches. `exp` has not passed. Every gate in
+	// every app - all of which read the SAME default - accepts it. That is not a
+	// login bypass to work around; it is "there is no login".
+	//
+	// So the default is the EMPTY STRING, and `Validate` rejects it.
+	//
+	// ----------------------------------------------------------------------------
+	// WHY THE SetDefault CALL IS STILL HERE, WITH AN EMPTY VALUE
+	// ----------------------------------------------------------------------------
+	//
+	// This is the same trap documented a few lines below for `storage.access_key`,
+	// and it is worth repeating because the obvious "fix" - deleting the
+	// SetDefault entirely - is a serious outage.
+	//
+	// Viper's `AutomaticEnv` does not discover keys. It only substitutes a value
+	// for a key viper already knows about, and `Unmarshal` walks that known set.
+	// With no `SetDefault("jwt.secret_key", ...)`, viper has no `jwt.secret_key`,
+	// so `JWT_SECRET_KEY=...` in the environment is invisible: `cfg.JWT.SecretKey`
+	// stays empty, `Validate` refuses, and the service will not start EVEN WHEN THE
+	// OPERATOR HAS SET A PERFECTLY GOOD KEY.
+	//
+	// That is a fail-closed failure and therefore a safe one, but it is still an
+	// outage caused by a change that looked like a security improvement. The
+	// registration is what makes the env var work; the value is what makes it safe.
+	// Both halves are needed, and `TestLoadConfigSucceedsWithAGoodSecret` is what
+	// stops somebody deleting this line in a later "cleanup".
+	viper.SetDefault("jwt.secret_key", "")
+
 	viper.SetDefault("jwt.access_token_ttl", 15)
 	viper.SetDefault("jwt.refresh_token_ttl", 7)
 	viper.SetDefault("jwt.issuer", "wideo11-auth")

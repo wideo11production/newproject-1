@@ -1,0 +1,59 @@
+<!--
+  Animated tab icon — Wideo11 Billing (port 3003).
+
+  ==============================================
+  WHY THIS FILE EXISTS AT ALL
+  ==============================================
+  This app had NO icon file, so Next emitted no `<link rel="icon">` and the tab
+  showed Chrome's default blank-page glyph. Found by
+  `tools/check-favicon-updateable.mjs`, which asserts every app has an
+  `app/icon.svg` — an absent icon file is a normal-looking state that tells you
+  nothing, and two apps were in it.
+
+  Same construction as the brand-W mark on web/admin/superadmin, with an amber
+  accent to distinguish it in a tab strip full of blue-purple squares.
+
+  WHY NO PRICE IS FORMATTED HERE, and why the arc is sized for 16px
+
+  The arc is a 5-unit stroke, not 3. A favicon is drawn at 16 pixels, where 3 units
+  is 0.75 device pixels — below the threshold where a browser draws a stroke
+  cleanly instead of as a translucent smear. That produced an icon which was
+  correct at 64 and at 128 and invisible at the only size it is used at, which is
+  what "dull" means. See `apps/superadmin/src/app/icon.svg` for the full note.
+
+  Safari does not run SMIL in a favicon, so there this renders as a good static
+  icon. The motion is additive, never load-bearing.
+
+  A NOTE ON THE COMMENT ABOVE THIS ONE
+
+  Em-dashes are real em-dashes, never two hyphens. XML forbids a doubled hyphen
+  anywhere inside a comment, and an earlier version of another icon used hyphens as
+  an underline — which made the browser reject the ENTIRE document. It served HTTP
+  200 with `image/svg+xml` and rendered no icon at all.
+  `tools/check-icon-svg.mjs` is the regression test.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Wideo11 Billing">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="100%" stop-color="#7b5cf6"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="8" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="1"/>
+      <stop offset="45%"  stop-color="#fef3c7" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#fbbf24" stop-opacity="0.25"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#wg)"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#accent)"
+          stroke-width="5" stroke-linecap="round"
+          stroke-dasharray="46 117" stroke-dashoffset="0">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0 32 32" to="360 32 32"
+                      dur="2.6s" repeatCount="indefinite"/>
+  </circle>
+  <path d="M13 21 L22 43 L30 29 L37 43 L46 21"
+        fill="none" stroke="#ffffff" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

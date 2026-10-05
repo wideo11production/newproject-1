@@ -95,6 +95,7 @@ func MigratedModels() []interface{} {
 		&model.SecurityEvent{},
 		&model.SuperadminAccount{},
 		&model.UserSession{},
+	&model.TrialDevice{},
 		&model.TestAccountMarker{},
 		// NOTE: `ClickEvent` was removed from this list when the click ledger moved
 		// to `analytics-service.ui_click_events`. Leaving it registered would have

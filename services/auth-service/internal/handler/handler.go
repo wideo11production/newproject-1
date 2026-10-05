@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/model"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
@@ -21,12 +22,30 @@ type AuthHandler struct {
 	// securitySvc lockout/PIN/device-limit enforce karta hai.
 	// Login me inject hota hai. Nil ho to security features gracefully skip hoti hain.
 	securitySvc *service.SecurityService
+	// trialDevices is the one-trial-per-BROWSER cap. Kept apart from
+	// `entitlements` because the two answer different questions on different
+	// schedules: entitlements are about what a PAID plan allows, this is about
+	// whether a FREE offer has already been collected. See
+	// `internal/service/trial_device.go` for why it is keyed on a browser and
+	// not on an IP.
+	trialDevices *service.TrialDeviceService
 	// storage - direct-to-MinIO avatar uploads (presigned URLs).
 	//
 	// Nil ho sakta hai agar storage config missing hai. Handlers us case me
 	// saaf 503 return karte hain (crash nahi) - user ko pata chalega ki
 	// upload available nahi hai, blank screen nahi milega.
 	storage *service.StorageService
+
+	// securityNotifier sends PIN-change, password-change and welcome emails.
+	//
+	// A separate field from `authService`'s own emailer because this one carries
+	// SECURITY events, not transaction mail: it must keep working when transactional
+	// mail is disabled, because the alert nobody receives is the one that mattered.
+	//
+	// Nil-safe. Every call site checks, and a missing notifier means no email rather
+	// than a failed request - a 500 on a successful PIN change would be a worse
+	// outcome than a silent one, and the change itself has already been persisted.
+	securityNotifier SecurityNotifier
 
 	// rbac / serviceAccess - "who may do what", backed by migration 017.
 	//
@@ -88,6 +107,20 @@ func (h *AuthHandler) SetMediaService(m *service.MediaService) {
 // SetEntitlementService wires the plan ledger.
 func (h *AuthHandler) SetEntitlementService(e *service.EntitlementService) {
 	h.entitlements = e
+}
+
+// SetTrialDeviceService attaches the one-trial-per-browser cap.
+//
+// A setter for the same reason as `SetEntitlementService`: `main.go` builds the
+// handler before it has a database, and threading one more argument through every
+// constructor call would be a wide diff for no benefit.
+//
+// The nil check in `Register` is what makes an unwired cap safe, and it is worth
+// stating which direction: an unwired cap GRANTS every trial rather than refusing
+// to sign anybody up. For a promotion that is the correct failure — the cost is
+// some free trials, and the alternative is an outage.
+func (h *AuthHandler) SetTrialDeviceService(s *service.TrialDeviceService) {
+	h.trialDevices = s
 }
 
 // SetTranscodeClient wires the transcoding handoff.
@@ -168,6 +201,253 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	// ============================================================================
+	// TRIAL GRANT - the 3-day plan, automatically, on registration
+	// ============================================================================
+	//
+	// WHY THIS IS HERE AND NOT SOMEWHERE ELSE
+	//
+	// Because this is the ONLY moment in a user's life when granting them a plan is
+	// unambiguously correct. Everywhere else it needs a decision: did they pay, is
+	// this a retry, is this abuse. Here it is simply "a new account starts on the
+	// trial", which is the industry default and what `plans.go` already describes.
+	//
+	// Without this, registration produced an account with NO plan, and `Limit()`
+	// returned `ErrEntitlementMissing` for every capability — so a brand new user
+	// could not upload a single file, on any plan, including the free trial the
+	// product ships. That is the state this session found the product in.
+	//
+	// ---- IT IS BEST-EFFORT AND SAYS SO ----
+	//
+	// A failed grant does NOT fail the registration. The account exists, the
+	// tokens are valid, and the user can sign in; they just see zero allowances
+	// until an operator grants one. Rolling back a successful signup because a
+	// quota row failed to insert is the worse failure by a wide margin.
+	//
+	// But it is reported in the response and logged, rather than swallowed: a silent
+	// failure here is indistinguishable from "the trial does not exist", which is
+	// the exact confusion this code is here to remove.
+	//
+	// ---- NO `trial` ON RE-REGISTRATION ----
+	//
+	// `Register` fails with `ErrUserExists` for a duplicate email, so this runs
+	// exactly once per account, ever. The abuse question — how many times one
+	// person may obtain a trial — is therefore NOT answered here, because there is
+	// nothing to answer: a second attempt creates no user and grants nothing.
+	//
+	// What still needs answering, and is a separate piece of work: a user whose
+	// trial EXPIRED asking for another one. See `TrialPolicy` below.
+	var trialInfo gin.H
+	if h.entitlements != nil {
+
+		// ========================================================================
+		// THE DEVICE CAP, and it runs BEFORE the trial is granted
+		// ========================================================================
+		//
+		// WHY IT IS HERE AND NOT IN THE CLIENT
+		//
+		// Because a check the client performs is a check the client can skip. The
+		// browser is the untrusted party; if this lived in JS, one console line
+		// would hand out unlimited trials.
+		//
+		// WHY IT IS HERE AND NOT IN `EntitlementService.Grant`
+		//
+		// Because `Grant` is also called by the admin endpoint, for a deliberate
+		// operator action. A superadmin saying "give this account a trial" must not
+		// be second-guessed by a rule about the operator's own browser.
+		//
+		// WHY IT BLOCKS THE TRIAL AND NOT THE REGISTRATION
+		//
+		// Because the innocent case is real: the second person on a shared laptop.
+		// Refusing them a SIGNUP punishes them for a device they do not control. So
+		// the account is created, and it simply starts with zero allowances — an
+		// honest state the UI can explain.
+		//
+		// It is a HARD CAP, per the product decision: one trial per browser, no
+		// override path in the client.
+		deviceFingerprint := deviceInfo.Fingerprint
+		// A nil `trialDevices` means the cap was never wired. Treated as GRANTED,
+		// and the refusal path — the part that must not fail open — is untouched.
+		// See `SetTrialDeviceService`.
+		var claim *service.TrialClaimResult
+		if h.trialDevices != nil {
+			var claimErr error
+			claim, claimErr = h.trialDevices.ClaimTrial(c.Request.Context(), deviceFingerprint, user.Email)
+			if claimErr != nil {
+				// NEVER fatal. A failure to CHECK the cap must not fail a signup; it
+				// means the cap could not be evaluated, and the safe reading of "could
+				// not evaluate" is "allow". Logged so it is never mistaken for the cap
+				// working.
+				log.Printf("[TRIAL] device cap check failed for %s: %v — allowing", user.Email, claimErr)
+				claim = nil
+			}
+		}
+
+		if claim != nil && !claim.Granted {
+			// ---- REFUSED. The account exists; the trial does not. ----
+			//
+			// The event is CRITICAL (`criticalTypes` in `model/security.go`), which
+			// puts it on the superadmin red banner AND makes it acknowledgeable with
+			// the OK button. No new alert machinery — one map entry was enough.
+			//
+			// The attempt COUNT travels in the detail, because the event type alone
+			// cannot separate a family member from an operation.
+			if h.securitySvc != nil {
+				h.securitySvc.LogSecurityEvent(
+					c.Request.Context(), &user.ID, user.Email,
+					model.EventTrialBlockedDevice,
+					service.TrialBlockedDetail(
+						deviceFingerprint, claim.AlreadyClaimedBy, claim.BlockedAttempts,
+					),
+					clientIP(c.Request), c.Request.UserAgent(),
+				)
+			}
+			log.Printf("[TRIAL] refused for %s — this browser already used a trial (%d refusals)",
+				user.Email, claim.BlockedAttempts)
+
+			trialInfo = gin.H{
+				"granted":         false,
+				"reason":          "device_already_trialed",
+				"message":         "This browser has already used a free trial.",
+				"blocked_attempts": claim.BlockedAttempts,
+			}
+		} else {
+			endsAt := h.entitlements.TrialEndFromNow()
+			ent, grantErr := h.entitlements.Grant(
+				c.Request.Context(), user.ID, service.PlanTrial,
+				model.EntitlementSourceTrial, endsAt, nil, nil,
+				user.Email, deviceFingerprint,
+			)
+			if grantErr != nil {
+				// Logged and surfaced, NOT fatal. See the note above.
+				log.Printf("[TRIAL] grant failed for %s: %v — account created with zero allowances", user.Email, grantErr)
+				trialInfo = gin.H{
+					"granted": false,
+					"reason":  grantErr.Error(),
+				}
+			} else {
+				trialInfo = gin.H{
+					"granted":  true,
+					"plan":     service.PlanTrial,
+					"ends_at":  ent.EndsAt,
+					"days":     h.entitlements.TrialDays(),
+					"limits":   trialLimits(h.entitlements, ent),
+				}
+				log.Printf("[TRIAL] granted %s for %d day(s), ends %s",
+					service.PlanTrial, h.entitlements.TrialDays(), ent.EndsAt)
+			}
+		}
+	} else {
+		// No entitlement service wired. Not a crash — a deployment without it simply
+		// has no plans, which is a configuration problem reported at boot.
+		trialInfo = gin.H{"granted": false, "reason": "entitlements not configured"}
+	}
+
+	// ============================================================================
+	// SERVICE GRANTS - so the apps are actually reachable
+	// ============================================================================
+	//
+	// Every registered account is granted the services it needs, for the same
+	// reason the trial is granted here: registration is the one moment where the
+	// answer is not a decision.
+	//
+	// WHY THIS EXISTS, AND WHAT IT COST WHEN IT DID NOT
+	//
+	// `requireService("web")` guards the channel routes — `POST /channels`,
+	// `PATCH /channels/:id`, every cover and logo route. It is a correct guard
+	// with a real backing table (`user_services`), and `ServiceAccess.Grant` has
+	// existed the whole time.
+	//
+	// **`user_services` had zero rows.** Not because granting failed — because
+	// nothing ever called `Grant`. So every one of those routes answered
+	//
+	//     {"error":"service_not_granted","message":"You do not have access to web."}
+	//
+	// to every user, including new ones, including on the channel-SETUP flow where
+	// the platform has just asked them to create their first channel.
+	//
+	// That is the SEVENTH recorded instance of this repository's most expensive
+	// pattern — correct code, correct tests, correct comments, and no path by which
+	// anything reaches it. It is also the worst possible place to hit it, because a
+	// guard that blocks everyone is indistinguishable from a guard that works.
+	//
+	// FIXED THE SAME WAY AS THE TRIAL, and for the same reason: make registration
+	// grant it, so the policy is the shape of the code rather than a check
+	// somebody has to remember to run.
+	//
+	// `web`         the main app — channels, billing, dashboard
+	// `video_editor` the editor at :3002, same session
+	//
+	// Both are granted, not `admin`: an ordinary creator needs both, and granting
+	// `admin`/`superadmin` services to every signup would make those slugs
+	// meaningless as a restriction.
+	var servicesGranted []string
+	if h.serviceAccess != nil {
+		for _, svc := range defaultUserServices {
+			// `reason` is free text in an audit column, and "granted at
+			// registration" is the only honest value here — not "user asked",
+			// because nobody asked.
+			if err := h.serviceAccess.Grant(c.Request.Context(), user.ID, svc, nil,
+				"granted automatically at registration"); err != nil {
+				// Logged, NOT fatal. An account that exists but cannot reach the
+				// editor is a support ticket; an account that does not exist is a
+				// signup that appears to have worked.
+				log.Printf("[SERVICE GRANT] %s failed for %s: %v", svc, user.Email, err)
+				continue
+			}
+			servicesGranted = append(servicesGranted, svc)
+		}
+	}
+
+	// ============================================================================
+	// ROLE APPOINTMENT - the THIRD layer, and the last one with no writer
+	// ============================================================================
+	//
+	// Layer 1: `entitlements`   — what PLAN the user is on          (was 0 rows)
+	// Layer 2: `user_services`   — which APPS the user may open    (was 0 rows)
+	// Layer 3: `appointments`    — which ROLES the user holds      (was 0 rows)
+	//
+	// All three were correctly seeded, correctly implemented, correctly tested,
+	// and had ZERO writers. So all three resolved to "nothing", and a brand-new user
+	// was refused channel creation three different ways in a row:
+	//
+	//	service_not_granted  ->  "You do not have access to web."
+	//	forbidden            ->  "You do not have the 'channel.create' capability."
+	//
+	// The second one is this block. `requirePermission("channel.create")` calls
+	// `RBAC.Can`, which reads `appointments` → `role_permissions`. With no
+	// appointment, there are no permissions, and the superadmin bypass does not
+	// apply because a new user is not a superadmin.
+	//
+	// `creator` and nothing else. It is the lowest ranked role that can make and
+	// manage content, which is exactly what a signup is. `finance` and `ops` are
+	// deliberately NOT granted — a self-service signup that appointed itself an
+	// administrator would make the whole rank hierarchy decorative.
+	//
+	// The appointment is made BY the system, so `granterID` is the user's own id:
+	// `Appoint` records who granted a role, and attributing a self-appointment to
+	// the system (nil granter) would misreport it as an admin action. This is the
+	// ONE case where self-attribution is honest rather than a privilege problem,
+	// because the role being granted is the lowest one and the alternative is a
+	// bootstrap superadmin doing it by hand for every signup.
+	var roleGranted string
+	if h.rbac != nil {
+		roleID, lookupErr := h.rbac.RoleIDByName(c.Request.Context(), "creator")
+		if lookupErr != nil {
+			log.Printf("[RBAC] creator role lookup failed at registration: %v", lookupErr)
+		} else if _, appointErr := h.rbac.Appoint(
+			c.Request.Context(), user.ID, user.ID, roleID,
+			"granted automatically at registration", nil,
+		); appointErr != nil {
+			// Logged, NOT fatal. An account that exists but cannot create a channel
+			// is a support ticket; an account that does not exist is a signup that
+			// appeared to work.
+			log.Printf("[RBAC] creator appointment failed for %s: %v", user.Email, appointErr)
+		} else {
+			roleGranted = "creator"
+		}
+	}
+
 	c.JSON(http.StatusCreated, gin.H{
 		"user": gin.H{
 			"id":          user.ID,
@@ -179,7 +459,58 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			"created_at":  user.CreatedAt,
 		},
 		"tokens": tokenPair,
+		// Echoed so the client can render "your trial ends in 3 days" WITHOUT a
+		// second request, and so the expiry the SERVER computed is what the UI shows
+		// rather than the browser's own arithmetic on a timestamp.
+		"trial": trialInfo,
+		// Which apps this account can open. The client needs it to decide where to
+		// send somebody after signup, and it is the same list the server enforces —
+		// so a mismatch between "the UI offered this" and "the guard allows this"
+		// cannot happen.
+		"services": servicesGranted,
+		"role":     roleGranted,
 	})
+}
+
+// defaultUserServices is what every new account is granted.
+//
+// A closed list, not "everything" — `admin` and `superadmin` are deliberately
+// absent. Granting them to every signup would make those slugs meaningless as a
+// restriction, which is the entire reason `requireService` exists as a second gate
+// alongside `requirePermission`.
+//
+// Held here rather than in `.env` because these are product defaults an operator
+// should not need to configure; the SERVICE GRANT model, not this list, is what is
+// configurable.
+var defaultUserServices = []string{"web", "video_editor"}
+
+// trialLimits renders a granted plan's capabilities for the registration response.
+//
+// `Limit`'s second return value is `granted`, not "is unlimited" — unlimited is the
+// VALUE being `config.Unlimited`. Getting that backwards reported a `starter` user as
+// unlimited across every capability; see
+// `internal/service/entitlement_limit_contract_test.go`.
+func trialLimits(s *service.EntitlementService, ent *model.Entitlement) map[string]any {
+	out := map[string]any{}
+	if s == nil || ent == nil {
+		return out
+	}
+
+	// `s.Plan(...)` rather than `s.plans.Get(...)` — `plans` is unexported, and
+	// reaching into another package's private field is not an option. The exported
+	// accessor exists so this is the only way, which is the point of it.
+	plan, ok := s.Plan(ent.PlanCode)
+	if !ok {
+		return out
+	}
+	for capability, v := range plan.Grants {
+		if v == config.Unlimited {
+			out[capability] = "unlimited"
+		} else {
+			out[capability] = v
+		}
+	}
+	return out
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {

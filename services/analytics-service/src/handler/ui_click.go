@@ -74,16 +74,20 @@ func (h *Handler) RecordUIClicks(c *gin.Context) {
 	//
 	// WHAT "THE CALLER" MEANS, precisely: the value arrived in a header, on a
 	// connection that already presented the internal token. The apps' shared
-	// audit handler sets these from the httpOnly session cookie it read
-	// server-side. It decodes that JWT WITHOUT verifying the signature, because
-	// it is labelling a row, not authorising anything - see
-	// `packages/ui/src/jwt-payload.ts`, which says so at the top.
+	// audit handler (`@wideo11/ui/audit-handler`) sets these from the httpOnly
+	// session cookie it read server-side, AFTER verifying the cookie's signature
+	// with the real `JWT_SECRET_KEY`.
 	//
-	// So a forged cookie misattributes a click; it does not grant access and
-	// cannot reach another user's data through this endpoint. That is an
-	// acceptable trade for attribution, and an unacceptable one for permissions
-	// - which is why nothing in this file reads these headers to decide whether
-	// to serve the request.
+	// The header value is still only as good as that verification, so the handler
+	// also sends `X-Internal-Attribution` and this file records it. A forged
+	// cookie therefore cannot silently become a plausible-looking row: it lands as
+	// `attribution = 'forged'`, with whatever user id the forger chose, and the
+	// fraud is a `WHERE` clause rather than an argument.
+	//
+	// Nothing in this file reads these headers to decide whether to serve the
+	// request. That is deliberate and is the asymmetry that keeps this safe: an
+	// attribution header is a LABEL, a permission decision is a GATE, and only the
+	// gate needs to be unforgeable.
 	var userID *uuid.UUID
 	if raw := c.GetHeader("X-Internal-User-Id"); raw != "" {
 		if parsed, err := uuid.Parse(strings.TrimSpace(raw)); err == nil && parsed != uuid.Nil {
@@ -92,6 +96,17 @@ func (h *Handler) RecordUIClicks(c *gin.Context) {
 	}
 	userEmail := strings.TrimSpace(c.GetHeader("X-Internal-User-Email"))
 	sessionID := strings.TrimSpace(c.GetHeader("X-Internal-Session-Id"))
+
+	// Closed set. An unrecognised value becomes `anonymous`, the least
+	// trust-bearing state, so a new client cannot invent a fourth category that
+	// reads as more trusted than it is.
+	attribution := "anonymous"
+	switch strings.TrimSpace(c.GetHeader("X-Internal-Attribution")) {
+	case "verified":
+		attribution = "verified"
+	case "forged":
+		attribution = "forged"
+	}
 
 	// Geo and device are derived from the REQUEST. Same reason as identity: the
 	// client would otherwise be able to place itself in any country.
@@ -130,6 +145,7 @@ func (h *Handler) RecordUIClicks(c *gin.Context) {
 			OS:         geo.OS,
 			UserID:     userID,
 			UserEmail:  truncate(userEmail, 255),
+			Attribution: attribution,
 			OccurredAt: occurred,
 		})
 	}

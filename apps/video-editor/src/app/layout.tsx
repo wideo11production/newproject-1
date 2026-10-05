@@ -1,4 +1,5 @@
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 import type { Metadata } from 'next';
 // Google font REMOVED - air-gapped Grafana font stack use ho raha hai.
 // Kyun: "next/font/google" build time par network se Inter fetch karta tha aur
@@ -17,7 +18,7 @@ function ThemeProvider({ children }: { children: ReactNode }) {
 }
 
 export const metadata: Metadata = {
-  title: 'Wideo11 Video Editor',
+  title: 'WideoCut Pro',
   description: 'Professional video editor with templates, filters, animations and transitions',
 };
 
@@ -31,6 +32,10 @@ export default function RootLayout({
       <body className={FONT_SANS_CLASS} style={{ fontFamily: FONT_SANS_STACK }} suppressContentEditableWarning>
         {/* Global activity capture (Awareness grid ka data source) */}
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
         <ThemeProvider>
           <Providers>
             <div className="flex h-screen flex-col bg-background">

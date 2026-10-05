@@ -50,6 +50,20 @@ func main() {
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
+
+	// ---- Order matters, and this is why ----
+	//
+	// `RegisterRoutes` decides WHICH routes are public. `middleware.AuthRequired`
+	// is applied INSIDE it, per group. Nothing global is added here, because a
+	// global auth middleware would also guard `/health` - and a health endpoint
+	// that requires a credential makes Docker kill a healthy container, which is
+	// the exact bug recorded for the frontend apps in `updatedtodo.md` Session 19.
+	//
+	// The previous arrangement registered every billing route on the bare engine
+	// and applied auth to ONE group (the payouts). `POST /subscriptions`,
+	// `POST /plans`, `POST /invoices`, `POST /invoices/payments` and
+	// `PUT /payments/:id/refund` were reachable with no credential, taking
+	// `user_id` from the request body.
 	h.RegisterRoutes(r)
 
 	// Health check route: Kubernetes/Docker healthcheck is endpoint par depend karta hai.

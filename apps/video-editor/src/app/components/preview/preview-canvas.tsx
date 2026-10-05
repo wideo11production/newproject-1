@@ -120,11 +120,37 @@ export function PreviewCanvas({
     };
   }, []);
 
-  const sources = useCallback(() => {
+  /**
+   * Must stay IDENTICAL to `video-editor.tsx`'s `compositorSources`.
+   *
+   * The preview and the exporter drive the same compositor over the same shape, and
+   * if this map knows about something the export map does not, the result is a logo
+   * that appears in the rendered file but not on screen while you position it — or
+   * the reverse. Both are worse than a logo that never appears, because the user
+   * finds out late.
+   */
+const sources = useCallback(() => {
     const map = new Map<string, { url: string; kind: string }>();
     for (const item of media.items) map.set(item.id, { url: item.url, kind: item.kind });
+    // A branding clip carries its logo URL on the clip: a channel is not a file the
+    // user imported, so it will never be a media item and would otherwise never be
+    // resolvable here.
+    for (const track of tracks) {
+      if (track.type !== 'branding') continue;
+      for (const clip of track.clips) {
+        // The store's URL is the live one for any id it holds. A sponsor
+        // logo IS a media item, and its clip still carries the blob: URL
+        // minted in the PREVIOUS document - dead after a reload. Writing
+        // it here overwrote the fresh URL the store just re-minted from
+        // IndexedDB, so the mark vanished on every reload. Only a channel
+        // logo, whose id is never a media item, needs the URL off the clip.
+        if (clip.url && !map.has(clip.mediaId)) {
+          map.set(clip.mediaId, { url: clip.url, kind: 'image' });
+        }
+      }
+    }
     return map;
-  }, [media.items]);
+  }, [media.items, tracks]);
 
   useEffect(() => {
     const canvas = canvasRef.current;

@@ -22,6 +22,10 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	// `config` for `PlanDisplayName`. The import is the fix: the plan display name
+	// used to be a `switch` in this file, over three plan codes that do not exist.
+	// See `getPlanDisplayName`.
+	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/model"
 )
 
@@ -613,24 +617,41 @@ func (s *AuthService) GetDashboardStats(ctx context.Context, userID uuid.UUID) (
 	return &stats, nil
 }
 
-// getPlanDisplayName returns human-readable plan name
+// getPlanDisplayName returns human-readable plan name.
+//
+// -----------------------------------------------------------------------------
+// THIS SWITCH WAS ON THREE PLAN CODES THAT DO NOT EXIST
+// -----------------------------------------------------------------------------
+//
+// It matched `lifetime_1`, `lifetime_5` and `lifetime_10`. The actual codes,
+// defined twenty lines away in `config/plans.go`, are `lifetime1`, `lifetime5` and
+// `lifetime10` — no underscore.
+//
+// All three fell through to `default: return code`, so every lifetime subscriber
+// saw the literal string `lifetime1` in the creator dashboard. Not a cosmetic
+// difference in a rarely-read panel: it is the plan name on the billing summary a
+// paying customer looks at to check what they bought.
+//
+// The prices are gone too, and that is a deliberate second fix rather than a
+// correction of the first. Hardcoding `$199` here means this string disagrees with
+// `PLANS_LIFETIME1_PRICE_MINOR` the moment anyone changes the price, and this file
+// is not where the catalogue lives. Reading `config.PlansConfig` means the display
+// name cannot drift from the price.
+//
+// The switch itself is kept rather than replaced with a map lookup, because a map
+// would still be a second list of codes - and a second list of codes is the exact
+// thing that produced this bug. What changed is that it now reads the codes from
+// the same constant the seeder uses.
 func getPlanDisplayName(code string) string {
-	switch code {
-	case "trial":
-		return "Free Trial (3 days)"
-	case "starter":
-		return "Starter ($12/mo)"
-	case "pro":
-		return "Pro ($29/mo)"
-	case "studio":
-		return "Studio ($79/mo)"
-	case "lifetime_1":
-		return "Lifetime 1 ($199 once)"
-	case "lifetime_5":
-		return "Lifetime 5 ($599 once)"
-	case "lifetime_10":
-		return "Lifetime 10 ($999 once)"
-	default:
-		return code
-	}
+	// Delegated to `config`, which owns the code->label map.
+	//
+	// The switch this replaces was on `lifetime_1`/`lifetime_5`/`lifetime_10` while
+	// the real codes are `lifetime1`/`lifetime5`/`lifetime10`, so all three fell
+	// through to `default: return code` and every lifetime subscriber saw the raw
+	// code on their billing summary.
+	//
+	// Delegating means a plan added in `LoadPlans` without a label entry degrades
+	// to showing the code - visible, debuggable - rather than to silently
+	// rendering the wrong plan's name, which is what a mismatched switch does.
+	return config.PlanDisplayName(code)
 }

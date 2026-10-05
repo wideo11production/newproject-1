@@ -14,7 +14,6 @@
 // ============================================================================
 
 import { useCallback, useEffect, useState } from 'react';
-import { useAccessToken } from 'wideo11-auth';
 
 export interface AnalyticsData {
   overview: {
@@ -57,34 +56,42 @@ export function useAnalytics(): AnalyticsState {
   // ---- The caller's own session token ----
   //
   // BUG THIS FIXES: the hook originally fetched `/api/analytics` with no
-  // Authorization header at all. The route correctly forwards the caller's
-  // token to auth-service - and correctly received nothing, so it returned
-  // 401 and the dashboard said "Sign in to view analytics" for a user who WAS
-  // signed in.
+  // -----------------------------------------------------------------------------
+  // PEHLE `useAccessToken()` THA - `packages/auth` SE, JO LOCALSTORAGE ME TOKEN
+  // RAKHTA THA
+  // -----------------------------------------------------------------------------
   //
-  // The symptom is nasty because it looks right: the sign-in banner is
-  // accurate as a sentence, just not as a diagnosis.
+  // Wo store `accessToken` AUR `refreshToken` dono ko `localStorage` me persist
+  // karta tha (`w11-auth` key). Matlab is app par koi bhi XSS, koi bhi compromised
+  // extension, ya koi bhi ad script - poora live session uthata tha, refresh token
+  // ke saath. httpOnly cookie wahi protection deti hai jo isko bypass karta hai.
   //
-  // Note this is the USER's token, not a superadmin credential. The admin
-  // token never enters the browser - the route relays whatever the caller
-  // sends, and a non-superadmin still gets 403 from auth-service.
-  const accessToken = useAccessToken();
+  // `auth-service` sirf `Authorization: Bearer` accept karta hai; cookie nahi. To
+  // browser ko header banane ke liye token chahiye tha - ye theek hai - lekin token
+  // ko STORAGE me rakhna theek nahi tha.
+  //
+  // Doosra reason bhi tha: har doosra app cookie server-side padhta hai
+  // (`apps/video-editor/src/app/api/session/route.ts` wahi karta hai). Ye ek appahi
+  // tha jisne token browser storage me rakha, aur usi wajah se `packages/auth`
+  // exist karta tha.
+  //
+  // Ab koi token client side nahi hai. `/api/analytics` server par httpOnly cookie
+  // padhta hai aur khud header banata hai. Isliye:
+  //   - "token abhi load hua hai" ka state khatam - wahi confusable state jo
+  //     signed-in superadmin ko "Sign in to view analytics" dikhata tha
+  //   - localStorage me credentials khatam
+  //   - `packages/auth` genuinely unused ho gaya, to use DELETE kar diya gaya hai
+  //
+  // Neeche `forbidden` alag state hai 401 se: "tum superadmin nahi ho" aur "tum
+  // signed in nahi ho" do alag problems hain, aur dono ko "sign in" bolna ek ko
+  // galat batata hai.
 
   const load = useCallback(async () => {
-    // No token yet means the store has not rehydrated from localStorage, NOT
-    // that the user is signed out. Treating those two states the same is what
-    // produced a dashboard that told a signed-in superadmin "Sign in to view
-    // analytics" - a sentence that is grammatically true and diagnostically
-    // false.
-    if (!accessToken) {
-      setState((s) => (s.loading ? s : { ...s, loading: true, error: null }));
-      return;
-    }
+    setState((s) => (s.loading ? s : { ...s, loading: true, error: null }));
     try {
-      const res = await fetch('/api/analytics', {
-        cache: 'no-store',
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      // No Authorization header. The cookie rides along automatically and is
+      // read server-side.
+      const res = await fetch('/api/analytics', { cache: 'no-store' });
       if (res.status === 403) {
         setState({ data: null, error: null, forbidden: true, loading: false });
         return;
@@ -102,13 +109,19 @@ export function useAnalytics(): AnalyticsState {
         const body = await res.json().catch(() => ({}));
         setState({
           data: null,
-          error: (body as { message?: string }).message ?? `API returned ${res.status}`,
+          error:
+            (body as { message?: string }).message ?? `API returned ${res.status}`,
           forbidden: false,
           loading: false,
         });
         return;
       }
-      setState({ data: (await res.json()) as AnalyticsData, error: null, forbidden: false, loading: false });
+      setState({
+        data: (await res.json()) as AnalyticsData,
+        error: null,
+        forbidden: false,
+        loading: false,
+      });
     } catch (e) {
       setState({
         data: null,
@@ -121,10 +134,10 @@ export function useAnalytics(): AnalyticsState {
 
   useEffect(() => {
     load();
-  }, [load, accessToken]);
+  }, [load]);
 
-  // Separate interval effect: re-arming the timer on every token change would
-  // reset the 15s cadence each time.
+  // Separate interval effect: re-arming the timer on every dependency change
+  // would reset the 15s cadence each time.
   useEffect(() => {
     const id = setInterval(load, REFRESH_MS);
     return () => clearInterval(id);

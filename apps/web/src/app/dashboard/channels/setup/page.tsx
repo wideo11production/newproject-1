@@ -51,7 +51,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, Palette, Sparkles, Tag, Eye, MessageSquare, Baby, Droplets } from 'lucide-react';
+import { ArrowLeft, Check, Palette, Sparkles, Tag, Eye, MessageSquare, Baby, Droplets, MousePointer, Maximize2, Minimize2 } from 'lucide-react';
 import { Label } from '@wideo11/ui/label';
 import { Input } from '@wideo11/ui/input';
 import { CoverUploader } from '@/components/channels/cover-uploader';
@@ -83,6 +83,10 @@ type SetupChannel = {
   comment_policy: string;
   kids_auto_classify: boolean;
   watermark_enabled: boolean;
+  /** Logo position: corner of the frame. */
+  logo_position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  /** Auto-size logo to fit the corner. */
+  logo_auto_size?: boolean;
   setup_complete: boolean;
   setup_completed_at?: string;
 };
@@ -140,6 +144,8 @@ export default function ChannelSetupPage() {
   const [commentPolicy, setCommentPolicy] = useState('anyone');
   const [kidsAutoClassify, setKidsAutoClassify] = useState(true);
   const [watermarkEnabled, setWatermarkEnabled] = useState(false);
+  const [logoPosition, setLogoPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('bottom-right');
+  const [logoAutoSize, setLogoAutoSize] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState('');
@@ -206,6 +212,8 @@ export default function ChannelSetupPage() {
       setCommentPolicy(ch.comment_policy ?? 'anyone');
       setKidsAutoClassify(ch.kids_auto_classify ?? true);
       setWatermarkEnabled(ch.watermark_enabled ?? false);
+      setLogoPosition(ch.logo_position ?? 'bottom-right');
+      setLogoAutoSize(ch.logo_auto_size ?? true);
       if (Array.isArray(setupRes.brand_colors)) setPalette(setupRes.brand_colors);
       if (typeof setupRes.max_logo_bytes === 'number') setMaxLogoBytes(setupRes.max_logo_bytes);
     })();
@@ -356,6 +364,8 @@ export default function ChannelSetupPage() {
           comment_policy: commentsEnabled ? commentPolicy : 'approved',
           kids_auto_classify: kidsAutoClassify,
           watermark_enabled: watermarkEnabled,
+          logo_position: logoPosition,
+          logo_auto_size: logoAutoSize,
           finish_step2: true,
         }),
       });
@@ -425,6 +435,30 @@ export default function ChannelSetupPage() {
               No cover yet — you can add one below
             </span>
           ) : null}
+          {/* Logo position preview - shows where the logo will sit on videos */}
+          {logoUrl && (
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                display: 'flex',
+                alignItems: logoPosition.startsWith('top') ? 'flex-start' : 'flex-end',
+                justifyContent: logoPosition.endsWith('left') ? 'flex-start' : 'flex-end',
+                padding: '8px',
+              }}
+            >
+              <div
+                className="overflow-hidden rounded-full border-2 opacity-80"
+                style={{
+                  borderColor: hsl(activeBrand),
+                  backgroundColor: '#101216',
+                  width: logoAutoSize ? '48px' : '48px',
+                  height: logoAutoSize ? '48px' : '48px',
+                }}
+              >
+                <img src={logoUrl} alt="" className="h-full w-full object-cover" />
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 border-t border-[#2c3235] bg-[#181b1f] px-4 py-3">
           <div
@@ -522,6 +556,90 @@ export default function ChannelSetupPage() {
             </div>
           </div>
         </Section>
+
+        {/* ---- Logo position & auto-size ----
+            Only relevant if a logo exists. Shown conditionally so a creator without
+            a logo isn't asked to position something they don't have. */}
+        {logoUrl && (
+          <Section
+            icon={<MousePointer className="h-3.5 w-3.5" />}
+            title="Logo position"
+            hint="Where your logo sits on every video."
+            dataTrack="setup-section-logo-position"
+          >
+            <div className="space-y-3">
+              <Label className="text-xs text-[#9fa7b3]">Corner</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map((pos) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    data-track={`setup-logo-pos-${pos}`}
+                    aria-pressed={logoPosition === pos}
+                    onClick={() => {
+                      setLogoPosition(pos);
+                      void save({ logo_position: pos });
+                    }}
+                    className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                      logoPosition === pos
+                        ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
+                        : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                    }`}
+                  >
+                    <span className="h-2 w-2 rounded" style={{
+                      background: logoPosition === pos ? '#5794f2' : 'transparent',
+                      border: '1px solid currentColor'
+                    }} />
+                    <span className="text-[11px] font-medium">{pos.replace('-', ' ')}</span>
+                  </button>
+                ))}
+              </div>
+
+              <Label className="text-xs text-[#9fa7b3]">Sizing</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  data-track="setup-logo-auto-size-on"
+                  aria-pressed={logoAutoSize}
+                  onClick={() => {
+                    setLogoAutoSize(true);
+                    void save({ logo_auto_size: true });
+                  }}
+                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                    logoAutoSize
+                      ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
+                      : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                  }`}
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  <span className="text-[11px] font-medium">Auto-size</span>
+                </button>
+                <button
+                  type="button"
+                  data-track="setup-logo-auto-size-off"
+                  aria-pressed={!logoAutoSize}
+                  onClick={() => {
+                    setLogoAutoSize(false);
+                    void save({ logo_auto_size: false });
+                  }}
+                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                    !logoAutoSize
+                      ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
+                      : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                  }`}
+                >
+                  <Minimize2 className="h-3 w-3" />
+                  <span className="text-[11px] font-medium">Manual</span>
+                </button>
+              </div>
+              <p className="text-[10px] text-[#6b7280]">
+                Auto-size fits the logo to the corner at a consistent scale across
+                all project aspect ratios. Manual lets you set a custom size in the
+                editor.
+              </p>
+            </div>
+          </Section>
+        )}
 
         {/* ---- Tagline ---- */}
         <Section

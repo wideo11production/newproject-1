@@ -29,6 +29,9 @@ import {
   Settings2,
   Check,
   AlertTriangle,
+  Smartphone,
+  Monitor,
+  Square,
 } from 'lucide-react';
 import { PanelSection, Button, Field, Select, NumberInput, ColorInput, TextInput, EmptyState } from './panel-kit';
 import {
@@ -41,6 +44,7 @@ import {
   type SaveResult,
 } from '../../lib/engine/project-store';
 import type { ProjectDoc, ProjectSettings, ProjectSummary, TimelineTrack } from '../../lib/engine/types';
+import { PROJECT_VERSION, PROJECT_PRESETS, getPreset } from '../../lib/engine/types';
 import type { MediaItem } from '../../lib/engine/media-store';
 
 export interface ProjectPanelProps {
@@ -256,11 +260,43 @@ export function ProjectPanel({
         )}
       </PanelSection>
 
-      <PanelSection title="Settings" hint="These change the preview, the timecode and the export together — they are not cosmetic.">
+<PanelSection title="Settings" hint="These change the preview, the timecode and the export together — they are not cosmetic.">
         <div className="space-y-2">
+          <Field label="Preset" hint="Quick aspect-ratio templates for common platforms">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+              {PROJECT_PRESETS.map((preset) => {
+                const isActive = doc.settings.width === preset.width && doc.settings.height === preset.height;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      const p = getPreset(preset.id);
+                      onSettings({ width: p.width, height: p.height });
+                    }}
+                    className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-xs transition-colors ${
+                      isActive
+                        ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
+                        : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                    }`}
+                  >
+                    <span className="flex h-6 w-6 items-center justify-center rounded bg-surface-overlay" style={{ color: isActive ? '#5794f2' : 'inherit' }}>
+                      {preset.id === 'mobile' && <Smartphone className="h-3 w-3" />}
+                      {preset.id === 'desktop' && <Monitor className="h-3 w-3" />}
+                      {preset.id === 'square' && <Square className="h-3 w-3" />}
+                      {preset.id === 'cinema' && <Monitor className="h-3 w-3" />}
+                      {preset.id === 'portrait-4-5' && <Smartphone className="h-3 w-3" />}
+                    </span>
+                    <span className="font-medium">{preset.label}</span>
+                    <span className="text-[8px] text-fg-muted">{preset.hint}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
           <Field label="Resolution">
             <Select
-              value={resolution}
+              value={`${doc.settings.width}x${doc.settings.height}`}
               ariaLabel="Project resolution"
               options={RESOLUTIONS}
               onChange={(v) => {
@@ -297,22 +333,38 @@ export function ProjectPanel({
   );
 }
 
-/** Re-exported so the shell can build a doc from live state. */
+/**
+ * Re-exported so the shell can build a doc from live state.
+ *
+ * NOTE: this had no call sites, which is why a hardcoded `version: 2` sat in it
+ * alongside a hardcoded `version: 3` in `video-editor.tsx` while
+ * `PROJECT_VERSION` was also 2. Three numbers for one field, none of them
+ * referencing the definition. Now they all reference the constant, so there is
+ * one number and it lives in one place.
+ *
+ * It also omits `markers`. `markers` is optional on `ProjectDoc`, so omitting it
+ * compiles - and a caller that used this to build a document would silently drop
+ * every marker. Rather than leave that as a trap in dead code, the parameter is
+ * explicit: you cannot call this and forget markers, because there is nowhere to
+ * forget them.
+ */
 export function makeDoc(
   id: string,
   settings: ProjectSettings,
   tracks: TimelineTrack[],
   transitions: ProjectDoc['transitions'],
+  markers: NonNullable<ProjectDoc['markers']>,
   history: TimelineTrack[][],
   future: TimelineTrack[][],
   duration: number
 ): ProjectDoc {
   return {
-    version: 2,
+    version: PROJECT_VERSION,
     id,
     settings,
     tracks,
     transitions,
+    markers,
     history,
     future,
     savedAt: Date.now(),

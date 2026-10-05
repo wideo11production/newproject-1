@@ -66,8 +66,14 @@ type Guard =
  * discarded and the status had to be recomputed by a second, duplicated check -
  * two copies of one rule that could disagree. Returning the decision keeps a
  * single source of truth for "who may read this".
+ *
+ * EXPORTED so `api/ledger/route.ts` uses this exact function rather than a
+ * weaker local check. It had one: `if (!authHeader)`, presence only, no
+ * verification and no role check - which meant any logged-in user who could
+ * reach this port could read the combined auth + BILLING user ledger. One guard,
+ * every route that needs it.
  */
-async function requireSuperadmin(authHeader: string | null): Promise<Guard> {
+export async function requireSuperadmin(authHeader: string | null): Promise<Guard> {
   // 1. A credential must be present at all.
   if (!authHeader) {
     return {
@@ -86,14 +92,21 @@ async function requireSuperadmin(authHeader: string | null): Promise<Guard> {
       headers: { Authorization: authHeader },
       cache: 'no-store',
     });
-  } catch (err) {
+  } catch {
+    // NO error message in the body.
+    //
+    // This branch is reached by a caller whose token has merely been *present* -
+    // not verified. `fetch`'s error message embeds the host it could not reach,
+    // so returning it here hands `http://auth-service:8085` to an anonymous
+    // caller on the first port scan. The caller cannot act on "auth-service is
+    // unreachable any more than they could act on its address, but publishing
+    // the internal DNS map is free reconnaissance.
     return {
       ok: false,
       status: 503,
       body: {
         error: 'Service Unavailable',
         message: 'Cannot reach authentication service',
-        detail: err instanceof Error ? err.message : 'unknown',
       },
     };
   }
@@ -131,16 +144,84 @@ async function requireSuperadmin(authHeader: string | null): Promise<Guard> {
   return { ok: true, role };
 }
 
+/** Canonical name of the session cookie this app's login route sets. */
+const SESSION_COOKIE = 'wideo11_session';
+
+/**
+ * Find the caller's bearer credential: the `Authorization` header, or the session
+ * cookie.
+ *
+ * -----------------------------------------------------------------------------
+ * WHY THIS FUNCTION EXISTS
+ * -----------------------------------------------------------------------------
+ *
+ * Every relay in this app used to call `requireSuperadmin(request.headers.get(
+ * 'authorization'))` directly. That was correct while the dashboard asked the
+ * operator to paste a JWT into a box.
+ *
+ * It stopped being correct the moment the login became cookie-based, and the
+ * failure was quiet and confusing:
+ *
+ *   - the operator signs in successfully; `/api/session` returns
+ *     `authenticated: true, role: superadmin`
+ *   - the dashboard then fires six API calls
+ *   - all six 401, because there is no `Authorization` header any more
+ *   - `loadAll` treats a 401 as "the session ended" and flips the whole UI back to
+ *     the signed-out screen
+ *
+ * So the app reported "Your session ended. Sign in again." to an operator whose
+ * session was demonstrably still valid - and `/api/session`, called a second later,
+ * answered 200. Two endpoints of the same app disagreeing about the same cookie is
+ * the tell: the difference is not the session, it is which function read it.
+ *
+ * THE ORDER MATTERS, AND BOTH ARE KEPT
+ *
+ * Header first, cookie second. The header is not dead code - a scripted caller or
+ * a future service-to-service path legitimately has no cookie, and dropping header
+ * support would break those. The cookie is what the BROWSER sends, because the
+ * credential is httpOnly and JavaScript cannot attach it by hand - which is the
+ * property that makes the whole scheme worth doing.
+ *
+ * Returns null when neither is present, so `requireSuperadmin` sees "no credential"
+ * and answers 401 rather than forwarding a request with no identity at all.
+ */
+export function bearerFromRequest(request: Request): string | null {
+  const header = request.headers.get('authorization');
+  if (header) return header;
+
+  const cookieHeader = request.headers.get('cookie');
+  if (!cookieHeader) return null;
+
+  for (const part of cookieHeader.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq === -1) continue;
+    if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue;
+
+    const raw = part.slice(eq + 1).trim();
+    if (!raw) return null;
+    try {
+      return `Bearer ${decodeURIComponent(raw)}`;
+    } catch {
+      // A malformed percent-escape is a malformed cookie, not a crash - and not a
+      // reason to fall through and read some OTHER cookie as if it were the
+      // session.
+      return null;
+    }
+  }
+  return null;
+}
+
 /**
  * forwardTelemetry relays a request to the telemetry service, after checking that
  * the caller is a superadmin.
  *
- * The caller's Authorization header is READ but never forwarded. The upstream is
+ * The caller's credential is READ but never forwarded. The upstream is
  * authenticated with the internal token instead, so a caller's token cannot be
  * replayed against a service that has no concept of it.
  *
  * @param path    path on analytics-service, e.g. "/ui-clicks/stats"
- * @param request the incoming request; query string and Authorization are read
+ * @param request the incoming request; query string and the caller's credential
+ *                are read. See `bearerFromRequest` for how the credential is found.
  * @param method  forwarded verbatim. GET for reads, POST for the purge.
  */
 export async function forwardTelemetry(
@@ -161,7 +242,7 @@ export async function forwardTelemetry(
     );
   }
 
-  const guard = await requireSuperadmin(request.headers.get('authorization'));
+  const guard = await requireSuperadmin(bearerFromRequest(request));
   if (!guard.ok) {
     return NextResponse.json(guard.body, { status: guard.status });
   }
@@ -179,12 +260,14 @@ export async function forwardTelemetry(
 
     const payload = await res.json().catch(() => ({}));
     return NextResponse.json(payload, { status: res.status });
-  } catch (err) {
+  } catch {
+    // No error message. The caller is already a verified superadmin here, but the
+    // internal address is still not something an HTTP response needs to carry,
+    // and the cost of removing it is zero.
     return NextResponse.json(
       {
         error: 'Service Unavailable',
         message: 'Cannot reach the telemetry service',
-        detail: err instanceof Error ? err.message : 'unknown',
       },
       { status: 503 }
     );

@@ -1,6 +1,7 @@
 "use client";
 
 import { GlobalActivityTracker } from '@wideo11/ui/activity-tracker';
+import { PresenceTracker } from '@wideo11/ui/presence-tracker';
 
 import './globals.css';
 // Global font stack - Grafana-style system fonts (air-gapped, no network fetch)
@@ -20,6 +21,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       <body className={`${FONT_SANS_CLASS} h-full bg-slate-950 text-slate-100 antialiased overflow-hidden`} style={{ fontFamily: FONT_SANS_STACK }}>
         {/* Global activity capture (Awareness grid ka data source) */}
         <GlobalActivityTracker />
+        {/* Presence heartbeat - feeds the superadmin Online Now panel. See the component's
+            header: the server-side start/beat/end existed with zero callers, which is why
+            every presence number read 0. */}
+        <PresenceTracker />
         <AdminClient>
           {children}
         </AdminClient>

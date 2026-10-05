@@ -1,0 +1,44 @@
+<!--
+  Animated tab icon — Wideo11 Analytics (port 3005).
+
+  Identical construction to `apps/superadmin/src/app/icon.svg`; only the accent
+  colour differs, and the reasoning for the whole approach is in that file's
+  header. Read that one first - this is a copy with a different hue, deliberately,
+  rather than a second design.
+
+  Emerald accent, to match this app's `emerald-400` chart palette.
+
+  Geometry note, repeated because it is the part that is easy to get wrong: the
+  14px-rounded square's boundary is 32 from the centre on the axes but about 39.5
+  on the diagonals, so the diagonals are the roomiest part. The arc's outer edge
+  sits at 27.5 and the mark reaches about 22, which is what lets the arc pass
+  behind the letter.
+
+  Safari does not run SMIL in a favicon, so this renders as a static icon there.
+  The static composition is designed to stand alone - the motion is additive.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Wideo11 Analytics">
+  <defs>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f9cf9"/>
+      <stop offset="100%" stop-color="#7b5cf6"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#6ee7b7" stop-opacity="0.95"/>
+      <stop offset="55%"  stop-color="#10b981" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#10b981" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="64" height="64" rx="14" fill="url(#wg)"/>
+  <circle cx="32" cy="32" r="26" fill="none" stroke="url(#accent)"
+          stroke-width="3" stroke-linecap="round"
+          stroke-dasharray="30 133" stroke-dashoffset="0">
+    <animateTransform attributeName="transform" type="rotate"
+                      from="0 32 32" to="360 32 32"
+                      dur="2.6s" repeatCount="indefinite"/>
+  </circle>
+  <path d="M13 21 L22 43 L30 29 L37 43 L46 21"
+        fill="none" stroke="#ffffff" stroke-width="5.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

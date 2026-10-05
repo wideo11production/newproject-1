@@ -3,50 +3,195 @@
 @tailwind utilities;
 
 /*
- * Minimal globals for the superadmin app.
+ * Superadmin globals.
  *
- * NOTE: web app ka globals.css copy nahi kiya gaya kyunki usme shadcn ke
- * CSS variables (--border, --background etc.) reference thay jo is app me
- * define nahi hain - build fail ho jata tha ("border-border class does not exist").
- * Ye app raw Tailwind classes use karti hai, isliye simple base styles kaafi hain.
+ * =============================================================================
+ * THIS FILE USED TO PIN THE APP DARK, WHICH IS WHY THERE WAS NO LIGHT THEME
+ * =============================================================================
  *
- * Hinglish: simple CSS - shadcn variables ki zarurat nahi is app ko
+ * What was here:
+ *
+ *     body {
+ *       background-color: #030712;   // gray-950
+ *       color: #f3f4f6;              // gray-100
+ *     }
+ *
+ * and zero custom properties. That is the whole reason `bg-gray-950`,
+ * `text-gray-300` and `border-gray-800` did not work in this app.
+ *
+ * `enterpriseTheme` - which every app imports - maps the ENTIRE `gray` scale onto
+ * nine CSS variables:
+ *
+ *     gray.50 … gray.950  ->  rgb(var(--app-ink) / <alpha-value>)  and friends
+ *
+ * Those nine variables were defined in exactly ONE file in the repository:
+ * `apps/web/src/app/globals.css`. This app compiled every `gray-*` utility into
+ *
+ *     background-color: rgb(var(--app-bg) / 1)
+ *
+ * against a variable that did not exist here. An undefined `var()` invalidates the
+ * whole declaration at computed-value time, so every one of those utilities
+ * resolved to NOTHING. The page looked dark because of the hardcoded hex on `body`
+ * above, and nothing else worked.
+ *
+ * A light theme was not a missing feature. It was structurally impossible: the
+ * variables the entire design system depends on were defined in another app's
+ * stylesheet.
+ *
+ * =============================================================================
+ * WHY THE VARIABLES ARE `R G B` TRIPLES AND NOT HEX
+ * =============================================================================
+ *
+ * `--app-bg: 255 255 255`, consumed as `rgb(var(--app-bg) / <alpha-value>)`.
+ *
+ * Because this dashboard is full of translucent panels - `bg-gray-900/50`,
+ * `bg-gray-950/40`, `bg-gray-800/30`, `bg-amber-950/20`, `bg-red-900/60`. With
+ * channel triples, Tailwind's `<alpha-value>` does the arithmetic and every
+ * opacity modifier keeps working. With hex it would need `color-mix()` at every
+ * call site, or those ~40 translucent surfaces would all become opaque and the
+ * panel hierarchy would flatten.
+ *
+ * =============================================================================
+ * DARK IS THE DEFAULT, ON `:root` - NOT ON `.dark`
+ * =============================================================================
+ *
+ * `:root` carries dark and `.light` overrides it. The reverse arrangement is what
+ * `apps/web` does, and having both in one product is worse than either choice:
+ * a component written as `bg-gray-900` resolves to a different surface depending
+ * on which app renders it, and nothing in the class name says which.
+ *
+ * Putting dark on `:root` also means a page with NO theme class renders dark
+ * rather than white. Failing toward dark is right for a monitoring surface: it is
+ * the theme the design is built around, and a flash of white before the script
+ * runs is worse than a flash of dark.
+ *
+ * The trade-off, stated plainly: with dark on `:root`, `class="dark"` is a no-op,
+ * so any stylesheet or component that keys off `.dark` will not match. That is
+ * acceptable HERE because this app uses no `dark:` variants at all - which is a
+ * deliberate property of the design, explained next.
+ *
+ * =============================================================================
+ * WHY THERE ARE NO `dark:` VARIANTS IN THE COMPONENTS
+ * =============================================================================
+ *
+ * Because `enterpriseTheme` inverts the grey scale:
+ *
+ *     gray.50  = the STRONGEST foreground
+ *     gray.950 = the page BACKGROUND
+ *
+ * So `text-gray-100` is near-black on light and near-white on dark, from the same
+ * class name. One class, both themes, no `dark:` prefix anywhere.
+ *
+ * That is the property that makes a theme toggle a two-file change instead of a
+ * two-thousand-line one. Writing `dark:` variants everywhere would mean two class
+ * strings per element and a permanent risk of writing one without the other - the
+ * same class of bug as the configuration saying one thing and the code another.
  */
+
+/* ---------------------------------------------------------------------------
+ * Dark - the default, on :root
+ * ------------------------------------------------------------------------- */
+:root {
+  --app-bg: 3 7 18;
+  --app-surface: 17 24 39;
+  --app-surface-raised: 31 41 55;
+  --app-border: 31 41 55;
+  --app-border-strong: 55 65 81;
+  --app-ink: 255 255 255;
+  --app-fg-strong: 209 213 219;
+  --app-fg-muted: 156 163 175;
+  --app-fg-subtle: 107 114 128;
+}
+
+/* ---------------------------------------------------------------------------
+ * Light - chosen, not inverted
+ *
+ * The greys are slightly cooler than a mechanical flip of the dark values would
+ * give, and the borders sit closer to the surface. That is what keeps a data table
+ * legible in light mode without heavy borders - which is the thing that actually
+ * goes wrong in light themes, usually showing up as a page of hard black lines.
+ * ------------------------------------------------------------------------- */
+.light {
+  --app-bg: 255 255 255;
+  --app-surface: 249 250 251;
+  --app-surface-raised: 243 244 246;
+  --app-border: 229 231 235;
+  --app-border-strong: 209 213 219;
+  --app-ink: 17 24 39;
+  --app-fg-strong: 55 65 81;
+  --app-fg-muted: 107 114 128;
+  --app-fg-subtle: 156 163 175;
+}
 
 html,
 body {
   height: 100%;
+  /* NO hardcoded background-color here. */
+  /*
+   * It used to be `background-color: #030712`, which is what pinned this app dark
+   * and made a light theme unreachable no matter what the class on <html> said.
+   * `bg-gray-950` on <body> (see layout.tsx) now resolves through `var(--app-bg)`
+   * and therefore follows the theme.
+   */
 }
 
-body {
-  background-color: #030712; /* gray-950 */
-  color: #f3f4f6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ---------------------------------------------------------------------------
+ * `color-scheme` follows the theme class.
+ *
+ * CSS variables do not reach the browser's own furniture. Scrollbars, `<select>`
+ * dropdowns, form-control borders and autofill styling all follow `colorScheme`,
+ * not the palette - so without this line a dark page gets a white scrollbar and
+ * light-coloured select menus, which is the most common way a "dark mode" looks
+ * unfinished. The pre-paint script also sets it inline, which covers the window
+ * before this stylesheet has parsed.
+ * ------------------------------------------------------------------------- */
+:root {
+  color-scheme: dark;
 }
 
-/* Scrollbar styling - dark theme */
-/* 4px - shared file ke saath match karta hai.
+.light {
+  color-scheme: light;
+}
+
+/* ---------------------------------------------------------------------------
+ * Scrollbars
  *
- * Ye block shared file ke BAAD aata hai, isliye ye jeetta. Pehle yahan 8px
- * tha, jo poore project ko 8px scrollbar deta tha jabki shared file kuch aur
- * bol rahi thi. Ab dono 4px hain.
+ * 4px, matching the shared scrollbar stylesheet that web/admin/analytics import.
+ * Not `@import`ed here because this app's build has no reason to pull in the
+ * shared file, and a duplicated `@import` of a Tailwind-ordered stylesheet is a
+ * known source of ordering surprises. The values are identical and the reason is
+ * recorded, so a change to one is a change to both deliberately.
  *
- * Hinglish: shared rule ke baad ka rule jeetta hai - isliye dono ek hi value. */
+ * Colours come from the theme variables, so the scrollbar themes itself. A
+ * hardcoded `#111827` track would be a dark stripe down a light page.
+ * ------------------------------------------------------------------------- */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #111827;
+  background: rgb(var(--app-surface) / 1);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: rgb(var(--app-border-strong) / 1);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #4b5563;
+  background: rgb(var(--app-fg-subtle) / 1);
+}
+
+/* ---------------------------------------------------------------------------
+ * Focus rings
+ *
+ * `outline: none` without a replacement is the most common accessibility
+ * regression in a themed app: it looks fine to the person styling it and makes the
+ * whole thing unusable by keyboard. Every interactive element in this app sets
+ * `focus:ring-2`, and this rule is the backstop for anything that forgets.
+ * ------------------------------------------------------------------------- */
+:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 1);
+  outline-offset: 2px;
 }

@@ -25,7 +25,7 @@ import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { AlertCircle, Loader2, Eye, EyeOff, Lock } from 'lucide-react';
 
-import { useClickTracking, reportSecurityViolation } from '@/lib/audit-tracking';
+import { reportSecurityViolation } from '@/lib/audit-tracking';
 import { nextFromLocation } from '@/lib/safe-next';
 import SecuritySetupGate from '@/components/security/security-setup-gate';
 
@@ -38,9 +38,11 @@ import {
 } from '@/components/auth/auth-shell';
 
 export default function LoginPage() {
-  // Click tracking start - har click capture hota hai
-  // Hinglish: is page ke clicks bhi track hote hain
-  useClickTracking('auth/login');
+  // Click tracking: `GlobalActivityTracker` already captures every click on this
+  // page, from `app/layout.tsx`. A second `useClickTracking` here used to write
+  // every click twice - and this file's version also omitted `surface` and
+  // `element_id`, so the duplicate rows landed with a null surface. The tracker
+  // has one mount point, and it is the layout.
 
   // ---- Form field states ----
   const [email, setEmail] = useState('');

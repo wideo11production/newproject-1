@@ -365,6 +365,14 @@ export class Compositor {
       this.paintText(clip, ctx, W, H);
     }
 
+    // Branding last: logo on top of everything.
+    for (const track of state.tracks) {
+      if (track.type !== 'branding' || !track.visible) continue;
+      const clip = clipAt(track, t);
+      if (!clip) continue;
+      this.paintBranding(clip, ctx, W, H);
+    }
+
     // Audio is not a drawing, but it is part of "this frame": elements that
     // are not on screen still have to be playing or silent correctly.
     //
@@ -803,6 +811,70 @@ export class Compositor {
     ctx.scale(pan.z, pan.z);
     ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
     drawText(ctx, { ...DEFAULT_TEXT_STYLE, ...clip.text }, rect.x, rect.y, rect.w, rect.h);
+    ctx.restore();
+  }
+
+/**
+   * Draw the branding logo.
+   *
+   * ---- WHY THE LOGO'S OWN SHAPE IS USED ----
+   *
+   * `const logoH = logoW` forced every logo into a square box. A wordmark is
+   * routinely 4:1 or wider, so a square box either stretched it to a square or, once
+   * a fit mode was added, letterboxed it inside a box sized for something else. The
+   * corner maths then positioned a box the logo did not fill, which put the visible
+   * edge somewhere other than the corner the user chose.
+   *
+   * The natural aspect ratio is applied once the image has loaded; until then the
+   * previous square box is used, because a first frame that is briefly misproportioned
+   * is invisible while a logo that stays the wrong shape is not.
+   *
+   * ---- WHY THE TRANSFORM IS HONOURED ----
+   *
+   * It was not: `x`, `y`, `scale` and `rotation` were all read into `transform` and
+   * then ignored, so dragging the logo in the inspector moved nothing, and the
+   * device presets (which are expressed as a corner and a size) had nothing to act on.
+   */
+     private paintBranding(clip: TimelineClip, ctx: CanvasRenderingContext2D, W: number, H: number) {
+    const source = this.state?.sources.get(clip.mediaId);
+    if (!source) return;
+
+    const transform = clip.transform;
+    const corner = transform.corner || 'bottom-right';
+    const size = transform.pipSize || 0.15; // Default 15% of frame width
+    const opacity = Math.max(0, Math.min(1, clip.opacity));
+    const pad = W * 0.035;
+
+    ctx.save();
+    ctx.globalAlpha = opacity;
+    ctx.globalCompositeOperation = 'source-over';
+
+    const img = loadImage(source.url);
+    if (img.complete && img.naturalWidth > 0) {
+      const natural = img.naturalWidth / img.naturalHeight;
+      const logoW = size * W;
+      const logoH = logoW / natural;
+
+      // Corner placement is the DEFAULT position, and the default position is
+      // expressed as a centre of `0.5, 0.5`. So a non-centre `x`/`y` can only have
+      // come from the user (or a preset) putting the logo somewhere specific, and it
+      // wins over the corner. No extra flag is needed to tell the two apart, and
+      // nothing new has to survive a save/reload to be right next time.
+      const explicit = transform.x !== 0.5 || transform.y !== 0.5;
+      const baseX = corner.includes('right') ? W - logoW - pad : pad;
+      const baseY = corner.includes('bottom') ? H - logoH - pad : pad;
+
+      // Centre of the logo, which is what rotation must happen around: rotating about
+      // the top-left corner throws the logo out of the frame.
+      const cx = explicit ? transform.x * W : baseX + logoW / 2;
+      const cy = explicit ? transform.y * H : baseY + logoH / 2;
+      const scale = Number.isFinite(transform.scale) && transform.scale > 0 ? transform.scale : 1;
+
+      ctx.translate(cx, cy);
+      if (transform.rotation) ctx.rotate((transform.rotation * Math.PI) / 180);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, -logoW / 2, -logoH / 2, logoW, logoH);
+    }
     ctx.restore();
   }
 }

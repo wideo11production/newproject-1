@@ -41,7 +41,14 @@ export function AudioPanel({
   onClipVolume: (v: number) => void;
   onClipFade: (edge: 'in' | 'out', v: number) => void;
   onMatchLevel: (targetDb: number) => void;
-  onSilenceRemoved: (blob: Blob) => void;
+  /**
+   * `duration` is the trimmed length, passed alongside the blob.
+   *
+   * It was omitted, so the caller had no length to give the new clip and it landed
+   * with a 5-second placeholder instead of the audio it actually contains. The
+   * value is already computed here as the difference of the two reported figures.
+   */
+  onSilenceRemoved: (blob: Blob, duration: number) => void;
   onRecord: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
@@ -67,7 +74,7 @@ export function AudioPanel({
             ).toFixed(1)} dBFS; raise it to cut more.`
           : `Removed ${r.removedSeconds.toFixed(1)}s of ${r.originalSeconds.toFixed(1)}s (${pct}%) in your browser — nothing uploaded.`
       );
-      onSilenceRemoved(blob);
+      onSilenceRemoved(blob, Math.max(0, r.originalSeconds - r.removedSeconds));
     } catch (e) {
       setResult(e instanceof Error ? `Failed: ${e.message}` : 'Silence removal failed');
     } finally {
