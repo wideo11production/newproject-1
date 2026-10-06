@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,6 +19,38 @@ type Handler struct {
 
 func NewHandler(svc *service.BillingService) *Handler {
 	return &Handler{svc: svc}
+}
+
+// resolveBillingUser turns the VERIFIED token claim into the
+// billing-side uint, via the identity adapter.
+//
+// The four handlers that need "which billing user is this"
+// share this one path so the answer - and the two failures,
+// "not a resolvable user" (400) and "database broken" (500) -
+// cannot drift apart between them.
+//
+// Returns false when the response is already written.
+func (h *Handler) resolveBillingUser(c *gin.Context) (uint, bool) {
+	verified, ok := selfUserID(c)
+	if !ok {
+		return 0, false
+	}
+	userID, err := h.svc.ResolveBillingUserID(c.Request.Context(), verified)
+	if err != nil {
+		if errors.Is(err, service.ErrIdentityNotResolvable) {
+			// The token carried a user_id auth-service would not
+			// issue. A CLIENT error: the caller's credential is
+			// malformed, not the database.
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "user_id_not_resolvable",
+				"message": "The verified token does not name a resolvable user id.",
+			})
+			return 0, false
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return 0, false
+	}
+	return userID, true
 }
 
 // RegisterRoutes wires billing's HTTP surface.
@@ -266,25 +299,20 @@ func (h *Handler) Subscribe(c *gin.Context) {
 		return
 	}
 
-	// The billing model stores `UserID uint`. The token carries a UUID, so the
-	// cast can fail for a real user.
-	//
-	// It is left failing LOUDLY rather than defaulting to 0. A silent 0 matches
-	// no rows, so the user is told "you have no subscriptions" instead of an
-	// error - and that reads as "billing is broken for me", which is worse than a
-	// 400 they can report. See `identity.go` for why the mismatch is not fixed
-	// here.
-	parsed, err := strconv.ParseUint(verified, 10, 64)
+	// The token carries auth-service's UUID; the subscription row
+	// keys by billing's uint. `Subscribe` resolves the two through
+	// the identity adapter, so a UUID that names no user is a 400
+	// BEFORE any row is written - not a subscription that belongs
+	// to nobody.
+	sub, err := h.svc.Subscribe(c.Request.Context(), verified, req.PlanCode, req.AutoRenew)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "user_id_not_resolvable",
-			"message": "This service's user id space does not match the auth service's. See identity.go.",
-		})
-		return
-	}
-
-	sub, err := h.svc.Subscribe(c.Request.Context(), uint(parsed), req.PlanCode, req.AutoRenew)
-	if err != nil {
+		if errors.Is(err, service.ErrIdentityNotResolvable) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "user_id_not_resolvable",
+				"message": "The verified token does not name a resolvable user id.",
+			})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -311,16 +339,15 @@ func (h *Handler) GetSubscription(c *gin.Context) {
 
 func (h *Handler) GetSubscriptionByUser(c *gin.Context) {
 	// From the TOKEN. `:user_id` is ignored - see `identity.go`.
-	verified, ok := selfUserID(c)
+	//
+	// The UUID the token carries is resolved to billing's uint
+	// by the adapter, so a real user finds their subscription
+	// instead of a 400.
+	userID, ok := h.resolveBillingUser(c)
 	if !ok {
 		return
 	}
-	userID, err := strconv.ParseUint(verified, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
-		return
-	}
-	sub, err := h.svc.GetSubscriptionByUser(c.Request.Context(), uint(userID))
+	sub, err := h.svc.GetSubscriptionByUser(c.Request.Context(), userID)
 	if err != nil {
 		if err == repository.ErrSubscriptionNotFound {
 			c.JSON(http.StatusNotFound, gin.H{"error": "subscription not found"})
@@ -341,13 +368,11 @@ func (h *Handler) CancelSubscription(c *gin.Context) {
 	//
 	// `:user_id` is still in the route - removing it would 404 every existing
 	// client - and it is ignored.
-	verified, ok := selfUserID(c)
+	//
+	// The UUID the token carries is resolved to billing's uint
+	// by the adapter before the cancel runs.
+	userID, ok := h.resolveBillingUser(c)
 	if !ok {
-		return
-	}
-	userID, err := strconv.ParseUint(verified, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
 
@@ -355,7 +380,7 @@ func (h *Handler) CancelSubscription(c *gin.Context) {
 		Reason string `json:"reason"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	sub, err := h.svc.CancelSubscription(c.Request.Context(), uint(userID), req.Reason)
+	sub, err := h.svc.CancelSubscription(c.Request.Context(), userID, req.Reason)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -492,18 +517,16 @@ func (h *Handler) ListInvoices(c *gin.Context) {
 	//
 	// This was a full invoice disclosure: authenticated as anybody, request
 	// `/invoices/user/<anyone-else>` and read their billing history.
-	verified, ok := selfUserID(c)
+	//
+	// The UUID the token carries is resolved to billing's uint
+	// by the adapter, so the listing is the CALLER's own.
+	userID, ok := h.resolveBillingUser(c)
 	if !ok {
-		return
-	}
-	userID, err := strconv.ParseUint(verified, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
 		return
 	}
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
 	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-	invoices, err := h.svc.ListInvoices(c.Request.Context(), uint(userID), limit, offset)
+	invoices, err := h.svc.ListInvoices(c.Request.Context(), userID, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

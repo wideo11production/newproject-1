@@ -6,11 +6,13 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"newproject/services/billing-service/src/config"
 	"newproject/services/billing-service/src/database"
+	"newproject/services/billing-service/src/entitlement"
 	"newproject/services/billing-service/src/handler"
 	"newproject/services/billing-service/src/middleware"
 	"newproject/services/billing-service/src/repository"
@@ -43,8 +45,41 @@ func main() {
 	itemRepo := repository.NewInvoiceItemRepository(db)
 	paymentRepo := repository.NewPaymentRepository(db)
 	expenseRepo := repository.NewManualExpenseRepository(db)
+	// The identity adapter: auth-service's UUID -> billing's uint.
+	// `Subscribe` cannot resolve a caller without it.
+	identityRepo := repository.NewUserIdentityRepository(db)
 
-	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo)
+	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo)
+
+	// ---- Payment-success auto-fire (P0.3) ----
+	//
+	// When a subscription is recorded, the subscriber must be
+	// granted the plan they paid for, and entitlements live in
+	// auth-service. The fire needs BOTH the internal URL and the
+	// shared JWT secret, so it is fail-closed here: a service
+	// that starts without them would silently skip every grant,
+	// and "users paid but got nothing" is the worst possible
+	// silent failure. Refusing to start is the loud version.
+	//
+	// `JWT_SECRET_KEY` is the same SSOT value the payout middleware
+	// already reads (`os.Getenv` there too), and compose supplies
+	// both variables with `:?`/static bindings - this check is the
+	// in-process backstop, not the first line of defense.
+	authInternalURL := strings.TrimSpace(os.Getenv("AUTH_INTERNAL_URL"))
+	jwtSecret := os.Getenv("JWT_SECRET_KEY")
+	if authInternalURL == "" || jwtSecret == "" {
+		missing := []string{}
+		if authInternalURL == "" {
+			missing = append(missing, "AUTH_INTERNAL_URL")
+		}
+		if jwtSecret == "" {
+			missing = append(missing, "JWT_SECRET_KEY")
+		}
+		log.Fatalf("refusing to start: entitlement auto-fire is unconfigured (%s). "+
+			"Without it a recorded sale grants nothing, and that failure is silent.",
+			strings.Join(missing, ", "))
+	}
+	billingSvc.SetEntitlementFirer(entitlement.NewClient(authInternalURL, []byte(jwtSecret)))
 
 	h := handler.NewHandler(billingSvc)
 	r := gin.New()

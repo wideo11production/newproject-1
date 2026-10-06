@@ -1607,6 +1607,13 @@ services:
       # `:?` me `docker compose up` ruk kar bolta hai "JWT_SECRET_KEY is
       # required". Ye billing ke block me aakhri fail-open entry thi.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - billing-service validates payout JWTs with it}
+      # Entitlement auto-fire (P0.3): when billing records a
+      # subscription, it grants the plan at auth-service's
+      # internal endpoint. Static compose-network URL - the same
+      # convention as the web app's AUTH_INTERNAL_URL - because a
+      # browser never sees this value and a container resolves
+      # service names, not localhost.
+      AUTH_INTERNAL_URL: http://auth-service:8085
       # KYC provider: local = zero-cost deterministic bank validation
       KYC_PROVIDER: ${KYC_PROVIDER:-local}
       DATABASE_HOST: postgres

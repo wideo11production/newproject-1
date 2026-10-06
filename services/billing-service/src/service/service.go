@@ -24,6 +24,25 @@ type BillingService struct {
 	itemRepo     repository.InvoiceItemRepository
 	paymentRepo  repository.PaymentRepository
 	expenseRepo  repository.ManualExpenseRepository
+	// identityRepo is the uint<->UUID adapter. Required: without it
+	// every caller of `Subscribe` is unresolvable, which is the
+	// 400 `user_id_not_resolvable` crash this field closes.
+	identityRepo repository.UserIdentityRepository
+	// entitlement fires the grant at auth-service when a sale is
+	// recorded. Optional (nil = the fire is disabled), because the
+	// write it guards is a payment that must not roll back if auth
+	// is briefly unreachable. Set via SetEntitlementFirer.
+	entitlement EntitlementFirer
+}
+
+// EntitlementFirer records a sale as a plan grant in auth-service.
+//
+// An interface declared HERE (the consumer) rather than imported
+// from the `entitlement` package: the service only needs the one
+// method, and a test can then fake the fire without standing up
+// an HTTP server. `*entitlement.Client` satisfies it.
+type EntitlementFirer interface {
+	GrantSubscription(ctx context.Context, authUserID, planCode string, periodStart, periodEnd time.Time) error
 }
 
 // NewBillingService creates a new BillingService with all required repositories.
@@ -35,6 +54,7 @@ func NewBillingService(
 	itemRepo repository.InvoiceItemRepository,
 	paymentRepo repository.PaymentRepository,
 	expenseRepo repository.ManualExpenseRepository,
+	identityRepo repository.UserIdentityRepository,
 ) *BillingService {
 	return &BillingService{
 		planRepo:    planRepo,
@@ -44,7 +64,17 @@ func NewBillingService(
 		itemRepo:    itemRepo,
 		paymentRepo: paymentRepo,
 		expenseRepo: expenseRepo,
+		identityRepo: identityRepo,
 	}
+}
+
+// SetEntitlementFirer wires the payment-success auto-fire.
+//
+// Called once from `main.go` after the fail-closed startup
+// check. Passing nil disables the fire - the correct state for
+// a test, and a state main.go never actually enters.
+func (s *BillingService) SetEntitlementFirer(f EntitlementFirer) {
+	s.entitlement = f
 }
 
 // InvoiceItemRequest represents a request to create an invoice item
@@ -102,17 +132,41 @@ func (s *BillingService) UpdatePlan(ctx context.Context, plan *model.Subscriptio
 }
 
 // Subscribe creates a new subscription for a user.
-func (s *BillingService) Subscribe(ctx context.Context, userID uint, planCode string, autoRenew bool) (*model.Subscription, error) {
+//
+// `authUserID` is the VERIFIED token claim: auth-service's
+// canonical UUID. It is resolved to the billing-side uint
+// through the identity adapter (`ResolveBillingUserID`), and
+// the billing id is what lands on the row - `subscriptions`
+// key by uint, and only the adapter knows the mapping.
+//
+// A UUID that is not a UUID at all returns
+// `ErrIdentityNotResolvable` BEFORE any write: an unresolvable
+// caller must not create a subscription row that references
+// nobody.
+//
+// After the row is written, the sale is fired at auth-service
+// as an entitlement grant (see `SetEntitlementFirer`). The
+// fire is best-effort BY DESIGN: the payment already happened,
+// and rolling a completed sale back because a internal POST
+// failed would trade a real billing record for a guess. A
+// failed fire is logged loudly - the grant can be reconciled
+// by an operator, a silently missing one cannot.
+func (s *BillingService) Subscribe(ctx context.Context, authUserID, planCode string, autoRenew bool) (*model.Subscription, error) {
+	billingUserID, err := s.ResolveBillingUserID(ctx, authUserID)
+	if err != nil {
+		return nil, err
+	}
+
 	plan, err := s.planRepo.GetByCode(ctx, planCode)
 	if err != nil {
 		return nil, err
 	}
-	
-	_, _ = s.subRepo.GetByUserID(ctx, userID)
-	
+
+	_, _ = s.subRepo.GetByUserID(ctx, billingUserID)
+
 	now := time.Now()
 	var periodStart, periodEnd time.Time
-	
+
 	switch plan.Cycle {
 	case model.BillingCycleMonthly:
 		periodStart = now
@@ -127,9 +181,9 @@ func (s *BillingService) Subscribe(ctx context.Context, userID uint, planCode st
 		periodStart = now
 		periodEnd = now.AddDate(1, 0, 0)
 	}
-	
+
 	sub := &model.Subscription{
-		UserID:            userID,
+		UserID:            billingUserID,
 		PlanID:            plan.ID,
 		Status:            model.SubscriptionStatusActive,
 		StartDate:         now,
@@ -140,11 +194,26 @@ func (s *BillingService) Subscribe(ctx context.Context, userID uint, planCode st
 		PaymentProvider:    model.PaymentProviderStripe,
 		PaymentMethod:      model.PaymentMethodCreditCard,
 	}
-	
+
 	if err := s.subRepo.Create(ctx, sub); err != nil {
 		return nil, err
 	}
-	
+
+	// ---- The auto-fire: a sale IS a grant ----
+	//
+	// Only when a firer is wired (main.go always wires one;
+	// tests may not). Failure is logged, not returned: see the
+	// method comment for why a completed sale does not roll back.
+	if s.entitlement != nil {
+		if err := s.entitlement.GrantSubscription(ctx, authUserID, plan.Code, periodStart, periodEnd); err != nil {
+			log.Printf("[entitlement] grant fire FAILED for user %s plan %s: %v"+
+				" - the subscription stands; reconcile the grant via POST /admin/entitlements",
+				authUserID, plan.Code, err)
+		} else {
+			log.Printf("[entitlement] grant fired for user %s plan %s (source=subscription)", authUserID, plan.Code)
+		}
+	}
+
 	return sub, nil
 }
 

@@ -142,3 +142,6 @@ services/minio-exporter/minio-exporter
 # hain) - sirf tracking band hai. Asli backup service banne par
 # ye files migrate ho jayengi aur delete ho sakengi.
 infrastructure/backups/*.dump
+
+# Rotation backups of .env (tools/rotate-secrets.mjs) — secret copies
+.env.pre-rotation-*

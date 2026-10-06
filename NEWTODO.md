@@ -28,20 +28,19 @@
 | Content policy | `content_upload_enabled` enforced on all 4 entry points (upload-url + finalize, before ownership check) |
 | **CI** | pnpm + turbo (`ci-cd.yaml` converted — the old `npm ci` breakage is CLOSED) |
 | **Typecheck** | root `pnpm typecheck` **9/9 green** (fixed today: `@wideo11/tsconfig` had no `name` field, so strict mode was silently off; 26 unmasked errors fixed) |
+| **Entitlement grants P0.1–P0.3** | All three wired: superadmin `POST /admin/entitlements` (`GrantPlan`), trial-on-register with the one-trial-per-browser cap, and **grant-on-payment** — billing fires `POST /api/v1/internal/entitlements/subscription` after `Subscribe`, authenticated by a 60-second `service:"billing"` token signed with the shared `JWT_SECRET_KEY`. The uint↔UUID crash (`user_id_not_resolvable` for every real user) is closed by the `user_identities` key-lookup adapter: `services/billing-service/src/service/identity.go` + `repository/user_identity.go` + `entitlement/client.go`, pinned by `identity_test.go`, `client_test.go`, `subscribe_identity_test.go` and the comment-stripped `cmd/billing-service/main_test.go` |
+| **Branding Phase B blockers** | Both closed: the compositor sources map covers branding clip URLs (`apps/video-editor/src/app/lib/engine/sources.ts` — `buildCompositorSources(items, tracks)`), and the editor owns `/api/channels` + `/api/channels/[id]/setup` BFF routes relaying the session cookie to auth-service (`apps/video-editor/src/app/lib/engine/channels-relay.ts` — literal upstream paths, UUID-validated id, no open proxy). Pinned by `tools/check-branding-wiring.mjs` |
+| **`/dashboard/plans` (N2)** | The page exists: `apps/web/src/app/dashboard/plans/page.tsx` — plan list, current grant, expiry, upgrade CTA, real data from the BFF (the trial countdown's link target) |
 | Today's hardening | repo purge (7 `.dump` + `.bak` untracked), dashboard CORS allowlist (was `*` with credentials), webhook-receiver `JWT_SECRET_KEY` fail-closed binding |
 
 ### 🔴 INCOMPLETE — doc says open AND repo confirms
 
 | # | Item | Why it matters |
 |---|---|---|
-| R1 | **Rotate `JWT_SECRET_KEY`** | Historical default is committed; validation can't un-publish it |
-| R2 | **Rotate Gmail / OpenAI / Stripe keys** | Same — commit = disclosure |
-| R3 | **Rotate superadmin password** | `DefaultSuperadminPasswordHash` still in source, offline-attackable |
+| R1 | **Rotate the provider-issued keys** (`SMTP_PASSWORD`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`) + scrub git history | Self-minted secrets (`JWT_SECRET_KEY`, `SECURITY_SUPERADMIN_PASSWORD`) rotated 2026-10-06 by `tools/rotate-secrets.mjs` — every value verified against the parsed `KnownWeakJWTSecrets` matrix, against the old value, and against every other `.env` value. The three provider keys cannot be minted locally (a fabricated `sk_live_…` would silently break billing), and `git filter-repo` rewrites shared history — both need an explicit go-ahead |
+| R3 | **Source-default superadmin hash** (`DefaultSuperadminPasswordHash` still in source, offline-attackable) | Runtime password ROTATED 2026-10-06 (`SECURITY_SUPERADMIN_PASSWORD` in `.env`, 43 chars — overrides the compiled-in default at bootstrap). The default hash itself remains in source until the bootstrap default is removed |
 | R4 | **Backup/restore service (Phase D3)** | **No service exists.** An untested backup is a rumour |
-| P0.7 | **2 compose entries still fail-OPEN** | `docker-compose.yml:187` (dashboard-service) and `:1595` (billing-service Go) still `JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}` — every other service is `:?` |
-| P0.1–P0.3 | **Entitlement grants** (`POST /admin/entitlements`, trial-on-register, grant-on-payment) | Blocks **every quota in the product** |
 | N1 | **7-day refresh only on :3008** | Other 7 apps discard refresh token → logout every 15 min. Fix belongs in `@wideo11/ui/gate` |
-| N2 | **`/dashboard/plans` 404s** | Trial-countdown links to it; page does not exist (confirmed: no `dashboard/plans` in `apps/web`) |
 | N3 | `channel_type` required by API but create form doesn't send it | Channel create fails for real users |
 | N4 | `contentType` vs `content_type` inconsistency across upload handlers | Latent 400s |
 | Y1 | **NATS click-ledger publisher has NO consumer** | Dashboard polls 12 req/min/operator; events durable but unread |
@@ -50,9 +49,7 @@
 | S1 | **2FA at login** | PIN is asked *after* login — password alone grants a session (architectural, HIGH) |
 | S2 | **PII retention purge** | 30-day purges specified; verify which telemetry tables actually have a deleting worker |
 | S3 | Postfix for production email | Gmail ~500/day cap, lockable |
-| B2–B5 | **Branding Phase B** (current frontier) | B2 missing; B3 partially built but **functionally dead**; B4/B5 missing |
-| B-blocker-1 | Branding source never registered in compositor `sources` map | `paintBranding` does `sources.get(clip.mediaId)` → undefined → silent no-op, **no logo in preview or export** |
-| B-blocker-2 | `/api/channels` unreachable from video-editor | Routes exist only in `apps/web/src/app/api/channels/**` (list, `[id]`, cover, logo, setup — 20+ BFF routes); video-editor has no rewrite/middleware → 404, panel shows empty state |
+| B2–B5 | **Branding Phase B build-out** (current frontier) | Both hard blockers CLOSED (see verified table). Remaining: B2 (logo auto-on-new-clip) missing; B3's track + export path is live now the blockers are closed — verify end-to-end; B4/B5 exist as `BRANDING_PRESETS` and the panel's sponsor slot — verify and complete |
 | E1 | Editor records **no clicks** (0 of 533 rows from :3002) | Most complex surface is invisible to analytics |
 | E2 | Real upload endpoint for editor (multipart, resumable, progress, auth) | Deliberately not faked — a project of its own |
 | E3 | Untested at scale: 1000+ clips, very long timelines, 4K export | Virtualisation proven at ~20 clips only |
@@ -73,12 +70,12 @@
 
 ### Tier 1 — before any real user (RED, all small except where noted)
 
-- [ ] **T1.1 Rotate the 4 secrets** (R1–R3) + scrub git history (`git filter-repo`), then rotate again. Scrubbing ≠ rotating; anyone who cloned already has them.
-- [ ] **T1.2 Fail-closed the 2 remaining compose `:-`** (dashboard-service, billing-service Go) — 10-minute change, matches every other service.
-- [ ] **T1.3 Entitlement grants P0.1–P0.3** — superadmin-gated `POST /admin/entitlements`, trial grant on registration, grant on payment success. Unblocks every quota in the product.
-- [ ] **T1.4 `/dashboard/plans` page** — the trial countdown already links to it; build the page (plan list, current grant, expiry, upgrade CTA).
+- [x] **T1.1 Rotate the secrets** — DONE 2026-10-06 (self-minted half): `JWT_SECRET_KEY` + `SECURITY_SUPERADMIN_PASSWORD` rotated by `tools/rotate-secrets.mjs` with the `KnownWeakJWTSecrets` matrix parsed from source and checked. STILL OPEN: the git-history scrub (`git filter-repo`) — destructive, needs explicit go-ahead — and the three provider-issued keys (`SMTP_PASSWORD`, `OPENAI_API_KEY`, `STRIPE_SECRET_KEY`), which only their providers can mint. Scrubbing ≠ rotating; anyone who cloned already has the old values.
+- [x] **T1.2 Fail-closed the remaining compose `:-`** — DONE: all 12 `JWT_SECRET_KEY` bindings in `docker-compose.yml` are `${JWT_SECRET_KEY:?…}` (verified by grep — zero `:-` remain), including billing-service Go and dashboard-service.
+- [x] **T1.3 Entitlement grants P0.1–P0.3** — DONE 2026-10-06. Superadmin-gated `POST /admin/entitlements`, trial grant on registration (one-trial-per-browser cap), and grant on payment success: billing's `Subscribe` resolves the token UUID through the `user_identities` adapter and fires `POST /api/v1/internal/entitlements/subscription` (60s `service:"billing"` token). Pinned by four test files + `cmd/billing-service/main_test.go`.
+- [x] **T1.4 `/dashboard/plans` page** — DONE: `apps/web/src/app/dashboard/plans/page.tsx` — plan list, current grant, expiry, upgrade CTA, real data from the BFF.
 - [ ] **T1.5 `channel_type` in the create form** — one hidden field or a default; API already requires it.
-- [ ] **T1.6 Branding Phase B unblock** (the two hard blockers above): register branding media in the compositor `sources` map, and expose channel routes to the editor (BFF routes under `apps/video-editor/src/app/api/channels/` like `apps/web` has, or a `next.config.mjs` rewrite). **Then** B2 (logo auto-on-new-clip), B3 (dedicated Branding track that bakes into export), B4 (3 device presets: 16:9 top-right · 9:16 top-left · 1:1 top-right), B5 (sponsor slot bottom-right / second user logo).
+- [x] **T1.6 Branding Phase B unblock** — DONE: both hard blockers closed (compositor `sources` map covers branding clip URLs; editor owns the `/api/channels` BFF relay). Pinned by `tools/check-branding-wiring.mjs`. Remaining: the B2/B4/B5 build-out above.
 
 ### Tier 2 — security architecture (HIGH value)
 

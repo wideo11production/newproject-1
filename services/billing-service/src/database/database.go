@@ -34,6 +34,11 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&model.SubscriptionPlan{},
 		&model.Subscription{},
+		// UserIdentity: the uint<->UUID adapter between billing's
+		// `subscriptions.user_id` and auth-service's canonical user
+		// UUID. Without the table, `Resolve` fails and every
+		// subscriber is unresolvable.
+		&model.UserIdentity{},
 		&model.TaxRate{},
 		&model.Invoice{},
 		&model.InvoiceItem{},
