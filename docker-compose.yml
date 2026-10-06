@@ -183,8 +183,16 @@ services:
       # dashboard ke HTTP/WS endpoint use karte hain.
       # Production me .env se sirf apne origins do.
       DASHBOARD_ALLOWED_ORIGINS: ${DASHBOARD_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001}
-      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se)
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se).
+      #
+      # Fail-closed (`:?`), jaan-boojh kar. `:-` me `.env` me var missing
+      # par compose chup-chaap EMPTY secret use kar leta tha - matlab har
+      # JWT verify fail hota aur dashboard ke WS + API routes 401 dete,
+      # aur symptom "service down" lagta jabki asli galti sirf config thi.
+      # `:?` me `docker compose up` ruk kar bolta hai "JWT_SECRET_KEY is
+      # required" - ek galti, ek message. Baaki 8 services pehle se `:?`
+      # use kar rahe the; ye do aakhri fail-open entries the.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - dashboard-service validates auth-service tokens with it}
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:
@@ -1592,7 +1600,13 @@ services:
       SERVER_MODE: release
       # JWT secret: auth-service ke SAME token validate karne ke liye (SSOT - .env se).
       # Payout routes JWT protected hain - ye var na ho to woh 500 de sakte hain.
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-}
+      #
+      # Fail-closed (`:?`), jaan-boojh kar. `:-` me missing var par compose
+      # chup-chaap EMPTY secret use kar leta tha - payout routes 500 dete
+      # aur symptom "billing broken" lagta, jabki asli galti sirf config thi.
+      # `:?` me `docker compose up` ruk kar bolta hai "JWT_SECRET_KEY is
+      # required". Ye billing ke block me aakhri fail-open entry thi.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - billing-service validates payout JWTs with it}
       # KYC provider: local = zero-cost deterministic bank validation
       KYC_PROVIDER: ${KYC_PROVIDER:-local}
       DATABASE_HOST: postgres

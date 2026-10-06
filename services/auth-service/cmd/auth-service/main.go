@@ -1066,6 +1066,37 @@ func main() {
 	superadminHandler.RegisterRoutes(auth, authHandler.AuthMiddleware(),
 		middleware.CheckRevoked(revocationStore))
 
+	// ---- SERVICE-TO-SERVICE: billing's payment-success grant (P0.3) ----
+	//
+	// When billing records a payment for a subscription, the subscriber
+	// must be granted the plan they paid for, and `entitlements` live
+	// here. So the write has to be a call from billing to auth.
+	//
+	// Mounted on the ROOT engine, NOT on `auth`/`protected`: those
+	// groups carry `AuthMiddleware()`, which authenticates a user
+	// session, and billing is not a user. The caller authenticates AS A
+	// SERVICE - a short-lived token signed by the same JWT_SECRET_KEY
+	// carrying `service: "billing"` (see
+	// `internal/middleware/service_token.go` for why the claim, not the
+	// secret, is the boundary).
+	//
+	// WHO CALLS IT, AND WHY NOT YET (Phase 0 dependency):
+	// billing's subscription tables key users by `uint` while auth
+	// keys them by UUID, and billing's `Subscribe` fails loudly
+	// (`user_id_not_resolvable`) for every real user until that id
+	// space is reconciled (billing's `identity.go`). So the billing-side
+	// auto-fire is deliberately NOT wired: firing it today would grant a
+	// plan to a user billing cannot name. This endpoint is the
+	// correctly-attributed target - `source: "subscription"`, the one
+	// source the superadmin endpoint refuses because a manual grant is
+	// not a sale - and it is tested here. An operator can grant the
+	// same plan by hand via `POST /admin/entitlements` meanwhile.
+	r.POST(
+		"/api/v1/internal/entitlements/subscription",
+		middleware.RequireServiceToken([]byte(cfg.JWT.SecretKey), "billing"),
+		superadminHandler.GrantSubscriptionEntitlement,
+	)
+
 	// Awareness (Block 3) - REAL user data grid.
 	// NOTE: ye apna route group banata hai aur DONO layers lagata hai
 	// (auth + superadmin role), isliye backend-level protection bhi hai -
