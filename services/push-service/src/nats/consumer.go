@@ -3,7 +3,9 @@ package nats
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/rs/zerolog/log"
@@ -49,6 +51,19 @@ func NewConsumer(cfg config.NATSConfig, ps *service.PushService) (*Consumer, err
 }
 
 func (c *Consumer) Start(ctx context.Context) error {
+	// Ensure the stream exists before subscribing
+	_, err := c.jetStream.AddStream(&nats.StreamConfig{
+		Name:     c.cfg.Stream,
+		Subjects: []string{c.cfg.PushSubject},
+		Storage:  nats.FileStorage,
+		Retention: nats.LimitsPolicy,
+		MaxAge:   24 * time.Hour,
+		MaxMsgs:  100000,
+	})
+	if err != nil && err != nats.ErrStreamNameAlreadyInUse {
+		return fmt.Errorf("failed to create stream: %w", err)
+	}
+
 	sub, err := c.jetStream.QueueSubscribe(
 		c.cfg.PushSubject,
 		c.cfg.DurableConsumer,

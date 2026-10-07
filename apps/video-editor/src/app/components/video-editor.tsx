@@ -53,7 +53,7 @@ import { ModeRail, type EditorMode } from './sidebar/mode-rail';
 import { PlayerBar } from './player-bar';
 import { EditorToolbar } from './chrome/editor-toolbar';
 import { RecorderDialog } from './chrome/recorder-dialog';
-import { TimelineRuler } from './timeline/timeline-ruler';
+import { TimelineRuler, RULER_HEIGHT } from './timeline/timeline-ruler';
 import { TimelineRail } from './timeline/timeline-rail';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { ResizableHandle, useClampToViewport } from './layout/resizable';
@@ -61,9 +61,12 @@ import { MediaBin } from './panels/media-bin';
 import { TransitionsPanel } from './panels/transitions-panel';
 import { FiltersPanel, TitlesPanel, StickersPanel, PanZoomPanel, LayoutsPanel } from './panels/style-panels';
 import { AudioPanel } from './panels/audio-panel';
+import { ExpressionsPanel } from './panels/expressions-panel';
+import { TemplatesPanel } from './panels/templates-panel';
 import { ProjectPanel } from './panels/project-panel';
 import { BrandingPanel } from './panels/branding-panel';
 import { HelpPanel } from './panels/help-panel';
+import { SamplesPanel, BackgroundsPanel, IntrosPanel, EffectsPanel, ToolsPanel } from './panels/additional-panels';
 import { ClipProperties } from './inspector/clip-properties';
 import { ExportDialog } from './export/export-dialog';
 import { Compositor } from '../lib/engine/compositor';
@@ -179,6 +182,7 @@ export function VideoEditor() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const headerScrollRef = useRef<HTMLDivElement | null>(null);
   const laneScrollRef = useRef<HTMLDivElement | null>(null);
+  const rulerScrollRef = useRef<HTMLDivElement | null>(null);
   const bladeRef = useRef<(() => string | null) | null>(null);
   const patchStamp = useRef<{ id: string; at: number }>({ id: '', at: 0 });
   const playheadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -514,6 +518,41 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
     [firstTrackOf, addToTracks, playheadFrame, commitFrom, fps]
   );
 
+  const addTemplate = useCallback(
+    (templateId: string, atFrame: number) => {
+      const target = firstTrackOf('video', 'base') ?? firstTrackOf('video') ?? firstTrackOf('text');
+      if (!target) {
+        setToast('No video or text track to place the template on');
+        return;
+      }
+      const clip: TimelineClip = {
+        id: nextId('tmpl'),
+        mediaId: `template:${templateId}`,
+        mediaName: `Template: ${templateId}`,
+        startTime: frameToSeconds(atFrame, fps),
+        duration: 5,
+        type: target.type,
+        effects: [],
+        sourceIn: 0,
+        speed: 1,
+        volume: 1,
+        muted: false,
+        opacity: 1,
+        fadeIn: 0,
+        fadeOut: 0,
+        filter: { ...NEUTRAL_FILTER },
+        transform: { ...DEFAULT_TRANSFORM },
+        expressions: {},
+        linkedId: null,
+      };
+      commitFrom((prev) => extendBranding(addToTracks(prev, target.id, clip), clip.startTime + clip.duration + 1 / fps));
+      setSelectedIds(new Set([clip.id]));
+      setMode('project');
+      setToast(`Template "${templateId}" placed at frame ${atFrame}`);
+    },
+    [firstTrackOf, addToTracks, commitFrom, frameToSeconds, fps, setToast, setSelectedIds, setMode]
+  );
+
   // ---- Clip editing ----
   const removeClipById = useCallback(
     (clipId: string) => {
@@ -647,6 +686,61 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
       else applyEdit(before, after);
     },
     [tracks, applyEdit]
+  );
+
+  const stampTemplate = useCallback(
+    (templateId: string, clipId: string) => {
+      const hit = clipById.get(clipId);
+      if (!hit) return;
+      patchClip(clipId, { effects: [...hit.clip.effects.filter((e) => !e.startsWith('template:')), `template:${templateId}`] }, 'template');
+      setToast(`Template "${templateId}" stamped onto "${hit.clip.mediaName}"`);
+    },
+     [patchClip, clipById, setToast]
+  );
+
+  // ---- Intros Panel handlers ----
+  const addIntro = useCallback(
+    (introId: string, atFrame: number) => {
+      const target = firstTrackOf('video', 'base') ?? firstTrackOf('video') ?? firstTrackOf('text');
+      if (!target) {
+        setToast('No video or text track to place the intro on');
+        return;
+      }
+      const introClip: TimelineClip = {
+        id: nextId('intro'),
+        mediaId: `intro:${introId}`,
+        mediaName: `Intro: ${introId}`,
+        startTime: frameToSeconds(atFrame, fps),
+        duration: 3,
+        type: target.type,
+        effects: [introId],
+        sourceIn: 0,
+        speed: 1,
+        volume: 1,
+        muted: false,
+        opacity: 1,
+        fadeIn: 0,
+        fadeOut: 0,
+        filter: { ...NEUTRAL_FILTER },
+        transform: { ...DEFAULT_TRANSFORM },
+        linkedId: null,
+      };
+      commitFrom((prev) => extendBranding(addToTracks(prev, target.id, introClip), introClip.startTime + introClip.duration + 1 / fps));
+      setSelectedIds(new Set([introClip.id]));
+      setToast(`Intro "${introId}" placed at frame ${atFrame}`);
+    },
+    [firstTrackOf, addToTracks, patchClip, extendBranding, frameToSeconds, commitFrom, fps, setSelectedIds, setToast]
+  );
+
+  // ---- Effects Panel handlers ----
+  const toggleEffect = useCallback(
+    (clipId: string, effectId: string) => {
+      const hit = clipById.get(clipId);
+      if (!hit) return;
+      const on = hit.clip.effects.includes(effectId);
+      patchClip(clipId, { effects: on ? hit.clip.effects.filter((e) => e !== effectId) : [...hit.clip.effects, effectId] }, 'effects');
+    },
+    [clipById, patchClip]
   );
 
   const splitClip = useCallback(
@@ -1311,6 +1405,24 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
     return () => lanes.removeEventListener('scroll', sync);
   }, []);
 
+  // ---- Ruler horizontal scroll sync ----
+  //
+  // The ruler MUST stay fixed vertically while clips scroll. So the ruler lives
+  // in its own container (rulerScrollRef) with overflow-x-auto only (NO overflow-y).
+  // But horizontally, the ruler and tracks MUST scroll in perfect sync so time
+  // markers align with clips. This effect syncs rulerScrollRef.scrollLeft with
+  // laneScrollRef.scrollLeft on every horizontal scroll event.
+  useEffect(() => {
+    const ruler = rulerScrollRef.current;
+    const lanes = laneScrollRef.current;
+    if (!ruler || !lanes) return;
+    const sync = () => {
+      if (ruler.scrollLeft !== lanes.scrollLeft) ruler.scrollLeft = lanes.scrollLeft;
+    };
+    lanes.addEventListener('scroll', sync, { passive: true });
+    return () => lanes.removeEventListener('scroll', sync);
+  }, []);
+
   // ---- Theme ----
   useEffect(() => {
     document.documentElement.classList.toggle('light', settings.theme === 'light');
@@ -1877,33 +1989,106 @@ if (!mod) {
                   onRecord={() => setRecording(true)}
                 />
               )}
-              {mode === 'project' && (
-                <ProjectPanel
-                  doc={docSnapshot()}
-                  media={media.items}
-                  dirty={dirty}
-                  lastSavedAt={savedAt}
-                  autosave
-                  onSettings={(p: Partial<ProjectSettings>) => {
-                    if (p.name !== undefined) setProjectName(p.name);
-                    if (p.width !== undefined) setResolution((r) => ({ ...r, width: p.width as number }));
-                    if (p.height !== undefined) setResolution((r) => ({ ...r, height: p.height as number }));
-                    if (p.background !== undefined) setBackground(p.background);
-                    if (p.fps !== undefined) {
-                      const rate = coerceFps(p.fps);
-                      // The zoom is re-expressed so the timeline keeps the same
-                      // apparent size in SECONDS. Without this, switching 30 -> 60
-                      // would silently double the zoom.
-                      patch({ fps: rate, pxPerFrame: rescalePxPerFrame(pxPerFrame, fps, rate) });
-                    }
-                    setDirty(true);
+              {mode === 'expressions' && (
+                <ExpressionsPanel
+                  clip={panelClip}
+                  onApplyExpression={(property, expression) => {
+                    if (!panelClip) return;
+                    const next = { ...(panelClip.expressions ?? {}), [property]: expression };
+                    patchClip(panelClip.id, { expressions: next }, 'expressions');
                   }}
-                  onNew={newProject}
-                  onOpen={openProject}
-                  onSave={doSave}
-                  onImported={importProjectFile}
+                  onClearExpression={(property) => {
+                    if (!panelClip) return;
+                    const next = { ...(panelClip.expressions ?? {}) };
+                    delete next[property];
+                    patchClip(panelClip.id, { expressions: next }, 'expressions');
+                  }}
+                  onRemoveAllExpressions={() => {
+                    if (!panelClip) return;
+                    patchClip(panelClip.id, { expressions: {} }, 'expressions');
+                    setToast('All expressions cleared');
+                  }}
                 />
               )}
+              {mode === 'templates' && (
+                <TemplatesPanel
+                  clip={panelClip}
+                  playheadFrame={playheadFrame}
+                  fps={fps}
+                  onApplyTemplate={(templateId, atFrame) => {
+                    void addTemplate(templateId, atFrame);
+                  }}
+                  onStampTemplate={(templateId, clipId) => {
+                    stampTemplate(templateId, clipId);
+                  }}
+                />
+              )}
+               {mode === 'project' && (
+                 <ProjectPanel
+                   doc={docSnapshot()}
+                   media={media.items}
+                   dirty={dirty}
+                   lastSavedAt={savedAt}
+                   autosave
+                   onSettings={(p: Partial<ProjectSettings>) => {
+                     if (p.name !== undefined) setProjectName(p.name);
+                     if (p.width !== undefined) setResolution((r) => ({ ...r, width: p.width as number }));
+                     if (p.height !== undefined) setResolution((r) => ({ ...r, height: p.height as number }));
+                     if (p.background !== undefined) setBackground(p.background);
+                     if (p.fps !== undefined) {
+                       const rate = coerceFps(p.fps);
+                       // The zoom is re-expressed so the timeline keeps the same
+                       // apparent size in SECONDS. Without this, switching 30 -> 60
+                       // would silently double the zoom.
+                       patch({ fps: rate, pxPerFrame: rescalePxPerFrame(pxPerFrame, fps, rate) });
+                     }
+                     setDirty(true);
+                   }}
+                   onNew={newProject}
+                   onOpen={openProject}
+                   onSave={doSave}
+                   onImported={importProjectFile}
+                 />
+               )}
+
+               {/* ---- New Movavi-style panels ----
+                   Hinglish: ye panels mode-rail me naye modes ke liye hain:
+                   samples (stock video), backgrounds, intros, effects, tools
+                   Sabhi zero background framing boxes ke saath banaye gaye hain
+                   aur orange-red hover (#ff6500) use karte hain.
+               */}
+
+               {mode === 'samples' && <SamplesPanel />}
+               {mode === 'backgrounds' && <BackgroundsPanel />}
+               {mode === 'intros' && (
+                 <IntrosPanel
+                   playheadFrame={playheadFrame}
+                   fps={fps}
+                   onApplyIntro={(introId, atFrame) => { void addIntro(introId, atFrame); }}
+                 />
+               )}
+               {mode === 'effects' && (
+                 <EffectsPanel
+                   clip={panelClip}
+                   onApplyEffect={(effectId) => {
+                     if (!panelClip) return;
+                     toggleEffect(panelClip.id, effectId);
+                   }}
+                   onRemoveEffect={(effectId) => {
+                     if (!panelClip) return;
+                     toggleEffect(panelClip.id, effectId);
+                   }}
+                 />
+               )}
+               {mode === 'tools' && (
+                 <ToolsPanel
+                   settings={settings.tools ?? {}}
+                   onToggle={(key, value) => {
+                     const next = { ...(settings.tools ?? {}), [key]: value };
+                     patch({ tools: next });
+                   }}
+                 />
+               )}
               {/* ---- BRANDING EDITS GO THROUGH THE HISTORY ----
 
                   All three of these used to call `setTracks` directly. That made
@@ -2064,28 +2249,31 @@ if (!mod) {
         invert
       />
 
-      {/* ---- Timeline, full width. Ruler, lanes and playhead share ONE
-          horizontally scrolled strip, with the header column beside it. That is
-          what makes their time axes the same axis. ---- */}
+      {/* ---- Timeline, full width.
+          NEW STRUCTURE: the ruler is FIXED — it stays put when clips scroll
+          vertically. The ruler lives in its OWN horizontally-scrollable container
+          (rulerScrollRef) with overflow-y-hidden only. The tracks live in
+          laneScrollRef with overflow-y-auto. A scroll-sync effect keeps both
+          containers' scrollLeft in lockstep so time markers stay aligned with clips.
+
+          Ruler height is RULER_HEIGHT (40px), imported from the ruler component
+          so the header column row cannot drift.
+
+          will-change: promotes both scroll containers to GPU layers for 60FPS
+          mobile touch scrolling — no jank on trackpads or phone screens. ---- */}
       <div style={{ height: settings.timelineHeight }} className="flex min-h-0 shrink-0 flex-col overflow-hidden">
-        <div className="flex min-h-0 flex-1">
-          <div ref={headerScrollRef} className="shrink-0 overflow-x-hidden overflow-y-auto">
-            <TrackHeaders
-              tracks={tracks}
-              trackHeights={settings.trackHeights}
-              onTrackHeight={trackHeight}
-              onToggleTrack={toggleTrack}
-              onTrackVolume={trackVolume}
-              onPatchClip={patchClip}
-              onAddTrack={addTrack}
-              onRemoveTrack={removeTrack}
-              pxPerFrame={pxPerFrame}
-              onZoom={(v) => patch({ pxPerFrame: v })}
-              onFit={() => patch({ pxPerFrame: 3 })}
-            />
-          </div>
-          <div ref={laneScrollRef} className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-surface">
-            <div className="relative" style={{ width: laneWidth }}>
+        {/*
+          RULER ROW — FIXED: does NOT scroll vertically with clips.
+          Only overflows horizontally, synced to the tracks below.
+          The ruler's own TimelineRuler component renders its internal playhead
+          (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
+        <div className="relative shrink-0 overflow-hidden will-change-scroll-position">
+          <div
+            ref={rulerScrollRef}
+            className="overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position"
+            style={{ height: RULER_HEIGHT }}
+          >
+            <div className="relative" style={{ width: laneWidth, height: RULER_HEIGHT }}>
               <TimelineRuler
                 duration={duration}
                 currentFrame={playheadFrame}
@@ -2104,6 +2292,31 @@ if (!mod) {
                 gridVisible={settings.gridVisible}
                 snapEnabled={settings.snapEnabled}
               />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex min-h-0 flex-1">
+          <div ref={headerScrollRef} className="shrink-0 overflow-x-hidden overflow-y-auto">
+            <TrackHeaders
+              tracks={tracks}
+              trackHeights={settings.trackHeights}
+              onTrackHeight={trackHeight}
+              onToggleTrack={toggleTrack}
+              onTrackVolume={trackVolume}
+              onPatchClip={patchClip}
+              onAddTrack={addTrack}
+              onRemoveTrack={removeTrack}
+              pxPerFrame={pxPerFrame}
+              onZoom={(v) => patch({ pxPerFrame: v })}
+              onFit={() => patch({ pxPerFrame: 3 })}
+            />
+          </div>
+          <div
+            ref={laneScrollRef}
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-surface will-change-transform"
+          >
+            <div className="relative" style={{ width: laneWidth }}>
               <TimelineTracks
                 tracks={tracks}
                 transitions={transitions}
@@ -2140,107 +2353,113 @@ if (!mod) {
                 onHoverClip={setPreviewClip}
                 onBladeReady={setBlade}
                   onToggleTrack={toggleTrack}
-                onTrackVolume={trackVolume}
-                onTrackHeight={trackHeight}
-                onAddTrack={addTrack}
-                onRemoveTrack={removeTrack}
-                onSelectTransition={setSelectedTransitionId}
-                onRemoveTransition={removeTransition}
-                onChangeTransition={changeTransition}
-                onOpenInspector={setInspecting}
-                onToggleLink={toggleLink}
-                onDropMedia={(mediaId, trackId, atFrame) => {
-                  const item = media.byId.get(mediaId);
-                  if (item) addMedia(item, trackId, atFrame);
-                }}
-                onDropHoverChange={() => undefined}
-                selectedClipId={selectedIdsArr.length === 1 ? selectedIdsArr[0] : null}
-                selectedTransitionId={selectedTransitionId}
-                selectedIdsCount={selectedIds.size}
-                clipboardHasContent={clipboard.length > 0}
-                // ONE handler for the context menu, the toolbar and the
-                // keyboard. If each had its own implementation they would
-                // drift, and "Cut" from the menu would quietly do something
-                // slightly different from Ctrl+X.
-                onContextAction={(action) => {
-                  if (action === 'cut') {
-                    copySelected();
-                    removeSelected();
-                  } else if (action === 'copy') copySelected();
-                  else if (action === 'paste') pasteClipboard();
-                  else if (action === 'ripple') removeSelected(true);
-                  else if (action === 'attach') {
-                    // Attach / DETACH. The label in the menu states the action,
-                    // so this one call does both - the same toggle the clip's
-                    // own button uses, so the two can never disagree.
-                    const id = selectedIdsArr[0];
-                    const hit = id ? clipById.get(id) : null;
-                    if (!id || !hit) {
-                      setToast('Select one clip first');
-                      return;
-                    }
-                    const result = attach(tracks, id);
-                    if (!result.ok) {
+                  onTrackVolume={trackVolume}
+                  onTrackHeight={trackHeight}
+                  onAddTrack={addTrack}
+                  onRemoveTrack={removeTrack}
+                  onSelectTransition={setSelectedTransitionId}
+                  onRemoveTransition={removeTransition}
+                  onChangeTransition={changeTransition}
+                  onOpenInspector={setInspecting}
+                  onToggleLink={toggleLink}
+                  onDropMedia={(mediaId, trackId, atFrame) => {
+                    const item = media.byId.get(mediaId);
+                    if (item) addMedia(item, trackId, atFrame);
+                  }}
+                  onDropHoverChange={() => undefined}
+                  selectedClipId={selectedIdsArr.length === 1 ? selectedIdsArr[0] : null}
+                  selectedTransitionId={selectedTransitionId}
+                  selectedIdsCount={selectedIds.size}
+                  clipboardHasContent={clipboard.length > 0}
+                  // ONE handler for the context menu, the toolbar and the
+                  // keyboard. If each had its own implementation they would
+                  // drift, and "Cut" from the menu would quietly do something
+                  // slightly different from Ctrl+X.
+                  onContextAction={(action) => {
+                    if (action === 'cut') {
+                      copySelected();
+                      removeSelected();
+                    } else if (action === 'copy') copySelected();
+                    else if (action === 'paste') pasteClipboard();
+                    else if (action === 'ripple') removeSelected(true);
+                    else if (action === 'attach') {
+                      // Attach / DETACH. The label in the menu states the action,
+                      // so this one call does both - the same toggle the clip's
+                      // own button uses, so the two can never disagree.
+                      const id = selectedIdsArr[0];
+                      const hit = id ? clipById.get(id) : null;
+                      if (!id || !hit) {
+                        setToast('Select one clip first');
+                        return;
+                      }
+                      const result = attach(tracks, id);
+                      if (!result.ok) {
+                        setToast(result.label);
+                        return;
+                      }
+                      commit(result.tracks);
                       setToast(result.label);
-                      return;
+                    } else if (action === 'mute') {
+                      const id = selectedIdsArr[0];
+                      const hit = id ? clipById.get(id) : null;
+                      if (!id || !hit) {
+                        setToast('Select one clip first');
+                        return;
+                      }
+                      patchClip(id, { muted: !hit.clip.muted });
+                      setToast(hit.clip.muted ? `Unmuted “${hit.clip.mediaName}”` : `Muted “${hit.clip.mediaName}” — the rest of the lane is unaffected`);
+                    } else if (action === 'split') {
+                      const hit = bladeRef.current?.();
+                      setToast(hit ? `Split “${hit}” at frame ${playheadFrame}` : 'Nothing under the playhead to split');
                     }
-                    commit(result.tracks);
-                    setToast(result.label);
-                  } else if (action === 'mute') {
-                    const id = selectedIdsArr[0];
-                    const hit = id ? clipById.get(id) : null;
-                    if (!id || !hit) {
-                      setToast('Select one clip first');
-                      return;
-                    }
-                    patchClip(id, { muted: !hit.clip.muted });
-                    setToast(hit.clip.muted ? `Unmuted “${hit.clip.mediaName}”` : `Muted “${hit.clip.mediaName}” — the rest of the lane is unaffected`);
-                  } else if (action === 'split') {
-                    const hit = bladeRef.current?.();
-                    setToast(hit ? `Split “${hit}” at frame ${playheadFrame}` : 'Nothing under the playhead to split');
-                  }
-                }}
-              />
-              <div
-                className="pointer-events-none absolute top-0 z-30 h-full w-px bg-rose-500/70"
-                style={{ left: playheadFrame * pxPerFrame }}
-aria-hidden="true"
-              />
+                  }}
+                />
+                {/*
+                  Playhead for tracks area ONLY. The ruler has its own playhead
+                  inside TimelineRuler (rose-500 bar + triangle). This one lives
+                  in the tracks container so it follows vertical scroll of clips
+                  but stays anchored horizontally with the shared scroll sync.
+                */}
+                <div
+                  className="pointer-events-none absolute top-0 z-30 h-full w-px bg-rose-500/70"
+                  style={{ left: playheadFrame * pxPerFrame }}
+                  aria-hidden="true"
+                />
+              </div>
             </div>
+
+            {/*
+              The right rail: the voice meter at the full height of the lanes, and
+              the ruler's zoom.
+
+              It was in the player bar as a 16px stub, which read as a decoration
+              rather than as a meter - and the ruler's zoom controls had been
+              moved to the toolbar and then lost. Both belong here, beside the
+              timeline they measure and zoom, using height the lanes already have.
+            */}
+            <TimelineRail
+              playing={playing}
+              pxPerFrame={pxPerFrame}
+              onZoomTo={(px) => patch({ pxPerFrame: px })}
+              onFit={() => patch({ pxPerFrame: 3 })}
+            />
           </div>
-
-          {/*
-            The right rail: the voice meter at the full height of the lanes, and
-            the ruler's zoom.
-
-            It was in the player bar as a 16px stub, which read as a decoration
-            rather than as a meter - and the ruler's zoom controls had been
-            moved to the toolbar and then lost. Both belong here, beside the
-            timeline they measure and zoom, using height the lanes already have.
-          */}
-<TimelineRail
-            playing={playing}
-            pxPerFrame={pxPerFrame}
-            onZoomTo={(px) => patch({ pxPerFrame: px })}
-            onFit={() => patch({ pxPerFrame: 3 })}
+          <TimelineFooter
+            currentFrame={playheadFrame}
+            duration={duration}
+            fps={fps}
+            tracks={tracks}
+            transitions={transitions}
+            markers={markers}
+            drawnClips={drawnClipCount}
+            selectedCount={selectedIds.size}
+            projectName={projectName}
+            dirty={dirty}
+            snapEnabled={settings.snapEnabled}
+            measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
+            playbackRate={settings.playbackRate}
           />
         </div>
-        <TimelineFooter
-          currentFrame={playheadFrame}
-          duration={duration}
-          fps={fps}
-          tracks={tracks}
-          transitions={transitions}
-          markers={markers}
-          drawnClips={drawnClipCount}
-          selectedCount={selectedIds.size}
-          projectName={projectName}
-          dirty={dirty}
-          snapEnabled={settings.snapEnabled}
-          measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
-          playbackRate={settings.playbackRate}
-        />
-      </div>
 
 
       <RecorderDialog

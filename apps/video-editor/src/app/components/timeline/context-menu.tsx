@@ -138,7 +138,7 @@ export function TimelineContextMenu({
               title={a.disabled ? `Not available here. ${a.hint}` : a.hint}
               className={[
                 'flex w-full items-center gap-2 px-3 py-1.5 text-left text-[8px] transition-colors',
-                a.disabled ? 'cursor-not-allowed text-fg-muted/60' : 'text-fg hover:bg-sky-600 hover:text-white',
+                a.disabled ? 'cursor-not-allowed text-fg-muted/60' : 'text-fg hover:text-[#ff6500]',
               ].join(' ')}
             >
               <Icon className="h-2 w-2 shrink-0" aria-hidden="true" />

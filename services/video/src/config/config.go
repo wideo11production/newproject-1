@@ -8,10 +8,11 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	MinIO    MinIOConfig
-	FFmpeg   FFmpegConfig
+	Server      ServerConfig
+	Framerate   FramerateConfig
+	Database    DatabaseConfig
+	MinIO       MinIOConfig
+	FFmpeg      FFmpegConfig
 }
 
 type ServerConfig struct {
@@ -19,6 +20,26 @@ type ServerConfig struct {
 	Mode         string
 	ReadTimeout  int
 	WriteTimeout int
+}
+
+type FramerateConfig struct {
+	// AURA_HIGH_FRAMERATE_ENABLED master toggle.
+	// Global on/off switch for ALL premium framerate features.
+	// Default false — AURA Premium is dormant until license check passes.
+	Enabled bool
+	// MaxStandardFPS — standard tier ceiling (default 30, supports 25/30 drop).
+	// All users capped here when global toggle is OFF or license is non-premium.
+	MaxStandardFPS int
+	// MaxHighFPS — high tier ceiling (default 60) for monthly/group plan subscribers.
+	// Monthly/group plan waalon ka MAXIMUM ceiling — premium NOT unlocked.
+	MaxHighFPS int
+	// AuraHighFPS — 120 FPS, ONLY for active lifetime single-user AURA license.
+	AuraHighFPS int
+	// AuraPremiumFPS — 240 FPS, 240Hz display optimization (top tier).
+	// Lifetime license + 240Hz display waalon ke liye.
+	AuraPremiumFPS int
+	// Display240HzOptimized — enables 240Hz display optimization path.
+	Display240HzOptimized bool
 }
 
 type DatabaseConfig struct {
@@ -105,6 +126,13 @@ func setDefaults() {
 	viper.SetDefault("minio.bucket", "video")
 
 	viper.SetDefault("ffmpeg.path", "ffmpeg")
+
+	viper.SetDefault("framerate.enabled", false)
+	viper.SetDefault("framerate.max_standard_fps", 30)
+	viper.SetDefault("framerate.max_high_fps", 60)
+	viper.SetDefault("framerate.aura_high_fps", 120)
+	viper.SetDefault("framerate.aura_premium_fps", 240)
+	viper.SetDefault("framerate.display_240hz_optimized", true)
 }
 
 func (c *DatabaseConfig) DSN() string {

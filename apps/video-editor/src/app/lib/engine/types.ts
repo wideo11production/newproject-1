@@ -143,6 +143,11 @@ export interface TimelineClip {
   /** Free-form effect names, kept for the effects list in the inspector. */
   effects: string[];
 
+  /** Expressions keyed by property name. The compositor evaluates each on every
+   *  frame during preview and export. Stored as strings so they survive save/load
+   *  and undo/redo like every other clip field. */
+  expressions?: Record<string, string>;
+
   /** Seconds into the source media that this clip starts at. */
   sourceIn: number;
   /** Playback rate. 1 = real time. Duration on the timeline is source / speed. */
@@ -375,6 +380,7 @@ export function normaliseClip(raw: Partial<TimelineClip> & { id: string }): Time
     url: raw.url,
     poster: raw.poster,
     effects: raw.effects ?? [],
+    expressions: raw.expressions ?? {},
     sourceIn: raw.sourceIn ?? 0,
     speed: raw.speed && raw.speed > 0 ? raw.speed : 1,
     volume: raw.volume ?? 1,

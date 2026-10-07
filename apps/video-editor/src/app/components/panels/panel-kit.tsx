@@ -67,11 +67,11 @@ export function Tile({
       aria-pressed={Boolean(active)}
       aria-label={ariaLabel ?? label}
       title={hint ? `${label}\n${hint}` : label}
-      className={[
-        'group flex flex-col gap-1 rounded-md border p-1.5 text-left transition-colors',
+       className={[
+        'group flex flex-col gap-1 border p-1.5 text-left transition-colors duration-150 duration-150',
         active
-          ? 'border-sky-500 bg-sky-500/15 ring-1 ring-sky-500/40'
-          : 'border-edge bg-surface-raised/60 hover:border-edge-strong hover:bg-surface-overlay/60',
+          ? 'border-[#ff6500] text-[#ff6500]'
+          : 'border-edge text-fg-secondary hover:border-[#ff6500] hover:text-fg',
       ].join(' ')}
     >
       {swatch && <span className={`h-7 w-full rounded bg-gradient-to-br ${swatch}`} aria-hidden="true" />}
@@ -119,7 +119,7 @@ export function Slider({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(Number(e.target.value))}
-      className={`h-1 w-full cursor-pointer accent-sky-500 ${className}`}
+      className={`h-1 w-full cursor-pointer accent-[#ff6500] ${className}`}
     />
   );
 }
@@ -142,7 +142,7 @@ export function TextInput({
       aria-label={ariaLabel}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
     />
   );
 }
@@ -174,7 +174,7 @@ export function NumberInput({
         const n = Number(e.target.value);
         if (Number.isFinite(n)) onChange(n);
       }}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
     />
   );
 }
@@ -195,7 +195,7 @@ export function Select<T extends string>({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as T)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg focus:border-sky-500 focus:outline-none"
+      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -224,7 +224,7 @@ export function Toggle({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         aria-label={label}
-        className="mt-0.5 h-3 w-3 shrink-0 accent-sky-500"
+        className="mt-0.5 h-3 w-3 shrink-0 accent-[#ff6500]"
       />
       <span>
         <span>{label}</span>
@@ -273,9 +273,9 @@ export function Button({
   className?: string;
 }) {
   const styles = {
-    default: 'bg-sky-600 text-white hover:bg-sky-500',
-    outline: 'border border-edge-strong text-fg hover:bg-surface-overlay',
-    danger: 'border border-rose-900 text-rose-300 hover:bg-rose-950/50',
+    default: 'text-[#ff6500] hover:text-[#e55800]',
+    outline: 'border border-edge-strong text-fg hover:text-[#ff6500]',
+    danger: 'border border-rose-900 text-rose-400 hover:text-rose-300',
   }[variant];
   return (
     <button
@@ -283,7 +283,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${full ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors duration-150 duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${full ? 'w-full' : ''} ${className}`}
     >
       {children}
     </button>

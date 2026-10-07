@@ -94,9 +94,14 @@ const (
 )
 
 // SubscriptionPlan represents a subscription plan/product offered to customers
+//
+// Hinglish: Har plan ek tier define karta hai jisme maximum FPS ceiling
+// specify hoti hai. Standard plans 60 FPS tak clamp karte hain, jabki
+// AURA standalone plan 120/240 FPS unlock karta hai. Zero discount
+// configurations allowed — price field sirf positive decimal.Decimal hota hai.
 type SubscriptionPlan struct {
 	ID          uint           `gorm:"primarykey" json:"id"`
-	UUID       uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"uuid"`
+	UUID        uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"uuid"`
 	Name        string         `gorm:"size:100;not null" json:"name"`
 	Code        string         `gorm:"size:50;not null;uniqueIndex" json:"code"`
 	Description string         `gorm:"size:500" json:"description"`
@@ -106,6 +111,14 @@ type SubscriptionPlan struct {
 	Interval    int            `gorm:"default:1" json:"interval"`
 	TrialDays   int            `gorm:"default:0" json:"trial_days"`
 	Features    string         `gorm:"type:text" json:"features"`
+	// MaxFPS clamps the video runtime property — standard tiers cap at 60 FPS.
+	// AURA standalone unlocks 120 FPS / 240Hz display support.
+	MaxFPS      int            `gorm:"default:60" json:"max_fps"`
+	// IsStandalone marks a single-user lifetime license with no recurring cycle.
+	// Zero discount configurations allowed.
+	IsStandalone bool          `gorm:"default:false" json:"is_standalone"`
+	// MaxResolution caps the output resolution (e.g. "1920x1080", "3840x2160").
+	MaxResolution string        `gorm:"size:32;default:'1920x1080'" json:"max_resolution"`
 	IsActive    bool           `gorm:"default:true" json:"is_active"`
 	SortOrder   int            `gorm:"default:0" json:"sort_order"`
 	CreatedAt   time.Time      `json:"created_at"`
@@ -117,26 +130,33 @@ func (SubscriptionPlan) TableName() string {
 }
 
 // Subscription represents a customer's active subscription
+//
+// Hinglish: Subscription table individual user ka payment status track karta
+// hai. AURA standalone license ke liye IsStandalone=true flag set hota hai
+// aur tier_state_token dynamically update karta hai jisse 120/240 FPS unlock hoti hai.
 type Subscription struct {
 	ID          uint           `gorm:"primarykey" json:"id"`
-	UUID       uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"uuid"`
-	UserID     uint           `gorm:"not null;index" json:"user_id"`
-	PlanID     uint           `gorm:"not null;index" json:"plan_id"`
-	Plan       SubscriptionPlan `json:"plan"`
-	Status     SubscriptionStatus `gorm:"size:20;default:'pending'" json:"status"`
-	StartDate  time.Time        `json:"start_date"`
-	EndDate    time.Time        `json:"end_date"`
+	UUID        uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"uuid"`
+	UserID      uint           `gorm:"not null;index" json:"user_id"`
+	PlanID      uint           `gorm:"not null;index" json:"plan_id"`
+	Plan        SubscriptionPlan `json:"plan"`
+	Status      SubscriptionStatus `gorm:"size:20;default:'pending'" json:"status"`
+	StartDate   time.Time        `json:"start_date"`
+	EndDate     time.Time        `json:"end_date"`
 	CurrentPeriodStart time.Time `json:"current_period_start"`
 	CurrentPeriodEnd time.Time `json:"current_period_end"`
-	TrialEnd   time.Time        `json:"trial_end"`
-	AutoRenew  bool             `gorm:"default:false" json:"auto_renew"`
-	CanceledAt time.Time        `json:"canceled_at"`
-	CancelReason string         `gorm:"size:500" json:"cancel_reason"`
+	TrialEnd    time.Time        `json:"trial_end"`
+	AutoRenew   bool             `gorm:"default:false" json:"auto_renew"`
+	CanceledAt  time.Time        `json:"canceled_at"`
+	CancelReason string        `gorm:"size:500" json:"cancel_reason"`
 	PaymentProvider PaymentProvider `gorm:"size:30" json:"payment_provider"`
 	PaymentMethod PaymentMethod `gorm:"size:30" json:"payment_method"`
-	Metadata   string           `gorm:"type:text" json:"metadata"`
-	CreatedAt  time.Time        `json:"created_at"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	Metadata    string           `gorm:"type:text" json:"metadata"`
+	// TierStateToken reflects the active FPS tier unlocked by this subscription.
+	// Updated dynamically on purchase: "60fps", "120fps", "240hz".
+	TierStateToken string         `gorm:"size:32;default:'60fps'" json:"tier_state_token"`
+	CreatedAt   time.Time        `json:"created_at"`
+	UpdatedAt   time.Time        `json:"updated_at"`
 }
 
 func (Subscription) TableName() string {

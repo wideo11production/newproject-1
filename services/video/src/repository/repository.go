@@ -14,7 +14,33 @@ var (
 	ErrTrackNotFound      = errors.New("track not found")
 	ErrClipNotFound       = errors.New("clip not found")
 	ErrThumbnailNotFound  = errors.New("thumbnail not found")
+	ErrFramerateProfileNotFound = errors.New("framerate profile not found")
+	ErrMotionTrackNotFound      = errors.New("motion track not found")
 )
+
+// MotionTrackRepository — AI Motion Tracking ke liye repository interface.
+// Hinglish: ye coordinate vectors, keyframes, aur element bindings store karta hai.
+type MotionTrackRepository interface {
+	Create(ctx context.Context, track *model.MotionTrack) error
+	GetByID(ctx context.Context, id uint) (*model.MotionTrack, error)
+	GetByProjectID(ctx context.Context, projectID uint) ([]*model.MotionTrack, error)
+	Update(ctx context.Context, track *model.MotionTrack) error
+	DeleteByID(ctx context.Context, id uint) error
+}
+
+// TrackKeyframeRepository — motion track keyframes ka lia repository.
+type TrackKeyframeRepository interface {
+	Create(ctx context.Context, kf *model.TrackKeyframe) error
+	GetByTrackID(ctx context.Context, trackID uint) ([]*model.TrackKeyframe, error)
+	DeleteByTrackID(ctx context.Context, trackID uint) error
+}
+
+// FramerateProfileRepository defines methods for framerate profile storage.
+type FramerateProfileRepository interface {
+	Create(ctx context.Context, p *model.ProjectFramerateProfile) error
+	GetByProjectUUID(ctx context.Context, projectUUID string) (*model.ProjectFramerateProfile, error)
+	Update(ctx context.Context, p *model.ProjectFramerateProfile) error
+}
 
 // ProjectRepository defines methods for project storage
 type ProjectRepository interface {
@@ -248,4 +274,104 @@ func (r *thumbnailCacheRepository) DeleteByClipID(ctx context.Context, clipID ui
 
 func (r *thumbnailCacheRepository) DeleteOlderThan(ctx context.Context, before time.Time) error {
 	return r.db.WithContext(ctx).Where("created_at < ?", before).Delete(&model.ThumbnailCache{}).Error
+}
+
+// framerateProfileRepository implements FramerateProfileRepository using GORM.
+type framerateProfileRepository struct {
+	db *gorm.DB
+}
+
+// NewFramerateProfileRepository creates a new FramerateProfileRepository.
+func NewFramerateProfileRepository(db *gorm.DB) FramerateProfileRepository {
+	return &framerateProfileRepository{db: db}
+}
+
+func (r *framerateProfileRepository) Create(ctx context.Context, p *model.ProjectFramerateProfile) error {
+	return r.db.WithContext(ctx).Create(p).Error
+}
+
+func (r *framerateProfileRepository) GetByProjectUUID(ctx context.Context, projectUUID string) (*model.ProjectFramerateProfile, error) {
+	var profile model.ProjectFramerateProfile
+	err := r.db.WithContext(ctx).Where("project_uuid = ?", projectUUID).First(&profile).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrFramerateProfileNotFound
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+func (r *framerateProfileRepository) Update(ctx context.Context, p *model.ProjectFramerateProfile) error {
+	return r.db.WithContext(ctx).Save(p).Error
+}
+
+// ---------------------------------------------------------------------------
+// Motion Tracking repositories
+// ---------------------------------------------------------------------------
+
+type motionTrackRepository struct {
+	db *gorm.DB
+}
+
+func NewMotionTrackRepository(db *gorm.DB) MotionTrackRepository {
+	return &motionTrackRepository{db: db}
+}
+
+func (r *motionTrackRepository) Create(ctx context.Context, track *model.MotionTrack) error {
+	return r.db.WithContext(ctx).Create(track).Error
+}
+
+func (r *motionTrackRepository) GetByID(ctx context.Context, id uint) (*model.MotionTrack, error) {
+	var track model.MotionTrack
+	err := r.db.WithContext(ctx).First(&track, "id = ?", id).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMotionTrackNotFound
+		}
+		return nil, err
+	}
+	return &track, nil
+}
+
+func (r *motionTrackRepository) GetByProjectID(ctx context.Context, projectID uint) ([]*model.MotionTrack, error) {
+	var tracks []*model.MotionTrack
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&tracks).Error
+	if err != nil {
+		return nil, err
+	}
+	return tracks, nil
+}
+
+func (r *motionTrackRepository) Update(ctx context.Context, track *model.MotionTrack) error {
+	return r.db.WithContext(ctx).Save(track).Error
+}
+
+func (r *motionTrackRepository) DeleteByID(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&model.MotionTrack{}).Error
+}
+
+type trackKeyframeRepository struct {
+	db *gorm.DB
+}
+
+func NewTrackKeyframeRepository(db *gorm.DB) TrackKeyframeRepository {
+	return &trackKeyframeRepository{db: db}
+}
+
+func (r *trackKeyframeRepository) Create(ctx context.Context, kf *model.TrackKeyframe) error {
+	return r.db.WithContext(ctx).Create(kf).Error
+}
+
+func (r *trackKeyframeRepository) GetByTrackID(ctx context.Context, trackID uint) ([]*model.TrackKeyframe, error) {
+	var keyframes []*model.TrackKeyframe
+	err := r.db.WithContext(ctx).Where("track_id = ?", trackID).Order("frame").Find(&keyframes).Error
+	if err != nil {
+		return nil, err
+	}
+	return keyframes, nil
+}
+
+func (r *trackKeyframeRepository) DeleteByTrackID(ctx context.Context, trackID uint) error {
+	return r.db.WithContext(ctx).Where("track_id = ?", trackID).Delete(&model.TrackKeyframe{}).Error
 }

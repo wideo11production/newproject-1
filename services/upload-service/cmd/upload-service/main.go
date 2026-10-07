@@ -36,6 +36,7 @@ func main() {
 	}
 
 	uploadRepo := repository.NewUploadRepository(db)
+	safetyRepo := repository.NewSafetyRepository(db)
 
 	uploadSvc, err := service.NewUploadService(service.UploadConfig{
 		MinioEndpoint:  cfg.Minio.Endpoint,
@@ -48,7 +49,37 @@ func main() {
 		log.Fatalf("failed to create upload service: %v", err)
 	}
 
-	h := handler.NewHandler(uploadSvc)
+	// AURA Content Safety Guard: FFmpeg + ONNX open-source pipeline.
+	// Disabled by default (config.content_safety.enabled) — enable in prod
+	// with model file + ffmpeg/python3 on PATH.
+	contentSafetyCfg := service.ContentSafetyConfig{
+		Enabled:              cfg.ContentSafety.Enabled,
+		FFmpegPath:           cfg.ContentSafety.FFmpegPath,
+		ONNXModelPath:        cfg.ContentSafety.ONNXModelPath,
+		MinConfidence:        cfg.ContentSafety.MinConfidence,
+		FrameSampleRate:      cfg.ContentSafety.FrameSampleRate,
+		MaxFramesToAnalyze:   cfg.ContentSafety.MaxFramesToAnalyze,
+		BlacklistOnDetection: cfg.ContentSafety.BlacklistOnDetection,
+	}
+
+	var analyzer service.FrameAnalyzer
+	if contentSafetyCfg.Enabled {
+		analyzer = service.NewONNXFrameAnalyzer(service.DefaultONNXAnalyzerConfig(cfg.ContentSafety.ONNXModelPath))
+	}
+
+	safetySvc := service.NewContentSafetyService(safetyRepo, analyzer, contentSafetyCfg, cfg.Minio.Bucket)
+	safetySvc.SetMinioClient(uploadSvc.Client())
+
+	// Wire quota checker into upload service.
+	quotaCfg := &service.DefaultQuotaConfig{
+		MaxDailyUploads:      cfg.Quota.MaxDailyUploads,
+		MaxFileSizeMB:        cfg.Quota.MaxFileSizeMB,
+		MaxConcurrentUploads: cfg.Quota.MaxConcurrentUploads,
+	}
+	uploadSvc.SetQuotaChecker(quotaCfg)
+	uploadSvc.SetContentSafety(safetySvc)
+
+	h := handler.NewHandler(uploadSvc, safetyRepo)
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())

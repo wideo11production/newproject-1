@@ -2,9 +2,9 @@
 //
 // YE TESTS wo RULES protect karte hain jo aapne diye:
 //   - 60/20/20 split (subscribed creator)
-//   - 60/10/20 + 10 platform (free creator)
+//   - 60/0/40 split (free creator - gets nothing)
 //   - Region-wise plan pricing
-//   - 50% creator discount on monthly, 0% on lifetime
+//   - ONE discount matrix per user (student 25% XOR 12-month 25%)
 //   - Minimum balance check
 //
 // Hinglish comments: har block ka arth
@@ -49,15 +49,15 @@ func TestRevenueSplitSubscribedCreator(t *testing.T) {
 	}
 }
 
-// TestRevenueSplitFreeCreator - 60/10/20 + 10 platform
+// TestRevenueSplitFreeCreator - 60/0/40 split (free creator gets 0%)
 func TestRevenueSplitFreeCreator(t *testing.T) {
 	gross := decimal.NewFromInt(1000)
 
 	split := CalculateRevenueSplit(gross, false)
 
-	// Creator sirf 10% (free uploader)
-	if !split.Creator.Equal(decimal.NewFromInt(100)) {
-		t.Errorf("free creator should get 10%% = 100, got %s", split.Creator.String())
+	// Creator sirf 0% (free uploader - kuch nahi milta)
+	if !split.Creator.Equal(decimal.NewFromInt(0)) {
+		t.Errorf("free creator should get 0%% = 0, got %s", split.Creator.String())
 	}
 
 	// Viewer 60%
@@ -65,9 +65,9 @@ func TestRevenueSplitFreeCreator(t *testing.T) {
 		t.Errorf("viewer should get 60%% = 600, got %s", split.Viewer.String())
 	}
 
-	// Platform 20% + baki 10% = 30%
-	if !split.Platform.Equal(decimal.NewFromInt(300)) {
-		t.Errorf("platform should get 30%% (20%% + baki 10%%) = 300, got %s", split.Platform.String())
+	// Platform 60% + 0% = gets full 40%
+	if !split.Platform.Equal(decimal.NewFromInt(400)) {
+		t.Errorf("platform should get 40%% = 400, got %s", split.Platform.String())
 	}
 
 	total := split.Viewer.Add(split.Creator).Add(split.Platform)
@@ -222,48 +222,97 @@ func TestPlanPricingLowCurrency(t *testing.T) {
 	}
 }
 
-// TestCreatorDiscountMonthly - content uploader ko 50% discount monthly par
-func TestCreatorDiscountMonthly(t *testing.T) {
-	plan, err := GetPlanForCreator(RegionIndia, TierQuarterly, true)
+// TestCreatorPlansAreViewerPlans - creator plans = viewer plans
+// EXACTLY (user directive: purani creator 50% law DELETED —
+// creator ka old plan delete, storage free, creator ab viewer
+// plan hi leta hai).
+func TestCreatorPlansAreViewerPlans(t *testing.T) {
+	// Creator ke liye koi alag discount matrix nahi — viewer
+	// plan ka full price.
+	plan, err := GetPlanForUser(RegionIndia, TierQuarterly, DiscountEligibility{}, DiscountNone)
 	if err != nil {
-		t.Fatalf("GetPlanForCreator error: %v", err)
+		t.Fatalf("GetPlanForUser error: %v", err)
 	}
-
-	// 300 ka 50% discount = 150
-	if !plan.Price.Equal(decimal.NewFromInt(150)) {
-		t.Errorf("creator should pay 150 (50%% off 300), got %s", plan.Price.String())
+	if plan.DiscountPercent != 0 {
+		t.Errorf("creator (no matrix): expected 0%% discount, got %d%%", plan.DiscountPercent)
 	}
-	if plan.DiscountPercent != 50 {
-		t.Errorf("discount should be 50%%, got %d", plan.DiscountPercent)
+	if !plan.Price.Equal(decimal.NewFromInt(300)) {
+		t.Errorf("creator (no matrix): expected full ₹300, got %s", plan.Price.String())
 	}
 }
 
-// TestCreatorNoDiscountLifetime - LIFETIME par KOI discount NAHI (hard rule)
-func TestCreatorNoDiscountLifetime(t *testing.T) {
-	// Lifetime plan manually set karo (table me nahi hai, to test direct)
-	lifetime := &Plan{
-		Tier:       TierLifetime,
-		Region:     RegionIndia,
-		Currency:   "INR",
-		Price:      decimal.NewFromInt(10000),
-		Days:       36500,
-		MinBalance: decimal.NewFromInt(1000),
-	}
-
-	// GetPlanForCreator lifetime ke liye table lookup karega - table me nahi hai
-	// to direct verify karte hain discount logic
-	_ = lifetime
-
-	// Non-creator ko discount nahi
-	plan, err := GetPlanForCreator(RegionIndia, TierAnnual, false)
+// TestStudentDiscountMatrix - AURA-verified student/tutor/
+// tuition center ko 25%.
+func TestStudentDiscountMatrix(t *testing.T) {
+	plan, err := GetPlanForUser(RegionIndia, TierQuarterly,
+		DiscountEligibility{IsVerifiedStudent: true}, DiscountStudent)
 	if err != nil {
-		t.Fatalf("GetPlanForCreator error: %v", err)
+		t.Fatalf("GetPlanForUser error: %v", err)
 	}
-	if plan.DiscountPercent != 0 {
-		t.Errorf("non-creator should get 0%% discount, got %d", plan.DiscountPercent)
+	if plan.DiscountPercent != DiscountPercent {
+		t.Errorf("student matrix: expected %d%%, got %d%%", DiscountPercent, plan.DiscountPercent)
 	}
-	if !plan.Price.Equal(decimal.NewFromInt(1000)) {
-		t.Errorf("non-creator should pay full 1000, got %s", plan.Price.String())
+	// 300 ka 25% discount = 225
+	if !plan.Price.Equal(decimal.NewFromInt(225)) {
+		t.Errorf("student matrix: expected ₹225, got %s", plan.Price.String())
+	}
+}
+
+// TestTwelveMonthDiscountMatrix - 12-month commitment (monthly-
+// billed) ko 25%.
+func TestTwelveMonthDiscountMatrix(t *testing.T) {
+	plan, err := GetPlanForUser(RegionIndia, TierAnnual,
+		DiscountEligibility{IsTwelveMonthCommitment: true}, DiscountTwelveMonth)
+	if err != nil {
+		t.Fatalf("GetPlanForUser error: %v", err)
+	}
+	if plan.DiscountPercent != DiscountPercent {
+		t.Errorf("twelve-month matrix: expected %d%%, got %d%%", DiscountPercent, plan.DiscountPercent)
+	}
+	// 1000 ka 25% discount = 750
+	if !plan.Price.Equal(decimal.NewFromInt(750)) {
+		t.Errorf("twelve-month matrix: expected ₹750, got %s", plan.Price.String())
+	}
+}
+
+// TestDiscountNoStacking - student + 12-month dono eligible ho
+// to bhi EXACTLY ONE matrix (25%), dual-compounding (50%) blocked.
+func TestDiscountNoStacking(t *testing.T) {
+	plan, err := GetPlanForUser(RegionIndia, TierAnnual,
+		DiscountEligibility{IsVerifiedStudent: true, IsTwelveMonthCommitment: true},
+		DiscountStudent) // user ne student matrix choose kiya
+	if err != nil {
+		t.Fatalf("GetPlanForUser error: %v", err)
+	}
+	if plan.DiscountPercent != DiscountPercent {
+		t.Errorf("dual-eligible: expected exactly %d%% (one matrix), got %d%%",
+			DiscountPercent, plan.DiscountPercent)
+	}
+	// 1000 ka 25% = 750 — 50% (₹500) NAHI
+	if !plan.Price.Equal(decimal.NewFromInt(750)) {
+		t.Errorf("dual-eligible: expected ₹750 (one 25%% matrix), got %s", plan.Price.String())
+	}
+}
+
+// TestDiscountIneligibleChoiceRejected - ineligible matrix error.
+func TestDiscountIneligibleChoiceRejected(t *testing.T) {
+	// Student verify nahi hua — student matrix reject.
+	if _, err := GetPlanForUser(RegionIndia, TierQuarterly,
+		DiscountEligibility{}, DiscountStudent); err == nil {
+		t.Error("unverified student matrix must be rejected")
+	}
+	// 12-month commitment nahi — twelve_month matrix reject.
+	if _, err := GetPlanForUser(RegionIndia, TierQuarterly,
+		DiscountEligibility{}, DiscountTwelveMonth); err == nil {
+		t.Error("twelve-month matrix without commitment must be rejected")
+	}
+}
+
+// TestUnknownDiscountMatrix - unknown matrix reject.
+func TestUnknownDiscountMatrix(t *testing.T) {
+	if _, err := GetPlanForUser(RegionIndia, TierQuarterly,
+		DiscountEligibility{}, "bogus"); err == nil {
+		t.Error("unknown matrix must be rejected")
 	}
 }
 

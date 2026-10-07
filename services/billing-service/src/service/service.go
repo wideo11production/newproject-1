@@ -924,13 +924,20 @@ type SisterShareConfig struct {
 	Currency         string          `json:"currency"`          // INR
 }
 
+// SisterLedgerVaultToken is the SSOT token name for the 5% sister
+// share destination (user directive, Blocker 2 answer: the placeholder
+// string "sister-account-id" is replaced by this production token
+// name). The token's real ledger destination value is still pending —
+// see CLARIFICATIONS.md Q2.2.
+const SisterLedgerVaultToken = "sister_ledger_vault_active"
+
 // GetSisterShareConfig returns the immutable sister share configuration
 // 5% automated allocation via GORM ledger triggers - UNMODIFIED
 func (s *BillingService) GetSisterShareConfig() *SisterShareConfig {
 	return &SisterShareConfig{
 		SharePercentage:  decimal.NewFromFloat(5.0), // 5% - UNMODIFIED
 		AllocationType:   "automatic",                // GORM trigger
-		RecipientAccount: "sister-account-id",        // Sister's account
+		RecipientAccount: SisterLedgerVaultToken,     // Sister's ledger vault token (Blocker 2)
 		IsActive:         true,                       // Always active
 		Currency:         "INR",
 	}

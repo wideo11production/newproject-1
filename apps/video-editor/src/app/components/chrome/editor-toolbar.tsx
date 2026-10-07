@@ -486,12 +486,12 @@ export function EditorToolbar({
                 // Two-line tooltip: what it is, what it does, how to use it.
                 title={`${b.label}\n${b.hint}${b.shortcut ? `\nShortcut: ${b.shortcut}` : ''}`}
                 className={[
-                  'flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors',
+                  'flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-150 duration-150',
                   b.disabled
                     ? 'cursor-not-allowed text-fg-muted'
                     : b.active
-                      ? 'bg-sky-500/12 text-sky-300 ring-1 ring-inset ring-sky-500/30'
-                      : 'text-fg-secondary hover:bg-surface-sunken hover:text-white',
+                      ? 'text-[#ff6500]'
+                      : 'text-fg-secondary hover:text-[#ff6500]',
                 ].join(' ')}
               >
                 <b.Icon className="h-4 w-4" aria-hidden="true" />
@@ -528,42 +528,42 @@ export function EditorToolbar({
             set of correct answers - five frame rates and a set of speeds - and a
             cycle button makes the user press it just to find out where they are.
           */}
-          <label
-            className="flex items-center gap-1 px-1"
-            title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
-          >
-            <Gauge className="h-2 w-2 text-fg-muted" aria-hidden="true" />
-            <select
-              value={String(fps)}
-              onChange={(e) => onFpsChange(Number(e.target.value))}
-              aria-label="Timeline frame rate"
-              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
-            >
-              {SUPPORTED_FPS.map((f) => (
-                <option key={f} value={f}>
-                  {f} fps
-                </option>
-              ))}
-            </select>
-          </label>
-          <label
-            className="flex items-center gap-1 px-1"
-            title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
-          >
-            <Timer className="h-2 w-2 text-fg-muted" aria-hidden="true" />
-            <select
-              value={String(playbackRate)}
-              onChange={(e) => onPlaybackRate(Number(e.target.value))}
-              aria-label="Playback speed"
-              className="h-6 rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-sky-500 focus:outline-none"
-            >
-              {PLAYBACK_RATES.map((r) => (
-                <option key={r} value={r}>
-                  {r}x
-                </option>
-              ))}
-            </select>
-          </label>
+           <label
+             className="flex items-center gap-1 px-1"
+             title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
+           >
+             <Gauge className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+             <select
+               value={String(fps)}
+               onChange={(e) => onFpsChange(Number(e.target.value))}
+               aria-label="Timeline frame rate"
+               className="h-6 w-16 cursor-pointer rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+             >
+               {SUPPORTED_FPS.map((f) => (
+                 <option key={f} value={f}>
+                   {f} fps
+                 </option>
+               ))}
+             </select>
+           </label>
+           <label
+             className="flex items-center gap-1 px-1"
+             title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
+           >
+             <Timer className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+             <select
+               value={String(playbackRate)}
+               onChange={(e) => onPlaybackRate(Number(e.target.value))}
+               aria-label="Playback speed"
+               className="h-6 w-16 cursor-pointer rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+             >
+               {PLAYBACK_RATES.map((r) => (
+                 <option key={r} value={r}>
+                   {r}x
+                 </option>
+               ))}
+             </select>
+           </label>
         </ToolbarGroup>
 
       </div>
@@ -583,7 +583,7 @@ export function EditorToolbar({
         <div className="ml-3 flex shrink-0 items-center gap-1 border-l border-edge pl-2">
           <span className="truncate text-[8px] text-fg-secondary" title={projectName}>
             {projectName}
-            <span className={dirty ? 'ml-1 text-amber-400' : 'ml-1 text-fg-muted'}>
+            <span className={dirty ? 'ml-1 text-[#ff6500]' : 'ml-1 text-fg-muted'}>
               {dirty ? '● unsaved' : savedAt ? '● saved' : '○ new'}
             </span>
           </span>

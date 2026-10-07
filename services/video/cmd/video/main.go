@@ -36,14 +36,17 @@ func main() {
         log.Fatalf("failed to migrate database: %v", err)
     }
 
-    // Initialize repositories
+// Initialize repositories
     clipRepo := repository.NewClipRepository(db)
     projectRepo := repository.NewProjectRepository(db)
     trackRepo := repository.NewTrackRepository(db)
     thumbnailRepo := repository.NewThumbnailCacheRepository(db)
-    fingerprintRepo := repository.NewVideoFingerprintRepository(db)
-    audioRepo := repository.NewAudioFingerprintRepository(db)
-    targetRepo := repository.NewTargetRepository(db)
+	fingerprintRepo := repository.NewVideoFingerprintRepository(db)
+	audioRepo := repository.NewAudioFingerprintRepository(db)
+	targetRepo := repository.NewTargetRepository(db)
+	framerateProfileRepo := repository.NewFramerateProfileRepository(db)
+	motionTrackRepo := repository.NewMotionTrackRepository(db)
+	keyframeRepo := repository.NewTrackKeyframeRepository(db)
 
     // Initialize services
     videoSvc := service.NewVideoService(
@@ -52,17 +55,26 @@ func main() {
         trackRepo,
         clipRepo,
         thumbnailRepo,
+        motionTrackRepo,
+        keyframeRepo,
     )
 
-    moderationSvc := service.NewModerationService(
-        clipRepo,
-        fingerprintRepo,
-        audioRepo,
-        targetRepo,
-    )
+	moderationSvc := service.NewModerationService(
+		clipRepo,
+		fingerprintRepo,
+		audioRepo,
+		targetRepo,
+	)
 
-    // Initialize handlers
-    h := handler.NewHandler(videoSvc, moderationSvc)
+	// AURA Premium Framerate service (strict license-based feature flag).
+	// In production, AURALicenseChecker implementation (HTTP client to
+	// licensing-service) should be wired here. nil = all users get standard
+	// tier (safe default until license service integration).
+	var framerateSvc *service.FramerateService
+	framerateSvc = service.NewFramerateService(cfg.Framerate, nil, framerateProfileRepo)
+
+	// Initialize handlers
+	h := handler.NewHandler(videoSvc, moderationSvc, framerateSvc)
 
     // Initialize Gin router
     r := gin.New()

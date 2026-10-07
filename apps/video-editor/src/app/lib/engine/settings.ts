@@ -118,6 +118,8 @@ export interface EditorSettings {
   lastProjectId: string;
   /** Frame rate the timeline is counting in. */
   fps: number;
+  /** Persistent tool toggles (proxy mode, cache, etc.) — serialized to localStorage. */
+  tools: Record<string, boolean>;
 }
 
 export const DEFAULT_SETTINGS: EditorSettings = {
@@ -159,6 +161,7 @@ export const DEFAULT_SETTINGS: EditorSettings = {
   activeMode: 'media',
   lastProjectId: '',
   fps: 30,
+  tools: {},
 };
 
 /**

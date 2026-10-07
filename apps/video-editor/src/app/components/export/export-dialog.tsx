@@ -200,7 +200,7 @@ export function ExportDialog({
           {running && (
             <div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-surface-overlay">
-                <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
+                <div className="h-full rounded-full bg-[#ff6500] transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
               <p className="mt-1.5 flex items-center gap-1.5 font-mono text-[8px] text-fg-secondary">
                 <Loader2 className="h-2 w-2 animate-spin" aria-hidden="true" />

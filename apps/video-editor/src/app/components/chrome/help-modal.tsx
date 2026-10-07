@@ -198,7 +198,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
       >
         {/* ---- Header: title, search, close ---- */}
         <header className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
-          <Sparkles className="h-2 w-2 shrink-0 text-sky-400" aria-hidden="true" />
+          <Sparkles className="h-2 w-2 shrink-0 text-[#ff6500]" aria-hidden="true" />
           <h2 className="text-[10px] font-semibold text-fg">What every control is for</h2>
           <div className="relative ml-auto w-52">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-2 w-2 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
@@ -207,7 +207,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search help…"
               aria-label="Search help"
-              className="w-full rounded-md border border-edge bg-surface-raised py-1 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
+              className="w-full rounded-md border border-edge bg-surface-raised py-1 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
             />
           </div>
           <button
@@ -287,7 +287,7 @@ export function HelpModal({ onClose }: { onClose: () => void }) {
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-md bg-sky-600 px-3 py-1 text-[8px] font-medium text-white transition-colors hover:bg-sky-500"
+            className="ml-auto rounded-md bg-[#ff6500] px-3 py-1 text-[8px] font-medium text-white transition-colors hover:bg-[#ff6500]"
           >
             Close
           </button>

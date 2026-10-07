@@ -31,16 +31,19 @@ func NewPostgresDB(dsn string) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-    return db.AutoMigrate(
-        &model.Clip{},
-        &model.Project{},
-        &model.Track{},
-        &model.ThumbnailCache{},
-        &model.VideoFingerprint{},
-        &model.AudioFingerprint{},
-        &model.Target{},
-        &model.ContentReport{},
-    )
+	return db.AutoMigrate(
+		&model.Clip{},
+		&model.Project{},
+		&model.Track{},
+		&model.ThumbnailCache{},
+		&model.VideoFingerprint{},
+		&model.AudioFingerprint{},
+		&model.Target{},
+		&model.ContentReport{},
+		&model.ProjectFramerateProfile{},
+		&model.MotionTrack{},
+		&model.TrackKeyframe{},
+	)
 }
 
 func DSN(host string, port int, user, password, dbname, sslmode, tz string) string {

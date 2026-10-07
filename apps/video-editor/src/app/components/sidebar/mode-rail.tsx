@@ -52,6 +52,14 @@ import {
   Moon,
   Badge,
   User,
+  FunctionSquare,
+  LayoutTemplate,
+  Film,
+  SquareStack,
+  Layers,
+  Wand2,
+  Sparkles,
+  Settings,
 } from 'lucide-react';
 
 export type EditorMode =
@@ -63,12 +71,19 @@ export type EditorMode =
   | 'panzoom'
   | 'layouts'
   | 'audio'
+  | 'expressions'
+  | 'templates'
   | 'project'
   | 'help'
   | 'callouts'
   | 'stabilize'
   | 'chroma'
-  | 'branding';
+  | 'branding'
+  | 'samples'
+  | 'backgrounds'
+  | 'intros'
+  | 'effects'
+  | 'tools';
 
 interface ModeDef {
   id: EditorMode;
@@ -89,7 +104,14 @@ const MODES: ModeDef[] = [
   { id: 'panzoom', label: 'Pan & Zoom', Icon: Move, status: 'ready', hint: 'A slow push in or pull out across a clip. The presets are the two-keyframe envelopes from the sample resources.' },
   { id: 'layouts', label: 'Overlays', Icon: LayoutGrid, status: 'ready', hint: 'Picture-in-picture and split-screen. These need a second video track — add one with + on the Tracks header.' },
   { id: 'audio', label: 'Audio', Icon: Music, status: 'ready', hint: 'Web Audio effects, level matching and local silence removal. Nothing here uploads your audio.' },
+  { id: 'expressions', label: 'Expressions', Icon: FunctionSquare, status: 'ready', hint: 'Keyframes linked by a formula: position follows rotation, opacity follows a sine wave, anything that can be measured can be animated with one. No scripting language — just the operators an editor reaches for.' },
+  { id: 'templates', label: 'Templates', Icon: LayoutTemplate, status: 'ready', hint: 'Ready-made template graphics: animated lower-thirds, intro sequences, end screens. Each one is a saved composition the editor stamps onto your timeline — change the text, it changes everywhere.' },
   { id: 'branding', label: 'Branding', Icon: Badge, status: 'ready', hint: 'Select a channel to auto-apply its logo, colour and position to the branding track.' },
+  { id: 'samples', label: 'Sample Videos', Icon: Film, status: 'ready', hint: 'Stock sample videos and royalty-free clips you can drag directly to the timeline.' },
+  { id: 'backgrounds', label: 'Backgrounds', Icon: SquareStack, status: 'ready', hint: 'Solid colour and gradient backgrounds for your project canvas.' },
+  { id: 'intros', label: 'Intro Videos', Icon: Layers, status: 'ready', hint: 'Animated intro sequences you can place at the start of your timeline.' },
+  { id: 'effects', label: 'Effects', Icon: Wand2, status: 'ready', hint: 'Visual effects: blur, glow, glitch, particle — applied to the selected clip.' },
+  { id: 'tools', label: 'Tools', Icon: Settings, status: 'ready', hint: 'Editor configuration: proxy mode, caching, performance tuning.' },
   { id: 'project', label: 'Project', Icon: FolderOpen, status: 'ready', hint: 'New, open, save, autosave, recent projects, and the resolution and frame rate everything else follows.' },
   { id: 'help', label: 'Help', Icon: HelpCircle, status: 'ready', hint: 'Every keyboard shortcut and mouse gesture, generated from the same table the editor uses.' },
   {
@@ -168,12 +190,12 @@ export function ModeRail({
             // the rail, which inverts the hierarchy: the rail is a switchboard,
             // not a list of destinations, and a destination should not shout
             // louder than the picture.
-            'group relative flex h-8 w-8 shrink-0 items-center justify-center rounded transition-colors',
+            'group relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors duration-150 duration-150',
             !ready
               ? 'cursor-not-allowed text-fg-muted/50'
               : on
-                ? 'bg-surface-overlay text-sky-300'
-                : 'text-fg-muted hover:bg-surface-overlay/60 hover:text-fg',
+                ? 'text-[#ff6500]'
+                : 'text-fg-muted hover:text-[#ff6500]',
           ].join(' ')}
         >
           {/*
@@ -182,9 +204,9 @@ export function ModeRail({
             thing it points at.
           */}
           {on && ready && (
-            <span className="absolute -left-1 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-sky-400" aria-hidden="true" />
+            <span className="absolute -left-1 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[#ff6500]" aria-hidden="true" />
           )}
-          <Icon className="h-2 w-2" aria-hidden="true" />
+          <Icon className="h-4 w-4" aria-hidden="true" />
             {!ready && (
               // A dot, not a "coming soon" label. Enough to signal "not yet"
               // without turning the rail into a list of apologies.
@@ -210,12 +232,12 @@ export function ModeRail({
           aria-pressed={waveformVisible}
           aria-label="Toggle waveforms"
           title={`${waveformVisible ? 'Hide' : 'Show'} audio waveforms on clips.\nThe peaks are decoded from your own file; a file the browser cannot decode draws a flat line rather than a fake one.`}
-          className={[
-            'flex h-8 w-8 items-center justify-center rounded transition-colors',
-            waveformVisible ? 'text-sky-400' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
+           className={[
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            waveformVisible ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <AudioWaveform className="h-2 w-2" aria-hidden="true" />
+          <AudioWaveform className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -223,12 +245,12 @@ export function ModeRail({
           aria-pressed={gridVisible}
           aria-label="Toggle the frame grid"
           title={`${gridVisible ? 'Hide' : 'Show'} the frame grid behind the lanes.\nDrawn from the real frame count, so it moves when you zoom.`}
-          className={[
-            'flex h-8 w-8 items-center justify-center rounded transition-colors',
-            gridVisible ? 'text-sky-400' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
+           className={[
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            gridVisible ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <Grid3x3 className="h-2 w-2" aria-hidden="true" />
+          <Grid3x3 className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -237,21 +259,21 @@ export function ModeRail({
           aria-pressed={snapEnabled}
           aria-label="Snapping"
           title={`Snapping is ${snapEnabled ? 'on' : 'off'} — toggle it with N.\nClips land on the playhead, clip edges, markers and the ends of the timeline.`}
-          className={[
-            'flex h-8 w-8 items-center justify-center rounded transition-colors',
-            snapEnabled ? 'text-sky-400' : 'text-fg-muted',
+           className={[
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            snapEnabled ? 'text-[#ff6500]' : 'cursor-not-allowed text-fg-muted',
           ].join(' ')}
         >
-          <Magnet className="h-2 w-2" aria-hidden="true" />
+          <Magnet className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           title={`${theme === 'dark' ? 'Light' : 'Dark'} theme\nPersisted, so it survives a refresh like everything else here.`}
-          className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+           className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150 hover:text-fg"
         >
-          {theme === 'dark' ? <Sun className="h-2 w-2" aria-hidden="true" /> : <Moon className="h-3.5 w-3.5" aria-hidden="true" />}
+          {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
         </button>
         <button
           type="button"
@@ -259,12 +281,12 @@ export function ModeRail({
           aria-pressed={active === 'project'}
           aria-label="Project settings"
           title="Project\nNew, open, save, autosave, and the resolution everything else follows."
-          className={[
-            'flex h-8 w-8 items-center justify-center rounded transition-colors',
-            active === 'project' ? 'bg-sky-600 text-white' : 'text-fg-muted hover:bg-surface-overlay hover:text-fg',
+           className={[
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            active === 'project' ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <Gauge className="h-2 w-2" aria-hidden="true" />
+          <Gauge className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </nav>

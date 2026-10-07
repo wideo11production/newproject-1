@@ -148,7 +148,7 @@ export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.R
                         'flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left text-[8px] transition-colors',
                         item.disabled
                           ? 'cursor-not-allowed text-fg-muted'
-                          : 'text-fg hover:bg-sky-600 hover:text-white',
+                          : 'text-fg hover:text-[#ff6500]',
                       ].join(' ')}
                     >
                       <span>{item.label}</span>

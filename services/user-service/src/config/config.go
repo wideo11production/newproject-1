@@ -8,8 +8,16 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
+	Server           ServerConfig
+	Database         DatabaseConfig
+	Security         SecurityConfig
+}
+
+type SecurityConfig struct {
+	// JWT_SECRET_KEY — shared secret for signing 365-day student verification tokens.
+	// Hinglish: user directive — JWT_SECRET_KEY fail-fast enforced in production.
+	// Empty value in production par panic karega (fail-fast).
+	JWTSecretKey string `mapstructure:"jwt_secret_key"`
 }
 
 type ServerConfig struct {
@@ -83,6 +91,14 @@ func setDefaults() {
 	viper.SetDefault("database.dbname", "user_service")
 	viper.SetDefault("database.sslmode", "disable")
 	viper.SetDefault("database.timezone", "UTC")
+
+	// Fail-fast: JWT_SECRET_KEY must be set explicitly in production.
+	// Hinglish: agar secret empty hai to panic — security misconfiguration
+	// silently chupke se bahut bura hota hai (user directive).
+	if viper.GetString("jwt_secret_key") == "" &&
+		viper.GetString("server.mode") == "release" {
+		panic("FATAL: JWT_SECRET_KEY must be set (production fail-fast)")
+	}
 }
 
 func (c *DatabaseConfig) DSN() string {

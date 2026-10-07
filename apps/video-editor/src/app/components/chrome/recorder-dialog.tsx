@@ -995,7 +995,7 @@ export function RecorderDialog({
               // longer there.
               onClick={() => (state === 'recording' ? stop() : requestClose())}
               aria-label="Close"
-            className="rounded p-1 text-fg-muted hover:bg-surface-overlay hover:text-white"
+            className="rounded p-1 text-fg-muted  hover:text-white"
           >
             <X className="h-2 w-2" />
           </button>
@@ -1009,7 +1009,7 @@ export function RecorderDialog({
               onClick={() => setUseCam((v) => !v)}
               aria-pressed={useCam}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-[8px] transition-colors ${
-                useCam ? 'border-sky-500 bg-sky-500/10 text-sky-300' : 'border-edge-strong text-fg-muted'
+                useCam ? 'border-[#ff6500] bg-[#ff6500]/10 text-[#ff6500]' : 'border-edge-strong text-fg-muted'
               }`}
             >
               <Camera className="h-2 w-2" /> Camera {useCam ? 'on' : 'off'}
@@ -1031,7 +1031,7 @@ export function RecorderDialog({
                 value={camId}
                 onChange={(e) => setCamId(e.target.value)}
                 aria-label="Camera to record from"
-                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-sky-500 focus:outline-none"
+                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
               >
                 <option value="">System default camera</option>
                 {cams.map((d, i) => (
@@ -1046,7 +1046,7 @@ export function RecorderDialog({
                 value={micId}
                 onChange={(e) => setMicId(e.target.value)}
                 aria-label="Microphone to record from"
-                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-sky-500 focus:outline-none"
+                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
               >
                 <option value="">System default microphone</option>
                 {mics.map((d, i) => (
@@ -1062,7 +1062,7 @@ export function RecorderDialog({
               onClick={() => setUseMic((v) => !v)}
               aria-pressed={useMic}
               className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-[8px] transition-colors ${
-                useMic ? 'border-sky-500 bg-sky-500/10 text-sky-300' : 'border-edge-strong text-fg-muted'
+                useMic ? 'border-[#ff6500] bg-[#ff6500]/10 text-[#ff6500]' : 'border-edge-strong text-fg-muted'
               }`}
             >
               <Mic className="h-2 w-2" /> Microphone {useMic ? 'on' : 'off'}
@@ -1168,7 +1168,7 @@ export function RecorderDialog({
                   <button
                     type="button"
                     onClick={changeDevices}
-                    className="flex items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg-muted hover:bg-surface-overlay hover:text-fg"
+                    className="flex items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg-muted  hover:text-fg"
                   >
                     <RotateCcw className="h-2 w-2" /> Change devices
                   </button>
@@ -1269,7 +1269,7 @@ export function RecorderDialog({
                   type="checkbox"
                   checked={keepSeparateAudio}
                   onChange={(e) => setKeepSeparateAudio(e.target.checked)}
-                  className="h-3 w-3 accent-sky-500"
+                  className="h-3 w-3 accent-[#ff6500]"
                 />
                 Keep the voiceover as a{' '}
                 <strong className="mx-0.5 text-fg">separate clip</strong>
@@ -1348,7 +1348,7 @@ export function RecorderDialog({
                   type="button"
                   onClick={() => void saveToDevice('voiceover')}
                   title="Save the separate voiceover track on its own (audio only)"
-                  className="flex h-8 items-center justify-center gap-1 rounded border border-edge/50 px-2 text-[9px] text-fg-secondary transition-colors hover:bg-surface-overlay hover:text-fg"
+                  className="flex h-8 items-center justify-center gap-1 rounded border border-edge/50 px-2 text-[9px] text-fg-secondary transition-colors  hover:text-fg"
                 >
                   <Download className="h-2.5 w-2.5" aria-hidden="true" />
                   Voiceover only
@@ -1357,7 +1357,7 @@ export function RecorderDialog({
               <button
                 type="button"
                 onClick={discard}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg hover:bg-surface-overlay"
+                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg "
               >
                 <RotateCcw className="h-2 w-2" /> Discard and retake
               </button>
@@ -1365,7 +1365,7 @@ export function RecorderDialog({
                 type="button"
                 onClick={keep}
                 title="File this take in the media library. Click its tile to drop it on the timeline."
-                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-[8px] font-medium text-white hover:bg-sky-500"
+                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-[#ff6500] px-3 py-2 text-[8px] font-medium text-white hover:bg-[#ff6500]"
               >
                 <Check className="h-2 w-2" /> Add to library
               </button>
@@ -1402,7 +1402,7 @@ export function RecorderDialog({
               type="button"
               onClick={() => void arm()}
               title="Open the selected camera and microphone so you can check them before recording"
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-sky-600 px-3 py-2.5 text-[8px] font-medium text-white hover:bg-sky-500"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#ff6500] px-3 py-2.5 text-[8px] font-medium text-white hover:bg-[#ff6500]"
             >
               <Camera className="h-2 w-2" /> Use these devices
             </button>

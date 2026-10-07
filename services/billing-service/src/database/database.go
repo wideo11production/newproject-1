@@ -39,6 +39,19 @@ func AutoMigrate(db *gorm.DB) error {
 		// UUID. Without the table, `Resolve` fails and every
 		// subscriber is unresolvable.
 		&model.UserIdentity{},
+		// RoyaltyMilestone: one-time royalty claim tracker (Tier A/B/C/D
+		// withdrawal law). `has_withdrawn_first_royalty` flag yahan
+		// lock hota hai — ek user, ek claim, dobara nahi.
+		&model.RoyaltyMilestone{},
+		// PushAllocation: 12-month commitment ka free text-only
+		// push quota (default 1000, 3-month absolute limit,
+		// .env-configurable). Expiry ke baad PurgeExpired se
+		// auto-forfeit.
+		&model.PushAllocation{},
+		// StudentIdentity: AURA student gate verification record.
+		// Degree/ID review → 'verified' + 365-day identity token;
+		// educational-violation → 'revoked' + 25% penalty.
+		&model.StudentIdentity{},
 		&model.TaxRate{},
 		&model.Invoice{},
 		&model.InvoiceItem{},

@@ -9,9 +9,28 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	Minio    MinioConfig
+	Server        ServerConfig
+	Database      DatabaseConfig
+	Minio         MinioConfig
+	Quota         QuotaConfig
+	ContentSafety ContentSafetyConfig
+}
+
+type ContentSafetyConfig struct {
+	Enabled              bool   `mapstructure:"enabled"`
+	FFmpegPath           string `mapstructure:"ffmpeg_path"`
+	ONNXModelPath        string `mapstructure:"onnx_model_path"`
+	MinConfidence        float32 `mapstructure:"min_confidence"`
+	FrameSampleRate      int    `mapstructure:"frame_sample_rate"`      // 1 = every frame, 5 = every 5th frame
+	MaxFramesToAnalyze   int    `mapstructure:"max_frames_to_analyze"`  // 0 = all frames
+	BlacklistOnDetection bool   `mapstructure:"blacklist_on_detection"`
+}
+
+type QuotaConfig struct {
+	// Per-user upload limits (from .env)
+	MaxDailyUploads      int64 `mapstructure:"max_daily_uploads"`       // 0 = unlimited
+	MaxFileSizeMB        int64 `mapstructure:"max_file_size_mb"`        // 0 = unlimited
+	MaxConcurrentUploads int   `mapstructure:"max_concurrent_uploads"`  // 0 = unlimited
 }
 
 type ServerConfig struct {
@@ -101,6 +120,20 @@ func setDefaults() {
 	viper.SetDefault("minio.bucket", "video-uploads")
 	viper.SetDefault("minio.secure", false)
 	viper.SetDefault("minio.chunk_size", 5242880)
+
+	// Quota defaults (0 = unlimited per user directive "unlimited")
+	viper.SetDefault("quota.max_daily_uploads", 0)
+	viper.SetDefault("quota.max_file_size_mb", 0)
+	viper.SetDefault("quota.max_concurrent_uploads", 0)
+
+	// Content Safety defaults
+	viper.SetDefault("content_safety.enabled", false)
+	viper.SetDefault("content_safety.ffmpeg_path", "ffmpeg")
+	viper.SetDefault("content_safety.onnx_model_path", "/models/content_safety.onnx")
+	viper.SetDefault("content_safety.min_confidence", 0.85)
+	viper.SetDefault("content_safety.frame_sample_rate", 10)
+	viper.SetDefault("content_safety.max_frames_to_analyze", 50)
+	viper.SetDefault("content_safety.blacklist_on_detection", true)
 }
 
 func (c *DatabaseConfig) DSN() string {

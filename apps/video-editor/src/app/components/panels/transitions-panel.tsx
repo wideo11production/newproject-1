@@ -154,7 +154,7 @@ export function TransitionsPanel({
             {target && clip ? (
               <>
                 <p className="mb-2 flex items-center gap-1.5 rounded border border-edge bg-surface-raised/60 px-2 py-1 text-[8px] text-fg-secondary">
-                  <Shuffle className="h-2 w-2 shrink-0 text-sky-400" aria-hidden="true" />
+                  <Shuffle className="h-2 w-2 shrink-0 text-[#ff6500]" aria-hidden="true" />
                   <span className="truncate">
                     {clip.mediaName} → next clip, at {target.atTime.toFixed(2)}s
                   </span>

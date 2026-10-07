@@ -30,7 +30,7 @@ func TestSisterShareIsExactlyFivePercent(t *testing.T) {
 	cfg := &SisterShareConfig{
 		SharePercentage:  decimal.NewFromFloat(5.0),
 		AllocationType:   "automatic",
-		RecipientAccount: "sister-account-id",
+		RecipientAccount: SisterLedgerVaultToken, // Blocker 2: SSOT token name
 		IsActive:         true,
 		Currency:         "INR",
 	}

@@ -9,12 +9,11 @@
 // Ek ad ka example: ₹1000, 100 din me 10 baar show
 //   → Viewer (ad dekhne wale)   : 60%
 //   → Platform                   : 20%
-//   → Content uploader (SUBSCRIBED)  : 20%
-//   → Content uploader (FREE uploader) : 10%
-//   → Platform                   : +10%  (baki)
-// Iska matlab: platform ko hamesha 20% milta hai, baaki 80% viewer+creator
-// me baant'te hain. Creator ka hissa depend karta hai uske subscription
-// status par.
+//   → Content uploader (SUBSCRIBED)    : 20%
+//   → Content uploader (FREE uploader)   : 0%
+//   → Platform (full remainder)       : 40%
+// Iska matlab: platform ko hamesha 20% minimum milta hai, baaki 80% viewer+creator
+// me baant'te hain. SUBSCRIBED creator = 20%, FREE creator = 0% (user directive).
 //
 // ---------------------------------------------------------------------------
 // PLANS (country/currency ke hisaab se alag):
@@ -45,7 +44,7 @@ type RevenueSplit struct {
 	Gross decimal.Decimal
 	// Viewer ka share (60%)
 	Viewer decimal.Decimal
-	// Content uploader ka share (subscribed=20%, free=10%)
+	// Content uploader ka share (subscribed=20%, free=0%)
 	Creator decimal.Decimal
 	// Platform ka share (20% ya free case me 20%)
 	Platform decimal.Decimal
@@ -63,8 +62,10 @@ const (
 	ViewerSharePct = "0.60"
 	// CreatorSubscribedSharePct: subscription wale creator ko (20%)
 	CreatorSubscribedSharePct = "0.20"
-	// CreatorFreeSharePct: free uploader ko (10%)
-	CreatorFreeSharePct = "0.10"
+	// CreatorFreeSharePct: free uploader ko (0%) — subscription ke bina
+	// creator ko kuch nahi milta (user directive: strictly subscribed
+	// creators get 20%, free creators get NOTHING)
+	CreatorFreeSharePct = "0.00"
 	// PlatformSharePct: platform ko (20%)
 	PlatformSharePct = "0.20"
 )
@@ -77,11 +78,10 @@ const (
 //   Platform = 1000 × 0.20 = ₹200
 //   Total    = ₹1000 ✅
 //
-// EXAMPLE: ₹1000 ka ad, creator FREE hai:
+// EXAMPLE: ₹1000 ka ad, creator FREE hai (subscription nahi):
 //   Viewer   = 1000 × 0.60 = ₹600
-//   Creator  = 1000 × 0.10 = ₹100
-//   Platform = 1000 × 0.20 = ₹200
-//   (baki ₹100 platform me - kyunki creator ko sirf 10% mila)
+//   Creator  = 1000 × 0.00 = ₹0    (free creators get NOTHING)
+//   Platform = 1000 × 0.40 = ₹400  (baki - 0.20 base + 0.20 free creator ki jagah)
 //
 // NOTE: Rounding - paise 2 decimal tak round hote hain aur LAST share ko
 // adjust kiya jaata hai taaki total EXACTLY gross ke barabar rahe (paisa
@@ -100,8 +100,7 @@ func CalculateRevenueSplit(
 
 	// Viewer aur creator ke baad jo bacha wahi platform ka hai
 	// (subscribed: 1.00 - 0.60 - 0.20 = 0.20 ✅)
-	// (free:      1.00 - 0.60 - 0.10 = 0.30, jisme 0.20 platform +
-	//            0.10 "baki" platform me jaata hai - jaisa aapne kaha)
+	// (free:      1.00 - 0.60 - 0.00 = 0.40, platform poori baki paata hai)
 	platformEffectivePct := decimal.NewFromInt(1).
 		Sub(viewerPct).
 		Sub(creatorPct)
@@ -260,14 +259,44 @@ var PlanPriceTable = map[Region]map[PlanTier]*Plan{
 	},
 }
 
-// ContentUploaderDiscountPercent - content uploader ko monthly plans par discount
+// ---------------------------------------------------------------------------
+// Discount matrices (user directive — Conflict 2 answer)
+// ---------------------------------------------------------------------------
+
+// DiscountMatrix - ek user par EXACTLY ONE discount matrix.
 //
-// Aapke rule: "content uploaders plans lenege unko video-editor ke monthly
-// wale plans me se 50% discount milyega"
+// Hinglish: user ke liye discount ek hi hota hai — dual-
+// compounding (25% + 25% = 50%) BLOCKED hai. Student verified
+// ho ya 12-month commitment lo, dono mein se EK choose karta
+// hai (user directive: "ik hi discount available hai double
+// nahi milega").
+type DiscountMatrix string
+
+const (
+	// DiscountNone - koi discount nahi (default).
+	DiscountNone DiscountMatrix = "none"
+	// DiscountStudent - AURA engine se verified student / tutor /
+	// tuition center ke liye 25%.
+	DiscountStudent DiscountMatrix = "student"
+	// DiscountTwelveMonth - 12-month commitment (monthly-billed)
+	// ke liye 25%.
+	DiscountTwelveMonth DiscountMatrix = "twelve_month"
+)
+
+// DiscountPercent - dono matrices ka value: 25%.
+const DiscountPercent = 25
+
+// DiscountEligibility - user ki discount eligibility.
 //
-// IMPORTANT: Lifetime par KOI discount NAHI (aapke rule: "lifetime purchase
-// me group usage me nahi koi discount")
-const ContentUploaderDiscountPercent = 50
+// Hinglish: IsVerifiedStudent flag AURA student gate
+// (student_verifications — user-service) se aayega, abhi woh
+// scaffold hai, isliye checkout verified status pass karta hai.
+// IsTwelveMonthCommitment checkout ka shape hai (12-month
+// commitment, monthly-billed).
+type DiscountEligibility struct {
+	IsVerifiedStudent      bool
+	IsTwelveMonthCommitment bool
+}
 
 // GetPlan - region + tier se plan lookup karta hai
 func GetPlan(region Region, tier PlanTier) (*Plan, error) {
@@ -282,46 +311,63 @@ func GetPlan(region Region, tier PlanTier) (*Plan, error) {
 	return plan, nil
 }
 
-// GetPlanForCreator - content uploader ka discount apply karke plan deta hai
+// GetPlanForUser - user ka plan with EXACTLY ONE discount matrix.
 //
-// RULES:
-//   - Monthly/biannual/annual plans par 50% discount
-//   - Lifetime par 0% discount
-func GetPlanForCreator(
+// LAWS (user directive — Conflict 2 answer):
+//   - Creator plans = viewer plans EXACTLY. Purani creator 50%
+//     monthly discount law DELETED hai (user ne order diya:
+//     "creator ka old wala delete karna ha") — creator ab viewer
+//     plan hi leta hai, storage free hai, koi creator-specific
+//     discount matrix nahi.
+//   - Verified student / tutor / tuition center -> student
+//     matrix (25%).
+//   - 12-month commitment (monthly-billed) -> twelve_month
+//     matrix (25%).
+//   - ONE matrix per user: dono eligible ho to bhi user EK
+//     choose karta hai — dual-compounding BLOCKED.
+//
+// `matrix` the USER'S choice (checkout se aata hai). Ineligible
+// choice (student matrix jab AURA verification nahi hui) ->
+// error, taake frontend ko explicit feedback mile.
+func GetPlanForUser(
 	region Region,
 	tier PlanTier,
-	isContentUploader bool,
+	eligibility DiscountEligibility,
+	matrix DiscountMatrix,
 ) (*Plan, error) {
-
 	plan, err := GetPlan(region, tier)
 	if err != nil {
 		return nil, err
 	}
 
-	// Lifetime par discount NAHI - ye hard rule hai
-	if tier == TierLifetime {
-		discounted := *plan
-		discounted.DiscountPercent = 0
-		discounted.Price = plan.Price // no discount
-		return &discounted, nil
+	// Choice validation — ineligible matrix reject karo.
+	switch matrix {
+	case DiscountNone:
+		return plan, nil
+	case DiscountStudent:
+		if !eligibility.IsVerifiedStudent {
+			return nil, fmt.Errorf(
+				"student discount matrix requires AURA-verified student/tutor/tuition-center status")
+		}
+	case DiscountTwelveMonth:
+		if !eligibility.IsTwelveMonthCommitment {
+			return nil, fmt.Errorf(
+				"twelve-month discount matrix requires a 12-month monthly-billed commitment")
+		}
+	default:
+		return nil, fmt.Errorf("unknown discount matrix: %s", matrix)
 	}
 
-	// Content uploader nahi hai ya lifetime hai -> full price
-	if !isContentUploader {
-		discounted := *plan
-		discounted.DiscountPercent = 0
-		return &discounted, nil
-	}
-
-	// Content uploader: 50% discount on monthly plans
-	discountPercent := decimal.NewFromInt(ContentUploaderDiscountPercent)
-	discountedPrice := plan.Price.
-		Mul(decimal.NewFromInt(1).Sub(discountPercent.Div(decimal.NewFromInt(100))))
-
+	// EXACTLY ONE matrix apply karo. Yahan tak ineligible
+	// choices reject ho chuke hain; dono eligible ho to bhi
+	// user ne EK choose kiya hai — isliye 25% hi, 50% nahi.
 	discounted := *plan
-	discounted.DiscountPercent = ContentUploaderDiscountPercent
-	discounted.Price = money(discountedPrice)
-
+	discounted.DiscountPercent = DiscountPercent
+	discounted.Price = money(plan.Price.Mul(
+		decimal.NewFromInt(1).Sub(
+			decimal.NewFromInt(DiscountPercent).Div(decimal.NewFromInt(100)),
+		),
+	))
 	return &discounted, nil
 }
 

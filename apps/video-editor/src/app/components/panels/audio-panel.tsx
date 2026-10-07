@@ -107,7 +107,7 @@ export function AudioPanel({
                     key={e.id}
                     label={e.label}
                     hint={e.group === 'enhance' ? 'Cleanup' : e.nodeClass.split('::').pop()}
-                    swatch={e.group === 'enhance' ? 'from-emerald-500/40 to-slate-900/20' : 'from-violet-500/40 to-slate-900/20'}
+                    swatch={e.group === 'enhance' ? 'from-[#ff6500]/40 to-slate-900/20' : 'from-violet-500/40 to-slate-900/20'}
                     active={on}
                     onClick={() => onToggleEffect(e.id)}
                     ariaLabel={`${on ? 'Remove' : 'Apply'} the ${e.label} effect`}

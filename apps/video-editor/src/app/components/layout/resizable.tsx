@@ -194,8 +194,8 @@ export function ResizableHandle({
       className={[
         'group relative z-30 shrink-0 outline-none',
         vertical ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize',
-        dragging ? 'bg-sky-500' : 'bg-transparent hover:bg-sky-500/40',
-        'focus-visible:bg-sky-500',
+        dragging ? 'bg-[#ff6500]' : 'bg-transparent hover:bg-[#ff6500]/40',
+        'focus-visible:bg-[#ff6500]',
         'transition-colors duration-150',
       ].join(' ')}
     >

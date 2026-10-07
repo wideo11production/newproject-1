@@ -38,7 +38,15 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	userSvc := service.NewUserService(userRepo)
 
-	h := handler.NewHandler(userSvc)
+	// AURA Student Gate: dual-gate verification engine (Gate A + Gate B).
+	studentVerifRepo := repository.NewStudentVerificationRepository(db)
+	studentVerifEngine := service.NewStudentVerificationEngine(
+		studentVerifRepo, userRepo,
+		[]byte(cfg.Security.JWTSecretKey),
+		service.StudentIdentityTokenTTL,
+	)
+
+	h := handler.NewHandler(userSvc, studentVerifEngine)
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())

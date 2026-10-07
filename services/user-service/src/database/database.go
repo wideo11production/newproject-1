@@ -31,7 +31,9 @@ func NewPostgresDB(dsn string) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(&model.User{})
+	// Models are listed in dependency order: User first (FK dependency),
+	// then StudentVerification (references user_id → users.id).
+	return db.AutoMigrate(&model.User{}, &model.StudentVerification{})
 }
 
 func DSN(host string, port int, user, password, dbname, sslmode, tz string) string {

@@ -22,6 +22,8 @@ type VideoService struct {
 	trackRepo       repository.TrackRepository
 	clipRepo        repository.ClipRepository
 	thumbnailRepo   repository.ThumbnailCacheRepository
+	motionTrackRepo repository.MotionTrackRepository
+	keyframeRepo    repository.TrackKeyframeRepository
 }
 
 // NewVideoService creates a new VideoService
@@ -31,13 +33,17 @@ func NewVideoService(
 	trackRepo repository.TrackRepository,
 	clipRepo repository.ClipRepository,
 	thumbnailRepo repository.ThumbnailCacheRepository,
+	motionTrackRepo repository.MotionTrackRepository,
+	keyframeRepo repository.TrackKeyframeRepository,
 ) *VideoService {
 	return &VideoService{
-		cfg:           cfg,
-		projectRepo:   projectRepo,
-		trackRepo:     trackRepo,
-		clipRepo:      clipRepo,
-		thumbnailRepo: thumbnailRepo,
+cfg:             cfg,
+		projectRepo:     projectRepo,
+		trackRepo:       trackRepo,
+		clipRepo:        clipRepo,
+		thumbnailRepo:   thumbnailRepo,
+		motionTrackRepo: motionTrackRepo,
+		keyframeRepo:    keyframeRepo,
 	}
 }
 
@@ -640,3 +646,84 @@ var (
 		"ERR_AUDIO_LICENSE_REQUIRED: Audio requires licensing - processing denied",
 	)
 )
+
+// ---------------------------------------------------------------------------
+// Motion Tracking Service methods
+// ---------------------------------------------------------------------------
+
+// CreateMotionTrack — creates a new motion track for AI tracking.
+//
+// Hinglish: naya motion track banata hai jisme crosshair overlay ke
+// liye coordinate vectors honge. Status "pending" se start hota hai.
+func (s *VideoService) CreateMotionTrack(
+	ctx context.Context,
+	track *model.MotionTrack,
+) error {
+	return s.motionTrackRepo.Create(ctx, track)
+}
+
+// GetMotionTracks — returns all motion tracks for a project.
+func (s *VideoService) GetMotionTracks(
+	ctx context.Context,
+	projectID uint,
+) ([]*model.MotionTrack, error) {
+	return s.motionTrackRepo.GetByProjectID(ctx, projectID)
+}
+
+// GetTrackKeyframes — returns all keyframes for a motion track.
+func (s *VideoService) GetTrackKeyframes(
+	ctx context.Context,
+	trackID uint,
+) ([]*model.TrackKeyframe, error) {
+	return s.keyframeRepo.GetByTrackID(ctx, trackID)
+}
+
+// AddTrackKeyframe — adds a coordinate vector keyframe at a specific frame.
+//
+// Hinglish: har frame par (x, y) normalized coordinate [0-1] aur velocity
+// (vel_x, vel_y) store karta hai. Yeh data frontend crosshair (`+`) ko
+// position karega aur linked element ka transform lock karega.
+func (s *VideoService) AddTrackKeyframe(
+	ctx context.Context,
+	kf *model.TrackKeyframe,
+) error {
+	return s.keyframeRepo.Create(ctx, kf)
+}
+
+// BindElementToTrack — links a title/expression/sticker overlay to a motion track.
+//
+// Hinglish: jab user "Link Element to Track" dropdown se ek element select
+// karta hai, to ye endpoint element_binding_id set karta hai. Jab bhi track
+// move karega, linked element ka transform bhi automatically update hoga.
+func (s *VideoService) BindElementToTrack(
+	ctx context.Context,
+	trackID uint,
+	elementID string,
+) (*model.MotionTrack, error) {
+	track, err := s.motionTrackRepo.GetByID(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	track.ElementBindingID = elementID
+	if err := s.motionTrackRepo.Update(ctx, track); err != nil {
+		return nil, err
+	}
+	return track, nil
+}
+
+// UpdateTrackStatus — updates the tracking state machine status.
+func (s *VideoService) UpdateTrackStatus(
+	ctx context.Context,
+	trackID uint,
+	status model.TrackerStatus,
+) (*model.MotionTrack, error) {
+	track, err := s.motionTrackRepo.GetByID(ctx, trackID)
+	if err != nil {
+		return nil, err
+	}
+	track.Status = status
+	if err := s.motionTrackRepo.Update(ctx, track); err != nil {
+		return nil, err
+	}
+	return track, nil
+}

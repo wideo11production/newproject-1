@@ -34,6 +34,8 @@ func AutoMigrate(db *gorm.DB) error {
 	return db.AutoMigrate(
 		&model.UploadSession{},
 		&model.UploadChunk{},
+		&model.UploadSafetyCheck{},
+		&model.BlacklistEntry{},
 	)
 }
 

@@ -24,7 +24,7 @@
 // of taking any of it away.
 
 import { useEffect, useState } from 'react';
-import { ZoomIn, ZoomOut, Minus, AudioWaveform } from 'lucide-react';
+import { ZoomIn, ZoomOut, Minus, AudioWaveform, Speaker, SpeakerWave } from 'lucide-react';
 import { levelBands } from '../../lib/engine/audio-graph';
 import { clampPxPerFrame, zoomPercent } from '../../lib/engine/frames';
 
@@ -67,7 +67,7 @@ export function TimelineRail({
   }, [playing]);
 
   const btn =
-    'flex h-6 w-6 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg disabled:opacity-40';
+    'flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500] disabled:opacity-40';
 
   return (
     <div
@@ -75,19 +75,18 @@ export function TimelineRail({
       title="Output level and timeline zoom"
     >
       <div className="flex h-7 items-center justify-center border-b border-edge">
-        <AudioWaveform className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+        <AudioWaveform className="h-4 w-4 text-fg-muted" aria-hidden="true" />
       </div>
 
       {/* The meter: 14 bars growing UPWARD, the full height of the lanes.
-          Green under -12dB, amber to -3, red above - a gain-stage convention,
-          not a personal preference. */}
+          Green under -12dB, amber to -3, red above - a gain-stage convention. */}
       <div
         role="meter"
         aria-label="Output level"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(Math.max(0, ...bands) * 100)}
-        className="flex min-h-0 flex-1 flex-col-reverse items-center gap-px px-1 py-2"
+        className="relative flex min-h-0 flex-1 flex-col-reverse items-center gap-px px-1 py-2"
       >
         {bands.map((v, i) => {
           const lit = v > 0.02;
@@ -95,10 +94,8 @@ export function TimelineRail({
           return (
             <span
               key={i}
-              className="w-1.5 rounded-sm transition-[height,background-color] duration-75"
+              className="w-1.5 transition-[height,background-color] duration-75"
               style={{
-                // A 1px floor so the meter reads as a column at rest instead of
-                // vanishing and leaving a mystery gap in the rail.
                 height: `${Math.max(1, Math.round(v * 100))}%`,
                 background: lit ? colour : 'rgb(var(--ve-edge))',
                 opacity: lit ? 1 : 0.5,
@@ -106,6 +103,22 @@ export function TimelineRail({
             />
           );
         })}
+
+        {/* Left / right speaker channels — blink the moment audio plays. */}
+        <span className="absolute -left-1.5 top-1 flex items-center gap-0.5">
+          <Speaker
+            className={`h-3 w-3 ${playing && bands[7] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted/30'}`}
+            aria-hidden="true"
+          />
+          <span className="text-[6px] text-fg-muted/40">L</span>
+        </span>
+        <span className="absolute -right-1.5 top-1 flex items-center gap-0.5">
+          <SpeakerWave
+            className={`h-3 w-3 ${playing && bands[10] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted/30'}`}
+            aria-hidden="true"
+          />
+          <span className="text-[6px] text-fg-muted/40">R</span>
+        </span>
       </div>
 
       {/* Ruler zoom. Back where it started, because a control that is not next
@@ -118,7 +131,7 @@ export function TimelineRail({
           title="Zoom in — until a single frame is plainly visible ( + )"
           className={btn}
         >
-          <ZoomIn className="h-2 w-2" aria-hidden="true" />
+          <ZoomIn className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -127,7 +140,7 @@ export function TimelineRail({
           title="Zoom out — see more of the timeline ( - )"
           className={btn}
         >
-          <ZoomOut className="h-2 w-2" aria-hidden="true" />
+          <ZoomOut className="h-4 w-4" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -136,7 +149,7 @@ export function TimelineRail({
           title={`Reset to 100% — ${zoomPercent(pxPerFrame)}% now ( 0 )`}
           className={btn}
         >
-          <Minus className="h-2 w-2" aria-hidden="true" />
+          <Minus className="h-4 w-4" aria-hidden="true" />
         </button>
         {/* The live scale. It was on the ruler, then in the toolbar, and is here
             now with the buttons it describes - a number that moves when the

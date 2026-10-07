@@ -10,17 +10,20 @@ import (
 )
 
 type Handler struct {
-	videoService *service.VideoService
-	moderator    *service.ModerationService
+	videoService   *service.VideoService
+	moderator      *service.ModerationService
+	framerateSvc   *service.FramerateService
 }
 
 func NewHandler(
 	vs *service.VideoService,
 	moderator *service.ModerationService,
+	framerateSvc *service.FramerateService,
 ) *Handler {
 	return &Handler{
 		videoService: vs,
 		moderator:    moderator,
+		framerateSvc: framerateSvc,
 	}
 }
 
@@ -65,6 +68,34 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		moderationGroup.POST("/block/:clip_id", h.BlockDuplicateContent)
 		moderationGroup.GET("/license/:hash", h.CheckAudioLicense)
 		moderationGroup.POST("/validate-audio", h.ValidateAudioParameters)
+	}
+
+	framerateGroup := r.Group("/framerate")
+	{
+		framerateGroup.POST("/eligibility/:user_id", h.CheckFramerateEligibility)
+		framerateGroup.POST("/apply/:project_uuid", h.ApplyFramerateToProject)
+		framerateGroup.GET("/profile/:project_uuid", h.GetFramerateProfile)
+	}
+
+	// ---- AI Motion Tracking Routes ----
+	// Hinglish: ye routes 2D AI Motion Tracking ka backend schema expose karte hain.
+	// Crosshair overlay (`+`) ke liye coordinate vectors, keyframe arrays,
+	// aur element binding (sticker/title/expression link) ke liye endpoints.
+	// Sab kuch self-hosted ONNX Runtime pe chalta hai — koi third-party nahi.
+	motionGroup := r.Group("/motion")
+	{
+		// Create a new motion track for a clip
+		motionGroup.POST("/tracks", h.CreateMotionTrack)
+		// Get all motion tracks for a project
+		motionGroup.GET("/tracks/:project_id", h.GetMotionTracks)
+		// Get a single track with all keyframes
+		motionGroup.GET("/tracks/:track_id/keyframes", h.GetTrackKeyframes)
+		// Add a keyframe at a specific frame
+		motionGroup.POST("/tracks/:track_id/keyframes", h.AddTrackKeyframe)
+		// Link an element (sticker/title/expression) to a track
+		motionGroup.PUT("/tracks/:track_id/bind", h.BindElementToTrack)
+		// Start/stop tracking status
+		motionGroup.PUT("/tracks/:track_id/status", h.UpdateTrackStatus)
 	}
 }
 
@@ -521,4 +552,221 @@ func (h *Handler) ValidateAudioParameters(c *gin.Context) {
 		return
 	}
 	c.Status(http.StatusOK)
+}
+
+// CheckFramerateEligibility - Returns the max framerate tier a user is eligible for.
+// AURA Premium feature flag: global toggle + strict AURA license check.
+// NO role-based, NO subscription-based, NO discount vectors.
+func (h *Handler) CheckFramerateEligibility(c *gin.Context) {
+	userID, err := strconv.ParseUint(c.Param("user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user ID"})
+		return
+	}
+
+	eligibility, err := h.framerateSvc.CheckEligibility(c.Request.Context(), uint(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"eligibility": eligibility})
+}
+
+// ApplyFramerateToProject - Evaluate eligibility and save framerate profile for a project.
+func (h *Handler) ApplyFramerateToProject(c *gin.Context) {
+	projectUUID := c.Param("project_uuid")
+	var req struct {
+		UserID          uint              `json:"user_id" binding:"required"`
+		ManualOverride  *model.FramerateTier `json:"manual_override_tier"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, err := h.framerateSvc.ApplyFramerateToProject(
+		c.Request.Context(),
+		req.UserID,
+		projectUUID,
+		nil, // project fetched from repo if needed
+		req.ManualOverride,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"profile": profile})
+}
+
+// GetFramerateProfile - Retrieve the framerate profile for a project.
+func (h *Handler) GetFramerateProfile(c *gin.Context) {
+	projectUUID := c.Param("project_uuid")
+	profile, err := h.framerateSvc.GetProfile(c.Request.Context(), projectUUID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"profile": profile})
+}
+
+// ---------------------------------------------------------------------------
+// AI Motion Tracking handlers
+// ---------------------------------------------------------------------------
+
+// CreateMotionTrack — creates a new motion tracking track for a clip.
+//
+// Hinglish: ye handler ek naya motion track banata hai jisme crosshair
+// overlay (`+`) position ke liye coordinate vectors store honge.
+// Tracking status "pending" se start hota hai, jab system tracking
+// shuru karta hai to "tracking", jab user "Link Element" pe click karta
+// hai to element_binding_id set hota hai.
+func (h *Handler) CreateMotionTrack(c *gin.Context) {
+	var req struct {
+		ProjectID     uint    `json:"project_id" binding:"required"`
+		ClipID        string  `json:"clip_id" binding:"required"`
+		Label         string  `json:"label"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	track := &model.MotionTrack{
+		ProjectID: req.ProjectID,
+		ClipID:    req.ClipID,
+		Label:     req.Label,
+		Status:    model.TrackerPending,
+	}
+
+	if err := h.videoService.CreateMotionTrack(c.Request.Context(), track); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"track": track})
+}
+
+// GetMotionTracks — returns all motion tracks for a project.
+func (h *Handler) GetMotionTracks(c *gin.Context) {
+	projectID, err := strconv.ParseUint(c.Param("project_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid project ID"})
+		return
+	}
+
+	tracks, err := h.videoService.GetMotionTracks(c.Request.Context(), uint(projectID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tracks": tracks})
+}
+
+// GetTrackKeyframes — returns all keyframes for a motion track.
+func (h *Handler) GetTrackKeyframes(c *gin.Context) {
+	trackID, err := strconv.ParseUint(c.Param("track_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid track ID"})
+		return
+	}
+
+	keyframes, err := h.videoService.GetTrackKeyframes(c.Request.Context(), uint(trackID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"keyframes": keyframes})
+}
+
+// AddTrackKeyframe — adds a coordinate vector keyframe at a specific frame.
+//
+// Hinglish: har frame par (x, y) normalized coordinate [0-1] aur velocity
+// (vel_x, vel_y) store karta hai. Yeh data frontend crosshair (`+`) ko
+// position karega aur linked element ka transform lock karega.
+func (h *Handler) AddTrackKeyframe(c *gin.Context) {
+	trackID, err := strconv.ParseUint(c.Param("track_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid track ID"})
+		return
+	}
+
+	var req struct {
+		Frame      float64 `json:"frame" binding:"required"`
+		X          float64 `json:"x" binding:"required"`
+		Y          float64 `json:"y" binding:"required"`
+		VelX       float64 `json:"vel_x"`
+		VelY       float64 `json:"vel_y"`
+		Confidence float64 `json:"confidence"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	kf := &model.TrackKeyframe{
+		TrackID:    uint(trackID),
+		Frame:      req.Frame,
+		X:          req.X,
+		Y:          req.Y,
+		VelX:       req.VelX,
+		VelY:       req.VelY,
+		Confidence: req.Confidence,
+	}
+
+	if err := h.videoService.AddTrackKeyframe(c.Request.Context(), kf); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"keyframe": kf})
+}
+
+// BindElementToTrack — links a title/expression/sticker overlay to a motion track.
+//
+// Hinglish: jab user "Link Element to Track" dropdown se ek element select
+// karta hai, to ye endpoint element_binding_id set karta hai. Jab bhi track
+// move karega, linked element ka transform bhi automatically update hoga.
+func (h *Handler) BindElementToTrack(c *gin.Context) {
+	trackID, err := strconv.ParseUint(c.Param("track_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid track ID"})
+		return
+	}
+
+	var req struct {
+		ElementID string `json:"element_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	track, err := h.videoService.BindElementToTrack(c.Request.Context(), uint(trackID), req.ElementID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"track": track})
+}
+
+// UpdateTrackStatus — updates the tracking state machine status.
+func (h *Handler) UpdateTrackStatus(c *gin.Context) {
+	trackID, err := strconv.ParseUint(c.Param("track_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid track ID"})
+		return
+	}
+
+	var req struct {
+		Status string `json:"status" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	track, err := h.videoService.UpdateTrackStatus(c.Request.Context(), uint(trackID), model.TrackerStatus(req.Status))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"track": track})
 }

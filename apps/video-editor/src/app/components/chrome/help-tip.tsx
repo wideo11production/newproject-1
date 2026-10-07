@@ -37,7 +37,7 @@ export function HelpTip() {
         onClick={() => setOpen(true)}
         aria-label="Help"
         title="What every control does — hover any tool for its own card, or open the full guide"
-        className="flex h-6 w-6 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+        className="flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]"
       >
         <HelpCircle className="h-2 w-2" aria-hidden="true" />
       </button>

@@ -154,7 +154,7 @@ export function AuthNav() {
   }, [refresh]);
 
   const iconBtn =
-    'flex h-8 w-8 items-center justify-center rounded-md border border-edge bg-surface-raised text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
+    'flex h-8 w-8 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]';
 
   if (session.state === 'loading') {
     return (
@@ -202,7 +202,7 @@ export function AuthNav() {
         </a>
         <a
           href={REGISTER_URL}
-          className={`${iconBtn} border-sky-500/50 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25`}
+          className={`${iconBtn} border-[#ff6500]/50 bg-[#ff6500]/15 text-[#ff6500] hover:bg-[#ff6500]/25`}
           aria-label="Create an account"
           title={`Create an account - ${REGISTER_URL}`}
         >
@@ -279,7 +279,7 @@ export function AuthNav() {
         aria-expanded={menuOpen}
         aria-label={`Account menu for ${session.email}`}
         title={`${session.email} (${session.role})`}
-        className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-sky-600 text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors hover:bg-sky-500"
+         className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-[#ff6500] text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors motion-safe:animate-pulse hover:bg-[#ff6500]">
       >
         {/*
           The uploaded avatar, or initials.
@@ -324,8 +324,8 @@ export function AuthNav() {
         <div
           role="menu"
           aria-label="Account"
-          className="absolute right-0 top-9 z-50 w-52 rounded-md border border-edge bg-surface-raised p-1 shadow-lg"
-        >
+            className="absolute right-0 top-9 z-50 w-52 border border-edge bg-surface p-1"
+          >
           {/*
             Identity first, so a user who signed in as one of several accounts
             can tell at a glance WHICH one this menu belongs to. Truncated with
@@ -341,7 +341,7 @@ export function AuthNav() {
             href={DASHBOARD_URL}
             role="menuitem"
             onClick={() => setMenuOpen(false)}
-            className="mt-1 flex h-7 items-center gap-1.5 rounded px-2 text-[8px] text-fg transition-colors hover:bg-surface-overlay"
+            className="mt-1 flex h-6 items-center gap-1.5 px-2 text-[8px] text-fg transition-colors hover:text-[#ff6500]"
           >
             <LayoutDashboard className="h-2 w-2 shrink-0" aria-hidden="true" />
             Dashboard
@@ -355,7 +355,7 @@ export function AuthNav() {
               void logout();
             }}
             disabled={busy}
-            className="flex h-7 w-full items-center gap-1.5 rounded px-2 text-[8px] text-fg transition-colors hover:bg-surface-overlay disabled:opacity-50"
+            className="flex h-6 w-full items-center gap-1.5 px-2 text-[8px] text-fg transition-colors hover:text-[#ff6500] disabled:opacity-50"
           >
             {busy ? (
               <Loader2 className="h-2 w-2 shrink-0 animate-spin" aria-hidden="true" />

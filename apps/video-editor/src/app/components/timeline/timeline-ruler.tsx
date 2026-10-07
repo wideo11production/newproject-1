@@ -402,7 +402,7 @@ export function TimelineRuler({
       // The ruler is now BOTH: a short drag scrubs, a long drag pans. There is no
       // single cursor that can say both honestly, so it says the safer one —
       // `grab` — and the behaviour is discoverable by doing rather than by looking.
-      className="group relative shrink-0 cursor-grab select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-500 active:cursor-grabbing"
+      className="group relative shrink-0 cursor-grab select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#ff6500] active:cursor-grabbing"
     >
       {/* ---- The baseline. A hard edge along the bottom is what makes a strip
            of dashes read as a ruler rather than as a broken border. ---- */}
@@ -413,7 +413,7 @@ export function TimelineRuler({
       {hasMeasure && (
         <>
           <div
-            className="pointer-events-none absolute top-0 h-full border-x border-sky-400/80 bg-sky-400/15"
+            className="pointer-events-none absolute top-0 h-full border-x border-[#ff6500]/80 bg-[#ff6500]/15"
             style={{ left: measure.start * pxPerFrame, width: Math.max(1, measureLen * pxPerFrame) }}
           />
           {/*
@@ -652,7 +652,7 @@ export function TimelineZoom({
         onChange={(e) => onZoom(clampPxPerFrame(Number(e.target.value) / 100))}
         aria-label="Timeline zoom"
         title={`Timeline zoom: ${zoomPercent(pxPerFrame)}% — ${pxPerFrame.toFixed(2)} pixels per frame\nDrag to zoom, or Alt+scroll anywhere on the ruler.`}
-        className="h-1 w-12 cursor-pointer accent-sky-500"
+        className="h-1 w-12 cursor-pointer accent-[#ff6500]"
       />
       <span className="w-8 text-center font-mono text-[8px] text-fg-secondary" aria-label="Zoom percentage">
         {zoomPercent(pxPerFrame)}%

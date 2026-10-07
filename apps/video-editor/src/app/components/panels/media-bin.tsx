@@ -47,7 +47,7 @@ const FILTERS: Array<{ id: FilterId; label: string; Icon: typeof Film; hint: str
 ];
 
 const KIND_STYLE: Record<MediaKind, { ring: string; chip: string; label: string }> = {
-  video: { ring: 'ring-sky-500/30', chip: 'bg-sky-500/15 text-sky-300', label: 'Video' },
+  video: { ring: 'ring-[#ff6500]/30', chip: 'bg-[#ff6500]/15 text-[#ff6500]', label: 'Video' },
   audio: { ring: 'ring-violet-500/30', chip: 'bg-violet-500/15 text-violet-300', label: 'Audio' },
   image: { ring: 'ring-emerald-500/30', chip: 'bg-emerald-500/15 text-emerald-300', label: 'Image' },
   text: { ring: 'ring-amber-500/30', chip: 'bg-amber-500/15 text-amber-300', label: 'Text' },
@@ -159,9 +159,9 @@ export function MediaBin({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-dashed border-edge-strong px-3 py-2 text-[8px] font-medium text-fg transition-colors hover:border-sky-500 hover:text-sky-300"
+          className="flex flex-1 items-center justify-center gap-2 rounded-md border border-dashed border-edge-strong px-3 py-2 text-[8px] font-medium text-fg transition-colors duration-150 duration-150 hover:border-[#ff6500] hover:text-[#ff6500]"
         >
-          <Upload className="h-2 w-2" aria-hidden="true" />
+          <Upload className="h-4 w-4" aria-hidden="true" />
           Import media
         </button>
         <input
@@ -179,14 +179,14 @@ export function MediaBin({
       </div>
 
       <div className="relative">
-        <Search className="h-2 w-2" aria-hidden="true" />
+        <Search className="h-4 w-4" aria-hidden="true" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search media…"
           aria-label="Search media"
-          className="w-full rounded-md border border-edge-strong bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-sky-500 focus:outline-none"
+          className="w-full rounded-md border border-edge-strong bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
         />
       </div>
 
@@ -200,11 +200,11 @@ export function MediaBin({
             aria-label={label}
             title={`${label}\n${hint}`}
             className={[
-              'flex h-6 w-6 items-center justify-center rounded transition-colors',
-            filter === id ? 'bg-sky-600 text-white' : 'text-fg-secondary hover:bg-surface-overlay hover:text-fg',
+              'flex h-6 w-6 items-center justify-center rounded transition-colors duration-150',
+            filter === id ? 'bg-[#ff6500] text-white' : 'text-fg-secondary  hover:text-fg',
             ].join(' ')}
           >
-            <Icon className="h-2 w-2" aria-hidden="true" />
+            <Icon className="h-4 w-4" aria-hidden="true" />
           </button>
         ))}
         <span className="ml-auto self-center font-mono text-[8px] text-fg-muted">
@@ -217,7 +217,7 @@ export function MediaBin({
           <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded border border-dashed border-edge p-4 text-center">
             {items.length === 0 ? (
               <>
-                <Film className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+                <Film className="h-4 w-4 text-fg-muted" aria-hidden="true" />
                 <p className="text-[8px] text-fg-muted">No media imported yet</p>
                 <p className="max-w-[30ch] text-[8px] leading-snug text-fg-muted">
                   Import files, then click a tile to drop it on the timeline. Files stay in this browser
@@ -237,8 +237,8 @@ export function MediaBin({
                 <li key={item.id}>
                   <div
                     className={[
-                      'group relative overflow-hidden rounded-md border bg-surface-raised/60 ring-1 transition-colors',
-                      active ? 'border-sky-500 ring-sky-500/40' : `${style.ring} border-edge`,
+                      'group relative overflow-hidden rounded-md border  ring-1 transition-colors duration-150',
+                      active ? 'border-[#ff6500] ring-[#ff6500]/40' : `${style.ring} border-edge`,
                     ].join(' ')}
                   >
                     <button
@@ -268,7 +268,7 @@ export function MediaBin({
                       aria-pressed={active}
                       aria-label={`Add ${item.name} to the timeline`}
                       title={`${item.name}\nClick to add at the playhead · hover to preview`}
-                      className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                      className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]"
                     >
                       <div className="relative flex aspect-video items-center justify-center overflow-hidden bg-surface">
                         {item.poster ? (
@@ -300,13 +300,13 @@ export function MediaBin({
                             }
                           >
                             {reading.has(item.name) ? (
-                              <Loader2 className="h-2 w-2 animate-spin text-fg-muted" aria-hidden="true" />
+                              <Loader2 className="h-4 w-4 animate-spin text-fg-muted" aria-hidden="true" />
                             ) : item.kind === 'audio' ? (
-                              <Music className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+                              <Music className="h-4 w-4 text-fg-muted" aria-hidden="true" />
                             ) : item.kind === 'text' ? (
-                              <Type className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+                              <Type className="h-4 w-4 text-fg-muted" aria-hidden="true" />
                             ) : (
-                              <Film className="h-2 w-2 text-fg-muted" aria-hidden="true" />
+                              <Film className="h-4 w-4 text-fg-muted" aria-hidden="true" />
                             )}
                           </span>
                         )}
@@ -356,7 +356,7 @@ export function MediaBin({
                       title={`Remove ${item.name} from the bin`}
                       className="absolute right-1 top-1 rounded bg-surface/80 p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-red-400 focus:opacity-100 focus:outline-none focus-visible:opacity-100 group-hover:opacity-100"
                     >
-                      <X className="h-2 w-2" aria-hidden="true" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 </li>

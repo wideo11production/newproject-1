@@ -47,6 +47,12 @@ export type SessionIdentity = {
   full_name: string;
   avatar_url: string;
   role: string;
+  /** AURA Professional Role for role-based tab visibility/adaptive toolkits */
+  professional_role?: 'student' | 'creator' | 'advocate' | 'lawyer' | 'middle_income_earner' | 'lower_middle_income_earner' | 'other';
+  /** Subscriber status (for Commercial Console + Revenue Ledger visibility) */
+  is_subscribed?: boolean;
+  /** Total lifetime revenue (for Financial Ledger visibility check) */
+  total_revenue?: number;
   is_verified: boolean;
   /** Logged in hai ya nahi (public pages ke liye false) */
   _isAuthenticated: boolean;

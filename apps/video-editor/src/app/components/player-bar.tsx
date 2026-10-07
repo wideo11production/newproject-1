@@ -163,20 +163,20 @@ export function PlayerBar({
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, [onFullscreenChange]);
 
-  const btn = 'flex h-7 w-7 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
+  const btn = 'flex h-7 w-7 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]';
 
   /**
    * The ACTIVE state, and why it is not a filled button.
    *
-   * These controls used to be `bg-sky-600 text-white`, and three filled blue
+   * These controls used to be `bg-[#ff6500] text-white`, and three filled blue
    * squares in a 40px strip out-shouted the play button next to them. An active
    * control only needs to read as active; a saturated fill at this size does not
    * read as active, it reads as three more primary actions.
    *
-   * A 12% tint plus the sky text colour says the same thing in a third of the
-   * ink, and it leaves the play button the only solid thing in the strip.
-   */
-  const on = 'bg-sky-500/12 text-sky-300 hover:bg-sky-500/20';
+    * A 12% tint plus the orange-red text colour says the same thing in a third of the
+    * ink, and it leaves the play button the only solid thing in the strip.
+    */
+  const on = 'bg-[#ff6500]/12 text-[#ff6500] hover:bg-[#ff6500]/20';
 
   // Clicking the timecode copies it. A timecode you cannot paste into a note
   // or a report is only half a feature.
@@ -207,16 +207,16 @@ export function PlayerBar({
 
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-t border-edge bg-surface px-3">
-      <button type="button" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={`${isPlaying ? 'Pause' : 'Play'} (Space)`} className="flex h-7 w-7 items-center justify-center rounded bg-sky-600 text-white hover:bg-sky-500">
-        {isPlaying ? <Pause className="h-2 w-2" /> : <Play className="h-3.5 w-3.5" />}
+       <button type="button" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={`${isPlaying ? 'Pause' : 'Play'} (Space)`} className="flex h-7 w-7 items-center justify-center rounded bg-[#ff6500] text-white hover:bg-[#e55800]">
+        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </button>
 
       <div className="flex items-center gap-0.5">
         <button type="button" onClick={() => onSeek(Math.max(0, currentFrame - 1))} className={btn} aria-label="Previous frame" title="Previous frame ( ← )">
-          <SkipBack className="h-2 w-2" />
+          <SkipBack className="h-4 w-4" />
         </button>
         <button type="button" onClick={() => onSeek(Math.min(durationFrames, currentFrame + 1))} className={btn} aria-label="Next frame" title="Next frame ( → )">
-          <SkipForward className="h-2 w-2" />
+          <SkipForward className="h-4 w-4" />
         </button>
       </div>
 
@@ -248,7 +248,7 @@ export function PlayerBar({
           aria-label="Loop playback"
           aria-pressed={loopOn}
         >
-          <Repeat className="h-2 w-2" />
+          <Repeat className="h-4 w-4" />
         </button>
 
         {/* Viewer layout and zoom. Persisted, because "which layout I like" is
@@ -268,7 +268,7 @@ export function PlayerBar({
               title={hint}
               className={[btn, viewerLayout === id ? on : ''].join(' ')}
             >
-              <Icon className="h-2 w-2" />
+              <Icon className="h-4 w-4" />
             </button>
           ))}
         </div>
@@ -293,7 +293,7 @@ export function PlayerBar({
           title="Show the resolution, frame rate and frame number over the picture"
           className={[btn, badge ? on : ''].join(' ')}
         >
-          <Tag className="h-2 w-2" />
+          <Tag className="h-4 w-4" />
         </button>
 
         <div className="flex items-center gap-1">
@@ -304,7 +304,7 @@ export function PlayerBar({
             title={muted || volume === 0 ? 'Unmute' : 'Mute'}
             aria-label={muted || volume === 0 ? 'Unmute' : 'Mute'}
           >
-            {muted || volume === 0 ? <VolumeX className="h-2 w-2" /> : <Volume2 className="h-3.5 w-3.5" />}
+            {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
           <input
             type="range"
@@ -323,7 +323,7 @@ export function PlayerBar({
         </div>
 
 
-        {fullscreen ? <Minimize2 className="h-2 w-2 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-3.5 w-3.5 text-fg-muted" aria-hidden="true" />}
+        {fullscreen ? <Minimize2 className="h-4 w-4 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-4 w-4 text-fg-muted" aria-hidden="true" />}
       </div>
     </div>
   );

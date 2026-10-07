@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,6 +31,13 @@ type UploadService struct {
 	minio     *minio.Client
 	bucket    string
 	chunkSize int64
+	// interceptor: educational content + frames check (nil = skip checks)
+	interceptor *EducationalViolationInterceptor
+	framesChecker *FramesChecker
+	// safety: content safety filter (FFmpeg + ONNX) — nil = disabled
+	safety *ContentSafetyService
+	// quota: per-user upload volume limits (.env config) — nil = unlimited
+	quota QuotaChecker
 }
 
 func NewUploadService(cfg UploadConfig, repo repository.UploadRepository) (*UploadService, error) {
@@ -48,7 +57,69 @@ func NewUploadService(cfg UploadConfig, repo repository.UploadRepository) (*Uplo
 	}, nil
 }
 
-func (s *UploadService) InitSession(ctx context.Context, userID uint, filename, contentType string, fileSize int64) (*model.UploadSession, error) {
+// SetInterceptor wires the educational violation + frames checker.
+//
+// Hinglish: interceptor optional hai (nil = no checks). Billing-service
+// ke student status ke liye interface use karta hai — cross-module
+// circular dependency avoid karne ke liye.
+func (s *UploadService) SetInterceptor(interceptor *EducationalViolationInterceptor, frames *FramesChecker) {
+	s.interceptor = interceptor
+	s.framesChecker = frames
+}
+
+// SetContentSafety wires the FFmpeg + ONNX content safety filter.
+// Hinglish: agar nil rakha jaye to safety checks skip honge (development mode).
+func (s *UploadService) SetContentSafety(safety *ContentSafetyService) {
+	s.safety = safety
+}
+
+// SetQuotaChecker wires per-user upload quota limits (.env config).
+func (s *UploadService) SetQuotaChecker(qc QuotaChecker) {
+	s.quota = qc
+}
+
+// Client returns the MinIO client (used by safety service for cleanup).
+func (s *UploadService) Client() *minio.Client {
+	return s.minio
+}
+
+// checkQuota validates upload against .env quota limits.
+func (s *UploadService) checkQuota(ctx context.Context, userID uint, fileSize int64) error {
+	if s.quota == nil {
+		return nil
+	}
+	return s.quota.CheckUploadQuota(ctx, userID, fileSize)
+}
+
+// isBlacklisted checks if user is on content safety blacklist.
+func (s *UploadService) isBlacklisted(ctx context.Context, userID uint) (bool, []*model.BlacklistEntry, error) {
+	if s.safety == nil || s.safety.repo == nil {
+		return false, nil, nil
+	}
+	isListed := s.safety.repo.IsBlacklisted(ctx, userID)
+	if !isListed {
+		return false, nil, nil
+	}
+	entries, err := s.safety.repo.GetBlacklistByUser(ctx, userID)
+	return true, entries, err
+}
+
+// checkViolations runs interceptor checks if wired. Returns violations
+// (non-nil slice) or nil (all OK). Also returns error on internal failure.
+func (s *UploadService) checkViolations(ctx context.Context, session *model.UploadSession) ([]*UploadViolation, error) {
+	if s.interceptor == nil {
+		return nil, nil // checks disabled
+	}
+	return s.interceptor.CheckAll(ctx, session, s.framesChecker)
+}
+
+func (s *UploadService) InitSession(ctx context.Context, userID uint, filename, contentType string, fileSize int64, category string) (*model.UploadSession, error) {
+
+	// Step 1: Quota check (.env config) — before creating session.
+	if err := s.checkQuota(ctx, userID, fileSize); err != nil {
+		return nil, fmt.Errorf("quota check failed: %w", err)
+	}
+
 	totalChunks := fileSize / s.chunkSize
 	if fileSize%s.chunkSize != 0 {
 		totalChunks++
@@ -63,11 +134,35 @@ func (s *UploadService) InitSession(ctx context.Context, userID uint, filename, 
 		TotalChunks: int(totalChunks),
 		Status:      "pending",
 		MinioPath:   fmt.Sprintf("uploads/%d/%s", userID, uuid.New()),
+		Category:    category,
 		ExpiresAt:   time.Now().Add(24 * time.Hour),
 	}
 
 	if err := s.repo.CreateSession(ctx, session); err != nil {
 		return nil, err
+	}
+
+	// Blacklist check — AURA content safety guard.
+	// Hinglish: agar user content safety violation se blacklisted hai
+	// to upload reject karo without processing.
+	if s.safety != nil {
+		if blacklisted, _, _ := s.isBlacklisted(ctx, userID); blacklisted {
+			session.Status = "blacklisted"
+			_ = s.repo.UpdateSession(ctx, session)
+			return nil, fmt.Errorf("upload rejected: user is blacklisted due to content safety violation")
+		}
+	}
+
+	// Interceptor check — educational content + frames validation.
+	// Hinglish: violation milne par session reject karo, block karke
+	// bachao. Non-blocking violations log karo.
+	violations, err := s.checkViolations(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("interceptor error: %w", err)
+	}
+	if len(violations) > 0 {
+		return nil, fmt.Errorf("upload rejected: %s (category=%s)",
+			violations[0].Reason, session.Category)
 	}
 
 	uploadURL, err := s.minio.PresignedPutObject(ctx, s.bucket, fmt.Sprintf("%s/session_%d", session.MinioPath, session.ID), 24*time.Hour)
@@ -167,6 +262,61 @@ func (s *UploadService) AssembleUpload(ctx context.Context, sessionUUID string) 
 	}
 
 	session.MinioPath = finalKey
+	session.Status = "assembling"
+	if err := s.repo.UpdateSession(ctx, session); err != nil {
+		return "", err
+	}
+
+	// AURA Content Safety Guard — scan assembled video.
+	// Hinglish: video fully assemble hone ke baad FFmpeg se frames nikal
+	// ke ONNX model se scan karo. Prohibited content detect hone par
+	// upload abort + file delete + user blacklist.
+	if s.safety != nil {
+		// Download assembled video to temp file for FFmpeg scanning.
+		tempFile, err := os.CreateTemp("", "aura_upload_*.mp4")
+		if err != nil {
+			return "", fmt.Errorf("temp file create: %w", err)
+		}
+		tempPath := tempFile.Name()
+		defer os.Remove(tempPath)
+
+		reader, err := s.minio.GetObject(ctx, s.bucket, finalKey, minio.GetObjectOptions{})
+		if err != nil {
+			tempFile.Close()
+			return "", fmt.Errorf("minio get for scan: %w", err)
+		}
+		if _, err := io.Copy(tempFile, reader); err != nil {
+			tempFile.Close()
+			reader.Close()
+			return "", fmt.Errorf("file copy for scan: %w", err)
+		}
+		tempFile.Close()
+		reader.Close()
+
+		scanResult, err := s.safety.ScanUpload(ctx, session.UUID, session.UserID, tempPath)
+		if err != nil {
+			return "", fmt.Errorf("safety scan failed: %w", err)
+		}
+
+		if scanResult.Flagged {
+			// Abort upload — delete fragments, blacklist user, mark session.
+			session.Status = "aborted"
+			_ = s.repo.UpdateSession(ctx, session)
+
+			// Delete the assembled video from MinIO.
+			_ = s.safety.CleanupViolations(ctx, session.UUID.String(), finalKey)
+
+			var reasons []string
+			for _, d := range scanResult.Detections {
+				reasons = append(reasons, fmt.Sprintf("%s(%.2f)", d.Category, d.Confidence))
+			}
+			return "", fmt.Errorf("upload ABORTED: prohibited content detected: %s", strings.Join(reasons, ", "))
+		}
+
+		// Safe — clean up temp file, allow upload to complete.
+		_ = os.Remove(tempPath)
+	}
+
 	session.Status = "completed"
 	if err := s.repo.UpdateSession(ctx, session); err != nil {
 		return "", err

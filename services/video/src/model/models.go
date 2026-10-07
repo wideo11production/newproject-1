@@ -4,6 +4,63 @@ import (
 	"time"
 )
 
+// TrackerStatus — AI motion tracking ka state machine.
+// Gate A (auto): system detects motion, Gate B (manual): user confirms target.
+type TrackerStatus string
+
+const (
+	TrackerPending     TrackerStatus = "pending"
+	TrackerTracking    TrackerStatus = "tracking"
+	TrackerConfirmed   TrackerStatus = "confirmed"
+	TrackerCompleted   TrackerStatus = "completed"
+	TrackerFailed      TrackerStatus = "failed"
+)
+
+// MotionTrack — 2D AI Motion Tracking ka backend schema.
+//
+// Hinglish: ye table har tracked object ka coordinate vector store karta hai
+// frame-by-frame. Crosshair overlay (`+`) ke liye har frame par (x, y) coordinate
+// aur velocity vector available hota hai. Link Element binding ke liye element_id
+// track karta hai ke kaunse overlay/sticker/title ko ye track dikhai dega.
+//
+// Backend uses self-hosted ONNX Runtime models — koi third-party API nahi.
+type MotionTrack struct {
+	ID         uint            `gorm:"primarykey" json:"id"`
+	ProjectID  uint            `gorm:"not null" json:"project_id"`
+	ClipID     string          `gorm:"type:text;not null" json:"clip_id"`
+	Label      string          `gorm:"type:text" json:"label" ` // Human-readable target label
+	Status     TrackerStatus   `gorm:"type:text;not null;default:'pending'" json:"status"`
+	// ElementBindingID — linked title/expression/sticker overlay ka ID
+	ElementBindingID string         `gorm:"type:text" json:"element_binding_id,omitempty"`
+	CreatedAt  time.Time       `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time       `gorm:"autoUpdateTime" json:"updated_at"`
+}
+
+func (MotionTrack) TableName() string {
+	return "motion_tracks"
+}
+
+// TrackKeyframe — har frame par tracked coordinate + velocity vector.
+//
+// Hinglish: ye keyframe array hai jo coordinate vectors ko store karta hai.
+// Playhead scrub ke time pre-rendered micro-scaled buffer se ye data
+// reference hota hai. Crosshair (`+`) position = (X, Y) normalized to [0,1].
+type TrackKeyframe struct {
+	ID         uint          `gorm:"primarykey" json:"id"`
+	TrackID    uint          `gorm:"not null" json:"track_id"`
+	Frame      float64       `gorm:"not null" json:"frame"`
+	X          float64       `gorm:"not null" json:"x"`    // Normalized X position [0.0-1.0]
+	Y          float64       `gorm:"not null" json:"y"`    // Normalized Y position [0.0-1.0]
+	VelX       float64       `gorm:"default:0" json:"vel_x"` // Velocity X (pixels/sec)
+	VelY       float64       `gorm:"default:0" json:"vel_y"` // Velocity Y (pixels/sec)
+	Confidence float64       `gorm:"default:0" json:"confidence"` // Tracking confidence [0-1]
+	CreatedAt  time.Time     `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (TrackKeyframe) TableName() string {
+	return "track_keyframes"
+}
+
 // TrackType represents the type of track (video, audio, etc.)
 type TrackType string
 
