@@ -194,7 +194,8 @@ export function MediaBin({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search media…"
           aria-label="Search media"
-          className="w-full rounded-md-edge-strong bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
+          className="w-full rounded-md bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
+          style={{ borderRadius: '6px' }}
         />
       </div>
 

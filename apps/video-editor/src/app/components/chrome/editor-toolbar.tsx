@@ -552,42 +552,46 @@ export function EditorToolbar({
             set of correct answers - five frame rates and a set of speeds - and a
             cycle button makes the user press it just to find out where they are.
           */}
-           <label
-             className="flex items-center gap-1 px-1"
-             title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
-           >
-             <Gauge className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
-             <select
-               value={String(fps)}
-               onChange={(e) => onFpsChange(Number(e.target.value))}
-               aria-label="Timeline frame rate"
-               className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
-             >
-               {SUPPORTED_FPS.map((f) => (
-                 <option key={f} value={f}>
-                   {f} fps
-                 </option>
-               ))}
-             </select>
-           </label>
-           <label
-             className="flex items-center gap-1 px-1"
-             title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
-           >
-             <Timer className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
-             <select
-               value={String(playbackRate)}
-               onChange={(e) => onPlaybackRate(Number(e.target.value))}
-               aria-label="Playback speed"
-               className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
-             >
-               {PLAYBACK_RATES.map((r) => (
-                 <option key={r} value={r}>
-                   {r}x
-                 </option>
-               ))}
-             </select>
-           </label>
+<label
+              className="flex items-center gap-1 px-1"
+              title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
+            >
+              <Gauge className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
+              <div className="ve-select-dropdown">
+              <select
+                value={String(fps)}
+                onChange={(e) => onFpsChange(Number(e.target.value))}
+                aria-label="Timeline frame rate"
+                className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+              >
+                {SUPPORTED_FPS.map((f) => (
+                  <option key={f} value={f}>
+                    {f} fps
+                  </option>
+                ))}
+              </select>
+              </div>
+            </label>
+            <label
+              className="flex items-center gap-1 px-1"
+              title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
+            >
+              <Timer className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
+              <div className="ve-select-dropdown">
+              <select
+                value={String(playbackRate)}
+                onChange={(e) => onPlaybackRate(Number(e.target.value))}
+                aria-label="Playback speed"
+                className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+              >
+                {PLAYBACK_RATES.map((r) => (
+                  <option key={r} value={r}>
+                    {r}x
+                  </option>
+                ))}
+              </select>
+              </div>
+            </label>
         </ToolbarGroup>
 
       </div>

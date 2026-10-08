@@ -82,7 +82,7 @@
     --ve-edge: 30 41 59; /* hairline borders */
     --ve-edge-strong: 51 65 85;
 
-    /* ---- Clip tiles: DARK in BOTH themes, deliberately ----
+/* ---- Clip tiles: DARK in BOTH themes, deliberately ----
 
        Ye editor ka sabse visible light-mode bug tha. Clip ka background
        `bg-sky-500/25` tha - ek TRANSLUCENT accent - aur uska text `text-white`.
@@ -104,12 +104,15 @@
        themes me bilkul SAME. Ye OPAQUE dark tints hain, translucent nahi,
        isliye inke upar white text hamesha padhne layak rehta hai.
 
-       Hinglish: clip dono theme me dark - wo media hai, theme nahi. Pehle
-                  ye translucent the, to light mode me saare naam gayab. */
-    --ve-clip-video: rgb(7 47 73);
-    --ve-clip-audio: rgb(46 16 101);
-    --ve-clip-text: rgb(69 39 5);
-    --ve-clip-image: rgb(4 47 36);
+       Movavi-style: each track type gets a distinct color tint so a user can
+       tell video from audio from text at a single glance. Video = orange-red
+       (#ff6500), audio = purple (#a855f7), text = amber (#fbbf24),
+       image = emerald (#10b981), branding = pink (#ec4899). */
+     --ve-clip-video: rgb(255 101 0);
+     --ve-clip-audio: rgb(168 85 247);
+     --ve-clip-text: rgb(251 191 36);
+     --ve-clip-image: rgb(16 185 129);
+     --ve-clip-branding: rgb(236 72 153);
   }
 
   /* ==========================================================================
@@ -309,5 +312,69 @@
 }
 
 .force-thin-scrollbar::-webkit-scrollbar-corner {
-  background: transparent;
-}
+    background: transparent;
+  }
+
+  /* ============================================================================
+   * SELECT DROPDOWN: Orange-red on scroll / hover
+   * ============================================================================
+   *
+   * Playback speed and frame rate dropdowns use native <select> elements.
+   * Chrome ignores ::-webkit-scrollbar rules on <select> elements, so we
+   * wrap them in a custom dropdown container that styles the scroller.
+   *
+   * Hinglish: jab user playback speed ya frame rate option scroll karta hai,
+   * orange-red highlight chalta hai. Ye CSS select ke dropdown scroller par
+   * orange-red thumb bana deta hai. */
+  .ve-select-dropdown {
+    position: relative;
+  }
+  
+  .ve-select-dropdown select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: none;
+  }
+  
+  /* Custom dropdown arrow - orange-red on hover */
+  .ve-select-dropdown::after {
+    content: '▼';
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 8px;
+    color: #9fa7b3;
+    pointer-events: none;
+    transition: color 150ms ease;
+  }
+  
+  .ve-select-dropdown:hover::after {
+    color: #ff6500;
+  }
+  
+  /* Orange-red scrollbar for select dropdown option lists */
+  .ve-select-dropdown select::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .ve-select-dropdown select::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 3px;
+  }
+  
+  .ve-select-dropdown select::-webkit-scrollbar-thumb {
+    background-color: #ff6500;
+    border-radius: 3px;
+    transition: background-color 150ms ease;
+  }
+  
+  .ve-select-dropdown select::-webkit-scrollbar-thumb:hover {
+    background-color: #ff8533;
+  }
+  
+  /* Firefox select scrollbar */
+  .ve-select-dropdown select {
+    scrollbar-width: thin;
+    scrollbar-color: #ff6500 #1a1a1a;
+  }

@@ -455,13 +455,15 @@ function IconToggle({
   );
 }
 
-/** The colour each lane's spine and type icon share with its clips. */
+/** The colour each lane's spine and type icon share with its clips.
+    Movavi-style: each track type gets a distinct, easily-recognizable colour
+    so a user can tell video from audio from text at a single glance. */
 const TRACK_TINT: Record<TrackType, string> = {
-  video: '#38bdf8',
-  audio: '#a78bfa',
-  text: '#fbbf24',
-  image: '#34d399',
-  branding: '#ec4899',
+  video: '#ff6500',     // Orange-Red — video clips (primary base track)
+  audio: '#a855f7',     // Purple — audio clips / track records
+  text: '#fbbf24',      // Amber — title / text overlays
+  image: '#10b981',     // Emerald — still image clips
+  branding: '#ec4899',  // Pink — logo / sponsor overlay
 };
 
 // ---------------------------------------------------------------------------

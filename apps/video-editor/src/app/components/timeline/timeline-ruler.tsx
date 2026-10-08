@@ -602,11 +602,23 @@ export function TimelineRuler({
         </div>
       )}
 
-      {/* ---- Playhead: a line and a head, because one element cannot be both
-           1px wide and a triangle without one of the two being wrong. ---- */}
-      <div className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-rose-500" style={{ left: currentFrame * pxPerFrame }} />
+{/* ---- Playhead: a line and a head, because one element cannot be both
+            1px wide and a triangle without one of the two being wrong. ----
+            Filmora-style: arrow pointer ABOVE the ruler pointing down at the
+            playhead line, plus the line itself extending the full height. */}
+      <div className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-[#ff6500]" style={{ left: currentFrame * pxPerFrame }} />
       <div
-        className="pointer-events-none absolute top-0 z-30 -ml-[5px] h-0 w-0-x-[5px]-[6px]-x-transparent-rose-500"
+        className="pointer-events-none absolute top-0 z-30 -ml-[5px] h-0 w-0 border-l-[5px] border-r-[5px] border-b-[6px] border-l-transparent border-r-transparent border-b-[#ff6500]"
+        style={{ left: currentFrame * pxPerFrame }}
+      />
+      {/*
+        Filmora-style: additional upper ornament above the playhead triangle.
+        A small diamond/arrow element that sits ABOVE the ruler at the playhead
+        position, giving the playhead a more pronounced "pointer" feel that
+        extends above the ruler strip rather than just sitting within it.
+      */}
+      <div
+        className="pointer-events-none absolute -top-1 z-30 -ml-1 h-2 w-2 rotate-45 bg-[#ff6500]"
         style={{ left: currentFrame * pxPerFrame }}
       />
 

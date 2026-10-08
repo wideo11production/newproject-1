@@ -60,17 +60,8 @@ import { TimelineRail } from './timeline/timeline-rail';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { ResizableHandle, useClampToViewport } from './layout/resizable';
 import { MediaBin } from './panels/media-bin';
-import { TransitionsPanel } from './panels/transitions-panel';
-import { FiltersPanel, TitlesPanel, StickersPanel, PanZoomPanel, LayoutsPanel } from './panels/style-panels';
-import { AudioPanel } from './panels/audio-panel';
-import { ExpressionsPanel } from './panels/expressions-panel';
-import { TemplatesPanel } from './panels/templates-panel';
-import { ProjectPanel } from './panels/project-panel';
-import { BrandingPanel } from './panels/branding-panel';
-import { HelpPanel } from './panels/help-panel';
-import { SamplesPanel, BackgroundsPanel, IntrosPanel, EffectsPanel, ToolsPanel } from './panels/additional-panels';
-import { ClipProperties } from './inspector/clip-properties';
-import { ExportDialog } from './export/export-dialog';
+import { DeletedClip } from './recover-dialog';
+import { ConfirmationDialog } from './confirmation-dialog';
 import { Compositor } from '../lib/engine/compositor';
 import { extractPeaks } from '../lib/engine/waveform';
 import { useMediaStore, type MediaItem, type MediaKind } from '../lib/engine/media-store';
@@ -176,9 +167,12 @@ export function VideoEditor() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
   const [hydrated, setHydrated] = useState(false);
-  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
-  const [previewClip, setPreviewClip] = useState<TimelineClip | null>(null);
-  const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 600 });
+  const [clipToDelete, setClipToDelete] = useState<string | null>(null);
+  const [clipsToDelete, setClipsToDelete] = useState<Set<string>>(new Set());
+  const [trackToDelete, setTrackToDelete] = useState<string | null>(null);
+  const [transitionToDelete, setTransitionToDelete] = useState<string | null>(null);
+  const [markerToDelete, setMarkerToDelete] = useState<string | null>(null);
+  const [projectToDelete, setProjectToDelete] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -560,6 +554,16 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
     (clipId: string) => {
       const hit = clipById.get(clipId);
       if (!hit) return;
+      setClipToDelete(clipId);
+    },
+    [clipById]
+  );
+
+  /** Delete clip with confirmation */
+  const deleteClipById = useCallback(
+    (clipId: string) => {
+      const hit = clipById.get(clipId);
+      if (!hit) return;
       const next = tracks.map((t) => ({ ...t, clips: t.clips.filter((c) => c.id !== clipId) }));
       commit(next);
       setSelectedIds((s) => {
@@ -567,6 +571,19 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
         n.delete(clipId);
         return n;
       });
+      setClipToDelete(null);
+      // Add to recovery bin
+      const deletedClip: DeletedClip = {
+        id: hit.clip.id,
+        mediaId: hit.clip.mediaId,
+        mediaName: hit.clip.mediaName,
+        trackName: hit.track.name,
+        startTime: hit.clip.startTime,
+        duration: hit.clip.duration,
+        deletedAt: Date.now(),
+      };
+      setRecoveredClips((prev) => [...prev, deletedClip]);
+      setToast(`Clip "${hit.clip.mediaName}" removed and added to recovery bin`);
     },
     [clipById, tracks, commit]
   );
@@ -583,11 +600,22 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
     (ripple?: boolean) => {
       const doRipple = ripple ?? getSettings().rippleEnabled;
       if (!selectedIds.size) return;
-      const count = selectedIds.size;
+      setClipsToDelete(new Set(selectedIds));
+    },
+    [selectedIds]
+  );
+
+  /** Delete selected clips with confirmation */
+  const deleteSelected = useCallback(
+    (ripple?: boolean) => {
+      const doRipple = ripple ?? getSettings().rippleEnabled;
+      if (!clipsToDelete.size) return;
+      const selectedClips = Array.from(clipsToDelete);
+      const count = selectedClips.length;
       const next = tracks.map((t) => {
-        const gone = t.clips.filter((c) => selectedIds.has(c.id));
+        const gone = t.clips.filter((c) => selectedClips.includes(c.id));
         if (gone.length === 0) return t;
-        const kept = t.clips.filter((c) => !selectedIds.has(c.id));
+        const kept = t.clips.filter((c) => !selectedClips.includes(c.id));
         if (!doRipple) return { ...t, clips: kept };
         const total = gone.reduce((n, c) => n + Math.round(c.duration * fps), 0);
         const boundary = gone.reduce((m, c) => Math.max(m, Math.round(clipEnd(c) * fps)), 0);
@@ -603,9 +631,26 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
       commit(next);
       setSelectedIds(new Set());
       setInspecting(null);
+      setClipsToDelete(new Set());
+      // Add deleted clips to recovery bin
+      selectedClips.forEach((clipId) => {
+        const hit = clipById.get(clipId);
+        if (hit) {
+          const deletedClip: DeletedClip = {
+            id: hit.clip.id,
+            mediaId: hit.clip.mediaId,
+            mediaName: hit.clip.mediaName,
+            trackName: hit.track.name,
+            startTime: hit.clip.startTime,
+            duration: hit.clip.duration,
+            deletedAt: Date.now(),
+          };
+          setRecoveredClips((prev) => [...prev, deletedClip]);
+        }
+      });
       setToast(doRipple ? `Ripple-deleted ${count} clip${count === 1 ? '' : 's'} and closed the gap` : `Deleted ${count} clip${count === 1 ? '' : 's'}`);
     },
-    [selectedIds, tracks, commit, fps]
+    [clipsToDelete, tracks, commit, fps]
   );
 
   /**
@@ -996,8 +1041,29 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
   }, []);
 
   const removeTrack = useCallback((trackId: string) => {
+    setTrackToDelete(trackId);
+  }, []);
+
+  /** Delete track with confirmation */
+  const deleteTrack = useCallback((trackId: string) => {
     setTracks((prev) => (prev.length <= 1 ? prev : prev.filter((t) => t.id !== trackId)));
     setTransitions((prev) => prev.filter((t) => t.trackId !== trackId));
+    setTrackToDelete(null);
+    // Add deleted track to recovery bin
+    const deletedTrack = tracks.find((t) => t.id === trackId);
+    if (deletedTrack) {
+      const deletedClip: DeletedClip = {
+        id: `track-${deletedTrack.id}`,
+        mediaId: deletedTrack.id,
+        mediaName: deletedTrack.name,
+        trackName: 'Track',
+        startTime: 0,
+        duration: 0,
+        deletedAt: Date.now(),
+      };
+      setRecoveredClips((prev) => [...prev, deletedClip]);
+    }
+    setToast('Track removed');
   }, []);
 
   // ---- Transitions ----
@@ -1015,9 +1081,17 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
     setDirty(true);
   }, []);
 
+  /** Transition editing */
+
   const removeTransition = useCallback((id: string) => {
+    setTransitionToDelete(id);
+  }, []);
+
+  /** Delete transition with confirmation */
+  const deleteTransition = useCallback((id: string) => {
     setTransitions((prev) => prev.filter((t) => t.id !== id));
     setSelectedTransitionId(null);
+    setTransitionToDelete(null);
     setToast('Transition removed');
   }, []);
 
@@ -1050,6 +1124,33 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
     setDirty(true);
     setToast(`Marker added at frame ${playheadFrame}`);
   }, [playheadFrame, setDirty]);
+
+  const gotoMarker = useCallback(
+    (dir: 1 | -1) => {
+      const m = dir === 1 ? nextMarker(markers, playheadFrame) : prevMarker(markers, playheadFrame);
+      if (!m) {
+        setToast(dir === 1 ? 'No later marker' : 'No earlier marker');
+        return;
+      }
+      setPlayhead(m.frame);
+      setToast(`${m.label || 'Marker'} — frame ${m.frame}`);
+    },
+    [markers, playheadFrame, setPlayhead]
+  );
+
+  /** Marker editing */
+
+  const removeMarker = useCallback((id: string) => {
+    setMarkerToDelete(id);
+  }, []);
+
+  /** Delete marker with confirmation */
+  const deleteMarker = useCallback((id: string) => {
+    setMarkers((prev) => prev.filter((m) => m.id !== id));
+    setMarkerToDelete(null);
+    setDirty(true);
+    setToast('Marker removed');
+  }, []);
 
   const gotoMarker = useCallback(
     (dir: 1 | -1) => {
@@ -2615,6 +2716,73 @@ if (!mod) {
           {toast}
         </div>
       )}
-    </div>
-  );
-}
+
+      {/* Confirmation Dialogs */}
+      <ConfirmationDialog
+        open={clipToDelete !== null}
+        title="Remove Clip"
+        message={`Are you sure you want to remove the clip "${clipById.get(clipToDelete)?.clip.mediaName || 'unknown'}"? This action cannot be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={() => deleteClipById(clipToDelete!)}
+        onCancel={() => setClipToDelete(null)}
+      />
+
+      <ConfirmationDialog
+        open={clipsToDelete.size > 0}
+        title="Remove Clips"
+        message={`Are you sure you want to remove ${clipsToDelete.size} clip${clipsToDelete.size === 1 ? '' : 's'}? This action cannot be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={() => deleteSelected()}
+        onCancel={() => setClipsToDelete(new Set())}
+      />
+
+      <ConfirmationDialog
+        open={trackToDelete !== null}
+        title="Remove Track"
+        message={`Are you sure you want to remove the track "${tracks.find((t) => t.id === trackToDelete)?.name || 'unknown'}"? All clips on this track will be deleted.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={() => deleteTrack(trackToDelete!)}
+        onCancel={() => setTrackToDelete(null)}
+      />
+
+      <ConfirmationDialog
+        open={transitionToDelete !== null}
+        title="Remove Transition"
+        message={`Are you sure you want to remove this transition? This action cannot be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={() => deleteTransition(transitionToDelete!)}
+        onCancel={() => setTransitionToDelete(null)}
+      />
+
+      <ConfirmationDialog
+        open={markerToDelete !== null}
+        title="Remove Marker"
+        message={`Are you sure you want to remove the marker "${markers.find((m) => m.id === markerToDelete)?.label || 'unknown'}"? This action cannot be undone.`}
+        confirmLabel="Remove"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={() => deleteMarker(markerToDelete!)}
+        onCancel={() => setMarkerToDelete(null)}
+      />
+
+      <ConfirmationDialog
+        open={projectToDelete}
+        title="New Project"
+        message="This will clear the current timeline and create a new empty project. All progress will be lost. Continue?"
+        confirmLabel="Create New Project"
+        cancelLabel="Cancel"
+        variant="warning"
+        onConfirm={() => {
+          newProject();
+          setProjectToDelete(false);
+        }}
+        onCancel={() => setProjectToDelete(false)}
+      />
