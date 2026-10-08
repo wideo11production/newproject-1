@@ -38,10 +38,13 @@ func main() {
 	auditRepo := repository.NewAuditEventRepository(db)
 	reconRepo := repository.NewReconciliationRepository(db)
 	reconItemRepo := repository.NewReconciliationItemRepository(db)
+	sisterProfileRepo := repository.NewSisterProfileRepository(db)
+	sisterShareLedgerRepo := repository.NewSisterShareLedgerRepository(db)
 
 	ledgerSvc := service.NewLedgerService(auditRepo, reconRepo, reconItemRepo)
+	sisterProfileSvc := service.NewSisterProfileService(sisterProfileRepo, sisterShareLedgerRepo)
 
-	h := handler.NewHandler(ledgerSvc)
+	h := handler.NewHandler(ledgerSvc, sisterProfileSvc)
 	r := gin.New()
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())

@@ -347,7 +347,7 @@ function VerifyContent() {
                 setElapsed(0);
                 setMessage('');
               }}
-              className="mt-1 rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
+              className="mt-1 rounded-md border-700 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
             >
               Try again
             </button>
@@ -368,7 +368,7 @@ function VerifyContent() {
     <div className="space-y-5">
       <div
         role="status"
-        className={`flex items-start gap-3 rounded-lg border p-4 text-sm ${
+        className={`flex items-start gap-3 rounded-md p-4 text-sm ${
           success
             ? 'border-emerald-700/60 bg-emerald-950/40 text-emerald-300'
             : awaiting
@@ -377,11 +377,11 @@ function VerifyContent() {
         }`}
       >
         {success ? (
-          <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
+          <CheckCircle2 className="mt-0.5 h-2.5 w-2.5 shrink-0" />
         ) : awaiting ? (
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0" />
+          <MailCheck className="mt-0.5 h-2.5 w-2.5 shrink-0" />
         ) : (
-          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
         )}
         <div className="min-w-0 space-y-1">
           <p className="font-medium leading-relaxed">
@@ -565,8 +565,8 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
   if (state === 'sent') {
     return (
       <div className="space-y-3">
-        <div className="flex items-start gap-2.5 rounded-lg border border-emerald-700/60 bg-emerald-950/40 p-3 text-xs text-emerald-300">
-          <Send className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="flex items-start gap-2.5 rounded-md border-700/60 bg-emerald-950/40 p-3 text-xs text-emerald-300">
+          <Send className="mt-0.5 h-2.5 w-2.5 shrink-0" />
           <p className="leading-relaxed">{feedback}</p>
         </div>
         <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
@@ -589,8 +589,8 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
 
   return (
     <form onSubmit={handleResend} className="space-y-3">
-      <div className="flex items-start gap-2.5 rounded-lg border border-[#2c3235] bg-[#0d0f11]/50 p-3">
-        <Send className="mt-0.5 h-4 w-4 shrink-0 text-[#9fa7b3]" />
+      <div className="flex items-start gap-2.5 rounded-md bg-[#0d0f11]/50 p-3">
+        <Send className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#9fa7b3]" />
         <div className="min-w-0 flex-1 space-y-2.5">
           <p className="text-xs leading-relaxed text-[#d8d9da]">
             Didn&apos;t get the email, or did it expire?
@@ -606,23 +606,23 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
               placeholder="you@example.com"
               autoComplete="email"
               required
-              className="h-10 w-full rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/60 focus:border-[#5794f2] focus:outline-none focus:ring-2 focus:ring-[#5794f2]/30"
+              className="h-10 w-full rounded-md bg-[#0d0f11] px-3 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/60 focus:border-[#5794f2] focus:outline-none focus:ring-2 focus:ring-[#5794f2]/30"
             />
           ) : null}
 
           <button
             type="submit"
             disabled={state === 'sending' || !email.trim()}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#1f2227] text-sm font-medium text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#1f2227] text-sm font-medium text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {state === 'sending' ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
                 Sending…
               </>
             ) : (
               <>
-                <Send className="h-4 w-4" />
+                <Send className="h-2.5 w-2.5" />
                 Resend verification email
               </>
             )}
@@ -632,7 +632,7 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
               429 par retryAfter seconds dikhate hain taaki user ko pata ho
               EXACTLY kitna wait karna hai (rather than guessing). */}
           {state === 'error' && feedback ? (
-            <div className="rounded-md border border-amber-700/50 bg-amber-950/30 p-2.5">
+            <div className="rounded-md border-700/50 bg-amber-950/30 p-2.5">
               <p className="text-[11px] leading-relaxed text-amber-300">
                 {feedback}
               </p>
@@ -680,3 +680,4 @@ export default function VerifyEmailPage() {
     </AuthShell>
   );
 }
+

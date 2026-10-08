@@ -29,7 +29,7 @@ export default function AdPlacementsPage() {
         </header>
 
         {/* Cost/law explanation */}
-        <div className="grid gap-3 rounded-lg border border-grafana-border bg-grafana-panel/60 p-4 sm:grid-cols-3">
+        <div className="grid gap-3 rounded-md-grafana-border bg-grafana-panel/60 p-4 sm:grid-cols-3">
           {[
             { label: 'Viewer / creator share', value: '60%' },
             { label: 'Platform share', value: '20%' },

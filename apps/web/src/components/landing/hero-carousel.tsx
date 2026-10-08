@@ -402,7 +402,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
                           }
                           className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#5794f2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#5794f2]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
                         >
-                          <Play className="h-4 w-4" aria-hidden="true" />
+                          <Play className="h-2.5 w-2.5" aria-hidden="true" />
                           {session.state === 'ready'
                             ? 'Go to dashboard'
                             : (slide.ctaLabel ?? 'Get started')}
@@ -428,7 +428,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
           aria-label="Previous slide"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
         >
-          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+          <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
 
         {/* Dot indicators - click to jump */}
@@ -459,7 +459,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
           aria-label="Next slide"
           className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
         >
-          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
 
         {/* Play/pause toggle - WCAG 2.2.2 (user can pause auto-updating) */}
@@ -470,9 +470,9 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
           className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
         >
           {isPaused ? (
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+            <Play className="h-2.5 w-2.5" aria-hidden="true" />
           ) : (
-            <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+            <Pause className="h-2.5 w-2.5" aria-hidden="true" />
           )}
         </button>
       </div>

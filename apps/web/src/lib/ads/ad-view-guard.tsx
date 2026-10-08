@@ -277,7 +277,7 @@ export default function AdViewGuard({
     <div
 		ref={containerRef}
 		data-ad-id={adId}
-      className="relative overflow-hidden rounded-xl border border-gray-800 bg-gray-900/60"
+      className="relative overflow-hidden rounded-md border-800 bg-gray-900/60"
     >
       {/* Ad content */}
       <div className="p-4">{children}</div>
@@ -299,7 +299,7 @@ export default function AdViewGuard({
           <p className="text-xs text-gray-500">{state.pauseReason}</p>
           <button
             onClick={confirmPresence}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             I am watching
           </button>
@@ -315,7 +315,7 @@ export default function AdViewGuard({
           </p>
           <button
             onClick={confirmPresence}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             Start viewing
           </button>
@@ -346,7 +346,7 @@ export default function AdViewGuard({
           <p className="text-sm font-medium text-green-300">View recorded</p>
           <button
             onClick={reset}
-            className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            className="rounded-md border-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
           >
             View again
           </button>

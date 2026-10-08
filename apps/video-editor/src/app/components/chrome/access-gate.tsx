@@ -161,7 +161,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-surface p-6">
-      <div className="w-full max-w-[360px] rounded-lg border border-edge bg-surface-raised p-5">
+      <div className="w-full max-w-[360px] rounded-md-edge bg-surface-raised p-5">
         <div className="mb-3 flex items-center gap-2 text-fg-muted">
           {content.icon}
           <span className="text-[8px] font-medium uppercase tracking-wider">
@@ -177,7 +177,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
             <>
               <a
                 href={withNext(REGISTER_URL)}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
               >
                 <UserPlus className="h-2 w-2" aria-hidden="true" />
                 Create an account
@@ -185,7 +185,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
               </a>
               <a
                 href={withNext(LOGIN_URL)}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
               >
                 <LogIn className="h-2 w-2" aria-hidden="true" />
                 I already have an account
@@ -197,7 +197,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
             <>
               <a
                 href={withNext(VERIFY_URL, { email: gate.email })}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
               >
                 <MailCheck className="h-2 w-2" aria-hidden="true" />
                 Resend verification email
@@ -211,7 +211,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => void probe()}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
               >
                 <RefreshCw className="h-2 w-2" aria-hidden="true" />
                 I have opened the link - check again
@@ -223,7 +223,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
             <>
               <a
                 href={withNext(SECURITY_SETUP_URL)}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge bg-surface-overlay text-[8px] font-medium text-fg transition-colors hover:border-fg-muted"
               >
                 <ShieldCheck className="h-2 w-2" aria-hidden="true" />
                 Continue to security setup
@@ -232,7 +232,7 @@ export function AccessGate({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => void probe()}
-                className="flex h-8 items-center justify-center gap-1.5 rounded-md border border-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
+                className="flex h-8 items-center justify-center gap-1.5 rounded-md-edge text-[8px] font-medium text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg"
               >
                 <RefreshCw className="h-2 w-2" aria-hidden="true" />
                 I have finished - check again

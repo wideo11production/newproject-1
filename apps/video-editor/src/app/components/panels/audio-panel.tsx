@@ -195,7 +195,7 @@ export function AudioPanel({
             </p>
           )}
           {result && (
-            <p className="flex items-start gap-1.5 rounded border border-edge bg-surface-raised/70 p-2 text-[8px] leading-snug text-fg">
+            <p className="flex items-start gap-1.5 rounded-edge bg-surface-raised/70 p-2 text-[8px] leading-snug text-fg">
               {result.startsWith('Removed') ? (
                 <Check className="mt-0.5 h-2 w-2 shrink-0 text-emerald-400" aria-hidden="true" />
               ) : (

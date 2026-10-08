@@ -163,7 +163,7 @@ func TestSubmitIDDocument_CreatesPendingDocument(t *testing.T) {
 	engine := newTestEngine()
 
 	now := time.Now().UTC()
-	sv, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id-card-abc.jpg", "college_id")
+	sv, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id-card-abc.jpg", model.DocTypeCollegeID, model.RoleStudent, "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestSubmitIDDocument_CreatesPendingDocument(t *testing.T) {
 func TestSubmitIDDocument_EmptyURL(t *testing.T) {
 	engine := newTestEngine()
 
-	_, err := engine.SubmitIDDocument(context.Background(), 2, "", "college_id")
+	_, err := engine.SubmitIDDocument(context.Background(), 2, "", model.DocTypeCollegeID, model.RoleStudent, "")
 	if err == nil {
 		t.Fatal("expected error for empty URL")
 	}
@@ -194,12 +194,12 @@ func TestSubmitIDDocument_EmptyURL(t *testing.T) {
 func TestApproveDocumentVerification_SetsVerified(t *testing.T) {
 	engine := newTestEngine()
 
-	// Submit ID doc first.
-	if _, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id.jpg", "college_id"); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+  // Submit ID doc first.
+  if _, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id.jpg", model.DocTypeCollegeID, model.RoleStudent, ""); err != nil {
+    t.Fatalf("setup: %v", err)
+  }
 
-	// Approve as admin user 99.
+  // Approve as admin user 99.
 	sv, err := engine.ApproveDocumentVerification(context.Background(), 2, 99)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -222,11 +222,11 @@ func TestApproveDocumentVerification_SetsVerified(t *testing.T) {
 func TestRejectDocumentVerification_SetsRejected(t *testing.T) {
 	engine := newTestEngine()
 
-	if _, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id.jpg", "college_id"); err != nil {
-		t.Fatalf("setup: %v", err)
-	}
+  if _, err := engine.SubmitIDDocument(context.Background(), 2, "minio://id.jpg", model.DocTypeCollegeID, model.RoleStudent, ""); err != nil {
+    t.Fatalf("setup: %v", err)
+  }
 
-	sv, err := engine.RejectDocumentVerification(context.Background(), 2, 99, "Blurred document")
+  sv, err := engine.RejectDocumentVerification(context.Background(), 2, 99, "Blurred document")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -367,8 +367,100 @@ func TestMintVerificationToken_ValidJWT(t *testing.T) {
 	if !ok {
 		t.Fatal("expected RegisteredClaims")
 	}
-	if claims.Issuer != "user-service-student-gate" {
-		t.Errorf("issuer: expected user-service-student-gate, got %s", claims.Issuer)
+	if claims.Issuer != "user-service-professional-gate" {
+		t.Errorf("issuer: expected user-service-professional-gate, got %s", claims.Issuer)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Advocate professional verification tests
+// ---------------------------------------------------------------------------
+
+func TestVerifyProfessionalGateA_AdvocateBarCouncilDomain(t *testing.T) {
+	// Test: advocate with Bar Council domain → instant Gate A pass
+	engine := newTestEngine()
+	// Override user 2 to have an advocate role + bar council email
+	engine.userRepo.(*fakeUserRepo).users[3] = &model.User{ID: 3, Email: "advocate@barcouncil.org.in", Username: "adv_bar"}
+	
+	sv, err := engine.VerifyProfessionalGateA(context.Background(), 3, model.RoleAdvocate)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sv.Status != model.VerificationVerifiedByDomain {
+		t.Errorf("status: expected %s, got %s", model.VerificationVerifiedByDomain, sv.Status)
+	}
+	if sv.ProfessionalRole != model.RoleAdvocate {
+		t.Errorf("role: expected advocate, got %s", sv.ProfessionalRole)
+	}
+}
+
+func TestSubmitIDDocument_AdvocateRequiresBarAssociationID(t *testing.T) {
+	engine := newTestEngine()
+	// Advocate without Bar Association ID should fail
+	_, err := engine.SubmitIDDocument(context.Background(), 2, "minio://bar-card.jpg", model.DocTypeBarCouncil, model.RoleAdvocate, "")
+	if err == nil {
+		t.Fatal("expected error for advocate without bar_association_id")
+	}
+}
+
+func TestSubmitIDDocument_AdvocateWithBarAssociationID(t *testing.T) {
+	engine := newTestEngine()
+	sv, err := engine.SubmitIDDocument(context.Background(), 2, "minio://bar-card.jpg", model.DocTypeBarCouncil, model.RoleAdvocate, "BAR-12345")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sv.BarAssociationID != "BAR-12345" {
+		t.Errorf("bar_association_id: expected BAR-12345, got %s", sv.BarAssociationID)
+	}
+	if sv.ProfessionalRole != model.RoleAdvocate {
+		t.Errorf("role: expected advocate, got %s", sv.ProfessionalRole)
+	}
+}
+
+func TestVerifyProfessionalGateA_TutorAcademicDomain(t *testing.T) {
+	engine := newTestEngine()
+	// Use user 2 with academic domain but tutor role
+	engine.userRepo.(*fakeUserRepo).users[4] = &model.User{ID: 4, Email: "tutor@iiitd.ac.in", Username: "tutor_user"}
+	
+	sv, err := engine.VerifyProfessionalGateA(context.Background(), 4, model.RoleTutor)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if sv.Status != model.VerificationVerifiedByDomain {
+		t.Errorf("status: expected %s, got %s", model.VerificationVerifiedByDomain, sv.Status)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Token claim validation for professional role
+// ---------------------------------------------------------------------------
+
+func TestMintVerificationToken_ProfessionalClaims(t *testing.T) {
+	engine := newTestEngine()
+
+	sv, err := engine.VerifyProfessionalGateA(context.Background(), 1, model.RoleStudent)
+	if err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	// Parse the token back and check for professional_verified claim.
+	token, err := jwt.ParseWithClaims(sv.VerificationToken, &jwt.RegisteredClaims{},
+		func(t *jwt.Token) (any, error) {
+			return engine.jwtSecret, nil
+		})
+	if err != nil {
+		t.Fatalf("token parse failed: %v", err)
+	}
+	if !token.Valid {
+		t.Error("expected token to be valid")
+	}
+
+	claims, ok := token.Claims.(*jwt.RegisteredClaims)
+	if !ok {
+		t.Fatal("expected RegisteredClaims")
+	}
+	if claims.Issuer != "user-service-professional-gate" {
+		t.Errorf("issuer: expected user-service-professional-gate, got %s", claims.Issuer)
 	}
 }
 

@@ -99,15 +99,15 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* ---- 1. Install on this device ---- */}
-      <div className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+      <div className="rounded-md bg-[#0d0f11] p-4">
         <div className="flex items-start gap-3">
-          <Download className="mt-0.5 h-4 w-4 shrink-0 text-[#5794f2]" aria-hidden="true" />
+          <Download className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#5794f2]" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-[#d8d9da]">Install on this device</p>
 
             {state.installed || state.isInstalled ? (
               <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-400">
-                <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                <Check className="h-2.5 w-2.5" aria-hidden="true" />
                 Already installed
               </p>
             ) : state.hasPrompt ? (
@@ -146,9 +146,9 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* ---- 2. QR for phone ---- */}
-      <div className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+      <div className="rounded-md bg-[#0d0f11] p-4">
         <div className="flex items-start gap-3">
-          <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-[#73bf69]" aria-hidden="true" />
+          <Smartphone className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#73bf69]" aria-hidden="true" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium text-[#d8d9da]">Open on your phone</p>
             <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
@@ -162,7 +162,7 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
             {/* White background zaroori hai - QR scanners dark background
                 par low-contrast modules miss kar dete hain. */}
             <div
-              className="rounded-lg bg-white p-3"
+              className="rounded-md bg-white p-3"
               // QR SVG apna aap safe hai (humne generate kiya, user input
               // nahi hai) - `dangerouslySetInnerHTML` yahan sahi hai.
               dangerouslySetInnerHTML={{ __html: qrSvg.svg }}
@@ -170,20 +170,20 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
 
             {/* Link + copy (QR scan ke bina bhi kaam chal jaye) */}
             <div className="flex w-full items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-md border border-[#2c3235] bg-[#181b1f] px-2.5 py-1.5 text-[11px] text-[#9fa7b3]">
+              <code className="min-w-0 flex-1 truncate rounded-md bg-[#181b1f] px-2.5 py-1.5 text-[11px] text-[#9fa7b3]">
                 {targetUrl}
               </code>
               <Button
                 onClick={copyLink}
                 variant="outline"
                 size="sm"
-                className="h-8 shrink-0 border-[#2c3235] px-2.5 text-[#d8d9da] hover:bg-[#1f2227]"
+                className="h-8 shrink-0-[#2c3235] px-2.5 text-[#d8d9da] hover:bg-[#1f2227]"
                 aria-label="Copy link"
               >
                 {copied ? (
-                  <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Check className="h-2.5 w-2.5" aria-hidden="true" />
                 ) : (
-                  <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                  <Copy className="h-2.5 w-2.5" aria-hidden="true" />
                 )}
               </Button>
             </div>
@@ -194,9 +194,9 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
                 warning isliye zaroori hai taki user confuse na ho ki QR
                 "kharab" hai. */}
             {isLocalhost ? (
-              <div className="w-full rounded-md border border-amber-700/50 bg-amber-950/20 p-2.5">
+              <div className="w-full rounded-md border-700/50 bg-amber-950/20 p-2.5">
                 <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-300">
-                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
                   <span>
                     This QR points at <span className="font-mono">localhost</span>,
                     which only works on this computer. To scan from your phone,
@@ -213,7 +213,7 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-[#9fa7b3]">
-        <ExternalLink className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+        <ExternalLink className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
         <span>
           Installed apps keep working offline and launch like any other app on
           your device.
@@ -222,3 +222,4 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

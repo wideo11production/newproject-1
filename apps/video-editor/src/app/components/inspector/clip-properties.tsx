@@ -66,8 +66,8 @@ export function ClipProperties({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-lg border border-edge-strong bg-surface-raised shadow-2xl">
-        <header className="flex items-center justify-between border-b border-edge px-4 py-2.5">
+      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-md-edge-strong bg-surface-raised shadow-2xl">
+        <header className="flex items-center justify-between-edge px-4 py-2.5">
           <div className="min-w-0">
             <h2 className="truncate text-[10px] font-medium text-fg">{clip.mediaName}</h2>
             <p className="font-mono text-[8px] text-fg-muted">
@@ -338,7 +338,7 @@ export function ClipProperties({
           </div>
         </div>
 
-        <footer className="flex items-center justify-between border-t border-edge px-4 py-2.5">
+        <footer className="flex items-center justify-between-edge px-4 py-2.5">
           <span className="flex items-center gap-1.5 text-[8px] text-fg-muted">
             <Gauge className="h-2 w-2" aria-hidden="true" />
             Changes apply to this clip only, and Ctrl+Z brings them back.

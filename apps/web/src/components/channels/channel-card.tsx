@@ -21,11 +21,11 @@
  *
  *  1. THE IMAGE IS THE CARD. Everything below it is caption, not content.
  *  2. NO BOXES. Cards are separated by WHITESPACE and a barely-there surface
- *     tint. A 1px border around twenty-four cards is a grid drawn around the
+ *     tint. A 1px around twenty-four cards is a grid drawn around the
  *     content, which is the opposite of letting the content be the thing you see.
  *  3. ONE ACCENT, AND IT IS THE CREATOR'S. The brand colour is the only saturated
  *     pixel in the card, and it is a 2px rule at the top - not a glow, not a
- *     border, not a filled button. Restraint is what makes an accent read as
+ *, not a filled button. Restraint is what makes an accent read as
  *     chosen rather than applied.
  *  4. TYPE DOES THE HIERARCHY. Uppercase micro-type with wide tracking for the
  *     category, tight tracking for the name. A category used to be a bordered
@@ -117,7 +117,7 @@ export function ChannelCard({
     Screenshotting the gallery showed a card rendering Chrome's broken-image glyph:
     the row said "2 uploads", so `latest_thumbnail` held a poster URL, and that
     object was not in storage. The card was displaying a torn-page icon at 16:10
-    with a border around it - which looks like a bug in the gallery, and is one.
+    with a around it - which looks like a bug in the gallery, and is one.
 
     The cause is a real gap rather than bad data: `media_assets.poster_url` is a
     string with no guarantee that the object behind it still exists. An upload can

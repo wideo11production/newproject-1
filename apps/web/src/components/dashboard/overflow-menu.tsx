@@ -159,12 +159,12 @@ export function OverflowMenu({
         aria-controls="dashboard-overflow-menu"
         aria-label={label}
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+          'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
           'text-[#9fa7b3] hover:bg-[#1f2227] hover:text-[#d8d9da]',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
         )}
       >
-        <MoreVertical className="h-4 w-4" aria-hidden="true" />
+        <MoreVertical className="h-2.5 w-2.5" aria-hidden="true" />
       </button>
 
       {open ? (
@@ -183,7 +183,7 @@ export function OverflowMenu({
             role="menu"
             aria-label={label}
             className={cn(
-              'absolute z-50 mt-2 w-72 overflow-hidden rounded-xl border border-[#2c3235]',
+              'absolute z-50 mt-2 w-72 overflow-hidden rounded-md',
               'bg-[#181b1f] shadow-2xl shadow-black/60',
               align === 'right' ? 'right-0' : 'left-0'
             )}
@@ -231,3 +231,4 @@ export function OverflowMenu({
     </div>
   );
 }
+

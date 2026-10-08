@@ -962,7 +962,7 @@ export function RecorderDialog({
   const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const ss = String(Math.floor(elapsed % 60)).padStart(2, '0');
 
-  const card = 'rounded border border-edge bg-surface-raised p-4';
+  const card = 'rounded-edge bg-surface-raised p-4';
 
   return (
     // ---- WHY THE OVERLAY SCROLLS ----
@@ -985,7 +985,7 @@ export function RecorderDialog({
       aria-label="Record camera or microphone"
     >
       <div className="flex min-h-full items-center justify-center">
-        <div className="w-full max-w-lg space-y-3 rounded-lg border border-edge-strong bg-surface-raised p-5 shadow-2xl">
+        <div className="w-full max-w-lg space-y-3 rounded-md-edge-strong bg-surface-raised p-5 shadow-2xl">
         <div className="flex items-center justify-between">
           <h2 className="text-[10px] font-semibold text-white">Record</h2>
           <button
@@ -1008,7 +1008,7 @@ export function RecorderDialog({
               type="button"
               onClick={() => setUseCam((v) => !v)}
               aria-pressed={useCam}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-[8px] transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-[8px] transition-colors ${
                 useCam ? 'border-[#ff6500] bg-[#ff6500]/10 text-[#ff6500]' : 'border-edge-strong text-fg-muted'
               }`}
             >
@@ -1031,7 +1031,7 @@ export function RecorderDialog({
                 value={camId}
                 onChange={(e) => setCamId(e.target.value)}
                 aria-label="Camera to record from"
-                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+                className="w-full rounded-md-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
               >
                 <option value="">System default camera</option>
                 {cams.map((d, i) => (
@@ -1046,7 +1046,7 @@ export function RecorderDialog({
                 value={micId}
                 onChange={(e) => setMicId(e.target.value)}
                 aria-label="Microphone to record from"
-                className="w-full rounded-md border border-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+                className="w-full rounded-md-edge bg-surface-raised px-2 py-1.5 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
               >
                 <option value="">System default microphone</option>
                 {mics.map((d, i) => (
@@ -1061,7 +1061,7 @@ export function RecorderDialog({
               type="button"
               onClick={() => setUseMic((v) => !v)}
               aria-pressed={useMic}
-              className={`flex flex-1 items-center justify-center gap-2 rounded-md border px-3 py-2 text-[8px] transition-colors ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-[8px] transition-colors ${
                 useMic ? 'border-[#ff6500] bg-[#ff6500]/10 text-[#ff6500]' : 'border-edge-strong text-fg-muted'
               }`}
             >
@@ -1071,7 +1071,7 @@ export function RecorderDialog({
         )}
 
         {error && (
-          <div className="flex items-start gap-2 rounded border border-amber-800 bg-amber-950/40 p-2.5 text-[8px] text-amber-300">
+          <div className="flex items-start gap-2 rounded border-800 bg-amber-950/40 p-2.5 text-[8px] text-amber-300">
             <AlertTriangle className="mt-0.5 h-2 w-2 shrink-0" />
             <span>{error}</span>
           </div>
@@ -1131,7 +1131,7 @@ export function RecorderDialog({
                 "start" is a decision made after the fact rather than a side effect
                 of picking a device. */}
             {state === 'ready' && (
-              <div className="space-y-2 rounded border border-edge-strong bg-surface-overlay/40 p-2.5">
+              <div className="space-y-2 rounded-edge-strong bg-surface-overlay/40 p-2.5">
                 {/* ---- NAME WHAT IS ACTUALLY OPEN ----
                     A picture alone does not identify a device: two phones produce
                     two pictures, and a preview that looks fine is not evidence that
@@ -1168,7 +1168,7 @@ export function RecorderDialog({
                   <button
                     type="button"
                     onClick={changeDevices}
-                    className="flex items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg-muted  hover:text-fg"
+                    className="flex items-center justify-center gap-2 rounded-md-edge-strong px-3 py-2 text-[8px] text-fg-muted  hover:text-fg"
                   >
                     <RotateCcw className="h-2 w-2" /> Change devices
                   </button>
@@ -1259,17 +1259,17 @@ export function RecorderDialog({
             */}
             {useCam && useMic ? (
               <label
-                className={`flex items-center gap-2 rounded border px-2.5 py-1.5 text-[9px] ${
+                className={`flex items-center gap-2 rounded px-2.5 py-1.5 text-[9px] ${
                   audioReviewUrl
-                    ? 'cursor-pointer border-edge bg-surface-overlay/40 text-fg-secondary'
-                    : 'cursor-pointer border-dashed border-edge/60 bg-surface-overlay/20 text-fg-muted'
+                    ? 'cursor-pointer-edge bg-surface-overlay/40 text-fg-secondary'
+                    : 'cursor-pointer-dashed-edge/60 bg-surface-overlay/20 text-fg-muted'
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={keepSeparateAudio}
                   onChange={(e) => setKeepSeparateAudio(e.target.checked)}
-                  className="h-3 w-3 accent-[#ff6500]"
+                  className="h-2.5 w-2.5 accent-[#ff6500]"
                 />
                 Keep the voiceover as a{' '}
                 <strong className="mx-0.5 text-fg">separate clip</strong>
@@ -1333,13 +1333,13 @@ export function RecorderDialog({
                     ? 'Save the complete clip — picture and sound together'
                     : 'Recording not ready yet'
                 }
-                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded border text-[10px] font-medium transition-colors ${
+                className={`flex h-8 flex-1 items-center justify-center gap-1.5 rounded text-[10px] font-medium transition-colors ${
                   reviewUrl
                     ? 'border-edge bg-surface-overlay text-fg hover:bg-surface-raised'
-                    : 'cursor-not-allowed border-edge/50 bg-surface-overlay/40 text-fg-muted opacity-50'
+                    : 'cursor-not-allowed-edge/50 bg-surface-overlay/40 text-fg-muted opacity-50'
                 }`}
               >
-                <Download className="h-3 w-3" aria-hidden="true" />
+                <Download className="h-2.5 w-2.5" aria-hidden="true" />
                 Save to device
               </button>
               {/* The second file, offered as a second file rather than as the default. */}
@@ -1348,7 +1348,7 @@ export function RecorderDialog({
                   type="button"
                   onClick={() => void saveToDevice('voiceover')}
                   title="Save the separate voiceover track on its own (audio only)"
-                  className="flex h-8 items-center justify-center gap-1 rounded border border-edge/50 px-2 text-[9px] text-fg-secondary transition-colors  hover:text-fg"
+                  className="flex h-8 items-center justify-center gap-1 rounded-edge/50 px-2 text-[9px] text-fg-secondary transition-colors  hover:text-fg"
                 >
                   <Download className="h-2.5 w-2.5" aria-hidden="true" />
                   Voiceover only
@@ -1357,7 +1357,7 @@ export function RecorderDialog({
               <button
                 type="button"
                 onClick={discard}
-                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-edge-strong px-3 py-2 text-[8px] text-fg "
+                className="flex flex-1 items-center justify-center gap-2 rounded-md-edge-strong px-3 py-2 text-[8px] text-fg "
               >
                 <RotateCcw className="h-2 w-2" /> Discard and retake
               </button>
@@ -1409,7 +1409,7 @@ export function RecorderDialog({
           </>
         )}
 
-        <p className="border-t border-edge pt-2 text-[8px] leading-snug text-fg-muted">
+        <p className="border-t-edge pt-2 text-[8px] leading-snug text-fg-muted">
           Everything here runs in your browser. Nothing is uploaded, so there is no
           service, no account and nothing to pay for.
         </p>

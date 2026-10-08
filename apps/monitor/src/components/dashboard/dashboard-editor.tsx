@@ -153,7 +153,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
             <p className="text-sm text-gray-400 mt-1">
               {(panel.data as any)?.label || panel.title}
             </p>
-            <Badge className="mt-2 bg-blue-500/20 text-blue-400 border-blue-500/30">
+            <Badge className="mt-2 bg-blue-500/20 text-blue-400-500/30">
               +{(Math.random() * 20).toFixed(1)}%
             </Badge>
           </div>
@@ -171,7 +171,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
               </thead>
               <tbody>
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-t border-gray-800">
+                  <tr key={i} className="border-t-800">
                     <td className="p-2 text-gray-300">item-{i + 1}</td>
                     <td className="text-right p-2 text-gray-400">{Math.floor(Math.random() * 1000)}</td>
                     <td className="text-right p-2">
@@ -240,7 +240,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
                     <span className="text-gray-500">
                       {new Date(Date.now() - (i * 1000 * 30)).toISOString().slice(11, 19)}
                     </span>
-                    <Badge variant="outline" className={`text-xs ${colors[level]} border-${colors[level].split('-')[1]}-400`}>
+                    <Badge variant="outline" className={`text-xs ${colors[level]}-${colors[level].split('-')[1]}-400`}>
                       {level.toUpperCase()}
                     </Badge>
                     <span className="text-gray-300">
@@ -257,9 +257,9 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
           <ScrollArea className="h-full">
             <div className="space-y-2 p-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="border border-red-500/20 bg-red-500/5 rounded p-2">
+                <div key={i} className="border-500/20 bg-red-500/5 rounded p-2">
                   <div className="flex items-center space-x-2">
-                    <XCircle className="h-4 w-4 text-red-400" />
+                    <XCircle className="h-2.5 w-2.5 text-red-400" />
                     <span className="font-medium text-red-300">
                       {['HighMemoryUsage', 'APIHighLatency', 'DiskSpaceLow'][i]}
                     </span>
@@ -302,7 +302,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
           {panels.map((panel, index) => (
             <div
               key={panel.id}
-              className="col-span-3 bg-[hsl(223_47%_11.2%)] border border-[hsl(217.2_32.6%_17.5%)] rounded-lg shadow-lg cursor-move hover:shadow-xl transition-shadow"
+              className="col-span-3 bg-[hsl(223_47%_11.2%)]-[hsl(217.2_32.6%_17.5%)] rounded-md shadow-lg cursor-move hover:shadow-xl transition-shadow"
               draggable
               onDragStart={(e) => {
                 setDraggedItem(panel);
@@ -315,25 +315,25 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-50 hover:opacity-100">
-                        <Settings className="h-3 w-3" />
+                        <Settings className="h-2.5 w-2.5" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="bg-[hsl(223_47%_11.2%)] border-[hsl(217.2_32.6%_17.5%)]">
+                    <DropdownMenuContent align="end" className="bg-[hsl(223_47%_11.2%)]-[hsl(217.2_32.6%_17.5%)]">
                       <DropdownMenuItem onClick={() => handleDuplicatePanel(panel)}>
-                        <Copy className="h-4 w-4 mr-2" /> Duplicate
+                        <Copy className="h-2.5 w-2.5 mr-2" /> Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => {
                         setSelectedPanel(panel);
                         setEditorOpen(true);
                       }}>
-                        <Settings className="h-4 w-4 mr-2" /> Edit
+                        <Settings className="h-2.5 w-2.5 mr-2" /> Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator className="bg-[hsl(217.2_32.6%_17.5%)]" />
                       <DropdownMenuItem 
                         onClick={() => handleRemovePanel(panel.id)}
                         className="text-red-400 focus:text-red-400"
                       >
-                        <Trash2 className="h-4 w-4 mr-2" /> Remove
+                        <Trash2 className="h-2.5 w-2.5 mr-2" /> Remove
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -348,7 +348,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
       )}
 
       <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-        <DialogContent className="bg-[hsl(223_47%_11.2%)] border-[hsl(217.2_32.6%_17.5%)] text-gray-100 max-w-2xl">
+        <DialogContent className="bg-[hsl(223_47%_11.2%)]-[hsl(217.2_32.6%_17.5%)] text-gray-100 max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Panel</DialogTitle>
             <DialogDescription>Update panel settings and configuration</DialogDescription>
@@ -360,16 +360,16 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
                 <Input
                   id="panel-title"
                   defaultValue={selectedPanel.title}
-                  className="bg-gray-800 border-gray-700 text-white mt-1"
+                  className="bg-gray-800-700 text-white mt-1"
                 />
               </div>
               <div>
                 <Label htmlFor="panel-type">Visualization Type</Label>
                 <Select defaultValue={selectedPanel.type}>
-                  <SelectTrigger className="bg-gray-800 border-gray-700 text-white mt-1">
+                  <SelectTrigger className="bg-gray-800-700 text-white mt-1">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[hsl(223_47%_11.2%)] border-[hsl(217.2_32.6%_17.5%)]">
+                  <SelectContent className="bg-[hsl(223_47%_11.2%)]-[hsl(217.2_32.6%_17.5%)]">
                     {panelTypes.map(pt => (
                       <SelectItem key={pt.type} value={pt.type}>{pt.name}</SelectItem>
                     ))}

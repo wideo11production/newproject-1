@@ -6,17 +6,19 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
 	"newproject/services/ledger-service/src/model"
 	"newproject/services/ledger-service/src/repository"
 	"newproject/services/ledger-service/src/service"
 )
 
 type Handler struct {
-	svc *service.LedgerService
+	svc               *service.LedgerService
+	sisterProfileSvc  *service.SisterProfileService
 }
 
-func NewHandler(svc *service.LedgerService) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *service.LedgerService, sisterProfileSvc *service.SisterProfileService) *Handler {
+	return &Handler{svc: svc, sisterProfileSvc: sisterProfileSvc}
 }
 
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
@@ -42,6 +44,14 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		recons.GET("/:id/mismatches", h.GetMismatchedItems)
 		recons.PUT("/:id/complete", h.CompleteReconciliation)
 		recons.PUT("/:id/resolve", h.ResolveReconciliation)
+	}
+
+	sister := r.Group("/sister-profile")
+	{
+		sister.POST("", h.CreateOrGetSisterProfile)
+		sister.GET("/:wallet_user_id", h.GetSisterProfile)
+		sister.GET("/:wallet_user_id/balance", h.GetSisterBalance)
+		sister.POST("/:wallet_user_id/withdraw", h.WithdrawSisterFunds)
 	}
 }
 
@@ -306,4 +316,92 @@ func (h *Handler) ResolveReconciliation(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"reconciliation": recon})
+}
+
+// ============================================================================
+// Sister Profile handlers
+// ============================================================================
+
+func (h *Handler) CreateOrGetSisterProfile(c *gin.Context) {
+	var req struct {
+		WalletUserID uint   `json:"wallet_user_id" binding:"required"`
+		Name         string `json:"name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	profile, err := h.sisterProfileSvc.CreateOrGetSisterProfile(c.Request.Context(), req.WalletUserID, req.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"profile": profile})
+}
+
+func (h *Handler) GetSisterProfile(c *gin.Context) {
+	walletUserID, err := strconv.ParseUint(c.Param("wallet_user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid wallet_user_id"})
+		return
+	}
+
+	profile, err := h.sisterProfileSvc.GetSisterProfile(c.Request.Context(), uint(walletUserID))
+	if err != nil {
+		if err == repository.ErrSisterProfileNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "sister profile not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"profile": profile})
+}
+
+func (h *Handler) GetSisterBalance(c *gin.Context) {
+	walletUserID, err := strconv.ParseUint(c.Param("wallet_user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid wallet_user_id"})
+		return
+	}
+
+	balance, err := h.sisterProfileSvc.GetSisterProfileBalance(c.Request.Context(), uint(walletUserID))
+	if err != nil {
+		if err == repository.ErrSisterProfileNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "sister profile not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"balance": balance.String()})
+}
+
+func (h *Handler) WithdrawSisterFunds(c *gin.Context) {
+	walletUserID, err := strconv.ParseUint(c.Param("wallet_user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid wallet_user_id"})
+		return
+	}
+
+	var req struct {
+		Amount string `json:"amount" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	amount, err := decimal.NewFromString(req.Amount)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid amount"})
+		return
+	}
+
+	if err := h.sisterProfileSvc.WithdrawSisterFunds(c.Request.Context(), uint(walletUserID), amount); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "withdrawal successful"})
 }

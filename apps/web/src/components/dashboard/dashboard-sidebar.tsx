@@ -56,19 +56,19 @@ export const DASHBOARD_TABS: SidebarTab[] = [
     id: 'overview',
     label: 'Overview',
     href: '/dashboard',
-    icon: <LayoutDashboard className="h-4 w-4" />,
+    icon: <LayoutDashboard className="h-2.5 w-2.5" />,
   },
   {
     id: 'channels',
     label: 'Channels',
     href: '/dashboard#channels',
-    icon: <Youtube className="h-4 w-4" />,
+    icon: <Youtube className="h-2.5 w-2.5" />,
   },
   {
     id: 'devices',
     label: 'Devices',
     href: '/dashboard#devices',
-    icon: <Monitor className="h-4 w-4" />,
+    icon: <Monitor className="h-2.5 w-2.5" />,
   },
   {
     id: 'settings',
@@ -79,7 +79,7 @@ export const DASHBOARD_TABS: SidebarTab[] = [
     // hai, jo ek hi page par profile + appearance + language + security +
     // content sab deta hai (requirement: "ek jagah, baar baar mat badlo").
     href: '/dashboard/settings',
-    icon: <Settings className="h-4 w-4" />,
+    icon: <Settings className="h-2.5 w-2.5" />,
   },
 ];
 
@@ -156,7 +156,7 @@ export function DashboardSidebar() {
             aria-current={active ? 'page' : undefined}
             title={collapsed ? tab.label : undefined}
             className={cn(
-              'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+              'group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50',
               active
                 ? 'bg-[#1f2227] text-[#d8d9da]'
@@ -188,16 +188,16 @@ export function DashboardSidebar() {
   return (
     <>
       {/* ---- Mobile: top bar + toggle ---- */}
-      <div className="flex items-center justify-between border-b border-[#2c3235] bg-[#181b1f] px-3 py-2 lg:hidden">
+      <div className="flex items-center justify-between-[#2c3235] bg-[#181b1f] px-3 py-2 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
           aria-label="Open navigation"
           aria-expanded={mobileOpen}
           aria-controls="dashboard-sidebar"
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
         >
-          <Menu className="h-5 w-5" aria-hidden="true" />
+          <Menu className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <span className="flex items-center gap-2">
           <BrandLockup size={22} />
@@ -219,9 +219,9 @@ export function DashboardSidebar() {
           />
           <div
             id="dashboard-sidebar"
-            className="fixed inset-y-0 left-0 z-50 w-64 border-r border-[#2c3235] bg-[#181b1f] lg:hidden"
+            className="fixed inset-y-0 left-0 z-50 w-64-[#2c3235] bg-[#181b1f] lg:hidden"
           >
-            <div className="flex items-center justify-between border-b border-[#2c3235] px-3 py-2.5">
+            <div className="flex items-center justify-between-[#2c3235] px-3 py-2.5">
               <span className="flex items-center gap-2">
                 <BrandLockup size={22} />
                 <span className="text-sm font-semibold text-[#d8d9da]">Wideo11</span>
@@ -230,9 +230,9 @@ export function DashboardSidebar() {
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
               >
-                <X className="h-5 w-5" aria-hidden="true" />
+                <X className="h-2.5 w-2.5" aria-hidden="true" />
               </button>
             </div>
             {nav}
@@ -243,14 +243,14 @@ export function DashboardSidebar() {
       {/* ---- Desktop: fixed rail ---- */}
       <aside
         className={cn(
-          'hidden shrink-0 border-r border-[#2c3235] bg-[#181b1f] lg:flex lg:flex-col',
+          'hidden shrink-0-[#2c3235] bg-[#181b1f] lg:flex lg:flex-col',
           collapsed ? 'w-16' : 'w-56'
         )}
       >
         {/* Brand */}
         <div
           className={cn(
-            'flex h-14 shrink-0 items-center border-b border-[#2c3235]',
+            'flex h-14 shrink-0 items-center-[#2c3235]',
             collapsed ? 'justify-center px-2' : 'gap-2 px-4'
           )}
         >
@@ -265,22 +265,22 @@ export function DashboardSidebar() {
         {nav}
 
         {/* Collapse toggle - bottom pe, taaki sidebar ke end me dikhe */}
-        <div className="mt-auto border-t border-[#2c3235] p-2">
+        <div className="mt-auto-[#2c3235] p-2">
           <button
             type="button"
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
             aria-controls="dashboard-sidebar-nav"
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
               'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
             )}
           >
             {collapsed ? (
-              <ChevronsRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <ChevronsRight className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             ) : (
-              <ChevronsLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <ChevronsLeft className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             )}
             <span className={cn('truncate', collapsed && 'sr-only')}>Collapse</span>
           </button>

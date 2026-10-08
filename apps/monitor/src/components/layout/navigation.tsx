@@ -17,17 +17,17 @@ function NavItem({ href, icon: Icon, label, active }: NavItemProps) {
         <Link
           href={href}
           className={cn(
-            'flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+            'flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
             active
-              ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+              ? 'bg-blue-500/10 text-blue-400 border-500/20'
               : 'text-gray-300 hover:bg-gray-800/50 hover:text-white'
           )}
         >
-          <Icon className="h-5 w-5" />
+          <Icon className="h-2.5 w-2.5" />
           <span>{label}</span>
         </Link>
       </TooltipTrigger>
-      <TooltipContent side="right" className="bg-gray-800 border-gray-700">
+      <TooltipContent side="right" className="bg-gray-800-700">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>

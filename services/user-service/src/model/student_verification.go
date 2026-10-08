@@ -1,23 +1,13 @@
-// StudentVerification — AURA student gate ka dual-gate verification record.
+// StudentVerification — AURA student gate + professional registry record.
 //
 // Hinglish: ye model user-service ka Gate A (domain whitelist) aur Gate B
 // (ID card upload + 365-day cryptographic token) ka state store karta hai.
-// Iska primary purpose verification status track karna — discount logic
-// billing-service ke StudentIdentity model pe hi rehta hai, lekin yeh
-// record dono services ke beech bridge bana ke khada hota hai.
+// Ismein Student, Tutor, aur Advocate teeno roles ka verification track hota hai.
 //
-// Dual-Gate Logic:
-//
-//   Gate A (Automatic Academic Check):
-//     - User ka email domain seed list mein match hone par instant verified.
-//     - Status = "verified_by_domain"
-//     - Token = nil (domain alone sufficient, lekin 365-day token mint karo
-//       taaki cross-service proof-of-issuance rahe).
-//
-//   Gate B (Document Fallback):
-//     - ID card image upload → cryptographic token with 365-day expiry.
-//     - Status = "pending_document" → admin/manual review → "verified" or "rejected"
-//     - Token expiry hote hi verification auto-invalid (re-apply zaroori).
+// Professional verification modes:
+//   - Student: academic domain → Gate A instant pass
+//   - Tutor: educational domain → Gate A instant pass
+//   - Advocate: Bar Council domain OR Bar Association ID card → Gate A/B
 //
 // Money law (SYSTEM-PLAN.md R2): no monetary data stored here —
 // pure verification state + cryptographic proof. Paise ka koi bhi field
@@ -30,7 +20,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// VerificationStatus — student verification ka state machine.
+// VerificationStatus — professional verification ka state machine.
 type VerificationStatus string
 
 const (
@@ -48,7 +38,18 @@ const (
 	VerificationExpired VerificationStatus = "expired"
 )
 
-// StudentVerification — ek user ka student verification record.
+// DocumentType — ID document ke type.
+type DocumentType string
+
+const (
+	DocTypeCollegeID  DocumentType = "college_id"
+	DocTypeBarCouncil DocumentType = "bar_council_id"
+	DocTypeBarCard    DocumentType = "bar_card"
+	DocTypeTutorCert  DocumentType = "tutor_certificate"
+	DocTypeOther      DocumentType = "other"
+)
+
+// StudentVerification — ek user ka professional verification record.
 //
 // Hinglish: ek user ek verification record ke paas hota hai. Agar domain
 // match kare (Gate A) to instant verified_by_domain. Agar domain match na
@@ -59,6 +60,15 @@ type StudentVerification struct {
 	// UserID — FK to users table (local uint).
 	UserID uint `gorm:"not null;uniqueIndex" json:"user_id"`
 
+	// ProfessionalRole — student, tutor, ya advocate.
+	// Hinglish: ye field determine karta hai ki user ka kaun sa gate apply hoga.
+	ProfessionalRole ProfessionalRole `gorm:"size:50;not null;default:''" json:"professional_role"`
+
+	// BarAssociationID — Advocate ke liye Bar Council membership number.
+	// Hinglish: advocate verify hone ke liye yeh mandatory hai. Bar Council
+	// ka ID card ya online membership database se match karta hai.
+	BarAssociationID string `gorm:"size:100" json:"bar_association_id,omitempty"`
+
 	// Status — current verification state (see VerificationStatus constants).
 	Status VerificationStatus `gorm:"size:30;not null;default:'pending'" json:"status"`
 
@@ -68,10 +78,12 @@ type StudentVerification struct {
 	EmailDomain string `gorm:"size:255" json:"email_domain,omitempty"`
 
 	// Gate B fields:
-	// IDDocumentURL — MinIO/S3 path to uploaded college ID card image.
+	// IDDocumentURL — MinIO/S3 path to uploaded ID card image.
 	IDDocumentURL string `gorm:"type:text" json:"id_document_url,omitempty"`
 	// IDDocumentUploadedAt — jab document upload hua.
 	IDDocumentUploadedAt *time.Time `json:"id_document_uploaded_at,omitempty"`
+	// DocumentType — ID document ka type (college_id, bar_council_id, etc.)
+	DocumentType DocumentType `gorm:"size:50;default:''" json:"document_type,omitempty"`
 
 	// VerificationToken — 365-day cryptographic JWT.
 	// Gate A ya Gate B dono mein mint hota hai. Cross-service proof-of-issuance.
@@ -90,9 +102,8 @@ type StudentVerification struct {
 	RejectionReason string `gorm:"type:text" json:"rejection_reason,omitempty"`
 
 	UUID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex;default:gen_random_uuid()" json:"uuid"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 func (StudentVerification) TableName() string {

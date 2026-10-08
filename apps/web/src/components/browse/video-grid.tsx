@@ -8,7 +8,7 @@ export default function VideoGrid() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {videos.map((video) => (
-        <Card key={video.id} className="bg-gray-900/50 border-gray-800 overflow-hidden group">
+        <Card key={video.id} className="bg-gray-900/50-800 overflow-hidden group">
           <div className="relative aspect-video bg-gray-800">
             <Image
               src={video.thumbnail}

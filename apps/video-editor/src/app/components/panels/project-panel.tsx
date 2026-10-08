@@ -207,7 +207,7 @@ export function ProjectPanel({
           {status && (
             <p
               className={[
-                'flex items-start gap-1.5 rounded border p-2 text-[8px] leading-snug',
+                'flex items-start gap-1.5 rounded p-2 text-[8px] leading-snug',
                 status.kind === 'ok'
                   ? 'border-emerald-900 text-emerald-300'
                   : status.kind === 'warn'
@@ -236,7 +236,7 @@ export function ProjectPanel({
                 <button
                   type="button"
                   onClick={() => void onOpen(p.id)}
-                  className="min-w-0 flex-1 rounded border border-edge px-2 py-1 text-left hover:border-edge-strong hover:bg-surface-overlay/40"
+                  className="min-w-0 flex-1 rounded-edge px-2 py-1 text-left hover:border-edge-strong hover:bg-surface-overlay/40"
                 >
                   <span className="block truncate text-[8px] text-fg">{p.name}</span>
                   <span className="block font-mono text-[8px] text-fg-muted">
@@ -274,18 +274,18 @@ export function ProjectPanel({
                       const p = getPreset(preset.id);
                       onSettings({ width: p.width, height: p.height });
                     }}
-                    className={`flex flex-col items-center gap-1 rounded-md border px-2 py-2 text-xs transition-colors ${
+                    className={`flex flex-col items-center gap-1 rounded-md px-2 py-2 text-xs transition-colors ${
                       isActive
                         ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
                         : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
                     }`}
                   >
                     <span className="flex h-6 w-6 items-center justify-center rounded bg-surface-overlay" style={{ color: isActive ? '#5794f2' : 'inherit' }}>
-                      {preset.id === 'mobile' && <Smartphone className="h-3 w-3" />}
-                      {preset.id === 'desktop' && <Monitor className="h-3 w-3" />}
-                      {preset.id === 'square' && <Square className="h-3 w-3" />}
-                      {preset.id === 'cinema' && <Monitor className="h-3 w-3" />}
-                      {preset.id === 'portrait-4-5' && <Smartphone className="h-3 w-3" />}
+                      {preset.id === 'mobile' && <Smartphone className="h-2.5 w-2.5" />}
+                      {preset.id === 'desktop' && <Monitor className="h-2.5 w-2.5" />}
+                      {preset.id === 'square' && <Square className="h-2.5 w-2.5" />}
+                      {preset.id === 'cinema' && <Monitor className="h-2.5 w-2.5" />}
+                      {preset.id === 'portrait-4-5' && <Smartphone className="h-2.5 w-2.5" />}
                     </span>
                     <span className="font-medium">{preset.label}</span>
                     <span className="text-[8px] text-fg-muted">{preset.hint}</span>

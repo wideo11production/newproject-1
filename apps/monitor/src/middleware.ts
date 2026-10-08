@@ -70,13 +70,26 @@ import { createGate } from '@wideo11/ui/gate';
 const gate = createGate({
   loginPath: null,
 
-  publicPages: ['/'],
+  // `/` is NOT public here. It is role-gated below, so an anonymous visitor
+  // gets a 401 rather than the dashboard shell. The old `publicPages: ['/']`
+  // let the public check fire first and the role gate never ran.
+  publicPages: [],
   publicApiPrefixes: [
-    '/api/metrics',
-    '/api/timeseries',
-    '/api/audit',
-    '/api/live',
+    '/api/audit',  // click capture - the tracker runs before sign-in on every app
+    '/api/live',   // Docker liveness probe - must be reachable without a session
   ],
+
+  // ---- MONITOR IS SUPERADMIN-ONLY ----
+  //
+  // Monitor exposes host resource usage, container counts, and per-panel
+  // Prometheus history. That is infrastructure data, not public product data.
+  // Only the operator should see it. Anyone else gets a 403 (API) or a
+  // redirect to the dashboard (page).
+  roleGate: {
+    paths: ['/', '/api/metrics', '/api/timeseries'],
+    roles: ['superadmin'],
+    pageRedirect: '/dashboard',
+  },
 });
 
 export default gate;

@@ -180,7 +180,7 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
             Local preview (object URL) upload ke dauraan instant feedback
             deta hai; finalize ke baad real public URL use hota hai. */}
         {showCircle ? (
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-[#2c3235] bg-[#0d0f11]">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full-[#2c3235] bg-[#0d0f11]">
             {shown ? (
               <img src={shown} alt="" className="h-full w-full object-cover" />
             ) : (
@@ -228,12 +228,12 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <label
                 htmlFor="avatar-file-input"
-                className="inline-flex h-9 cursor-pointer items-center rounded-lg bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
+                className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
               >
                 {preview || currentUrl ? (
-                  <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                 ) : (
-                  <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                 )}
                 {preview || currentUrl ? 'Replace image' : 'Upload image'}
               </label>
@@ -251,7 +251,7 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
                   className="h-9 px-2 text-[#9fa7b3] hover:text-[#d8d9da]"
                   aria-label="Clear selection"
                 >
-                  <X className="h-4 w-4" aria-hidden="true" />
+                  <X className="h-2.5 w-2.5" aria-hidden="true" />
                 </Button>
               ) : null}
             </div>

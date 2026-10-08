@@ -202,7 +202,7 @@ export function AuthNav() {
         </a>
         <a
           href={REGISTER_URL}
-          className={`${iconBtn} border-[#ff6500]/50 bg-[#ff6500]/15 text-[#ff6500] hover:bg-[#ff6500]/25`}
+          className={`${iconBtn}-[#ff6500]/50 bg-[#ff6500]/15 text-[#ff6500] hover:bg-[#ff6500]/25`}
           aria-label="Create an account"
           title={`Create an account - ${REGISTER_URL}`}
         >
@@ -279,8 +279,7 @@ export function AuthNav() {
         aria-expanded={menuOpen}
         aria-label={`Account menu for ${session.email}`}
         title={`${session.email} (${session.role})`}
-         className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-[#ff6500] text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors motion-safe:animate-pulse hover:bg-[#ff6500]">
-      >
+className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center overflow-visible rounded-full bg-[#ff6500] text-[9px] font-semibold uppercase tracking-wide text-white ring-1 ring-green-500/70 transition-colors motion-safe:animate-pulse hover:bg-[#ff6500]">
         {/*
           The uploaded avatar, or initials.
 
@@ -288,13 +287,13 @@ export function AuthNav() {
           same person had two faces depending on the app. An uploaded picture is
           the picture everywhere.
 
-          `onError` hides a BROKEN image URL rather than leaving the browser's
+          `onError` hides a BROKEN image URL rather than leaving the browser&apos;s
           broken-image glyph inside the green ring, which looks worse than
           letters would.
 
           `h-full w-full` on the image, so a photo fills the smaller circle rather
-          than overflowing it — the image is the one child that could exceed the
-          button's box if the parent's sizing ever changed.
+          than overflowing it &mdash; the image is the one child that could exceed the
+          button&apos;s box if the parent&apos;s sizing ever changed.
         */}
         {session.avatarUrl ? (
           <img
@@ -315,7 +314,7 @@ export function AuthNav() {
           // proportionally and the `border-2` around it added a further 2px, so the
           // indicator poked outside the button's own bounds — which is what reads as
           // "the avatar is bursting out of the header".
-          className="absolute bottom-0 right-0 box-border h-2 w-2 rounded-full border border-surface-raised bg-green-500 motion-safe:animate-pulse"
+          className="absolute bottom-0 right-0 box-border h-2 w-2 rounded-full-surface-raised bg-green-500 motion-safe:animate-pulse"
           aria-hidden="true"
         />
       </button>
@@ -324,7 +323,7 @@ export function AuthNav() {
         <div
           role="menu"
           aria-label="Account"
-            className="absolute right-0 top-9 z-50 w-52 border border-edge bg-surface p-1"
+            className="absolute right-0 top-9 z-50 w-52-edge bg-surface p-1"
           >
           {/*
             Identity first, so a user who signed in as one of several accounts
@@ -332,7 +331,7 @@ export function AuthNav() {
             `break-all` rather than an ellipsis: an email cut mid-character is
             useless for telling two accounts apart, which is the entire job.
           */}
-          <div className="border-b border-edge px-2 py-1.5">
+          <div className="border-b-edge px-2 py-1.5">
             <p className="break-all text-[8px] font-medium text-fg">{session.email}</p>
             <p className="mt-0.5 text-[8px] capitalize text-fg-muted">{session.role}</p>
           </div>
@@ -371,7 +370,7 @@ export function AuthNav() {
             THIS device only, and their other devices stay signed in. That
             distinction is the whole reason device-scoped logout was built.
           */}
-          <p className="border-t border-edge px-2 pt-1.5 pb-1 text-[8px] leading-relaxed text-fg-muted">
+          <p className="border-t-edge px-2 pt-1.5 pb-1 text-[8px] leading-relaxed text-fg-muted">
             Logging out ends this device only. Your other devices stay signed in.
           </p>
         </div>

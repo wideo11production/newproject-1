@@ -52,9 +52,9 @@ export function CommercialConsoleView() {
       </h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <div className="rounded-md bg-[#181b1f] p-5">
           <div className="flex items-center gap-3">
-            <DollarSign className="h-5 w-5 text-[#5794f2]" />
+            <DollarSign className="h-2.5 w-2.5 text-[#5794f2]" />
             <div>
               <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
                 Total Revenue
@@ -66,9 +66,9 @@ export function CommercialConsoleView() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <div className="rounded-md bg-[#181b1f] p-5">
           <div className="flex items-center gap-3">
-            <Globe className="h-5 w-5 text-[#73bf69]" />
+            <Globe className="h-2.5 w-2.5 text-[#73bf69]" />
             <div>
               <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
                 Impressions
@@ -80,9 +80,9 @@ export function CommercialConsoleView() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <div className="rounded-md bg-[#181b1f] p-5">
           <div className="flex items-center gap-3">
-            <Users className="h-5 w-5 text-[#f2495c]" />
+            <Users className="h-2.5 w-2.5 text-[#f2495c]" />
             <div>
               <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
                 Unique Viewers
@@ -94,9 +94,9 @@ export function CommercialConsoleView() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <div className="rounded-md bg-[#181b1f] p-5">
           <div className="flex items-center gap-3">
-            <TrendingUp className="h-5 w-5 text-[#f7c548]" />
+            <TrendingUp className="h-2.5 w-2.5 text-[#f7c548]" />
             <div>
               <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
                 Your Share (20%)
@@ -110,7 +110,7 @@ export function CommercialConsoleView() {
       </div>
 
       {/* Revenue split visualization */}
-      <div className="mb-8 rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="mb-8 rounded-md bg-[#181b1f] p-5">
         <h3 className="mb-4 text-sm font-semibold text-[#d8d9da]">
           Revenue Split (Q3.2)
         </h3>
@@ -157,7 +157,7 @@ export function CommercialConsoleView() {
       </div>
 
       {/* Geofencing */}
-      <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="rounded-md bg-[#181b1f] p-5">
         <h3 className="mb-4 text-sm font-semibold text-[#d8d9da]">
           Top Countries by Revenue
         </h3>
@@ -165,7 +165,7 @@ export function CommercialConsoleView() {
           {stats.top_countries.map((country, i) => (
             <div
               key={country.country}
-              className="flex items-center justify-between rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3 py-2"
+              className="flex items-center justify-between rounded-md bg-[#0d0f11] px-3 py-2"
             >
               <span className="text-sm text-[#d8d9da]">
                 #{i + 1} {country.country}
@@ -180,3 +180,4 @@ export function CommercialConsoleView() {
     </div>
   );
 }
+

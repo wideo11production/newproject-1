@@ -58,38 +58,38 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
 
   return (
     <Tabs defaultValue="table" className="w-full">
-      <TabsList className="bg-gray-800/50 border-gray-700 mb-4">
+      <TabsList className="bg-gray-800/50-700 mb-4">
         <TabsTrigger value="table" className="data-[state=active]:bg-gray-700">
-          <TableIcon className="h-4 w-4 mr-1" /> Table
+          <TableIcon className="h-2.5 w-2.5 mr-1" /> Table
         </TabsTrigger>
         <TabsTrigger value="chart" className="data-[state=active]:bg-gray-700">
-          <BarChart3 className="h-4 w-4 mr-1" /> Chart
+          <BarChart3 className="h-2.5 w-2.5 mr-1" /> Chart
         </TabsTrigger>
         <TabsTrigger value="graph" className="data-[state=active]:bg-gray-700">
-          <Activity className="h-4 w-4 mr-1" /> Graph
+          <Activity className="h-2.5 w-2.5 mr-1" /> Graph
         </TabsTrigger>
       </TabsList>
 
       <TabsContent value="table">
-        <Card className="bg-gray-900/50 border-gray-800">
+        <Card className="bg-gray-900/50-800">
           <CardContent className="p-0">
             <ScrollArea className="h-80">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-gray-800">
+                  <tr className="border-b-800">
                     <th className="text-left p-2 text-gray-400 font-medium">Metric</th>
                     <th className="text-right p-2 text-gray-400 font-medium">Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {resultType === 'vector' && Array.isArray(result) && result.map((r, i) => (
-                    <tr key={i} className="border-b border-gray-800/50">
+                    <tr key={i} className="border-b-800/50">
                       <td className="p-2">
                         <code className="text-blue-400">
                           {r.metric ? r.metric.__name__ || 'metric' : 'metric'}
                         </code>
                         {r.metric && Object.entries(r.metric).filter(([k]) => k !== '__name__').map(([k, v]) => (
-                          <Badge key={k} variant="outline" className="ml-1 text-xs border-gray-700 text-gray-400">
+                          <Badge key={k} variant="outline" className="ml-1 text-xs-700 text-gray-400">
                             {k}="{String(v)}"
                           </Badge>
                         ))}
@@ -100,7 +100,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                     </tr>
                   ))}
                   {resultType === 'matrix' && Array.isArray(result) && result.map((r, i) => (
-                    <tr key={i} className="border-b border-gray-800/50">
+                    <tr key={i} className="border-b-800/50">
                       <td className="p-2">
                         <code className="text-blue-400">{r.metric?.__name__ || 'metric'}</code>
                       </td>
@@ -110,7 +110,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                     </tr>
                   ))}
                   {resultType === 'scalar' && (
-                    <tr className="border-b border-gray-800/50">
+                    <tr className="border-b-800/50">
                       <td className="p-2"><code className="text-blue-400">scalar</code></td>
                       <td className="text-right p-2 text-gray-300 font-mono">
                         {String(result?.[1] ?? '')}
@@ -118,7 +118,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
                     </tr>
                   )}
                   {resultType === 'string' && (
-                    <tr className="border-b border-gray-800/50">
+                    <tr className="border-b-800/50">
                       <td className="p-2"><code className="text-blue-400">string</code></td>
                       <td className="text-right p-2 text-gray-300 font-mono">
                         {String(result?.[1] ?? '')}
@@ -133,7 +133,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
       </TabsContent>
 
       <TabsContent value="chart">
-        <Card className="bg-gray-900/50 border-gray-800">
+        <Card className="bg-gray-900/50-800">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-gray-300">
               Chart View ({resultType})
@@ -154,7 +154,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
       </TabsContent>
 
       <TabsContent value="graph">
-        <Card className="bg-gray-900/50 border-gray-800">
+        <Card className="bg-gray-900/50-800">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-gray-300">
               Graph View ({resultType})
@@ -191,7 +191,7 @@ export default function ResultsTable({ data, isLoading }: ResultsTableProps) {
 
 function ResultsSkeleton() {
   return (
-    <Card className="bg-gray-900/50 border-gray-800">
+    <Card className="bg-gray-900/50-800">
       <CardContent className="p-4">
         <div className="space-y-2">
           {Array.from({ length: 10 }).map((_, i) => (

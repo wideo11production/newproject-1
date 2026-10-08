@@ -63,7 +63,7 @@ export function LandingCta() {
         <Link href="/auth/login" className="w-full sm:w-auto">
           <Button
             variant="outline"
-            className="w-full border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+            className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
           >
             Log in
           </Button>
@@ -186,7 +186,7 @@ function LiveAvatar({
           and for anyone with reduced motion. */}
       <span
         aria-hidden="true"
-        className="absolute -inset-[2px] rounded-full border border-green-500/50"
+        className="absolute -inset-[2px] rounded-full border-500/50"
       />
 
       <span
@@ -222,7 +222,7 @@ export function MidPageCta() {
   const signedIn = session.state !== 'loading' && session.state !== 'out';
 
   return (
-    <section className="w-full border-y border-[#2c3235] bg-[#181b1f] px-4 py-12 sm:px-6 lg:px-8">
+    <section className="w-full-y-[#2c3235] bg-[#181b1f] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 text-center">
         {signedIn ? (
           <>
@@ -241,7 +241,7 @@ export function MidPageCta() {
               <Link href={EDITOR_URL} className="w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  className="w-full border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+                  className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
                 >
                   Open editor
                 </Button>
@@ -265,7 +265,7 @@ export function MidPageCta() {
               <Link href="/auth/login" className="w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  className="w-full border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+                  className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
                 >
                   Log in
                 </Button>

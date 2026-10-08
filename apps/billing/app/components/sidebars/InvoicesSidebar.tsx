@@ -20,9 +20,9 @@ export default function InvoicesSidebar() {
   ];
 
   const statusColors = {
-    pending: 'bg-yellow-500/20 text-yellow-500 border-yellow-500/30',
-    paid: 'bg-green-500/20 text-green-500 border-green-500/30',
-    overdue: 'bg-red-500/20 text-red-500 border-red-500/30',
+    pending: 'bg-yellow-500/20 text-yellow-500-500/30',
+    paid: 'bg-green-500/20 text-green-500-500/30',
+    overdue: 'bg-red-500/20 text-red-500-500/30',
   };
 
   return (
@@ -31,7 +31,7 @@ export default function InvoicesSidebar() {
         <h2 className="text-lg font-semibold">Invoices</h2>
         <div className="flex items-center space-x-2">
           <button className="btn btn-outline btn-sm">
-            <ArrowDown className="h-4 w-4 mr-1" />
+            <ArrowDown className="h-2.5 w-2.5 mr-1" />
             Export
           </button>
         </div>
@@ -39,7 +39,7 @@ export default function InvoicesSidebar() {
 
       <div className="grid gap-3 grid-cols-2">
         {invoiceStats.map((stat) => (
-          <Card key={stat.label} className="bg-card border-border">
+          <Card key={stat.label} className="bg-card">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -60,13 +60,13 @@ export default function InvoicesSidebar() {
         ))}
       </div>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Recent Invoices</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {recentInvoices.map((invoice) => (
-            <div key={invoice.number} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+            <div key={invoice.number} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-mono text-primary">{invoice.number}</p>
                 <p className="text-xs text-muted-foreground truncate">{invoice.customer}</p>
@@ -85,7 +85,7 @@ export default function InvoicesSidebar() {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Aging Summary</CardTitle>
         </CardHeader>

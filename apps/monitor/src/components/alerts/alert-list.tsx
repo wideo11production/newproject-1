@@ -40,9 +40,9 @@ export default function AlertList({ alerts }: AlertListProps) {
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0 mt-0.5">
                 {alert.state === 'firing' ? (
-                  <XCircle className="h-5 w-5 text-red-400" />
+                  <XCircle className="h-2.5 w-2.5 text-red-400" />
                 ) : (
-                  <CheckCircle2 className="h-5 w-5 text-green-400" />
+                  <CheckCircle2 className="h-2.5 w-2.5 text-green-400" />
                 )}
               </div>
               <div className="flex-1">

@@ -210,6 +210,52 @@ export interface TimelineTrack {
   locked: boolean;
 }
 
+/**
+ * A single-frame overlay: a text title, sticker, or expression that occupies
+ * exactly ONE frame on the timeline.
+ *
+ * This is the core primitive of AURA Micro-Frame Studio: instead of a clip that
+ * spans seconds, an overlay is pinned to a single frame index and clamps its
+ * visual representation to that frame's boundary. Movavi handles this via
+ * "title clips" that snap to frame boundaries; here we make it explicit in the
+ * type system so the compositor and the timeline agree.
+ */
+export interface FrameOverlay {
+  /** Unique identifier for this overlay instance. */
+  id: string;
+  /** The frame index this overlay is clamped to. */
+  frame: number;
+  /** Start time in seconds (derived from `frame / fps`). */
+  startTime: number;
+  /** Duration in seconds — always exactly one frame. */
+  duration: number;
+  /** The media content: text content, image URL, or expression blob. */
+  content: string;
+  /** Visual type of the overlay. */
+  kind: 'text' | 'image' | 'expression';
+  /** Opacity 0..1. */
+  opacity: number;
+  /** Transform for positioning/scaling on the frame. */
+  transform: ClipTransform;
+  /** Text style when kind === 'text'. */
+  textStyle?: TextClipStyle;
+  /** Effect names applied to this overlay. */
+  effects: string[];
+}
+
+/**
+ * An overlay track: a lane that carries FrameOverlay items clamped to
+ * single-frame durations.
+ *
+ * Visually distinct from base tracks: drawn above the base layer with its own
+ * opacity, corner, and size transform — same as LayerRole.overlay, but scoped
+ * to single-frame keyframes.
+ */
+export interface OverlayTrack extends TimelineTrack {
+  /** Overlay items carried on this track, each pinned to a single frame. */
+  overlays: FrameOverlay[];
+}
+
 export type TransitionType =
   | 'dissolve'
   | 'dip-black'

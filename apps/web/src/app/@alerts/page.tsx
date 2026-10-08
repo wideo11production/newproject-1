@@ -40,7 +40,7 @@ export default function AlertsRoute() {
             <select
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              className="w-32 rounded-md bg-gray-800/50 border border-gray-700 text-gray-300"
+              className="w-32 rounded-md bg-gray-800/50 border-700 text-gray-300"
               aria-label="Filter alerts"
             >
               <option value="all">All Alerts</option>
@@ -48,10 +48,10 @@ export default function AlertsRoute() {
               <option value="resolved">Resolved</option>
             </select>
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-2.5 w-2.5 text-gray-500" />
               <input
                 placeholder="Search..."
-                className="pl-7 w-48 bg-gray-800/50 border-gray-700 text-gray-300"
+                className="pl-7 w-48 bg-gray-800/50-700 text-gray-300"
                 value={search}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => setSearch(event.target.value)}
               />
@@ -96,7 +96,7 @@ function AlertHistory({ filter, search }: AlertHistoryProps) {
       {filteredAlerts.map((alert) => (
         <Card 
           key={alert.id} 
-          className={`bg-gray-900/50 border ${
+          className={`bg-gray-900/50 ${
             alert.state === 'firing' 
               ? 'border-red-500/30 bg-red-500/5' 
               : 'border-green-500/30 bg-green-500/5'
@@ -106,11 +106,11 @@ function AlertHistory({ filter, search }: AlertHistoryProps) {
             <div className="flex items-start space-x-3">
               <div className="flex-shrink-0 mt-0.5">
                 {alert.state === 'firing' ? (
-                  <AlertCircle className={`h-5 w-5 ${
+                  <AlertCircle className={`h-2.5 w-2.5 ${
                     alert.severity === 'critical' ? 'text-red-400' : 'text-yellow-400'
                   }`} />
                 ) : (
-                  <CheckCircle2 className="h-5 w-5 text-green-400" />
+                  <CheckCircle2 className="h-2.5 w-2.5 text-green-400" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -125,7 +125,7 @@ function AlertHistory({ filter, search }: AlertHistoryProps) {
                 )}
                 <div className="flex items-center space-x-4 text-xs text-gray-500">
                   <span className="flex items-center">
-                    <Clock className="h-3 w-3 mr-1" />
+                    <Clock className="h-2.5 w-2.5 mr-1" />
                     {alert.startsAt}
                   </span>
                   <span className={`px-2 py-0.5 rounded text-xs ${
@@ -194,13 +194,13 @@ function AlertsSkeleton() {
   return (
     <div className="space-y-2">
       {Array.from({ length: 8 }).map((_, i) => (
-        <Card key={i} className="bg-gray-900/50 border-gray-700">
+        <Card key={i} className="bg-gray-900/50-700">
           <CardContent className="p-3">
             <div className="flex items-start space-x-3">
-              <Skeleton className="h-5 w-5 rounded-full bg-gray-700/50" />
+              <Skeleton className="h-2.5 w-2.5 rounded-full bg-gray-700/50" />
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-1">
-                  <Skeleton className="h-4 w-48 bg-gray-700/50" />
+                  <Skeleton className="h-2.5 w-2.58 bg-gray-700/50" />
                   <Skeleton className="h-5 w-16 bg-gray-700/50" />
                 </div>
                 <Skeleton className="h-3 w-full bg-gray-700/50 mb-2" />

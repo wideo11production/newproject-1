@@ -160,15 +160,14 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
       aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
       title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
       className={
-        'inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-800 ' +
-        'bg-gray-900/60 text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200 ' +
-        'focus:outline-none focus:ring-2 focus:ring-blue-500 ' +
+        'inline-flex h-9 w-9 items-center justify-center rounded-md border-0 bg-[#1a1a1a] text-gray-400 transition-all duration-150 hover:bg-[#2a2a2a] hover:text-[#ff6500] ' +
+        'focus:outline-none focus:ring-2 focus:ring-[#ff6500] ' +
         className
       }
     >
       {/* Sun: shown in dark mode (i.e. "go light"). Hidden via the parent class. */}
       <svg
-        className="light:hidden h-4 w-4"
+        className="light:hidden h-2.5 w-2.5"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
@@ -182,7 +181,7 @@ export function ThemeToggle({ className = '' }: { className?: string }) {
 
       {/* Moon: shown in light mode (i.e. "go dark"). */}
       <svg
-        className="hidden light:block h-4 w-4"
+        className="hidden light:block h-2.5 w-2.5"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"

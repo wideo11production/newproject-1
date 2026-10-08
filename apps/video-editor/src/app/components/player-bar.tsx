@@ -92,7 +92,7 @@ function LevelMeter({ playing }: { playing: boolean }) {
         return (
           <span
             key={i}
-            className="w-0.5 rounded-sm transition-[height,background-color] duration-75"
+            className="w-0.5 rounded-md transition-[height,background-color] duration-75"
             style={{
               // A floor of 1px, so the meter reads as a row of bars at rest
               // instead of vanishing and leaving a mystery gap in the toolbar.
@@ -206,17 +206,17 @@ export function PlayerBar({
   ] as const;
 
   return (
-    <div className="flex h-10 shrink-0 items-center gap-2 border-t border-edge bg-surface px-3">
+    <div className="flex h-10 shrink-0 items-center gap-2 bg-[#1a1a1a] px-3">
        <button type="button" onClick={onTogglePlay} aria-label={isPlaying ? 'Pause' : 'Play'} title={`${isPlaying ? 'Pause' : 'Play'} (Space)`} className="flex h-7 w-7 items-center justify-center rounded bg-[#ff6500] text-white hover:bg-[#e55800]">
-        {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        {isPlaying ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5" />}
       </button>
 
       <div className="flex items-center gap-0.5">
         <button type="button" onClick={() => onSeek(Math.max(0, currentFrame - 1))} className={btn} aria-label="Previous frame" title="Previous frame ( ← )">
-          <SkipBack className="h-4 w-4" />
+          <SkipBack className="h-2.5 w-2.5" />
         </button>
         <button type="button" onClick={() => onSeek(Math.min(durationFrames, currentFrame + 1))} className={btn} aria-label="Next frame" title="Next frame ( → )">
-          <SkipForward className="h-4 w-4" />
+          <SkipForward className="h-2.5 w-2.5" />
         </button>
       </div>
 
@@ -248,7 +248,7 @@ export function PlayerBar({
           aria-label="Loop playback"
           aria-pressed={loopOn}
         >
-          <Repeat className="h-4 w-4" />
+          <Repeat className="h-2.5 w-2.5" />
         </button>
 
         {/* Viewer layout and zoom. Persisted, because "which layout I like" is
@@ -268,7 +268,7 @@ export function PlayerBar({
               title={hint}
               className={[btn, viewerLayout === id ? on : ''].join(' ')}
             >
-              <Icon className="h-4 w-4" />
+              <Icon className="h-2.5 w-2.5" />
             </button>
           ))}
         </div>
@@ -293,7 +293,7 @@ export function PlayerBar({
           title="Show the resolution, frame rate and frame number over the picture"
           className={[btn, badge ? on : ''].join(' ')}
         >
-          <Tag className="h-4 w-4" />
+          <Tag className="h-2.5 w-2.5" />
         </button>
 
         <div className="flex items-center gap-1">
@@ -304,7 +304,7 @@ export function PlayerBar({
             title={muted || volume === 0 ? 'Unmute' : 'Mute'}
             aria-label={muted || volume === 0 ? 'Unmute' : 'Mute'}
           >
-            {muted || volume === 0 ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+            {muted || volume === 0 ? <VolumeX className="h-2.5 w-2.5" /> : <Volume2 className="h-2.5 w-2.5" />}
           </button>
           <input
             type="range"
@@ -315,15 +315,12 @@ export function PlayerBar({
             onChange={(e) => onVolume?.(Number(e.target.value))}
             aria-label="Master volume"
             title="Master volume — after every clip, fade and track fader"
-            // `ve-fader`, NOT a bare range input. A default range in a 40px strip
-            // draws a big round thumb, and that thumb was the single loudest
-            // thing next to the play button.
-            className="ve-fader h-1 w-20 cursor-pointer"
+            className="ve-fader h-2 w-48 cursor-pointer accent-[#ff6500]"
           />
         </div>
 
 
-        {fullscreen ? <Minimize2 className="h-4 w-4 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-4 w-4 text-fg-muted" aria-hidden="true" />}
+        {fullscreen ? <Minimize2 className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" /> : <Maximize2 className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />}
       </div>
     </div>
   );

@@ -41,7 +41,7 @@ export function fmtNum(n: number | null | undefined): string {
 export function EmptyState({ why }: { why: string }) {
   return (
     <div
-      className="flex min-h-[120px] flex-col items-center justify-center gap-1 rounded border border-dashed border-gray-800 p-4 text-center"
+      className="flex min-h-[120px] flex-col items-center justify-center gap-1 rounded-dashed-800 p-4 text-center"
       title={why}
     >
       <span className="text-xs text-gray-500">no data</span>
@@ -67,7 +67,7 @@ export function Stat({
   const toneClass =
     tone === 'good' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : value === 'n/a' ? 'text-gray-500' : 'text-gray-100';
   return (
-    <div className="rounded border border-gray-800 bg-gray-900/60 p-3" title={hint}>
+    <div className="rounded border-800 bg-gray-900/60 p-3" title={hint}>
       <div className="truncate text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
       <div className={`mt-1 text-xl font-semibold tabular-nums ${toneClass}`}>
         {value}
@@ -90,7 +90,7 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded border border-gray-800 bg-gray-900/40 p-3">
+    <div className="rounded border-800 bg-gray-900/40 p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-medium text-gray-200">{title}</h3>
         {error ? <span className="text-[11px] text-red-400">{error}</span> : null}

@@ -66,7 +66,7 @@ export function ClickstreamAnalytics({ state }: { state: AnalyticsState }) {
       )}
 
       {recent.length > 0 && (
-        <ul className="mt-3 max-h-[160px] space-y-1 overflow-y-auto border-t border-gray-800 pt-2">
+        <ul className="mt-3 max-h-[160px] space-y-1 overflow-y-auto-800 pt-2">
           {recent.map((c, i) => {
             const ts = String(c.timestamp ?? '');
             // Coerce through String(): the API returns `unknown` values, and

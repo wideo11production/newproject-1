@@ -202,7 +202,7 @@ export function AuraFramerateView() {
         <div className="mb-6 h-4 w-80 animate-pulse rounded bg-[#1f2227]" />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-lg bg-[#1f2227]" />
+            <div key={i} className="h-40 animate-pulse rounded-md bg-[#1f2227]" />
           ))}
         </div>
       </div>
@@ -231,10 +231,10 @@ export function AuraFramerateView() {
 
       {/* License status bar — flat, no badges, clean */}
       {eligibility && (
-        <div className="mb-6 rounded-lg bg-[#0d0f11] border border-[#2c3235] px-4 py-3">
+        <div className="mb-6 rounded-md bg-[#0d0f11]-[#2c3235] px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FrameIcon className="h-4 w-4 text-[#5794f2]" />
+              <FrameIcon className="h-2.5 w-2.5 text-[#5794f2]" />
               <span className="text-sm text-[#9fa7b3]">
                 License: <span className="font-medium text-[#d8d9da]">{eligibility.license_type || 'none'}</span>
                 {eligibility.license_active && (
@@ -279,7 +279,7 @@ export function AuraFramerateView() {
             <div
               key={card.tier}
               className={cn(
-                'relative flex flex-col items-center gap-2 rounded-lg border bg-[#0d0f11] p-4 text-center transition-all',
+                'relative flex flex-col items-center gap-2 rounded-md bg-[#0d0f11] p-4 text-center transition-all',
                 isActive
                   ? 'border-[#ff6500] ring-2 ring-[#ff6500]/50'
                   : 'border-[#2c3235] hover:border-[#5794f2]/50',
@@ -297,13 +297,13 @@ export function AuraFramerateView() {
               <span className="text-2xl font-bold text-[#d8d9da]">{card.fps}</span>
               <span className="text-[10px] text-[#9fa7b3]">FPS · {card.refresh}</span>
               {isLocked && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-[#0d0f11]/80">
+                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-[#0d0f11]/80">
                   <span className="text-xs text-[#9fa7b3]">License required</span>
                 </div>
               )}
               {isActive && (
                 <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-[#ff6500] p-0.5">
-                  <Check className="h-3 w-3 text-white" />
+                  <Check className="h-2.5 w-2.5 text-white" />
                 </div>
               )}
             </div>
@@ -312,10 +312,10 @@ export function AuraFramerateView() {
       </div>
 
       {/* 240Hz refresh optimization toggle — clean, flat */}
-      <div className="mb-8 rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+      <div className="mb-8 rounded-md bg-[#0d0f11] p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Monitor className="h-5 w-5 text-[#5794f2]" />
+            <Monitor className="h-2.5 w-2.5 text-[#5794f2]" />
             <div>
               <h3 className="text-sm font-semibold text-[#d8d9da]">240Hz Display Optimization</h3>
               <p className="text-xs text-[#9fa7b3]">
@@ -341,7 +341,7 @@ export function AuraFramerateView() {
       </div>
 
       {/* Project application — flat input */}
-      <div className="mb-6 rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+      <div className="mb-6 rounded-md bg-[#0d0f11] p-4">
         <h3 className="mb-3 text-sm font-semibold text-[#d8d9da]">Apply to Project</h3>
         <div className="flex gap-3">
           <input
@@ -349,7 +349,7 @@ export function AuraFramerateView() {
             value={projectUuid}
             onChange={(e) => setProjectUuid(e.target.value)}
             placeholder="Project UUID"
-            className="flex-1 rounded-lg border border-[#2c3235] bg-[#111217] px-3 py-2 text-sm text-[#d8d9da] placeholder-[#9fa7b3]/50 focus:border-[#ff6500] focus:outline-none"
+            className="flex-1 rounded-md bg-[#111217] px-3 py-2 text-sm text-[#d8d9da] placeholder-[#9fa7b3]/50 focus:border-[#ff6500] focus:outline-none"
           />
           <Button
             size="sm"
@@ -364,7 +364,7 @@ export function AuraFramerateView() {
 
       {/* Active profile display — minimal */}
       {profile && (
-        <div className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+        <div className="rounded-md bg-[#0d0f11] p-4">
           <h3 className="mb-3 text-sm font-semibold text-[#d8d9da]">
             Active Profile: <span className="text-[#5794f2]">{projectUuid || '—'}</span>
           </h3>
@@ -393,11 +393,12 @@ export function AuraFramerateView() {
 
       {/* Error boundary — minimal visual clutter */}
       {error && (
-        <div className="mt-4 flex items-center gap-2 rounded-lg bg-[#f2495c]/10 border border-[#f2495c]/30 px-3 py-2">
-          <FrameIcon className="h-4 w-4 text-[#f2495c]" />
+        <div className="mt-4 flex items-center gap-2 rounded-md bg-[#f2495c]/10-[#f2495c]/30 px-3 py-2">
+          <FrameIcon className="h-2.5 w-2.5 text-[#f2495c]" />
           <span className="text-xs text-[#f2495c]">{error}</span>
         </div>
       )}
     </div>
   );
 }
+

@@ -113,9 +113,9 @@ export function RevealableInput({
         className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#6b7280] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus:outline-none focus:ring-2 focus:ring-[#5794f2]"
       >
         {shown ? (
-          <EyeOff className="h-4 w-4" aria-hidden="true" />
+          <EyeOff className="h-2.5 w-2.5" aria-hidden="true" />
         ) : (
-          <Eye className="h-4 w-4" aria-hidden="true" />
+          <Eye className="h-2.5 w-2.5" aria-hidden="true" />
         )}
       </button>
 

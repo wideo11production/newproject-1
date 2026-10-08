@@ -32,28 +32,28 @@ export function WorkspaceOverviewView() {
             label: 'Total Views',
             value: data.total_views?.toLocaleString() ?? '—',
             change: data.views_change ?? '',
-            icon: <BarChart3 className="h-5 w-5" />,
+            icon: <BarChart3 className="h-2.5 w-2.5" />,
             color: 'text-[#5794f2]',
           },
           {
             label: 'Subscribers',
             value: data.subscribers?.toLocaleString() ?? '—',
             change: data.subs_change ?? '',
-            icon: <Users className="h-5 w-5" />,
+            icon: <Users className="h-2.5 w-2.5" />,
             color: 'text-[#73bf69]',
           },
           {
             label: 'Uploads',
             value: data.total_uploads?.toLocaleString() ?? '—',
             change: data.uploads_change ?? '',
-            icon: <Upload className="h-5 w-5" />,
+            icon: <Upload className="h-2.5 w-2.5" />,
             color: 'text-[#f2495c]',
           },
           {
             label: 'Revenue',
             value: data.revenue ? `₹${Number(data.revenue).toLocaleString()}` : '—',
             change: data.revenue_change ?? '',
-            icon: <DollarSign className="h-5 w-5" />,
+            icon: <DollarSign className="h-2.5 w-2.5" />,
             color: 'text-[#f7c548]',
           },
         ]);
@@ -61,10 +61,10 @@ export function WorkspaceOverviewView() {
       .catch(() => {
         // API not yet implemented — show placeholder stats.
         setStats([
-          { label: 'Total Views', value: '0', change: '', icon: <BarChart3 className="h-5 w-5" />, color: 'text-[#5794f2]' },
-          { label: 'Subscribers', value: '0', change: '', icon: <Users className="h-5 w-5" />, color: 'text-[#73bf69]' },
-          { label: 'Uploads', value: '0', change: '', icon: <Upload className="h-5 w-5" />, color: 'text-[#f2495c]' },
-          { label: 'Revenue', value: '₹0', change: '', icon: <DollarSign className="h-5 w-5" />, color: 'text-[#f7c548]' },
+          { label: 'Total Views', value: '0', change: '', icon: <BarChart3 className="h-2.5 w-2.5" />, color: 'text-[#5794f2]' },
+          { label: 'Subscribers', value: '0', change: '', icon: <Users className="h-2.5 w-2.5" />, color: 'text-[#73bf69]' },
+          { label: 'Uploads', value: '0', change: '', icon: <Upload className="h-2.5 w-2.5" />, color: 'text-[#f2495c]' },
+          { label: 'Revenue', value: '₹0', change: '', icon: <DollarSign className="h-2.5 w-2.5" />, color: 'text-[#f7c548]' },
         ]);
       })
       .finally(() => setLoading(false));
@@ -88,7 +88,7 @@ export function WorkspaceOverviewView() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5"
+            className="rounded-md bg-[#181b1f] p-5"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -108,7 +108,7 @@ export function WorkspaceOverviewView() {
         ))}
       </div>
 
-      <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="rounded-md bg-[#181b1f] p-5">
         <p className="text-sm text-[#9fa7b3]">
           Select a tab from the sidebar to navigate to a specific workspace.
         </p>
@@ -116,3 +116,4 @@ export function WorkspaceOverviewView() {
     </div>
   );
 }
+

@@ -35,6 +35,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.AuditEvent{},
 		&model.Reconciliation{},
 		&model.ReconciliationItem{},
+		&model.SisterMasterProfile{},
+		&model.SisterShareLedger{},
 	)
 }
 

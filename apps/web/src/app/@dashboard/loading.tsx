@@ -12,7 +12,7 @@ export default function Loading() {
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="bg-gray-900/50 border-gray-700">
+            <Card key={i} className="bg-gray-900/50-700">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-4 w-24 bg-gray-700/50" />
@@ -23,7 +23,7 @@ export default function Loading() {
           ))}
         </div>
 
-        <Card className="bg-gray-900/50 border-gray-700">
+        <Card className="bg-gray-900/50-700">
           <CardHeader>
             <Skeleton className="h-4 w-32 bg-gray-700/50" />
           </CardHeader>
@@ -36,7 +36,7 @@ export default function Loading() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gray-900/50 border-gray-700">
+        <Card className="bg-gray-900/50-700">
           <CardHeader>
             <Skeleton className="h-4 w-32 bg-gray-700/50" />
           </CardHeader>

@@ -293,7 +293,7 @@ export function PreviewCanvas({
     viewerLayout === 'side-by-side'
       ? 'w-[calc(50%-4px)]'
       : viewerLayout === 'picture-in-picture'
-        ? 'absolute right-3 top-3 w-[32%] max-w-[280px] border border-edge-strong shadow-xl'
+        ? 'absolute right-3 top-3 w-[32%] max-w-[280px]-edge-strong shadow-xl'
         : '';
 
   return (
@@ -337,7 +337,7 @@ export function PreviewCanvas({
                 over the middle of a frame sits exactly where the subject
                 usually is; here it reads as a plate at the foot of the picture
                 and leaves the middle clear for the thing being watched. */}
-            <div className="flex items-center gap-3 rounded-xl border border-dashed border-white/20 bg-slate-950/40 px-5 py-2.5">
+            <div className="flex items-center gap-3 rounded-md-dashed/20 bg-slate-950/40 px-5 py-2.5">
               {WATERMARK_CHARACTERS.map((c) => (
                 <span
                   key={c.name}

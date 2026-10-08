@@ -8,7 +8,9 @@
     "declaration": true,
     "declarationMap": true,
     "paths": {
-      "@wideo11/*": ["../*/src"]
+      "@wideo11/*": ["../*/src"],
+      "next": ["../../node_modules/next"],
+      "next/*": ["../../node_modules/next/*"]
     }
   },
   "include": ["src/**/*"],

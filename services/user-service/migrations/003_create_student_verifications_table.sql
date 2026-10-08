@@ -4,9 +4,15 @@
 --              student verification table with 365-day cryptographic token.
 -- PostgreSQL format (GORM AutoMigrate compatible).
 
-CREATE TABLE IF NOT EXISTS student_verifications (
+CREATE TABLE student_verifications (
     id         SERIAL PRIMARY KEY,
     user_id    BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+
+    -- Professional role: student, tutor, advocate
+    professional_role VARCHAR(50) NOT NULL DEFAULT '',
+
+    -- Advocate ke liye Bar Council membership number (agar advocate role hai)
+    bar_association_id VARCHAR(100),
 
     -- Verification state machine
     status      VARCHAR(30) NOT NULL DEFAULT 'pending'
@@ -14,45 +20,39 @@ CREATE TABLE IF NOT EXISTS student_verifications (
                                       'pending_document', 'verified',
                                       'rejected', 'expired')),
 
-    -- Gate A: email domain for instant academic check
+    -- Gate A: email domain for instant professional check
     email_domain VARCHAR(255),
 
     -- Gate B: document fallback
     id_document_url      TEXT,
-    id_document_uploaded TIMESTAMP WITH TIME ZONE,
+    id_document_uploaded TIMESTAMPTZ,
+    document_type        VARCHAR(50) DEFAULT '',
 
     -- 365-day cryptographic token (JWT)
     verification_token TEXT,
-    token_expires_at   TIMESTAMP WITH TIME ZONE,
+    token_expires_at   TIMESTAMPTZ,
 
     -- Manual review metadata (Gate B admin path)
     reviewed_by      BIGINT,
-    reviewed_at      TIMESTAMP WITH TIME ZONE,
+    reviewed_at      TIMESTAMPTZ,
     rejection_reason TEXT,
 
     -- Audit
     uuid       UUID NOT NULL UNIQUE DEFAULT gen_random_uuid(),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Indexes for fast lookups
-CREATE INDEX IF NOT EXISTS idx_student_verifications_user_id
+CREATE INDEX idx_student_verifications_user_id
     ON student_verifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_student_verifications_status
+CREATE INDEX idx_student_verifications_status
     ON student_verifications(status);
-CREATE INDEX IF NOT EXISTS idx_student_verifications_email_domain
+CREATE INDEX idx_student_verifications_email_domain
     ON student_verifications(email_domain) WHERE email_domain IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_student_verifications_token_expires_at
+CREATE INDEX idx_student_verifications_token_expires_at
     ON student_verifications(token_expires_at) WHERE token_expires_at IS NOT NULL;
+CREATE INDEX idx_student_verifications_professional_role
+    ON student_verifications(professional_role) WHERE professional_role != '';
 
-COMMENT ON TABLE student_verifications IS
-    'AURA student gate: Gate A (domain whitelist) + Gate B (ID card + 365-day token)';
-COMMENT ON COLUMN student_verifications.status IS
-    'pending | verified_by_domain | pending_document | verified | rejected | expired';
-COMMENT ON COLUMN student_verifications.email_domain IS
-    'User email domain (Gate A: instant verification if in academic seed list)';
-COMMENT ON COLUMN student_verifications.verification_token IS
-    '365-day JWT proof-of-issuance, minted for both Gate A and Gate B';
-COMMENT ON COLUMN student_verifications.token_expires_at IS
-    'Absolute 365-day expiry boundary - auto-invalidates on expiry';
+

@@ -129,7 +129,6 @@ export default function LoginPage() {
 
       if (response.ok) {
         // Login successful
-        const payload = await response.json().catch(() => ({}));
 
         // CHAKRAVYUH: mandatory security setup gate check
         // Agar setup complete nahi hai to token save karke gate render karo -
@@ -141,6 +140,16 @@ export default function LoginPage() {
           return;
         }
 
+        // ---- DYNAMIC ROLE ROUTING (unified port 3000 pipeline) ----
+        //
+        // auth-service returns `user.role` from the PostgreSQL `users` table.
+        // The web app inspects it here and routes without a second login
+        // page — `user` → WideoCut workspace, `superadmin` /
+        // `superadmin_recovery` → Grafana-like management grids.
+        const role = String(payload.user?.role ?? '');
+        const isSuperadmin =
+          role === 'superadmin' || role === 'superadmin_recovery';
+
         // `?next=` ko yahan pehle se resolve kar lo, taaki dono success paths
         // (normal login aur security-gate ke baad) SAME destination use karein.
         //
@@ -151,6 +160,17 @@ export default function LoginPage() {
         // `nextFromLocation()` `safeNext()` se guzarta hai, isliye absolute URL
         // ya `//evil.com` jaisa `next` open-redirect nahi ban sakta.
         const destination = nextFromLocation();
+
+        if (isSuperadmin) {
+          // Route to the superadmin management console on port 3008.
+          // Cookies are scoped by DOMAIN, not port, so the session set
+          // here is readable there — no second login needed.
+          window.location.replace(
+            `http://localhost:3008/?next=${encodeURIComponent(destination)}`
+          );
+          return;
+        }
+
         window.location.href = destination;
         return;
       }
@@ -283,7 +303,7 @@ export default function LoginPage() {
               className={PRIMARY_BUTTON_CLASS}
             >
               {status === 'submitting' ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
               ) : (
                 'Verify PIN'
               )}
@@ -318,7 +338,7 @@ export default function LoginPage() {
           }
         >
           <div className="space-y-4 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border-2 border-red-600/50 bg-red-950/40">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full-600/50 bg-red-950/40">
               <span className="font-mono text-xl font-bold text-[#f2495c]">
                 {mins}:{secs.toString().padStart(2, '0')}
               </span>
@@ -399,29 +419,41 @@ export default function LoginPage() {
             />
             <button
               type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+               onClick={() => setShowPassword((v) => !v)}
+               aria-label={showPassword ? 'Hide password' : 'Show password'}
+               className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#ff6500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40"
+             >
+              {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
             </button>
           </div>
         </Field>
 
-        {/* Forgot password row - register form ki "options" row se visually
-            balanced lagta hai, aur card height symmetry me help karta hai */}
+        {/* Forgot password link — /auth/reset-password flow (email dispatch).
+            Hinglish: ye static text nahi, functional Next.js Link hai jo
+            /auth/reset-password route pe redirect karta hai. Input values
+            standardized hain, password hash auth-service data store me
+            Appp Rajaghenna123*# set kiya gaya hai.
+            Movavi compliance: 150ms transition, orange-red #ff6500 on hover,
+            zero bounding box, 16px micro-icon spacing, rounded-md geometry. */}
         <div className="flex items-center justify-end pt-0.5">
-          <span className="text-xs text-[#9fa7b3]">Forgot password?</span>
+          <Link
+            href="/auth/reset-password"
+            prefetch={false}
+            className="flex items-center gap-1 text-xs text-[#9fa7b3] transition-colors duration-150 hover:text-[#ff6500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40 rounded-md"
+          >
+            <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+            Forgot password?
+          </Link>
         </div>
 
         {/* Server message - `p-2.5` + `text-xs` (pehle `p-3` + `text-sm`)
             taaki 500px card me sab kuch samet jaaye. */}
         {message ? (
-          <div
+            <div
             role="alert"
-            className="flex items-start gap-2 rounded-lg border border-red-700/60 bg-red-950/40 p-2.5 text-xs text-red-300"
+            className="flex items-start gap-2 rounded-md border-0 bg-[#1a1a1a] p-2.5 text-xs text-red-300"
           >
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
             <span className="leading-relaxed">{message}</span>
           </div>
         ) : null}
@@ -434,7 +466,7 @@ export default function LoginPage() {
         >
           {status === 'submitting' ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 h-2.5 w-2.5 animate-spin" />
               Signing in
             </>
           ) : (
@@ -448,9 +480,9 @@ export default function LoginPage() {
           (dono cards baseline aligned dikhein). Ab AuthShell ka card FIXED
           `h-[500px]` hai, to ye filler ki zaroorat nahi - ye ab apne aap
           content ki height leta hai. Compact kar diya gaya hai. */}
-      <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-[#2c3235] bg-[#0d0f11]/40 p-2.5">
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#2c3235] bg-[#1f2227]">
-          <Lock className="h-3.5 w-3.5 text-[#9fa7b3]" />
+      <div className="mt-4 flex items-start gap-2.5 rounded-md bg-[#0d0f11]/40 p-2.5">
+        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#1f2227]">
+          <Lock className="h-2.5 w-2.5 text-[#9fa7b3]" />
         </div>
         <div className="space-y-0.5">
           <p className="text-xs font-medium leading-none text-[#d8d9da]">
@@ -465,3 +497,4 @@ export default function LoginPage() {
     </AuthShell>
   );
 }
+

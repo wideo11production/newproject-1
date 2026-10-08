@@ -70,8 +70,8 @@ export interface WideoCutMarkProps extends Omit<SVGProps<SVGSVGElement>, 'childr
   title?: string;
 }
 
-/** The signature accent. Single source, so every active state matches. */
-export const WIDECUT_ACTIVE = '#ff6b35';
+/** The signature accent - MOVAVI orange-red (#ff6500) */
+export const WIDECUT_ACTIVE = '#ff6500';
 
 export function WideoCutMark({
   active = false,

@@ -50,7 +50,7 @@ export function RetentionAnalytics({ state }: { state: AnalyticsState }) {
         <Chart option={columnOption(points)} style={{ height: 168 }} />
       ) : (
         <div
-          className="flex min-h-[140px] flex-col items-center justify-center gap-1 rounded border border-dashed border-gray-800 p-4 text-center"
+          className="flex min-h-[140px] flex-col items-center justify-center gap-1 rounded-dashed-800 p-4 text-center"
           title="No signup rows to plot."
         >
           <span className="text-xs text-gray-500">no signup history yet</span>
@@ -60,12 +60,12 @@ export function RetentionAnalytics({ state }: { state: AnalyticsState }) {
         </div>
       )}
 
-      <div className="mt-2 border-t border-gray-800 pt-2 text-[11px] text-gray-600">
+      <div className="mt-2-800 pt-2 text-[11px] text-gray-600">
         Total across {points.length} day{points.length === 1 ? '' : 's'}:{' '}
         <span className="text-gray-400">{fmtNum(total)}</span>
       </div>
 
-      <div className="mt-3 space-y-1.5 border-t border-gray-800 pt-3 text-[11px] leading-snug text-gray-500">
+      <div className="mt-3 space-y-1.5-800 pt-3 text-[11px] leading-snug text-gray-500">
         <p className="font-medium text-gray-400">Not instrumented</p>
         <p>
           <span className="text-gray-600">Actual retention</span> — cohorts, D1/D7/D30 return rates and

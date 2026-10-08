@@ -22,14 +22,14 @@ export default function SubscriptionsSidebar() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Subscriptions</h2>
         <button className="btn btn-primary btn-sm">
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-2.5 w-2.5 mr-1" />
           New
         </button>
       </div>
 
       <div className="grid gap-3 grid-cols-2">
         {subscriptionStats.map((stat) => (
-          <Card key={stat.label} className="bg-card border-border">
+          <Card key={stat.label} className="bg-card">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -50,13 +50,13 @@ export default function SubscriptionsSidebar() {
         ))}
       </div>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Subscription Plans</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {plans.map((plan) => (
-            <div key={plan.name} className="p-3 bg-muted/50 rounded-lg">
+            <div key={plan.name} className="p-3 bg-muted/50 rounded-md">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">{plan.name}</p>
@@ -69,7 +69,7 @@ export default function SubscriptionsSidebar() {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Expiring Soon</CardTitle>
         </CardHeader>
@@ -77,7 +77,7 @@ export default function SubscriptionsSidebar() {
           <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center">
-                <AlertCircle className="h-4 w-4 text-amber-500" />
+                <AlertCircle className="h-2.5 w-2.5 text-amber-500" />
               </div>
               <div>
                 <p className="text-sm font-medium">TechStart Inc</p>
@@ -89,7 +89,7 @@ export default function SubscriptionsSidebar() {
           <div className="flex items-center justify-between p-2 bg-muted/50 rounded">
             <div className="flex items-center space-x-2">
               <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center">
-                <AlertCircle className="h-4 w-4 text-red-500" />
+                <AlertCircle className="h-2.5 w-2.5 text-red-500" />
               </div>
               <div>
                 <p className="text-sm font-medium">DataFlow Labs</p>

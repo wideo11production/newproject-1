@@ -63,7 +63,7 @@
     "lint": "eslint src --ext ts,tsx",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
+"dependencies": {
     "@radix-ui/react-accordion": "catalog:",
     "@radix-ui/react-alert-dialog": "catalog:",
     "@radix-ui/react-aspect-ratio": "catalog:",
@@ -95,6 +95,7 @@
     "clsx": "catalog:",
     "jose": "^5.9.6",
     "lucide-react": "catalog:",
+    "next": "^14.2.0",
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {

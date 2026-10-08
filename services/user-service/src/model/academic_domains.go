@@ -99,6 +99,59 @@ var AcademicDomainSeedList = map[string]bool{
 	"ac.za":                   true,
 	"ac.in":                   true,
 	"edu.in":                  true,
+
+	// Research / institutional domains (res.in = National Knowledge Network)
+	"res.in":                 true,
+}
+
+// ProfessionalDomainSeedList — non-academic professional domains that grant
+// Gate A instant verification for Tutors and Advocates.
+//
+// Hinglish: student ke liye sirf academic domains kaafi hote hain, par
+// tutor aur advocate ke liye alag domain lists hain. Tutor ke liye kuch
+// university ya research institute domains work karte hain, aur advocate
+// ke liye Bar Council ya legal firm domains.
+var ProfessionalDomainSeedList = map[string]bool{
+	// Academic adjunct / continuing education (tutors at universities)
+	"ac.in":       true,
+	"edu.in":      true,
+	"res.in":      true,
+	"iimcal.ac.in": true,
+	"iitd.ac.in":  true,
+	"du.ac.in":    true,
+
+	// Bar Council and legal professional domains
+	"barcouncil.org.in":    true,
+	"indianbarassociation.com": true,
+	"advocateklub.com":       true,
+}
+
+// IsProfessionalDomain — Gate A for tutors and advocates.
+// Returns true agar email ka domain professional seed list mein hai.
+func IsProfessionalDomain(email string) bool {
+	domain := extractDomain(email)
+	if domain == "" {
+		return false
+	}
+	return ProfessionalDomainSeedList[domain]
+}
+
+// IsBarCouncilDomain — Advocate ke liye Bar Council domain check.
+func IsBarCouncilDomain(email string) bool {
+	domain := extractDomain(email)
+	if domain == "" {
+		return false
+	}
+	return BarCouncilDomainSeedList[domain]
+}
+
+// BarCouncilDomainSeedList — domains owned by bar associations and legal bodies.
+var BarCouncilDomainSeedList = map[string]bool{
+	"barcouncil.org.in":          true,
+	"indiabarassociation.org":    true,
+	"legalservicesauthority.gov.in": true,
+	"supremecourt.gov.in":        true,
+	"highcourt.gov.in":           true,
 }
 
 // IsAcademicDomain — Gate A lookup helper.

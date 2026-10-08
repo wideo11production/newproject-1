@@ -714,6 +714,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"is_active":     user.IsActive,
 			"is_verified":   user.IsVerified,
 			"last_login_at": user.LastLoginAt,
+			// DYNAMIC ROLE ROUTING (unified port 3000 pipeline):
+			// The Go auth engine inspects the PostgreSQL `users.role` column
+			// and reports it back so the web app can route without a second
+			// login page. `user` → WideoCut workspace. `superadmin` /
+			// `superadmin_recovery` → Grafana-like management grids.
+			"role":             user.Role,
+			"is_superadmin":    model.IsSuperadmin(user.Role),
+			"is_staff_role":    model.IsStaffRole(user.Role),
 		},
 		"tokens": tokenPair,
 		// Frontend isse padhke gate dikhata hai

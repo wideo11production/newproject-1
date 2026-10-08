@@ -1,5 +1,5 @@
 /**
- * ENTERPRISE THEME - single source of truth (Choice A: unified tokens, unique structure)
+ * MOVAVI-STYLE ENTERPRISE THEME - single source of truth
  *
  * KYUN YE HAI:
  * 9 apps ke apne-apne tailwind.config.ts the, aur wo ek doosre se DRIFT kar
@@ -10,14 +10,15 @@
  * Iska matlab: ek hi platform par buttons/alerts alag dikhte the.
  *
  * AB: ye file SAARI apps import karti hain. Color, button, badge, alert,
- * typography, radius, shadows, animations - sab ek hi enterprise tone me.
+ * typography, radius, shadows, animations - sab ek hi MOVAVI enterprise tone me.
  *
- * CHOICE A: Tokens UNIFIED, structure UNIQUE.
- *   - Tokens (color/typography/radius/animation) -> yahan se, sab same
- *   - Content globs aur page structure -> har app apna rakhta hai
- *     (editor Movavi-style rahega, monitor Grafana-console rahega)
- *
- * Hinglish comments: har block ka arth
+ * MOVAVI BORDERLESS DESIGN PHILOSOPHY:
+ * - NO borders anywhere - sections are differentiated by background contrast only
+ * - Deep Pitch Black (#0a0a0a) = preview/display areas
+ * - Rich Charcoal (#1a1a1a) = sidebars/chrome strips
+ * - Lighter Greyish-Black (#2a2a2a) = timeline tracks/layout grids
+ * - Orange-Red (#ff6500) = active/hover/selected accents
+ * - rounded-md (0.5rem) = uniform corner radius across all elements
  */
 
 import type { Config } from 'tailwindcss';
@@ -89,9 +90,12 @@ export const enterpriseTheme = {
       // text ke liye dedicated `ink` token banaya gaya hai.
       ink: 'rgb(var(--app-ink) / <alpha-value>)',
 
-      // ---- shadcn semantic tokens (CSS variables se) ----
-      border: 'hsl(var(--border))',
-      input: 'hsl(var(--input))',
+      // ---- shadcn semantic tokens (CSS variables se, borderless override) ----
+      // KYUN: Ab koi border nahi - sirf background contrast.
+      // `border` aur `input` variables empty string me set karo gaye
+      // global CSS me, taaki koi bhi border-visible effect na bana.
+      border: 'transparent',
+      input: 'transparent',
       ring: 'hsl(var(--ring))',
       background: 'hsl(var(--background))',
       foreground: 'hsl(var(--foreground))',
@@ -126,31 +130,31 @@ export const enterpriseTheme = {
 
       // ---- Grafana stack (unified enterprise tone) ----
       grafana: {
-        bg: '#111217',        // app background
-        panel: '#181b1f',     // card / panel
-        panelHover: '#1f2227',// panel hover state
-        border: '#2c3235',    // subtle border
-        text: '#d8d9da',      // primary text
-        textMuted: '#9fa7b3',// secondary text
-        primary: '#5794f2',   // action / accent blue
-        success: '#73bf69',   // healthy
-        warning: '#f2cc0c',   // caution
-        danger: '#f2495c',    // critical / breach
+        bg: '#0a0a0a',         // MOVAVI Deep Pitch Black - preview/display areas
+        panel: '#1a1a1a',      // MOVAVI Rich Charcoal - sidebars/chrome strips
+        panelHover: '#2a2a2a', // MOVAVI Lighter Greyish-Black - hover state
+        border: '#00000000',   // MOVAVI: NO borders - borderless policy
+        text: '#d8d9da',       // primary text
+        textMuted: '#9fa7b3',  // secondary text
+        primary: '#ff6500',    // MOVAVI orange-red accent
+        success: '#73bf69',    // healthy
+        warning: '#f2cc0c',    // caution
+        danger: '#f2495c',     // critical / breach
         info: '#8ab8ff',
       },
 
-      // ---- Surface scale (cards, borders) ----
+      // ---- Surface scale (cards, backgrounds) - MOVAVI palette ----
       surface: {
-        DEFAULT: '#181b1f',
-        raised: '#1f2227',
-        sunken: '#0d0f11',
+        DEFAULT: '#1a1a1a',    // Rich Charcoal - main panels
+        raised: '#2a2a2a',     // Lighter Greyish-Black - raised elements
+        sunken: '#0a0a0a',     // Deep Pitch Black - preview areas
       },
     },
 
     borderRadius: {
-      lg: 'var(--radius)',
-      md: 'calc(var(--radius) - 2px)',
-      sm: 'calc(var(--radius) - 4px)',
+      lg: '0.5rem',  // MOVAVI: rounded-md everywhere
+      md: '0.5rem',  // MOVAVI: rounded-md everywhere
+      sm: '0.5rem',  // MOVAVI: rounded-md everywhere
     },
 
     fontFamily: {

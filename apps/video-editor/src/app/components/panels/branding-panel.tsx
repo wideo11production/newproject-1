@@ -221,14 +221,14 @@ export function BrandingPanel({
     <div className="space-y-4">
       <PanelSection title="Channel Branding" hint="Select a channel to automatically apply its logo, colour and position to the branding track (top-most, locked).">
         {channels.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-[#2c3235] p-6 text-center">
+          <div className="flex flex-col items-center gap-3 rounded-md-dashed-[#2c3235] p-6 text-center">
             <Badge className="mx-auto h-10 w-10 text-[#9fa7b3]" />
             <p className="text-sm text-[#d8d9da]">No channels found</p>
             <p className="text-xs text-[#9fa7b3]">
               Create a channel in the dashboard and add a logo to use branding.
             </p>
             <Button onClick={loadChannels} variant="outline" className="mt-2">
-              <RefreshCw className="mr-1.5 h-3 w-3" />
+              <RefreshCw className="mr-1.5 h-2.5 w-2.5" />
               Refresh
             </Button>
           </div>
@@ -252,9 +252,9 @@ export function BrandingPanel({
                 reload, when there is a logo but no channel selection to hang it
                 off. */}
             {(selectedChannelId || existingClip) && (
-              <div className="rounded-lg border border-[#2c3235] bg-[#101216] p-4 space-y-3">
+              <div className="rounded-md bg-[#101216] p-4 space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 bg-[#181b1f]" style={{ borderColor: `hsl(${channels.find(c => c.id === selectedChannelId)?.brand_hue || 200} 50% 50%)` }}>
+                  <div className="h-12 w-12 shrink-0 overflow-hidden rounded-full bg-[#181b1f]" style={{ borderColor: `hsl(${channels.find(c => c.id === selectedChannelId)?.brand_hue || 200} 50% 50%)` }}>
                     {channels.find(c => c.id === selectedChannelId)?.logo_url ? (
                       <img src={channels.find(c => c.id === selectedChannelId)!.logo_url} alt="" className="h-full w-full object-cover" />
                     ) : (
@@ -314,7 +314,7 @@ export function BrandingPanel({
                         disabled={!existingClip}
                         title={p.hint}
                         aria-pressed={activePresetId === p.id}
-                        className={`rounded border px-1.5 py-1.5 text-[10px] leading-tight transition-colors ${
+                        className={`rounded px-1.5 py-1.5 text-[10px] leading-tight transition-colors ${
                           activePresetId === p.id
                             ? 'border-pink-500 bg-pink-500/15 text-pink-200'
                             : 'border-[#2c3235] text-[#9fa7b3] hover:border-pink-500/50 hover:text-[#d8d9da]'
@@ -328,11 +328,11 @@ export function BrandingPanel({
 
                 <div className="flex gap-2 pt-2">
                   <Button onClick={refreshBranding} variant="outline" disabled={loading}>
-                    {loading ? <Loader2 className="mr-1.5 h-3 w-3 animate-spin" /> : <RefreshCw className="mr-1.5 h-3 w-3" />}
+                    {loading ? <Loader2 className="mr-1.5 h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-2.5 w-2.5" />}
                     Refresh
                   </Button>
                   <Button onClick={clearBranding} variant="danger">
-                    <Trash2 className="mr-1.5 h-3 w-3" />
+                    <Trash2 className="mr-1.5 h-2.5 w-2.5" />
                     Remove
                   </Button>
                 </div>
@@ -366,7 +366,7 @@ export function BrandingPanel({
         >
           {sponsorClip ? (
             <div className="flex items-center gap-3">
-              <div className="h-10 w-20 shrink-0 overflow-hidden rounded border border-[#2c3235] bg-[#0d1014]">
+              <div className="h-10 w-20 shrink-0 overflow-hidden rounded-[#2c3235] bg-[#0d1014]">
                 {sponsorClip.url ? (
                   <img src={sponsorClip.url} alt="" className="h-full w-full object-contain" />
                 ) : null}
@@ -379,14 +379,14 @@ export function BrandingPanel({
                 </p>
               </div>
               <Button onClick={() => onRemoveSponsor(sponsorClip.id)} variant="danger">
-                <Trash2 className="mr-1.5 h-3 w-3" />
+                <Trash2 className="mr-1.5 h-2.5 w-2.5" />
                 Remove
               </Button>
             </div>
           ) : (
             <>
               <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="w-full">
-                <ImageIcon className="mr-1.5 h-3 w-3" />
+                <ImageIcon className="mr-1.5 h-2.5 w-2.5" />
                 Choose an image
               </Button>
               {/* Kept mounted and hidden rather than created per click: an input
@@ -450,19 +450,19 @@ export function BrandingPanel({
       <PanelSection title="About the Branding Track" hint="How it works">
         <ul className="space-y-1.5 text-xs text-[#9fa7b3]">
           <li className="flex items-start gap-1.5">
-            <Badge className="mt-0.5 h-3 w-3 shrink-0 text-pink-400" />
+            <Badge className="mt-0.5 h-2.5 w-2.5 shrink-0 text-pink-400" />
             <span>The branding track is <strong>locked</strong> and cannot be deleted or reordered.</span>
           </li>
           <li className="flex items-start gap-1.5">
-            <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-pink-400" />
+            <Sparkles className="mt-0.5 h-2.5 w-2.5 shrink-0 text-pink-400" />
             <span>Logo <strong>auto-applies</strong> when you select a channel — zero clicks after setup.</span>
           </li>
           <li className="flex items-start gap-1.5">
-            <ImageIcon className="mt-0.5 h-3 w-3 shrink-0 text-pink-400" />
+            <ImageIcon className="mt-0.5 h-2.5 w-2.5 shrink-0 text-pink-400" />
             <span>Position and sizing come from <strong>channel setup</strong> (logo position, auto-size).</span>
           </li>
           <li className="flex items-start gap-1.5">
-            <span className="mt-0.5 h-3 w-3 shrink-0 rounded-full bg-pink-400/20" />
+            <span className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-pink-400/20" />
             <span>Opacity slider above controls <strong>visibility</strong> without removing the logo.</span>
           </li>
         </ul>

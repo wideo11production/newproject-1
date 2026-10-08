@@ -130,7 +130,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
             <div
               key={tier.id}
               className={`
-                relative rounded-xl border bg-[#181b1f] p-5 transition-all duration-150
+                relative rounded-md bg-[#181b1f] p-5 transition-all duration-150
                 ${tier.accent}
                 ${isActive ? 'ring-2 ring-[#ff6500]' : ''}
               `}
@@ -160,7 +160,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
               <ul className="mb-4 space-y-1 text-xs text-[#9fa7b3]">
                 {tier.features.map((f) => (
                   <li key={f} className="flex items-center gap-2">
-                    <Check className="h-3 w-3 text-[#ff6500]" />
+                    <Check className="h-2.5 w-2.5 text-[#ff6500]" />
                     <span>{f}</span>
                   </li>
                 ))}
@@ -168,7 +168,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
 
               <div className="mb-2 flex items-center gap-4 text-xs text-[#9fa7b3]">
                 <span className="flex items-center gap-1">
-                  <Monitor className="h-3 w-3 text-[#ff6500]" />
+                  <Monitor className="h-2.5 w-2.5 text-[#ff6500]" />
                   Max {tier.maxFps} FPS
                 </span>
                 <span>Resolution: {tier.maxResolution}</span>
@@ -189,7 +189,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
                 >
                   {loading === tier.id ? (
                     <span className="flex items-center gap-1">
-                      <Zap className="h-3 w-3 animate-pulse" />
+                      <Zap className="h-2.5 w-2.5 animate-pulse" />
                       Processing...
                     </span>
                   ) : isActive ? (
@@ -210,10 +210,11 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
 
       {/* Status change indicator */}
       {success && (
-        <div className="mt-4 rounded-xl border border-[#ff6500]/30 bg-[#ff6500]/10 p-3 text-xs text-[#ff6500]">
+        <div className="mt-4 rounded-md/30 bg-[#ff6500]/10 p-3 text-xs text-[#ff6500]">
           Purchase successful. FPS ceiling and resolution limits have been updated in your profile.
         </div>
       )}
     </div>
   );
 }
+

@@ -15,7 +15,7 @@ import { IdentityProvider } from '@/lib/identity-context';
 import { AppChrome } from '@/components/app-chrome';
 
 export const metadata: Metadata = {
-  title: 'Wideo11 - Video Platform',
+  title: 'watch-earn-enjoy',
   description: 'Premium video platform with custom observability dashboard',
 };
 

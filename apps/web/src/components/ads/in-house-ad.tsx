@@ -74,7 +74,7 @@ export default function InHouseAd({ slotId, creative, onViewed }: InHouseAdProps
       data-ad-id={creative.id}
       data-ad-slot={slotId}
       // NOTE: ye div IntersectionObserver ke through track hota hai (guard me)
-      className="relative overflow-hidden rounded-lg border border-grafana-border bg-grafana-panel"
+      className="relative overflow-hidden rounded-md-grafana-border bg-grafana-panel"
     >
       {/* ---- Creative ---- */}
       <div className="p-4">
@@ -166,7 +166,7 @@ export default function InHouseAd({ slotId, creative, onViewed }: InHouseAdProps
           <button
             type="button"
             onClick={handleReset}
-            className="rounded-md border border-grafana-border px-3.5 py-1.5 text-xs text-grafana-textMuted transition-colors hover:bg-grafana-panelHover"
+            className="rounded-md-grafana-border px-3.5 py-1.5 text-xs text-grafana-textMuted transition-colors hover:bg-grafana-panelHover"
           >
             View again
           </button>

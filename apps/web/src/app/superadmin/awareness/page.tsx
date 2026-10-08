@@ -46,11 +46,11 @@ interface SecurityEvent {
 }
 
 const EVENT_ICONS: Record<string, React.ReactNode> = {
-  LOCKOUT_TRIGGERED: <Lock className="h-4 w-4" />,
-  PIN_FAILED: <Fingerprint className="h-4 w-4" />,
-  DEVICE_LIMIT_EXCEEDED: <Users className="h-4 w-4" />,
-  CONFIG_TAMPER: <ShieldAlert className="h-4 w-4" />,
-  LOGIN_FAILED: <LogIn className="h-4 w-4" />,
+  LOCKOUT_TRIGGERED: <Lock className="h-2.5 w-2.5" />,
+  PIN_FAILED: <Fingerprint className="h-2.5 w-2.5" />,
+  DEVICE_LIMIT_EXCEEDED: <Users className="h-2.5 w-2.5" />,
+  CONFIG_TAMPER: <ShieldAlert className="h-2.5 w-2.5" />,
+  LOGIN_FAILED: <LogIn className="h-2.5 w-2.5" />,
 };
 
 export default function AwarenessReportsPage() {
@@ -115,9 +115,9 @@ export default function AwarenessReportsPage() {
           <div className="flex items-center gap-3">
             <a
               href="/"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-700 text-gray-400 transition-colors hover:bg-gray-800"
+              className="flex h-9 w-9 items-center justify-center rounded-md border-700 text-gray-400 transition-colors hover:bg-gray-800"
             >
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft className="h-2.5 w-2.5" />
             </a>
             <div>
               <h1 className="text-2xl font-bold text-ink">Awareness Reports</h1>
@@ -129,16 +129,16 @@ export default function AwarenessReportsPage() {
           <button
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md border-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            {loading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
             Refresh
           </button>
         </div>
 
         {/* ---- CRITICAL ALERT (pulsing red - SPEC requirement) ---- */}
         {criticalCount > 0 && (
-          <div className="mb-6 flex items-center gap-3 rounded-lg border-2 border-red-600/60 bg-red-950/40 p-4 animate-pulse">
+          <div className="mb-6 flex items-center gap-3 rounded-md-600/60 bg-red-950/40 p-4 animate-pulse">
             <ShieldAlert className="h-6 w-6 shrink-0 text-red-600" />
             <div>
               <p className="animate-pulse text-lg font-bold text-red-600">
@@ -156,20 +156,20 @@ export default function AwarenessReportsPage() {
         <div className="mb-4 flex gap-2">
           <button
             onClick={() => setFilter('all')}
-            className={`rounded-lg px-3 py-1.5 text-sm ${
+            className={`rounded-md px-3 py-1.5 text-sm ${
               filter === 'all'
                 ? 'bg-blue-600 text-white'
-                : 'border border-gray-700 text-gray-400 hover:bg-gray-800'
+                : 'border-700 text-gray-400 hover:bg-gray-800'
             }`}
           >
             All ({events.length})
           </button>
           <button
             onClick={() => setFilter('critical')}
-            className={`rounded-lg px-3 py-1.5 text-sm ${
+            className={`rounded-md px-3 py-1.5 text-sm ${
               filter === 'critical'
                 ? 'bg-red-600 text-white'
-                : 'border border-gray-700 text-gray-400 hover:bg-gray-800'
+                : 'border-700 text-gray-400 hover:bg-gray-800'
             }`}
           >
             Critical ({criticalCount})
@@ -177,7 +177,7 @@ export default function AwarenessReportsPage() {
         </div>
 
         {error ? (
-          <div className="rounded-lg border border-red-700/60 bg-red-950/40 p-4 text-sm text-red-300">
+          <div className="rounded-md border-700/60 bg-red-950/40 p-4 text-sm text-red-300">
             {error}
           </div>
         ) : loading ? (
@@ -195,7 +195,7 @@ export default function AwarenessReportsPage() {
             {byUser.map(([email, userEvents]) => (
               <div
                 key={email}
-                className="rounded-xl border border-gray-800 bg-gray-900/50 p-5"
+                className="rounded-md border-800 bg-gray-900/50 p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div>
@@ -215,7 +215,7 @@ export default function AwarenessReportsPage() {
                   {userEvents.map((e) => (
                     <div
                       key={e.event.id}
-                      className={`flex items-start gap-3 rounded-lg border p-3 ${
+                      className={`flex items-start gap-3 rounded-md p-3 ${
                         e.critical
                           ? 'border-red-800/50 bg-red-950/20'
                           : 'border-gray-800 bg-gray-950/40'
@@ -226,7 +226,7 @@ export default function AwarenessReportsPage() {
                           e.critical ? 'text-red-500' : 'text-gray-500'
                         }`}
                       >
-                        {EVENT_ICONS[e.event.event_type] ?? <ShieldAlert className="h-4 w-4" />}
+                        {EVENT_ICONS[e.event.event_type] ?? <ShieldAlert className="h-2.5 w-2.5" />}
                       </div>
                       <div className="min-w-0 flex-1">
                         <p
@@ -251,9 +251,9 @@ export default function AwarenessReportsPage() {
         )}
 
         {/* ---- Data not yet available (honest notice) ---- */}
-        <div className="mt-6 rounded-lg border border-gray-800 bg-gray-900/40 p-4">
+        <div className="mt-6 rounded-md border-800 bg-gray-900/40 p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-300">
-            <Wallet className="h-4 w-4" />
+            <Wallet className="h-2.5 w-2.5" />
             Not yet tracked
           </p>
           <ul className="space-y-1 text-xs text-gray-500">

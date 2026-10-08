@@ -393,8 +393,8 @@ export default function ChannelSetupPage() {
 
   // The effective colour, whether the creator chose one or not.
   const activeBrand =
-    palette.find((c) => c.hue === brandHue) ??
-    palette.find((c) => c.hue === state.brand.hue) ??
+    palette.find((c) => c.hue === brandHue) ||
+    palette.find((c) => c.hue === state.brand.hue) ||
     state.brand;
 
   return (
@@ -407,7 +407,7 @@ export default function ChannelSetupPage() {
           onClick={() => router.push('/dashboard')}
           className="mb-3 inline-flex items-center gap-1.5 text-xs text-[#9fa7b3] hover:text-[#d8d9da]"
         >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          <ArrowLeft className="h-2.5 w-2.5" aria-hidden="true" />
           Back to dashboard
         </button>
         <h1 className="text-lg font-semibold text-[#d8d9da]">Set up your channel</h1>
@@ -420,7 +420,7 @@ export default function ChannelSetupPage() {
       {/* ---- Preview ----
           The live preview is the point. A colour swatch teaches nothing about a
           colour; the banner with the colour actually on it does. */}
-      <div className="mb-6 overflow-hidden rounded-lg border border-[#2c3235]">
+      <div className="mb-6 overflow-hidden rounded-md">
         <div
           className="relative h-28 w-full"
           style={{
@@ -447,7 +447,7 @@ export default function ChannelSetupPage() {
               }}
             >
               <div
-                className="overflow-hidden rounded-full border-2 opacity-80"
+                className="overflow-hidden rounded-full opacity-80"
                 style={{
                   borderColor: hsl(activeBrand),
                   backgroundColor: '#101216',
@@ -460,9 +460,9 @@ export default function ChannelSetupPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 border-t border-[#2c3235] bg-[#181b1f] px-4 py-3">
+        <div className="flex items-center gap-3 bg-[#181b1f] px-4 py-3">
           <div
-            className="h-11 w-11 shrink-0 overflow-hidden rounded-full border-2"
+            className="h-11 w-11 shrink-0 overflow-hidden rounded-full"
             style={{ borderColor: hsl(activeBrand), backgroundColor: '#101216' }}
           >
             {logoUrl ? (
@@ -486,14 +486,14 @@ export default function ChannelSetupPage() {
       <div className="space-y-6">
         {/* ---- Logo ---- */}
         <Section
-          icon={<Sparkles className="h-3.5 w-3.5" />}
+          icon={<Sparkles className="h-2.5 w-2.5" />}
           title="Channel logo"
           hint="The square mark beside your name, on every card and list."
           dataTrack="setup-section-logo"
         >
           <div className="flex items-center gap-3">
             <div
-              className="h-16 w-16 shrink-0 overflow-hidden rounded-full border"
+              className="h-16 w-16 shrink-0 overflow-hidden rounded-full"
               style={{ borderColor: hsl(activeBrand), backgroundColor: '#101216' }}
             >
               {logoUrl ? (
@@ -542,7 +542,7 @@ export default function ChannelSetupPage() {
               <label
                 htmlFor="setup-logo-input"
                 data-track="setup-logo-button"
-                className={`inline-flex h-8 cursor-pointer items-center rounded-md border border-[#2c3235] px-2.5 text-[11px] text-[#d8d9da] hover:bg-[#1f2227] ${
+                className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[11px] text-[#d8d9da] hover:bg-[#1f2227] ${
                   logoBusy ? 'pointer-events-none opacity-50' : ''
                 }`}
               >
@@ -562,7 +562,7 @@ export default function ChannelSetupPage() {
             a logo isn't asked to position something they don't have. */}
         {logoUrl && (
           <Section
-            icon={<MousePointer className="h-3.5 w-3.5" />}
+            icon={<MousePointer className="h-2.5 w-2.5" />}
             title="Logo position"
             hint="Where your logo sits on every video."
             dataTrack="setup-section-logo-position"
@@ -580,7 +580,7 @@ export default function ChannelSetupPage() {
                       setLogoPosition(pos);
                       void save({ logo_position: pos });
                     }}
-                    className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                    className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                       logoPosition === pos
                         ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
                         : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
@@ -605,13 +605,13 @@ export default function ChannelSetupPage() {
                     setLogoAutoSize(true);
                     void save({ logo_auto_size: true });
                   }}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                  className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                     logoAutoSize
                       ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
                       : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
                   }`}
                 >
-                  <Maximize2 className="h-3 w-3" />
+                  <Maximize2 className="h-2.5 w-2.5" />
                   <span className="text-[11px] font-medium">Auto-size</span>
                 </button>
                 <button
@@ -622,13 +622,13 @@ export default function ChannelSetupPage() {
                     setLogoAutoSize(false);
                     void save({ logo_auto_size: false });
                   }}
-                  className={`flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors ${
+                  className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                     !logoAutoSize
                       ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
                       : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
                   }`}
                 >
-                  <Minimize2 className="h-3 w-3" />
+                  <Minimize2 className="h-2.5 w-2.5" />
                   <span className="text-[11px] font-medium">Manual</span>
                 </button>
               </div>
@@ -643,7 +643,7 @@ export default function ChannelSetupPage() {
 
         {/* ---- Tagline ---- */}
         <Section
-          icon={<Tag className="h-3.5 w-3.5" />}
+          icon={<Tag className="h-2.5 w-2.5" />}
           title="Tagline"
           hint="One line under your channel name."
           dataTrack="setup-section-tagline"
@@ -665,7 +665,7 @@ export default function ChannelSetupPage() {
             guarantee behind it, and a client-side copy would be free to grow a
             colour nobody checked. */}
         <Section
-          icon={<Palette className="h-3.5 w-3.5" />}
+          icon={<Palette className="h-2.5 w-2.5" />}
           title="Brand colour"
           hint="Used for your logo ring, buttons and highlights."
           dataTrack="setup-section-brand"
@@ -684,8 +684,8 @@ export default function ChannelSetupPage() {
                     setBrandHue(c.hue);
                     void save({ brand_hue: c.hue, brand_hue_is_null: false });
                   }}
-                  className={`h-8 w-8 rounded-full border-2 transition-transform ${
-                    selected ? 'scale-110 border-[#d8d9da]' : 'border-transparent'
+                  className={`h-8 w-8 rounded-full transition-transform ${
+                    selected ? 'scale-110' : 'border-transparent'
                   }`}
                   style={swatchStyle(c)}
                 />
@@ -716,7 +716,7 @@ export default function ChannelSetupPage() {
             defaults and a creator who cannot see their own answer cannot tell that
             it is wrong. */}
         <Section
-          icon={<Sparkles className="h-3.5 w-3.5" />}
+          icon={<Sparkles className="h-2.5 w-2.5" />}
           title="Category and keywords"
           hint="These decide which uploads get recommended where."
           dataTrack="setup-section-discovery"
@@ -729,7 +729,7 @@ export default function ChannelSetupPage() {
               setChannelType(e.target.value);
               void save({ channel_type: e.target.value });
             }}
-            className="mt-1 h-9 w-full rounded-md border border-[#2c3235] bg-[#101216] px-2 text-xs text-[#d8d9da]"
+            className="mt-1 h-9 w-full rounded-md bg-[#101216] px-2 text-xs text-[#d8d9da]"
           >
             <option value="">Choose a category</option>
             {CHANNEL_TYPES.map((t: ChannelType) => (
@@ -758,7 +758,7 @@ export default function ChannelSetupPage() {
             creator wants for a first upload, and a boolean would have forced a
             choice between "the whole world" and "nobody". */}
         <Section
-          icon={<Eye className="h-3.5 w-3.5" />}
+          icon={<Eye className="h-2.5 w-2.5" />}
           title="Who can see it"
           hint="You can change this at any time."
           dataTrack="setup-section-visibility"
@@ -776,14 +776,14 @@ export default function ChannelSetupPage() {
                     setVisibility(v.value);
                     void save({ visibility: v.value });
                   }}
-                  className={`flex w-full items-start gap-2.5 rounded-md border px-3 py-2 text-left transition-colors ${
+                  className={`flex w-full items-start gap-2.5 rounded-md px-3 py-2 text-left transition-colors ${
                     selected
                       ? 'border-[#5794f2]/50 bg-[#5794f2]/5'
                       : 'border-[#2c3235] hover:bg-[#1f2227]'
                   }`}
                 >
                   <span
-                    className={`mt-0.5 h-3.5 w-3.5 shrink-0 rounded-full border-2 ${
+                    className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
                       selected ? 'border-[#5794f2]' : 'border-[#4b5158]'
                     }`}
                   />
@@ -802,7 +802,7 @@ export default function ChannelSetupPage() {
             wants comments off on one and required on the other, and a single global
             setting cannot say that. */}
         <Section
-          icon={<MessageSquare className="h-3.5 w-3.5" />}
+          icon={<MessageSquare className="h-2.5 w-2.5" />}
           title="Default upload settings"
           hint="Applied to new uploads on this channel. You can change any of it per video."
           dataTrack="setup-section-uploads"
@@ -838,7 +838,7 @@ export default function ChannelSetupPage() {
                       setCommentPolicy(p.value);
                       void save({ comment_policy: p.value });
                     }}
-                    className={`flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left ${
+                    className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left ${
                       selected
                         ? 'border-[#5794f2]/50 bg-[#5794f2]/5'
                         : 'border-[#2c3235] hover:bg-[#1f2227]'
@@ -855,7 +855,7 @@ export default function ChannelSetupPage() {
           <Toggle
             label="Auto-classify uploads"
             hint="Apply the made-for-kids setting to every upload automatically."
-            icon={<Baby className="h-3.5 w-3.5" />}
+            icon={<Baby className="h-2.5 w-2.5" />}
             checked={kidsAutoClassify}
             dataTrack="setup-kids-auto"
             onChange={(v) => {
@@ -867,7 +867,7 @@ export default function ChannelSetupPage() {
           <Toggle
             label="Brand watermark"
             hint="Stamp your colour on exported files."
-            icon={<Droplets className="h-3.5 w-3.5" />}
+            icon={<Droplets className="h-2.5 w-2.5" />}
             checked={watermarkEnabled}
             dataTrack="setup-watermark"
             onChange={(v) => {
@@ -882,7 +882,7 @@ export default function ChannelSetupPage() {
             it there may now have something they want, and hunting for another
             settings page to find the same uploader is how a channel stays blank. */}
         <Section
-          icon={<Sparkles className="h-3.5 w-3.5" />}
+          icon={<Sparkles className="h-2.5 w-2.5" />}
           title="Cover image"
           hint="The wide banner at the top of your channel page."
           dataTrack="setup-section-cover"
@@ -918,7 +918,7 @@ export default function ChannelSetupPage() {
           sections on a phone. Never disabled: there is no required field on this
           screen, so there is nothing to be waiting for. A compulsory step whose
           button can be disabled is a step that can trap somebody. */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-[#2c3235] bg-[#0d0f11]/95 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 bg-[#0d0f11]/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
           <p className="text-[10px] text-[#6b7280]">
             You can change all of this later.
@@ -930,7 +930,7 @@ export default function ChannelSetupPage() {
             onClick={() => void finish()}
             className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#5794f2] px-4 text-xs font-medium text-white transition-colors hover:bg-[#4a84db] disabled:opacity-60"
           >
-            <Check className="h-3.5 w-3.5" aria-hidden="true" />
+            <Check className="h-2.5 w-2.5" aria-hidden="true" />
             {saving ? 'Finishing…' : 'Finish setup'}
           </button>
         </div>
@@ -954,7 +954,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section data-track={dataTrack} className="rounded-lg border border-[#2c3235] p-4">
+    <section data-track={dataTrack} className="rounded-md p-4">
       <div className="mb-3 flex items-start gap-2">
         <span className="mt-0.5 text-[#5794f2]">{icon}</span>
         <div>
@@ -996,7 +996,7 @@ function Toggle({
         checked={checked}
         data-track={dataTrack}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[#5794f2]"
+        className="mt-0.5 h-2.5 w-2.5 shrink-0 accent-[#5794f2]"
       />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#d8d9da]">

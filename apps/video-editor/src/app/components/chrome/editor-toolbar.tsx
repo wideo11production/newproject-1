@@ -2,6 +2,23 @@
 import { useState } from 'react';
 
 // ============================================================================
+// BORDERLESS CHROME DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Toolbar ek `#1a1a1a` Rich Charcoal band hai — sidebar role, isliye tone
+// contrast hai ki jagah. Group separators (`border-r-edge`)
+// hata diye gaye; groups ab apne `bg-[#1a1a1a]` background se alag hote
+// hain jo ek contrast grid bana deta hai bina kisi line ke.
+//
+// Select controls (fps, playback rate): base `border-edge` hata diya
+// gaya — default state me koi nahi, sirf `bg-surface-raised` fill.
+// Hover / focus par `border-[#ff6500]` orange-red accent appear hota hai,
+// jo user ne explicitly KEEP kiya hai. Ye design principle hai: default me
+// quiet, interaction par accent.
+//
+// Saare interactive elements `rounded-md`, 150ms transition. Accent
+// rings / borders (`border-[#ff6500]`, `ring-[#ff6500]`) KEEP hain.
+// ============================================================================
 // Editor toolbar
 // ============================================================================
 //
@@ -269,6 +286,16 @@ export function EditorToolbar({
         { label: 'Go to the start', shortcut: 'Home' },
       ],
     },
+    {
+      id: 'help',
+      label: 'Help',
+      items: [
+        { label: 'User Menu & FAQs', shortcut: 'F1', onSelect: () => window.open('/help', '_blank') },
+        { label: 'Keyword Shortcuts Matrix', shortcut: '?', onSelect: () => {} },
+        { label: 'AURA Micro-Frame Studio Walkthrough', shortcut: 'Ctrl+H', onSelect: () => { window.location.href = 'help-micro-frame'; } },
+        { label: 'Logo & Sponsor Placement Guidelines', shortcut: 'Ctrl+L', onSelect: () => {}, separatorBefore: true },
+      ],
+    },
   ];
 
   const groups: ToolButton[][] = [
@@ -462,7 +489,7 @@ export function EditorToolbar({
       <div
         role="toolbar"
         aria-label="Editing tools"
-      className="flex h-10 shrink-0 items-center border-b border-edge bg-surface-raised"
+      className="flex h-10 shrink-0 items-center bg-[#1a1a1a]"
     >
       {/*
         Tool groups SCROLL hain (40+ buttons), session indicator NAHI.
@@ -486,7 +513,7 @@ export function EditorToolbar({
                 // Two-line tooltip: what it is, what it does, how to use it.
                 title={`${b.label}\n${b.hint}${b.shortcut ? `\nShortcut: ${b.shortcut}` : ''}`}
                 className={[
-                  'flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-150 duration-150',
+                  'flex h-7 w-7 shrink-0 items-center justify-center transition-colors duration-150',
                   b.disabled
                     ? 'cursor-not-allowed text-fg-muted'
                     : b.active
@@ -494,7 +521,7 @@ export function EditorToolbar({
                       : 'text-fg-secondary hover:text-[#ff6500]',
                 ].join(' ')}
               >
-                <b.Icon className="h-4 w-4" aria-hidden="true" />
+                <b.Icon className="h-2.5 w-2.5" aria-hidden="true" />
               </button>
             ))}
           </ToolbarGroup>
@@ -532,12 +559,12 @@ export function EditorToolbar({
              className="flex items-center gap-1 px-1"
              title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
            >
-             <Gauge className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+             <Gauge className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
              <select
                value={String(fps)}
                onChange={(e) => onFpsChange(Number(e.target.value))}
                aria-label="Timeline frame rate"
-               className="h-6 w-16 cursor-pointer rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+               className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
              >
                {SUPPORTED_FPS.map((f) => (
                  <option key={f} value={f}>
@@ -550,12 +577,12 @@ export function EditorToolbar({
              className="flex items-center gap-1 px-1"
              title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
            >
-             <Timer className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+             <Timer className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
              <select
                value={String(playbackRate)}
                onChange={(e) => onPlaybackRate(Number(e.target.value))}
                aria-label="Playback speed"
-               className="h-6 w-16 cursor-pointer rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+               className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
              >
                {PLAYBACK_RATES.map((r) => (
                  <option key={r} value={r}>
@@ -580,7 +607,7 @@ export function EditorToolbar({
           Left side ko hi scroll hone diya jaata hai: aapne 40+ buttons open
           kar liye to tools hat jaate hain, session indicator nahi.
         */}
-        <div className="ml-3 flex shrink-0 items-center gap-1 border-l border-edge pl-2">
+        <div className="ml-3 flex shrink-0 items-center gap-1 bg-[#1a1a1a] pl-2">
           <span className="truncate text-[8px] text-fg-secondary" title={projectName}>
             {projectName}
             <span className={dirty ? 'ml-1 text-[#ff6500]' : 'ml-1 text-fg-muted'}>

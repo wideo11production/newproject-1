@@ -1,0 +1,105 @@
+{
+  "version": "1.0",
+  "characters": {
+    "wino": {
+      "name": "Wino",
+      "role": "Keeps the cut tidy",
+      "image": "/wino.png",
+      "tint": "from-amber-400 to-amber-600",
+      "ring": "ring-amber-400/40",
+      "loop": "tidy",
+      "speaks": ["handles", "snapping", "undo"]
+    },
+    "rino": {
+      "name": "Rino",
+      "role": "Explains the why",
+      "image": "/rino.png",
+      "tint": "from-sky-400 to-sky-600",
+      "ring": "ring-sky-400/40",
+      "loop": "why",
+      "speaks": ["what", "costs", "undo"]
+    },
+    "tino": {
+      "name": "Tino",
+      "role": "Keeps it fast",
+      "image": "/tino.png",
+      "tint": "from-emerald-400 to-emerald-600",
+      "ring": "ring-emerald-400/40",
+      "loop": "fast",
+      "speaks": ["large", "waveforms", "export"]
+    },
+    "clip": {
+      "name": "Clip",
+      "role": "The cut",
+      "image": "/clip.png",
+      "tint": "from-[#ff6500] to-[#ff6500]/70",
+      "ring": "ring-[#ff6500]/40",
+      "loop": "cut",
+      "speaks": ["cut", "trim", "split"]
+    }
+  },
+  "emptyStates": {
+    "media": {
+      "character": "wino",
+      "message": "No media loaded yet. Drop a video, audio, or image here to begin.",
+      "action": "Import media"
+    },
+    "timeline": {
+      "character": "clip",
+      "message": "Empty timeline. Add a clip to start cutting.",
+      "action": "Add clip"
+    },
+    "project": {
+      "character": "tino",
+      "message": "No project loaded. Create or open a project to begin.",
+      "action": "New project"
+    },
+    "default": {
+      "character": "rino",
+      "message": "Nothing here yet. Select a tab from the sidebar to get started.",
+      "action": "Explore"
+    }
+  },
+  "animations": {
+    "tidy": {
+      "duration": 3000,
+      "easing": "ease-in-out",
+      "keyframes": [
+        { "opacity": 0, "transform": "translateY(20px) scale(0.9)", "offset": 0 },
+        { "opacity": 1, "transform": "translateY(0) scale(1)", "offset": 0.5 },
+        { "opacity": 0.9, "transform": "translateY(-4px) scale(1.02)", "offset": 0.75 },
+        { "opacity": 1, "transform": "translateY(0) scale(1)", "offset": 1 }
+      ]
+    },
+    "why": {
+      "duration": 4000,
+      "easing": "cubic-bezier(0.4, 0, 0.2, 1)",
+      "keyframes": [
+        { "opacity": 0, "transform": "rotate(-8deg) scale(0.85)", "offset": 0 },
+        { "opacity": 1, "transform": "rotate(0deg) scale(1)", "offset": 0.4 },
+        { "opacity": 1, "transform": "rotate(6deg) scale(1.04)", "offset": 0.7 },
+        { "opacity": 1, "transform": "rotate(0deg) scale(1)", "offset": 1 }
+      ]
+    },
+    "fast": {
+      "duration": 2500,
+      "easing": "linear",
+      "keyframes": [
+        { "opacity": 0, "transform": "translateX(-30px)", "offset": 0 },
+        { "opacity": 1, "transform": "translateX(0)", "offset": 0.3 },
+        { "opacity": 1, "transform": "translateX(6px)", "offset": 0.6 },
+        { "opacity": 1, "transform": "translateX(0)", "offset": 1 }
+      ]
+    },
+    "cut": {
+      "duration": 2000,
+      "easing": "ease-in-out",
+      "keyframes": [
+        { "opacity": 0, "transform": "scale(0.8) rotate(-12deg)", "offset": 0 },
+        { "opacity": 1, "transform": "scale(1) rotate(0deg)", "offset": 0.5 },
+        { "opacity": 1, "transform": "scale(1.05) rotate(4deg)", "offset": 0.8 },
+        { "opacity": 1, "transform": "scale(1) rotate(0deg)", "offset": 1 }
+      ]
+    }
+  }
+}

@@ -47,14 +47,14 @@ function AnalyticsMetrics() {
       {metricsList.map((metric) => {
         const Icon = metric.icon;
         return (
-          <Card key={metric.title} className="bg-gray-900/50 border-gray-700">
+          <Card key={metric.title} className="bg-gray-900/50-700">
             <CardContent className="p-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-xs text-gray-500">{metric.title}</span>
-                <Icon className="h-3 w-3 text-gray-500" />
+                <Icon className="h-2.5 w-2.5 text-gray-500" />
               </div>
               <div className="text-lg font-bold text-ink">{metric.value.toLocaleString()}</div>
-              <Badge variant="secondary" className="text-xs mt-1 bg-green-500/10 text-green-400 border-green-500/20">
+              <Badge variant="secondary" className="text-xs mt-1 bg-green-500/10 text-green-400-500/20">
                 {metric.trend}
               </Badge>
             </CardContent>
@@ -67,7 +67,7 @@ function AnalyticsMetrics() {
 
 function TrafficChart() {
   return (
-    <Card className="bg-gray-900/50 border-gray-700">
+    <Card className="bg-gray-900/50-700">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-gray-300">Real-time Traffic</CardTitle>
       </CardHeader>
@@ -99,11 +99,11 @@ function MetricsGridSkeleton() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {Array.from({ length: 4 }).map((_, i) => (
-        <Card key={i} className="bg-gray-900/50 border-gray-700">
+        <Card key={i} className="bg-gray-900/50-700">
           <CardContent className="p-3">
             <div className="flex items-center justify-between mb-1">
               <Skeleton className="h-3 w-16 bg-gray-700/50" />
-              <Skeleton className="h-3 w-3 bg-gray-700/50" />
+              <Skeleton className="h-2.5 w-2.5 bg-gray-700/50" />
             </div>
             <Skeleton className="h-5 w-12 bg-gray-700/50" />
             <Skeleton className="h-3 w-10 mt-1 bg-gray-700/50" />
@@ -116,7 +116,7 @@ function MetricsGridSkeleton() {
 
 function ChartSkeleton() {
   return (
-    <Card className="bg-gray-900/50 border-gray-700">
+    <Card className="bg-gray-900/50-700">
       <CardHeader>
         <Skeleton className="h-4 w-24 bg-gray-700/50" />
       </CardHeader>

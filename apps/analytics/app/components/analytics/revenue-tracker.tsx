@@ -35,7 +35,7 @@ export function RevenueTracker({ state }: { state: AnalyticsState }) {
       title="Revenue"
       note="Deliberately shows no figures. See the note below."
     >
-      <div className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded border border-dashed border-gray-800 p-4 text-center">
+      <div className="flex min-h-[150px] flex-col items-center justify-center gap-2 rounded-dashed-800 p-4 text-center">
         <span className="text-sm text-gray-400">not available on this app</span>
         <p className="max-w-[52ch] text-[11px] leading-relaxed text-gray-600">
           Revenue is owned by the billing service, not by this analytics app, and there is no
@@ -48,11 +48,11 @@ export function RevenueTracker({ state }: { state: AnalyticsState }) {
         </p>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2 border-t border-gray-800 pt-3 text-[11px] text-gray-500">
+      <div className="mt-3 grid grid-cols-2 gap-2-800 pt-3 text-[11px] text-gray-500">
         <div>
           <div className="text-gray-400">Where the ledger lives</div>
           <div className="mt-0.5 flex items-center gap-1">
-            <ExternalLink className="h-3 w-3" />
+            <ExternalLink className="h-2.5 w-2.5" />
             <span>billing-service · port 3003</span>
           </div>
         </div>

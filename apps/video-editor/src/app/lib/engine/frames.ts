@@ -193,3 +193,72 @@ export function rescalePxPerFrame(pxPerFrame: number, from: number, to: number):
   if (!from || !to || from === to) return clampPxPerFrame(pxPerFrame);
   return clampPxPerFrame((pxPerFrame * to) / from);
 }
+
+// ---------------------------------------------------------------------------
+// Micro-frame editing (AURA Micro-Frame Studio)
+// ---------------------------------------------------------------------------
+
+/**
+ * The pixel-per-frame floor for micro-frame editing.
+ *
+ * At this density a single frame is ~160px wide - enough to read a frame number,
+ * place a single-frame overlay, and distinguish adjacent frames by eye. Movavi
+ * uses the same principle: once a frame fills a thumb you stop zooming to "more"
+ * and start zooming to "precise".
+ */
+export const MIN_FRAME_PX_MICRO = 160;
+
+/** The pixel-per-frame ceiling: one frame fills the available viewport width. */
+export const MAX_PX_PER_FRAME_MICRO = 320;
+
+/**
+ * Micro-frame zoom steps, in frames-per-label.
+ *
+ * 1f — single-frame visibility (AURA Micro-Frame Studio's 3-frame buffer ring)
+ * 2f — two frames side by side
+ * 3f — the exact width of the buffer ring on one screen
+ */
+export const MICRO_FRAME_INTERVALS = [1, 2, 3] as const;
+
+/**
+ * Clamp a pixel-per-frame value into the micro-frame editing range.
+ *
+ * The standard `clampPxPerFrame` goes up to 64 — enough for "every frame is
+ * visible" at thumbnail size. Micro-frame editing needs 160+ so a frame is
+ * unmistakably readable and selectable.
+ */
+export function clampPxPerFrameMicro(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return MIN_FRAME_PX_MICRO;
+  return Math.max(MIN_FRAME_PX_MICRO, Math.min(MAX_PX_PER_FRAME_MICRO, v));
+}
+
+/**
+ * Convert a millisecond timestamp to `HH:MM:MMM` format.
+ *
+ * This is the format the AURA Micro-Frame Studio scrubber uses: hours, minutes,
+ * seconds, and milliseconds — three digits, zero-padded. Unlike timecode (which
+ * is frame-based and rate-dependent), milliseconds are absolute and unambiguous
+ * at any playback speed including 0.01x.
+ */
+export function msToTimestamp(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '00:00:000';
+  const total = Math.round(ms);
+  const hh = Math.floor(total / 3_600_000);
+  const mm = Math.floor((total % 3_600_000) / 60_000);
+  const ss = Math.floor((total % 60_000) / 1000);
+  const mmm = total % 1000;
+  const p = (n: number, w: number) => String(n).padStart(w, '0');
+  return `${p(hh, 2)}:${p(mm, 2)}:${p(ss, 2)}:${p(mmm, 3)}`;
+}
+
+/**
+ * Convert an `HH:MM:MMM` timestamp back to milliseconds.
+ * The inverse of `msToTimestamp`.
+ */
+export function timestampToMs(ts: string): number {
+  const parts = ts.split(':');
+  if (parts.length !== 4) return 0;
+  const [hh, mm, ss, mmm] = parts.map(Number);
+  if (parts.some((p) => Number.isNaN(p))) return 0;
+  return hh * 3_600_000 + mm * 60_000 + ss * 1000 + mmm;
+}

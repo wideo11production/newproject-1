@@ -97,7 +97,7 @@ export function TimelineContextMenu({
       role="menu"
       aria-label="Timeline actions"
       style={pos}
-      className="fixed z-[70] min-w-[196px] rounded-md border border-edge-strong bg-surface-raised py-1 shadow-2xl"
+      className="fixed z-[70] min-w-[196px] rounded-md-edge-strong bg-surface-raised py-1 shadow-2xl"
       onContextMenu={(e) => e.preventDefault()}
     >
       {actions.map((a, i) => {
@@ -146,7 +146,7 @@ export function TimelineContextMenu({
               {a.shortcut && (
                 <kbd
                   className={[
-                    'shrink-0 rounded border px-1 py-0.5 font-mono text-[8px]',
+                    'shrink-0 rounded px-1 py-0.5 font-mono text-[8px]',
                     a.disabled ? 'border-edge' : 'border-edge-strong text-fg-secondary',
                   ].join(' ')}
                 >

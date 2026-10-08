@@ -155,7 +155,7 @@ export function TrialCountdown() {
       <div
         role="status"
         aria-live="polite"
-        className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-amber-500/50 bg-amber-950/30 p-4"
+        className="mb-5 flex flex-wrap items-center gap-3 rounded-md border-500/50 bg-amber-950/30 p-4"
       >
         <span className="relative flex h-2.5 w-2.5 shrink-0">
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
@@ -189,7 +189,7 @@ export function TrialCountdown() {
 
   // ---- Over an hour: one quiet line ----
   return (
-    <div className="mb-5 flex flex-wrap items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/40 px-4 py-2.5 text-xs text-gray-400">
+    <div className="mb-5 flex flex-wrap items-center gap-2 rounded-md border-800 bg-gray-900/40 px-4 py-2.5 text-xs text-gray-400">
       <span className="font-medium text-gray-300">{plan.plan_name}</span>
       <span aria-hidden="true">·</span>
       <span>

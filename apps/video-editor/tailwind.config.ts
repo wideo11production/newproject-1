@@ -16,7 +16,7 @@ const config: Config = {
   // ---- Semantic aliases over the shared theme ----
   //
   // Every surface in the editor is one of five roles: the workspace, a raised
-  // panel, an overlay, a border, or text. Naming them means the light theme is
+  // panel, an overlay, a, or text. Naming them means the light theme is
   // a variable swap instead of a second copy of the component tree.
   //
   // This exists because the panels were first written with literal slate

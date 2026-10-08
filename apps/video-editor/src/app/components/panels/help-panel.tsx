@@ -1,15 +1,13 @@
 'use client';
 
 // ============================================================================
-// Help panel
+// Help panel — borderless, rounded-md
 // ============================================================================
 //
-// The shortcut list is generated from ONE table, and the menu bar prints from
-// the same table. That is the point: a shortcut list maintained by hand drifts
-// from the keyboard handler within a week, and a user who presses `S` and gets
-// nothing has no way to tell a broken binding from an undocumented one.
-//
-// The table lives in `lib/shortcuts.ts`.
+// Hinglish: is panel me koi bhi `border-edge` separator nahi hai. PanelSection
+// ek `bg-[#1a1a1a]` Rich Charcoal block hai jo contrast grid bana deta hai bina
+// kisi line ke. Kbd element: `rounded-md`, 150ms transition, hover par
+// `border-[#ff6500]` accent hota hai — wo highlight hai, separator nahi.
 
 import { Keyboard, MousePointer2, Sparkles } from 'lucide-react';
 import { PanelSection } from './panel-kit';
@@ -26,7 +24,7 @@ export function HelpPanel() {
                 <span className="block text-fg">{s.label}</span>
                 {s.hint && <span className="block text-[8px] text-fg-muted">{s.hint}</span>}
               </span>
-              <kbd className="shrink-0 rounded border border-edge-strong px-1.5 py-0.5 font-mono text-[8px] text-fg">
+              <kbd className="shrink-0 rounded-md border-0 bg-surface-sunken px-1.5 py-0.5 font-mono text-[8px] text-fg">
                 {s.keys}
               </kbd>
             </li>

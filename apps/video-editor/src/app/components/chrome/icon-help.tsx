@@ -91,15 +91,15 @@ export function HelpPopover({
       ref={cardRef}
       role="tooltip"
       style={pos}
-      className="fixed z-[80] w-[320px] rounded-lg border border-edge-strong bg-surface-raised p-3 shadow-2xl"
+      className="fixed z-[80] w-[320px] bg-surface-raised p-3 shadow-2xl"
     >
       <div className="mb-1.5 flex items-center gap-2">
         <h3 className="text-[10px] font-semibold text-fg">{entry.title}</h3>
-        <span className="rounded bg-surface-overlay px-1.5 py-0.5 text-[8px] uppercase tracking-wide text-fg-muted">
+        <span className="rounded-md bg-surface-overlay px-1.5 py-0.5 text-[8px] uppercase tracking-wide text-fg-muted">
           {entry.category}
         </span>
         {entry.keys && (
-          <kbd className="ml-auto rounded border border-edge-strong px-1 py-0.5 font-mono text-[8px] text-fg-secondary">
+          <kbd className="ml-auto rounded-md border-0 bg-surface-sunken px-1 py-0.5 font-mono text-[8px] text-fg-secondary">
             {entry.keys}
           </kbd>
         )}
@@ -112,7 +112,7 @@ export function HelpPopover({
         {entry.use}
       </p>
 
-      <div className="space-y-1.5 border-t border-edge pt-2">
+      <div className="space-y-1.5-0 bg-surface-sunken pt-2">
         <p className="flex items-start gap-1.5 text-[8px] leading-snug text-fg-secondary">
           <ThumbsUp className="mt-0.5 h-2 w-2 shrink-0 text-emerald-400" aria-hidden="true" />
           {entry.good}
@@ -126,7 +126,7 @@ export function HelpPopover({
       <Link
         href={`/help#${entry.id}`}
         onClick={onClose}
-        className="mt-2.5 flex items-center gap-1 text-[8px] text-sky-300 hover:text-sky-200"
+        className="mt-2.5 flex items-center gap-1 text-[8px] text-sky-300 transition-colors duration-150 hover:text-sky-200"
       >
         <BookOpen className="h-2 w-2" aria-hidden="true" />
         Full help for this tool

@@ -203,17 +203,17 @@ export function SessionUserMenu({
   if (session.state === 'out') {
     return (
       <div className={`flex shrink-0 items-center gap-2 ${className}`}>
-        <a
-          href={loginUrl}
-          className={`flex items-center justify-center gap-1.5 rounded-md border border-[#2c3235] px-3 py-2 ${text} font-medium text-[#e8eaed] transition-colors hover:bg-white/5`}
-        >
-          <LogIn className="h-3 w-3" aria-hidden="true" />
+           <a
+           href={loginUrl}
+           className={`flex items-center justify-center gap-1.5 rounded-md px-3 py-2 ${text} font-medium text-[#e8eaed] transition-colors hover:bg-[#ff6500]/10 hover:text-[#ff6500]`}
+         >
+           <LogIn className="h-2.5 w-2.5" aria-hidden="true" />
           Log in
         </a>
-        <a
-          href={registerUrl}
-          className={`flex items-center justify-center gap-1.5 rounded-md bg-[#4a8cff] px-3 py-2 ${text} font-semibold text-white transition-colors hover:bg-[#3d78e0]`}
-        >
+           <a
+           href={registerUrl}
+           className={`flex items-center justify-center gap-1.5 rounded-md bg-[#ff6500] px-3 py-2 ${text} font-semibold text-white transition-colors hover:bg-[#e55a00]`}
+         >
           Register
         </a>
       </div>
@@ -267,7 +267,7 @@ export function SessionUserMenu({
         <span
           className={
             'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 ' +
-            'border-[#111217] motion-safe:animate-pulse ' +
+            'border-[#0a0a0a] motion-safe:animate-pulse ' +
             (ready ? 'bg-green-500' : 'bg-amber-500')
           }
           aria-hidden="true"
@@ -277,9 +277,9 @@ export function SessionUserMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-11 z-50 w-60 rounded-md border border-[#2c3235] bg-[#171a1f] p-1 shadow-xl"
+          className="absolute right-0 top-11 z-50 w-60 rounded-md border-0 bg-[#1a1a1a] p-1 shadow-xl"
         >
-          <div className="border-b border-[#2c3235] px-3 py-2">
+          <div className="border-b border-muted/20 px-3 py-2">
             <p className="break-all text-[10px] font-medium text-[#e8eaed]">{session.email}</p>
             <p className="mt-0.5 text-[9px] capitalize text-[#8b949e]">
               {session.role}
@@ -293,7 +293,7 @@ export function SessionUserMenu({
             onClick={() => setOpen(false)}
             className="mt-1 flex h-8 items-center gap-2 rounded px-3 text-[10px] text-[#e8eaed] transition-colors hover:bg-white/5"
           >
-            <LayoutDashboard className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <LayoutDashboard className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             Dashboard
           </a>
 
@@ -304,7 +304,7 @@ export function SessionUserMenu({
             disabled={busy}
             className="flex h-8 w-full items-center gap-2 rounded px-3 text-[10px] text-[#e8eaed] transition-colors hover:bg-white/5 disabled:opacity-50"
           >
-            <LogOut className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <LogOut className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             {busy ? 'Signing out…' : 'Sign out'}
           </button>
 
@@ -314,7 +314,7 @@ export function SessionUserMenu({
             THIS device only, and their other devices stay signed in. That
             distinction is the whole reason device-scoped logout was built.
           */}
-          <p className="border-t border-[#2c3235] px-3 pb-2 pt-2 text-[9px] leading-relaxed text-[#8b949e]">
+          <p className="border-t border-muted/20 px-3 pb-2 pt-2 text-[9px] leading-relaxed text-[#8b949e]">
             Signing out ends this device only. Your other devices stay signed in.
           </p>
         </div>

@@ -165,7 +165,7 @@ export default function DashboardPlansPage() {
             href="/dashboard"
             className="flex items-center gap-1 rounded-md text-sm text-[#8b949e] transition-colors hover:text-[#e6e6e6]"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-2.5 w-2.5" />
             Dashboard
           </Link>
         </div>
@@ -177,18 +177,18 @@ export default function DashboardPlansPage() {
         </p>
 
         {loading && !plan ? (
-          <div className="flex items-center gap-2 rounded-lg border border-[#2c3235] bg-[#16181d] p-6 text-sm text-[#8b949e]">
-            <Loader2 className="h-4 w-4 animate-spin" />
+          <div className="flex items-center gap-2 rounded-md bg-[#16181d] p-6 text-sm text-[#8b949e]">
+            <Loader2 className="h-2.5 w-2.5 animate-spin" />
             Loading your plan…
           </div>
         ) : error ? (
-          <div className="flex items-center gap-3 rounded-lg border border-red-500/40 bg-red-950/20 p-4 text-sm text-red-200" role="alert">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div className="flex items-center gap-3 rounded-md border-500/40 bg-red-950/20 p-4 text-sm text-red-200" role="alert">
+            <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
             {error}
           </div>
         ) : !plan || !plan.has_plan ? (
           /* ---- No plan: honest empty state, fake "free trial" nahi ---- */
-          <div className="rounded-lg border border-[#2c3235] bg-[#16181d] p-6">
+          <div className="rounded-md bg-[#16181d] p-6">
             <CreditCard className="mb-3 h-6 w-6 text-[#8b949e]" />
             <p className="text-sm font-medium">No active plan</p>
             <p className="mt-1 text-xs text-[#8b949e]">
@@ -200,21 +200,21 @@ export default function DashboardPlansPage() {
         ) : (
           <>
             {/* ---- Current plan card ---- */}
-            <div className="rounded-lg border border-[#2c3235] bg-[#16181d] p-5">
+            <div className="rounded-md bg-[#16181d] p-5">
               <div className="flex flex-wrap items-center gap-3">
-                <ShieldCheck className="h-5 w-5 text-[#5794f2]" />
+                <ShieldCheck className="h-2.5 w-2.5 text-[#5794f2]" />
                 <span className="text-lg font-semibold">{plan.plan_name}</span>
                 <code className="rounded bg-[#0d0f11] px-1.5 py-0.5 text-xs text-[#8b949e]">
                   {plan.plan}
                 </code>
                 {plan.is_trial && (
-                  <span className="rounded-full border border-amber-500/50 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-200">
+                  <span className="rounded-full border-500/50 bg-amber-950/40 px-2 py-0.5 text-xs font-medium text-amber-200">
                     trial
                   </span>
                 )}
                 {plan.trial_expiring_soon && remaining !== null && remaining <= 3600 && (
-                  <span className="flex items-center gap-1 rounded-full border border-amber-500/60 bg-amber-950/60 px-2 py-0.5 text-xs font-semibold text-amber-100">
-                    <AlertTriangle className="h-3 w-3" />
+                  <span className="flex items-center gap-1 rounded-full border-500/60 bg-amber-950/60 px-2 py-0.5 text-xs font-semibold text-amber-100">
+                    <AlertTriangle className="h-2.5 w-2.5" />
                     expiring
                   </span>
                 )}
@@ -248,14 +248,14 @@ export default function DashboardPlansPage() {
             {limitRows.length > 0 && (
               <div className="mt-6">
                 <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#8b949e]">
-                  <CalendarClock className="h-4 w-4" />
+                  <CalendarClock className="h-2.5 w-2.5" />
                   What your plan includes
                 </h2>
                 <dl className="grid gap-2 sm:grid-cols-2">
                   {limitRows.map(([key, value]) => (
                     <div
                       key={key}
-                      className="flex items-center justify-between rounded-lg border border-[#2c3235] bg-[#16181d] px-4 py-3"
+                      className="flex items-center justify-between rounded-md bg-[#16181d] px-4 py-3"
                     >
                       <dt className="text-sm text-[#c9d1d9]">{humanize(key)}</dt>
                       <dd className="font-mono text-sm font-medium text-[#e6e6e6]">
@@ -287,3 +287,4 @@ export default function DashboardPlansPage() {
     </div>
   );
 }
+

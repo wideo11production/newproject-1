@@ -96,7 +96,7 @@ export function Panel({
       onDragOver={drag.onDragOver}
       onDrop={drag.onDrop}
       onDragEnd={drag.onDragEnd}
-      className={`flex flex-col overflow-hidden rounded-lg border border-gray-800 bg-gray-900/40 ${drag.className}`}
+      className={`flex flex-col overflow-hidden rounded-md border-800 bg-gray-900/40 ${drag.className}`}
     >
       {/*
         The HEADER is the drag surface, and the grip is only an affordance.
@@ -118,8 +118,8 @@ export function Panel({
       <div
         className={
           drag.draggable
-            ? 'flex cursor-grab items-center gap-2 border-b border-gray-800 px-4 py-2.5 active:cursor-grabbing'
-            : 'flex items-center gap-2 border-b border-gray-800 px-4 py-2.5'
+            ? 'flex cursor-grab items-center gap-2-800 px-4 py-2.5 active:cursor-grabbing'
+            : 'flex items-center gap-2-800 px-4 py-2.5'
         }
       >
         {drag.draggable ? (
@@ -147,7 +147,7 @@ export function DragGrip({ className = '' }: { className?: string }) {
     <svg
       viewBox="0 0 24 24"
       fill="currentColor"
-      className={`h-4 w-4 ${className}`}
+      className={`h-2.5 w-2.5 ${className}`}
       aria-hidden="true"
     >
       {/* 6 dots, 2 columns x 3 rows - the standard grip glyph. */}

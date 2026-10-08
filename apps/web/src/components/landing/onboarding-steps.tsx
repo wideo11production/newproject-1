@@ -121,7 +121,7 @@ export function OnboardingStepsRow({ className }: { className?: string }) {
                     Actually: icon circle me, number neeche as text. Let me do:
                     - Circle with Icon inside
                     - Step number as small label above/beside */}
-                <div className="relative flex h-[52px] w-[52px] items-center justify-center rounded-full border-2 bg-[#111217]"
+                <div className="relative flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#111217]"
                   style={{ borderColor: step.accent }}>
                   {/* Icon - accent color me */}
                   <Icon className="h-6 w-6" style={{ color: step.accent }} aria-hidden="true" />

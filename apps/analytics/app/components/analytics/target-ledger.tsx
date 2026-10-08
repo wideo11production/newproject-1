@@ -65,7 +65,7 @@ export function TargetLedger({ state }: { state: AnalyticsState }) {
 
       {accounts === 0 ? (
         <div
-          className="mt-3 flex min-h-[80px] items-center justify-center rounded border border-dashed border-gray-800 p-3 text-center"
+          className="mt-3 flex min-h-[80px] items-center justify-center rounded-dashed-800 p-3 text-center"
           title="No verified accounts yet."
         >
           <p className="max-w-[56ch] text-[11px] leading-relaxed text-gray-600">
@@ -75,7 +75,7 @@ export function TargetLedger({ state }: { state: AnalyticsState }) {
           </p>
         </div>
       ) : (
-        <p className="mt-3 border-t border-gray-800 pt-2 text-[11px] leading-relaxed text-gray-600">
+        <p className="mt-3-800 pt-2 text-[11px] leading-relaxed text-gray-600">
           The previous version of this panel showed a per-creator payout table with names and
           amounts. No payout data exists in this app, so the table is gone. Wire the billing
           service in here and the real figures replace this paragraph.

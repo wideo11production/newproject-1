@@ -1,6 +1,19 @@
 'use client';
 
 // ============================================================================
+// BORDERLESS PANEL DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Panel sections, tiles, inputs — sabke `border-edge` / `border-edge-strong`
+// separators hata diye gaye hain. Panel sections ab `bg-[#1a1a1a]` Rich
+// Charcoal blocks hain (sidebar role), jo ek contrast grid bana dete hain
+// bina kisi line ke. Tiles: default me koi nahi, `hover` par
+// `border-[#ff6500]` orange-red accent appear hota hai. Inputs: base
+// hata diya, `focus` par `border-[#ff6500]` accent aata hai.
+//
+// Default quiet, interaction par accent — ye principle saare components me
+// hai. Saare interactive elements `rounded-md`, 150ms transition.
+// ============================================================================
 // Panel building blocks
 // ============================================================================
 //
@@ -27,7 +40,7 @@ export function PanelSection({
   action?: ReactNode;
 }) {
   return (
-    <section className="border-b border-edge pb-3 last:border-b-0">
+    <section className="bg-[#1a1a1a] pb-3 last:bg-[#0a0a0a]">
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <h3 className="text-[10px] font-semibold uppercase tracking-wide text-fg-muted">{title}</h3>
         {action}
@@ -67,14 +80,14 @@ export function Tile({
       aria-pressed={Boolean(active)}
       aria-label={ariaLabel ?? label}
       title={hint ? `${label}\n${hint}` : label}
-       className={[
-        'group flex flex-col gap-1 border p-1.5 text-left transition-colors duration-150 duration-150',
+      className={[
+        'group flex flex-col gap-1 bg-[#1a1a1a] p-1.5 text-left transition-colors duration-150',
         active
-          ? 'border-[#ff6500] text-[#ff6500]'
-          : 'border-edge text-fg-secondary hover:border-[#ff6500] hover:text-fg',
+          ? 'bg-[#ff6500]/15 text-[#ff6500]'
+          : 'text-fg-secondary hover:bg-[#ff6500]/20 hover:text-fg',
       ].join(' ')}
     >
-      {swatch && <span className={`h-7 w-full rounded bg-gradient-to-br ${swatch}`} aria-hidden="true" />}
+      {swatch && <span className={`h-7 w-full bg-gradient-to-br ${swatch}`} aria-hidden="true" />}
       <span className="truncate text-[8px] font-medium text-fg">{label}</span>
       {hint && <span className="line-clamp-2 text-[8px] leading-snug text-fg-muted">{hint}</span>}
     </button>
@@ -142,7 +155,7 @@ export function TextInput({
       aria-label={ariaLabel}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
+      className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg placeholder:text-fg-muted focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none"
     />
   );
 }
@@ -174,7 +187,7 @@ export function NumberInput({
         const n = Number(e.target.value);
         if (Number.isFinite(n)) onChange(n);
       }}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+      className="w-full bg-[#1a1a1a] px-2 py-1 font-mono text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none"
     />
   );
 }
@@ -195,7 +208,7 @@ export function Select<T extends string>({
       value={value}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value as T)}
-      className="w-full rounded-md border border-edge-strong bg-surface px-2 py-1 text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+      className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none"
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -224,7 +237,7 @@ export function Toggle({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         aria-label={label}
-        className="mt-0.5 h-3 w-3 shrink-0 accent-[#ff6500]"
+        className="mt-0.5 h-2.5 w-2.5 shrink-0 accent-[#ff6500]"
       />
       <span>
         <span>{label}</span>
@@ -250,7 +263,7 @@ export function ColorInput({
       value={safe}
       aria-label={ariaLabel}
       onChange={(e) => onChange(e.target.value)}
-      className="h-7 w-full cursor-pointer rounded border border-edge-strong bg-surface p-0.5"
+      className="h-7 w-full cursor-pointer bg-[#1a1a1a] p-0.5"
     />
   );
 }
@@ -274,8 +287,8 @@ export function Button({
 }) {
   const styles = {
     default: 'text-[#ff6500] hover:text-[#e55800]',
-    outline: 'border border-edge-strong text-fg hover:text-[#ff6500]',
-    danger: 'border border-rose-900 text-rose-400 hover:text-rose-300',
+    outline: 'bg-[#1a1a1a] text-fg hover:text-[#ff6500]',
+    danger: 'text-rose-400 hover:text-rose-300',
   }[variant];
   return (
     <button
@@ -283,7 +296,7 @@ export function Button({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors duration-150 duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${full ? 'w-full' : ''} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[8px] font-medium transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-40 ${styles} ${full ? 'w-full' : ''} ${className}`}
     >
       {children}
     </button>
@@ -292,7 +305,7 @@ export function Button({
 
 export function EmptyState({ title, body }: { title: string; body: string }) {
   return (
-    <div className="rounded border border-dashed border-edge p-3 text-center">
+    <div className="bg-[#1a1a1a] p-3 text-center">
       <p className="text-[8px] font-medium text-fg-secondary">{title}</p>
       <p className="mt-1 text-[8px] leading-snug text-fg-muted">{body}</p>
     </div>

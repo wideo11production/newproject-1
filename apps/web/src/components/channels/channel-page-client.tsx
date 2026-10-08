@@ -138,8 +138,8 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
 
   if (channelError) {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-red-800/60 bg-red-950/30 p-4 text-sm text-red-300">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+      <div className="flex items-start gap-2 rounded-md border-800/60 bg-red-950/30 p-4 text-sm text-red-300">
+        <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
         <span>{channelError}</span>
         <Link href="/channels" className="ml-2 underline underline-offset-2">
           Browse all channels
@@ -151,7 +151,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
   if (!channel) {
     return (
       <div className="space-y-4">
-        <div className="h-40 w-full animate-pulse rounded-lg bg-gray-900/60" />
+        <div className="h-40 w-full animate-pulse rounded-md bg-gray-900/60" />
         <div className="h-6 w-48 animate-pulse rounded-md bg-gray-900/60" />
       </div>
     );
@@ -178,7 +178,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
           grey gap. That is the reason the colour is here and not only on the
           avatar ring. */}
       <div
-        className="h-32 w-full overflow-hidden rounded-lg sm:h-40"
+        className="h-32 w-full overflow-hidden rounded-md sm:h-40"
         style={{ backgroundColor: `hsl(${brand})` }}
       >
         {channel.cover_url ? (
@@ -199,12 +199,12 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
             src={avatar}
             alt=""
             data-track="channel-avatar"
-            className="h-16 w-16 shrink-0 rounded-full border-2 object-cover"
+            className="h-16 w-16 shrink-0 rounded-full object-cover"
             style={{ borderColor: `hsl(${brand})` }}
           />
         ) : (
           <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 text-xl font-semibold text-white"
+            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white"
             style={{ backgroundColor: `hsl(${brand})`, borderColor: `hsl(${brand})` }}
           >
             {channel.display_name.charAt(0).toUpperCase()}
@@ -224,7 +224,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
             {channel.tagline ? channel.tagline : `@${channel.handle}`}
           </p>
           {channel.channel_type ? (
-            <span className="mt-1 inline-block rounded border border-gray-700 px-1.5 py-0.5 text-[10px] text-gray-400">
+            <span className="mt-1 inline-block rounded border-700 px-1.5 py-0.5 text-[10px] text-gray-400">
               {channelTypeLabel(channel.channel_type) ?? channel.channel_type}
             </span>
           ) : null}
@@ -237,7 +237,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
       </div>
 
       {/* ---- tabs ---- */}
-      <div role="tablist" aria-label="Channel content" className="mt-6 flex gap-1 border-b border-gray-800">
+      <div role="tablist" aria-label="Channel content" className="mt-6 flex gap-1-800">
         {tabs.map((t) => {
           const active = tab === t.key;
           return (
@@ -264,18 +264,18 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
         {mediaError ? (
           // Shown HERE, inside the panel, so the channel's own identity stays on
           // screen. A list that failed to load is not a broken page.
-          <div className="flex items-start gap-2 rounded-lg border border-amber-800/60 bg-amber-950/20 p-4 text-sm text-amber-200">
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="flex items-start gap-2 rounded-md border-800/60 bg-amber-950/20 p-4 text-sm text-amber-200">
+            <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             <span>{mediaError}</span>
           </div>
         ) : media === null ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-40 animate-pulse rounded-lg bg-gray-900/60" />
+              <div key={i} className="h-40 animate-pulse rounded-md bg-gray-900/60" />
             ))}
           </div>
         ) : media.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-800 p-10 text-center">
+          <div className="rounded-md-dashed-800 p-10 text-center">
             <Play className="mx-auto h-6 w-6 text-gray-500" aria-hidden="true" />
             <p className="mt-3 text-sm text-ink">
               {tab === 'reel' ? 'No shorts yet' : tab === 'video' ? 'No videos yet' : 'Nothing published yet'}
@@ -288,7 +288,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {media.map((m) => (
               <div key={m.id} className="group">
-                <div className="relative overflow-hidden rounded-lg bg-gray-900/60">
+                <div className="relative overflow-hidden rounded-md bg-gray-900/60">
                   {m.poster_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

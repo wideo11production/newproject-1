@@ -131,7 +131,7 @@ export function FaqPortal({ className }: { className?: string }) {
               <AccordionItem
                 key={entry.id}
                 value={entry.id}
-                className="border-b border-[#2c3235]"
+                className="border-b-[#2c3235]"
               >
                 {/* ---- TRIGGER (the question) ----
                     Radix Trigger already has `aria-expanded` + keyboard.

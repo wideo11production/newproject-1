@@ -164,7 +164,7 @@ export function ModeRail({
   return (
     <nav
       aria-label="Editor modes"
-      className="flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-edge bg-surface py-2"
+      className="flex w-12 shrink-0 flex-col items-center gap-0.5 overflow-y-auto bg-[#1a1a1a] py-2"
     >
       {MODES.map(({ id, label, Icon, hint, status, why }) => {
         const on = active === id;
@@ -190,7 +190,7 @@ export function ModeRail({
             // the rail, which inverts the hierarchy: the rail is a switchboard,
             // not a list of destinations, and a destination should not shout
             // louder than the picture.
-            'group relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors duration-150 duration-150',
+            'group relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md transition-colors duration-150',
             !ready
               ? 'cursor-not-allowed text-fg-muted/50'
               : on
@@ -206,7 +206,7 @@ export function ModeRail({
           {on && ready && (
             <span className="absolute -left-1 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full bg-[#ff6500]" aria-hidden="true" />
           )}
-          <Icon className="h-4 w-4" aria-hidden="true" />
+          <Icon className="h-2.5 w-2.5" aria-hidden="true" />
             {!ready && (
               // A dot, not a "coming soon" label. Enough to signal "not yet"
               // without turning the rail into a list of apologies.
@@ -233,11 +233,11 @@ export function ModeRail({
           aria-label="Toggle waveforms"
           title={`${waveformVisible ? 'Hide' : 'Show'} audio waveforms on clips.\nThe peaks are decoded from your own file; a file the browser cannot decode draws a flat line rather than a fake one.`}
            className={[
-            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150',
             waveformVisible ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <AudioWaveform className="h-4 w-4" aria-hidden="true" />
+          <AudioWaveform className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -246,11 +246,11 @@ export function ModeRail({
           aria-label="Toggle the frame grid"
           title={`${gridVisible ? 'Hide' : 'Show'} the frame grid behind the lanes.\nDrawn from the real frame count, so it moves when you zoom.`}
            className={[
-            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150',
             gridVisible ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <Grid3x3 className="h-4 w-4" aria-hidden="true" />
+          <Grid3x3 className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -260,20 +260,20 @@ export function ModeRail({
           aria-label="Snapping"
           title={`Snapping is ${snapEnabled ? 'on' : 'off'} — toggle it with N.\nClips land on the playhead, clip edges, markers and the ends of the timeline.`}
            className={[
-            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150',
             snapEnabled ? 'text-[#ff6500]' : 'cursor-not-allowed text-fg-muted',
           ].join(' ')}
         >
-          <Magnet className="h-4 w-4" aria-hidden="true" />
+          <Magnet className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <button
           type="button"
           onClick={onToggleTheme}
           aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           title={`${theme === 'dark' ? 'Light' : 'Dark'} theme\nPersisted, so it survives a refresh like everything else here.`}
-           className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150 hover:text-fg"
+           className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 hover:text-fg"
         >
-          {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+          {theme === 'dark' ? <Sun className="h-2.5 w-2.5" aria-hidden="true" /> : <Moon className="h-2.5 w-2.5" aria-hidden="true" />}
         </button>
         <button
           type="button"
@@ -282,11 +282,11 @@ export function ModeRail({
           aria-label="Project settings"
           title="Project\nNew, open, save, autosave, and the resolution everything else follows."
            className={[
-            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 duration-150',
+            'flex h-8 w-8 items-center justify-center rounded-md text-fg-muted transition-colors duration-150',
             active === 'project' ? 'text-[#ff6500]' : 'hover:text-fg',
           ].join(' ')}
         >
-          <Gauge className="h-4 w-4" aria-hidden="true" />
+          <Gauge className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
       </div>
     </nav>

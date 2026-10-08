@@ -30,14 +30,14 @@ export default function PaymentsSidebar() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Payments</h2>
         <button className="btn btn-primary btn-sm">
-          <Plus className="h-4 w-4 mr-1" />
+          <Plus className="h-2.5 w-2.5 mr-1" />
           Record
         </button>
       </div>
 
       <div className="grid gap-3 grid-cols-2">
         {paymentStats.map((stat) => (
-          <Card key={stat.label} className="bg-card border-border">
+          <Card key={stat.label} className="bg-card">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -58,17 +58,17 @@ export default function PaymentsSidebar() {
         ))}
       </div>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Payment Providers</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {paymentMethods.map((provider) => (
-            <div key={provider.name} className="p-3 bg-muted/50 rounded-lg">
+            <div key={provider.name} className="p-3 bg-muted/50 rounded-md">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <DollarSign className="h-4 w-4 text-primary" />
+                    <DollarSign className="h-2.5 w-2.5 text-primary" />
                   </div>
                   <div>
                     <p className="font-medium">{provider.name}</p>
@@ -85,13 +85,13 @@ export default function PaymentsSidebar() {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Recent Payments</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {recentPayments.map((payment) => (
-            <div key={payment.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+            <div key={payment.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-mono text-primary">{payment.id}</p>
                 <p className="text-xs text-muted-foreground truncate">{payment.customer} • {payment.method}</p>

@@ -158,12 +158,12 @@ export default function CurrencyPage() {
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-md border-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
             >
               {refreshing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <RefreshCw className="h-2.5 w-2.5" />
               )}
               Refresh
             </button>
@@ -172,7 +172,7 @@ export default function CurrencyPage() {
 
         {/* ---- Status banner ---- */}
         <div
-          className={`mb-6 flex items-center gap-3 rounded-lg border p-4 ${
+          className={`mb-6 flex items-center gap-3 rounded-md p-4 ${
             error
               ? 'border-red-700/60 bg-red-950/30'
               : isStale
@@ -182,7 +182,7 @@ export default function CurrencyPage() {
         >
           {error ? (
             <>
-              <AlertTriangle className="h-5 w-5 text-red-400" />
+              <AlertTriangle className="h-2.5 w-2.5 text-red-400" />
               <div>
                 <p className="font-semibold text-red-300">Cannot reach currency service</p>
                 <p className="text-sm text-gray-400">{error}</p>
@@ -190,7 +190,7 @@ export default function CurrencyPage() {
             </>
           ) : isStale ? (
             <>
-              <Clock className="h-5 w-5 text-amber-400" />
+              <Clock className="h-2.5 w-2.5 text-amber-400" />
               <div>
                 <p className="font-semibold text-amber-300">Rates are stale</p>
                 <p className="text-sm text-gray-400">
@@ -200,7 +200,7 @@ export default function CurrencyPage() {
             </>
           ) : (
             <>
-              <CheckCircle2 className="h-5 w-5 text-green-400" />
+              <CheckCircle2 className="h-2.5 w-2.5 text-green-400" />
               <div>
                 <p className="font-semibold text-green-300">Live rates</p>
                 <p className="text-sm text-gray-400">
@@ -212,11 +212,11 @@ export default function CurrencyPage() {
         </div>
 
         {/* ---- Converter ---- */}
-        <div className="mb-6 rounded-xl border border-gray-800 bg-gray-900/50 p-5">
+        <div className="mb-6 rounded-md border-800 bg-gray-900/50 p-5">
           <div className="mb-4 flex items-center gap-2">
-            <ArrowRightLeft className="h-5 w-5 text-blue-400" />
+            <ArrowRightLeft className="h-2.5 w-2.5 text-blue-400" />
             <h2 className="font-semibold text-white">Convert</h2>
-            <span className="rounded-full border border-gray-700 bg-gray-800/60 px-2 py-0.5 text-[10px] text-gray-400">
+            <span className="rounded-full border-700 bg-gray-800/60 px-2 py-0.5 text-[10px] text-gray-400">
               2 decimal rounding
             </span>
           </div>
@@ -228,7 +228,7 @@ export default function CurrencyPage() {
                 type="number"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
+                className="h-10 w-full rounded-md border-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
               />
             </div>
             <div className="space-y-1.5">
@@ -236,7 +236,7 @@ export default function CurrencyPage() {
               <select
                 value={from}
                 onChange={(e) => setFrom(e.target.value)}
-                className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
+                className="h-10 w-full rounded-md border-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
               >
                 {Object.keys(CURRENCY_META).map((c) => (
                   <option key={c} value={c}>
@@ -250,7 +250,7 @@ export default function CurrencyPage() {
               <select
                 value={to}
                 onChange={(e) => setTo(e.target.value)}
-                className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
+                className="h-10 w-full rounded-md border-700 bg-gray-950 px-3 text-sm text-white focus:border-blue-500 focus:outline-none"
               >
                 {Object.keys(CURRENCY_META).map((c) => (
                   <option key={c} value={c}>
@@ -262,13 +262,13 @@ export default function CurrencyPage() {
             <button
               onClick={handleConvert}
               disabled={converting}
-              className="h-10 rounded-lg bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+              className="h-10 rounded-md bg-blue-600 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
             >
-              {converting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Convert'}
+              {converting ? <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" /> : 'Convert'}
             </button>
             <div className="space-y-1.5">
               <label className="text-xs text-gray-400">Result</label>
-              <div className="flex h-10 items-center rounded-lg border border-gray-800 bg-gray-950 px-3 font-mono text-sm text-green-400">
+              <div className="flex h-10 items-center rounded-md border-800 bg-gray-950 px-3 font-mono text-sm text-green-400">
                 {result !== null ? result.converted.toFixed(2) : '--'}
               </div>
             </div>
@@ -281,7 +281,7 @@ export default function CurrencyPage() {
         </div>
 
         {/* ---- Rates table ---- */}
-        <div className="overflow-hidden rounded-xl border border-gray-800">
+        <div className="overflow-hidden rounded-md border-800">
           <table className="w-full">
             <thead className="bg-gray-900/70">
               <tr>
@@ -324,7 +324,7 @@ export default function CurrencyPage() {
                         {data.base_currency} {r.rate !== 0 ? (1 / r.rate).toFixed(2) : '0.00'}
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <span className="rounded-full border border-gray-700 bg-gray-800/50 px-2 py-0.5 text-[10px] text-gray-400">
+                        <span className="rounded-full border-700 bg-gray-800/50 px-2 py-0.5 text-[10px] text-gray-400">
                           {r.source}
                         </span>
                       </td>
@@ -336,8 +336,8 @@ export default function CurrencyPage() {
         </div>
 
         {/* ---- Footer info ---- */}
-        <div className="mt-6 flex items-start gap-2 rounded-lg border border-gray-800 bg-gray-900/40 p-4 text-xs text-gray-500">
-          <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-gray-600" />
+        <div className="mt-6 flex items-start gap-2 rounded-md border-800 bg-gray-900/40 p-4 text-xs text-gray-500">
+          <TrendingUp className="mt-0.5 h-2.5 w-2.5 shrink-0 text-gray-600" />
           <p>
             Rates update every 24 hours (fixed interval) and are stored in the
             service&apos;s own table. All platform calculations read from that table -

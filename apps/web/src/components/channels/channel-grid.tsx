@@ -151,9 +151,9 @@ export default function ChannelGrid({
   // ---- Error ----
   if (error) {
     return (
-      <div className="rounded-xl border border-red-900/40 bg-red-950/20 px-5 py-4 text-[13px] text-red-200/80">
+      <div className="rounded-md border-900/40 bg-red-950/20 px-5 py-4 text-[13px] text-red-200/80">
         <div className="flex items-start gap-2.5">
-          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>
         </div>
       </div>
@@ -167,7 +167,7 @@ export default function ChannelGrid({
   // with no channels, the emptiest possible presentation is the right one.
   if (!channels || channels.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-white/10 px-8 py-20 text-center">
+      <div className="rounded-2xl-dashed/10 px-8 py-20 text-center">
         <p className="text-[13px] uppercase tracking-[0.16em] text-white/30">
           {type ? 'Nothing in this category' : 'No public channels yet'}
         </p>

@@ -27,7 +27,7 @@ function DropdownMenuContent({ children, className = '', align = 'start' }: Drop
 }
 
 function DropdownMenuItem({ children, className = '' }: DropdownProps) {
-  return <button type="button" className={`flex w-full items-center rounded-sm px-2 py-1.5 text-left text-sm hover:bg-gray-700 ${className}`}>{children}</button>;
+  return <button type="button" className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-sm hover:bg-gray-700 ${className}`}>{children}</button>;
 }
 
 export function ThemeToggle() {
@@ -40,8 +40,8 @@ export function ThemeToggle() {
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       className="text-gray-300 hover:text-ink hover:bg-gray-800"
     >
-      <Sun className="h-4 w-4 dark:hidden" />
-      <Moon className="h-4 w-4 hidden dark:block" />
+      <Sun className="h-2.5 w-2.5 dark:hidden" />
+      <Moon className="h-2.5 w-2.5 hidden dark:block" />
     </Button>
   );
 }
@@ -69,7 +69,7 @@ export function UserMenu() {
 export function Loading() {
   return (
     <div className="flex items-center justify-center h-screen">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="animate-spin rounded-full h-8 w-8-2-500"></div>
     </div>
   );
 }

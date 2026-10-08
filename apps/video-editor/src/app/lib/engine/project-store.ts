@@ -25,6 +25,7 @@
 
 import type { MediaItem, MediaKind } from './media-store';
 import { normaliseProject, type ProjectDoc, type ProjectSummary } from './types';
+import type { OverlayTrack } from './types';
 
 export type { ProjectSummary };
 
@@ -253,6 +254,28 @@ export function setLastOpenedId(id: string) {
     /* ignore */
   }
 }
+
+// ---------------------------------------------------------------------------
+// AURA Micro-Frame Studio: overlay tracks + pre-buffered cache
+// ---------------------------------------------------------------------------
+
+/**
+ * Overlay tracks attached to a project for micro-frame editing.
+ *
+ * Stored separately from the main `tracks` array so they can be added/removed
+ * without disturbing the core track list. Each overlay track carries
+ * FrameOverlay items clamped to single-frame durations.
+ */
+const OVERLAY_KEY = (projectId: string) => `wideo11.editor.overlays.${projectId}`;
+
+/**
+ * In-memory pre-buffer cache for microsecond playhead sync.
+ *
+ * Maps frame index -> decoded frame data (blob URL or canvas snapshot).
+ * This is the "pre-buffered local memory cache" that lets the playhead
+ * move at 0.01x speed without re-decoding on every tick.
+ */
+export const preBufferCache = new Map<string, Map<number, ImageData | OffscreenCanvas>>();
 
 // ---------------------------------------------------------------------------
 // Download / upload a project file

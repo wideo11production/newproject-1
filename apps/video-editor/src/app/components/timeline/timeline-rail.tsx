@@ -1,6 +1,16 @@
 'use client';
 
 // ============================================================================
+// BORDERLESS TIMELINE DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Rail pehle se borderless thi — koi bhi `border-edge` nahi, aur saare
+// interactive buttons pehle se `rounded-md` hain. Ye file sirf confirmation
+// hai. Rail ek `#1a1a1a` Rich Charcoal sidebar hai (voice meter + zoom
+// controls), aur uske buttons `duration-150` transition ke saath
+// `hover:text-[#ff6500]` orange-red accent use karte hain — default quiet,
+// interaction par accent.
+// ============================================================================
 // TIMELINE RIGHT RAIL
 // ============================================================================
 //
@@ -24,7 +34,7 @@
 // of taking any of it away.
 
 import { useEffect, useState } from 'react';
-import { ZoomIn, ZoomOut, Minus, AudioWaveform, Speaker, SpeakerWave } from 'lucide-react';
+import { ZoomIn, ZoomOut, Minus, AudioWaveform, Speaker, Volume2 } from 'lucide-react';
 import { levelBands } from '../../lib/engine/audio-graph';
 import { clampPxPerFrame, zoomPercent } from '../../lib/engine/frames';
 
@@ -67,15 +77,15 @@ export function TimelineRail({
   }, [playing]);
 
   const btn =
-    'flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500] disabled:opacity-40';
+    'flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500] disabled:opacity-40 rounded-md';
 
   return (
     <div
-      className="flex w-7 shrink-0 flex-col items-center gap-1 border-l border-edge bg-surface"
+      className="flex w-7 shrink-0 flex-col items-center gap-1 bg-[#1a1a1a]"
       title="Output level and timeline zoom"
     >
-      <div className="flex h-7 items-center justify-center border-b border-edge">
-        <AudioWaveform className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+      <div className="flex h-7 items-center justify-center">
+        <AudioWaveform className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
       </div>
 
       {/* The meter: 14 bars growing UPWARD, the full height of the lanes.
@@ -97,8 +107,8 @@ export function TimelineRail({
               className="w-1.5 transition-[height,background-color] duration-75"
               style={{
                 height: `${Math.max(1, Math.round(v * 100))}%`,
-                background: lit ? colour : 'rgb(var(--ve-edge))',
-                opacity: lit ? 1 : 0.5,
+                background: lit ? colour : 'transparent',
+                opacity: lit ? 1 : 0.3,
               }}
             />
           );
@@ -107,14 +117,14 @@ export function TimelineRail({
         {/* Left / right speaker channels — blink the moment audio plays. */}
         <span className="absolute -left-1.5 top-1 flex items-center gap-0.5">
           <Speaker
-            className={`h-3 w-3 ${playing && bands[7] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted/30'}`}
+            className={`h-2.5 w-2.5 ${playing && bands[7] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
             aria-hidden="true"
           />
           <span className="text-[6px] text-fg-muted/40">L</span>
         </span>
         <span className="absolute -right-1.5 top-1 flex items-center gap-0.5">
-          <SpeakerWave
-            className={`h-3 w-3 ${playing && bands[10] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted/30'}`}
+          <Volume2
+            className={`h-2.5 w-2.5 ${playing && bands[10] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
             aria-hidden="true"
           />
           <span className="text-[6px] text-fg-muted/40">R</span>
@@ -123,7 +133,7 @@ export function TimelineRail({
 
       {/* Ruler zoom. Back where it started, because a control that is not next
           to the thing it changes is a control people stop finding. */}
-      <div className="flex flex-col items-center gap-0.5 border-t border-edge py-1">
+      <div className="flex flex-col items-center gap-0.5 py-1">
         <button
           type="button"
           onClick={() => onZoomTo(clampPxPerFrame(pxPerFrame * 1.4))}
@@ -131,7 +141,7 @@ export function TimelineRail({
           title="Zoom in — until a single frame is plainly visible ( + )"
           className={btn}
         >
-          <ZoomIn className="h-4 w-4" aria-hidden="true" />
+          <ZoomIn className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -140,7 +150,7 @@ export function TimelineRail({
           title="Zoom out — see more of the timeline ( - )"
           className={btn}
         >
-          <ZoomOut className="h-4 w-4" aria-hidden="true" />
+          <ZoomOut className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -149,7 +159,7 @@ export function TimelineRail({
           title={`Reset to 100% — ${zoomPercent(pxPerFrame)}% now ( 0 )`}
           className={btn}
         >
-          <Minus className="h-4 w-4" aria-hidden="true" />
+          <Minus className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         {/* The live scale. It was on the ruler, then in the toolbar, and is here
             now with the buttons it describes - a number that moves when the

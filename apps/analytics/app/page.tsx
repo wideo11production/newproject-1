@@ -63,7 +63,7 @@ export default function AnalyticsDashboard() {
           </p>
         </div>
         <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-          <RefreshCw className="h-3 w-3" />
+          <RefreshCw className="h-2.5 w-2.5" />
           auto-refresh 15s
         </span>
       </header>
@@ -72,8 +72,8 @@ export default function AnalyticsDashboard() {
           indistinguishable from one that has no users, so every non-success
           state is stated. */}
       {state.forbidden ? (
-        <div className="mb-4 flex items-center gap-2 rounded border border-amber-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
-          <ShieldAlert className="h-4 w-4 shrink-0" />
+        <div className="mb-4 flex items-center gap-2 rounded border-900 bg-amber-950/30 px-3 py-2 text-xs text-amber-300">
+          <ShieldAlert className="h-2.5 w-2.5 shrink-0" />
           <span>
             Analytics are restricted to superadmins. Sign in with a superadmin account to see
             real data. These panels are empty because access was denied - not because there is no
@@ -81,16 +81,16 @@ export default function AnalyticsDashboard() {
           </span>
         </div>
       ) : state.error ? (
-        <div className="mb-4 rounded border border-red-900 bg-red-950/30 px-3 py-2 text-xs text-red-300">
+        <div className="mb-4 rounded border-900 bg-red-950/30 px-3 py-2 text-xs text-red-300">
           Data unavailable: {state.error}. Panels below may be empty because the request failed,
           not because the system has no data.
         </div>
       ) : state.loading ? (
-        <div className="mb-4 rounded border border-gray-800 bg-gray-900/60 px-3 py-2 text-xs text-gray-500">
+        <div className="mb-4 rounded border-800 bg-gray-900/60 px-3 py-2 text-xs text-gray-500">
           Loading analytics…
         </div>
       ) : (
-        <div className="mb-4 rounded border border-emerald-900 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
+        <div className="mb-4 rounded border-900 bg-emerald-950/30 px-3 py-2 text-xs text-emerald-300">
           Live from Postgres. Every figure below is measured; anything not instrumented says so
           explicitly rather than showing a placeholder number.
         </div>

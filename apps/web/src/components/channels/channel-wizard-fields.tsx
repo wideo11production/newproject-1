@@ -136,11 +136,11 @@ export const EMPTY_WIZARD: ChannelWizardExtras = {
  * Option - one selectable choice that LOOKS selected when it is.
  *
  * The bug this fixes: each option carried a static circle, and selection was
- * signalled only by the button's border and background. A person clicking "Yes"
+ * signalled only by the button's and background. A person clicking "Yes"
  * saw no change AT ALL in the circle, so nothing appeared to happen - the exact
  * complaint that the round options "do not select".
  *
- * The indicator is the state, not the border. `aria-pressed` and colour are
+ * The indicator is the state, not the. `aria-pressed` and colour are
  * secondary: they are what an assistive technology reads and what a
  * high-contrast theme may override, so neither can be the only signal.
  */
@@ -163,7 +163,7 @@ function Option({
       onClick={onSelect}
       aria-pressed={selected}
       data-track={testId}
-      className={`flex w-full items-start gap-2.5 rounded-md border px-2.5 py-2 text-left transition-colors ${
+      className={`flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
         selected
           ? 'border-[#5794f2] bg-[#5794f2]/10'
           : 'border-[#2c3235] hover:border-[#3d434a]'
@@ -171,7 +171,7 @@ function Option({
     >
       <span
         aria-hidden="true"
-        className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+        className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full transition-colors ${
           selected ? 'border-[#5794f2]' : 'border-[#4b5158]'
         }`}
       >
@@ -228,7 +228,7 @@ export function ChannelWizardFields({
           This picks your upload defaults and which features appear. You can change it
           later.
         </p>
-        <div className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-lg border border-[#2c3235] bg-[#181b1f] p-3">
+        <div className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-md bg-[#181b1f] p-3">
           {CATEGORY_GROUPS.map((g) => (
             <div key={g.group}>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
@@ -244,7 +244,7 @@ export function ChannelWizardFields({
                       onClick={() => set('channelType', it.value)}
                       aria-pressed={selected}
                       data-track={`type-${it.value}`}
-                      className={`flex items-start gap-2 rounded-md border px-2.5 py-2 text-left transition-colors ${
+                      className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
                         selected
                           ? 'border-[#5794f2] bg-[#5794f2]/10'
                           : 'border-[#2c3235] hover:border-[#3d434a]'
@@ -252,14 +252,13 @@ export function ChannelWizardFields({
                     >
                       {/*
                         A CHECK, not a colour. The category tiles had the same
-                        problem as the radio group: the only selection cue was a
-                        border tint, and on a dark background that is easy to
+                        problem as the radio group: the only selection cue was a tint, and on a dark background that is easy to
                         miss entirely - which is what "the options are not
                         selecting" looked like.
                       */}
                       <span
                         aria-hidden="true"
-                        className={`mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                        className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full transition-colors ${
                           selected ? 'border-[#5794f2] bg-[#5794f2]' : 'border-[#4b5158]'
                         }`}
                       >
@@ -367,7 +366,7 @@ export function ChannelWizardFields({
             value={value.contactEmail}
             onChange={(e) => set('contactEmail', e.target.value)}
             placeholder="you@example.com"
-            className="h-10 border-[#2c3235] bg-[#181b1f] text-sm"
+            className="h-10-[#2c3235] bg-[#181b1f] text-sm"
           />
           <p className="text-[10px] text-[#6b7280]">
             Never shown on your public channel. It decides which regional rules apply.
@@ -385,7 +384,7 @@ export function ChannelWizardFields({
               onChange={(e) => set('country', e.target.value.toUpperCase().slice(0, 2))}
               placeholder="IN"
               maxLength={2}
-              className="h-10 border-[#2c3235] bg-[#181b1f] text-sm uppercase"
+              className="h-10-[#2c3235] bg-[#181b1f] text-sm uppercase"
             />
           </div>
           <div className="space-y-1.5">
@@ -398,7 +397,7 @@ export function ChannelWizardFields({
               onChange={(e) => set('primaryLanguage', e.target.value.slice(0, 16))}
               placeholder="en"
               maxLength={16}
-              className="h-10 border-[#2c3235] bg-[#181b1f] text-sm"
+              className="h-10-[#2c3235] bg-[#181b1f] text-sm"
             />
           </div>
         </div>
@@ -413,7 +412,7 @@ export function ChannelWizardFields({
           value={value.keywords}
           onChange={(e) => set('keywords', e.target.value)}
           placeholder="cooking, thali, vegetarian, quick recipes"
-          className="h-10 border-[#2c3235] bg-[#181b1f] text-sm"
+          className="h-10-[#2c3235] bg-[#181b1f] text-sm"
         />
         <p className="text-[10px] text-[#6b7280]">
           Comma separated. These are how people find you - the description is not
@@ -513,7 +512,7 @@ function CoverField({
     <div className="space-y-1.5">
       <Label className="text-xs text-[#9fa7b3]">Channel cover (optional)</Label>
       <div className="flex items-start gap-3">
-        <div className="relative h-[68px] w-40 shrink-0 overflow-hidden rounded-md border border-dashed border-[#2c3235] bg-[#181b1f]">
+        <div className="relative h-[68px] w-40 shrink-0 overflow-hidden rounded-md-dashed-[#2c3235] bg-[#181b1f]">
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt="" className="h-full w-full object-cover" />
@@ -539,7 +538,7 @@ function CoverField({
           />
           <label
             htmlFor="ch-cover"
-            className={`inline-flex h-8 cursor-pointer items-center rounded-md border border-[#2c3235] px-2.5 text-[10px] text-[#d8d9da] transition-colors hover:bg-[#1f2227] ${
+            className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[10px] text-[#d8d9da] transition-colors hover:bg-[#1f2227] ${
               busy ? 'pointer-events-none opacity-50' : ''
             }`}
           >
@@ -579,3 +578,4 @@ export function clientPreflight(w: ChannelWizardExtras): string | null {
   if (w.contactEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(w.contactEmail)) return 'That contact email does not look right.';
   return null;
 }
+

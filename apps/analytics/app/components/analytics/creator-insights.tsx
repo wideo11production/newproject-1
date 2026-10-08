@@ -66,7 +66,7 @@ export function CreatorInsights({ state }: { state: AnalyticsState }) {
           )}
 
           {regs.length > 0 && (
-            <ul className="mt-3 max-h-[150px] space-y-1 overflow-y-auto border-t border-gray-800 pt-2">
+            <ul className="mt-3 max-h-[150px] space-y-1 overflow-y-auto-800 pt-2">
               {regs.slice(0, 12).map((r, i) => (
                 <li key={String(r.id ?? i)} className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="truncate text-gray-300">{String(r.email ?? '(unknown)')}</span>
@@ -86,7 +86,7 @@ export function CreatorInsights({ state }: { state: AnalyticsState }) {
 function EmptyWhenNone({ regs }: { regs: Array<Record<string, unknown>> }) {
   return (
     <div
-      className="flex min-h-[120px] flex-col items-center justify-center gap-1 rounded border border-dashed border-gray-800 p-4 text-center"
+      className="flex min-h-[120px] flex-col items-center justify-center gap-1 rounded-dashed-800 p-4 text-center"
       title="No registration rows to break down yet."
     >
       <span className="text-xs text-gray-500">

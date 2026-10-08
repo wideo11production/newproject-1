@@ -77,7 +77,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col bg-gray-950">
-      <header className="border-b border-gray-800 bg-gray-900/50">
+      {/* BORDERLESS DESIGN: Header separator uses bg-[#1a1a1a] (rich charcoal) contrast
+          against main area bg-gray-950 instead of a hard. Visual hierarchy
+          maintained through background color difference, not lines. */}
+      <header className="bg-[#1a1a1a]">
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-ink">Wideo11</h1>
@@ -120,7 +123,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       <div className="flex-1 overflow-hidden">
-        <aside className="absolute left-0 top-0 z-10 hidden h-full w-64 border-r border-gray-800 bg-gray-950/90 backdrop-blur-sm md:block">
+        {/* BORDERLESS DESIGN: Sidebar separator uses bg-[#1a1a1a] (rich charcoal)
+          instead of. Main content area has no visible separator -
+          the background contrast between sidebar and main provides the
+          visual division. */}
+        <aside className="absolute left-0 top-0 z-10 hidden h-full w-64 bg-[#1a1a1a]/90 backdrop-blur-sm md:block">
           <div className="p-4">
             <div className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-400">
@@ -129,30 +136,30 @@ export function AppChrome({ children }: { children: ReactNode }) {
               <nav className="space-y-1">
                 <a
                   href="/dashboard"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
                 >
-                  <BarChart3 className="h-4 w-4" />
+                  <BarChart3 className="h-2.5 w-2.5" />
                   Dashboard
                 </a>
                 <a
                   href="/analytics"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
                 >
-                  <Activity className="h-4 w-4" />
+                  <Activity className="h-2.5 w-2.5" />
                   Analytics
                 </a>
                 <a
                   href="/alerts"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
                 >
-                  <Bell className="h-4 w-4" />
+                  <Bell className="h-2.5 w-2.5" />
                   Alerts
                 </a>
                 <a
                   href="/settings"
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 hover:text-ink"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings className="h-2.5 w-2.5" />
                   Settings
                 </a>
               </nav>

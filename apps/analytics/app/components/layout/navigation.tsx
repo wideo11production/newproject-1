@@ -14,11 +14,11 @@ function NavItem({ href, icon: Icon, label, active }: NavItemProps) {
   return (
     <a
       href={href}
-      className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${active
-        ? 'bg-primary/10 text-primary border border-primary/20'
+      className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${active
+        ? 'bg-primary/10 text-primary/20'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}
     >
-      <Icon className="h-5 w-5" />
+      <Icon className="h-2.5 w-2.5" />
       <span>{label}</span>
     </a>
   );

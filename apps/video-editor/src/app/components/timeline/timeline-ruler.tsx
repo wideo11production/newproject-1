@@ -1,6 +1,23 @@
 'use client';
 
 // ============================================================================
+// BORDERLESS TIMELINE DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Ruler me koi bhi `border-edge` separator nahi hai — ye file pehle se
+// borderless thi, aur isliye yahan sirf confirmation comment hai. Baseline
+// (`bg-fg-muted/50`, 1px) KEEP hai kyunki wo ruler ki identity hai, ek
+// chrome separator nahi — "a hard edge along the bottom is what makes a
+// strip of dashes read as a ruler".
+//
+// Jo borders hain wo ACCENT hain, separators nahi, aur wo KEEP hain:
+//-x-[#ff6500]/80   — measurement selection (orange-red accent)
+//-x-2-400/70 — loop region (emerald accent)
+//-x-[5px]-[6px]-rose-500 — playhead triangle
+//
+// `focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#ff6500]`
+// KEEP hai — ye orange-red accent highlight hai, nahi.
+// ============================================================================
 // Timeline ruler
 // ============================================================================
 //
@@ -402,10 +419,10 @@ export function TimelineRuler({
       // The ruler is now BOTH: a short drag scrubs, a long drag pans. There is no
       // single cursor that can say both honestly, so it says the safer one —
       // `grab` — and the behaviour is discoverable by doing rather than by looking.
-      className="group relative shrink-0 cursor-grab select-none border-b border-edge bg-surface-raised focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#ff6500] active:cursor-grabbing"
+      className="group relative shrink-0 cursor-grab select-none focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[#ff6500] active:cursor-grabbing"
     >
       {/* ---- The baseline. A hard edge along the bottom is what makes a strip
-           of dashes read as a ruler rather than as a broken border. ---- */}
+           of dashes read as a ruler rather than as a broken. ---- */}
       <div className="absolute inset-x-0 bottom-0 h-px bg-fg-muted/50" aria-hidden="true" />
 
       {/* ---- Measurement selection. Drawn above the ticks so it reads as a
@@ -413,7 +430,7 @@ export function TimelineRuler({
       {hasMeasure && (
         <>
           <div
-            className="pointer-events-none absolute top-0 h-full border-x border-[#ff6500]/80 bg-[#ff6500]/15"
+            className="pointer-events-none absolute top-0 h-full-x-[#ff6500]/80 bg-[#ff6500]/15"
             style={{ left: measure.start * pxPerFrame, width: Math.max(1, measureLen * pxPerFrame) }}
           />
           {/*
@@ -425,7 +442,7 @@ export function TimelineRuler({
             neither readable.
           */}
           <div
-            className="pointer-events-none absolute bottom-0 left-1 rounded bg-surface-overlay px-1 font-mono text-[8px] whitespace-nowrap text-fg-secondary"
+            className="pointer-events-none absolute bottom-0 left-1 rounded-md bg-[#1a1a1a] px-1 font-mono text-[8px] whitespace-nowrap text-fg-secondary"
             style={{ left: (measure.start + measureLen / 2) * pxPerFrame }}
           >
             {measureLen}f · {(measureLen / fps).toFixed(3)}s · {frameToTimecode(measureLen, fps)}
@@ -470,7 +487,7 @@ export function TimelineRuler({
       {loop.on && (
         <>
           <div
-            className="pointer-events-none absolute bottom-0 top-0 border-x-2 border-emerald-400/70 bg-emerald-400/10"
+            className="pointer-events-none absolute bottom-0 top-0-x-2-400/70 bg-emerald-400/10"
             style={{ left: loop.start * pxPerFrame, width: Math.max(0, (loop.end - loop.start) * pxPerFrame) }}
           />
           {(['start', 'end'] as const).map((edge) => {
@@ -589,7 +606,7 @@ export function TimelineRuler({
            1px wide and a triangle without one of the two being wrong. ---- */}
       <div className="pointer-events-none absolute bottom-0 top-0 z-30 w-px bg-rose-500" style={{ left: currentFrame * pxPerFrame }} />
       <div
-        className="pointer-events-none absolute top-0 z-30 -ml-[5px] h-0 w-0 border-x-[5px] border-t-[6px] border-x-transparent border-t-rose-500"
+        className="pointer-events-none absolute top-0 z-30 -ml-[5px] h-0 w-0-x-[5px]-[6px]-x-transparent-rose-500"
         style={{ left: currentFrame * pxPerFrame }}
       />
 
@@ -633,11 +650,11 @@ export function TimelineZoom({
   onZoom: (next: number) => void;
   onFit: () => void;
 }) {
-  const btn = 'flex h-6 w-6 items-center justify-center rounded text-fg-muted transition-colors hover:bg-surface-overlay hover:text-fg';
+  const btn = 'flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500] rounded-md';
   return (
     <div className="flex items-center gap-0.5" role="group" aria-label="Timeline zoom">
       <button type="button" onClick={() => onZoom(clampPxPerFrame(pxPerFrame / 1.4))} aria-label="Zoom out" title="Show more of the timeline ( - )" className={btn}>
-        <ZoomOut className="h-2 w-2" aria-hidden="true" />
+        <ZoomOut className="h-2.5 w-2.5" aria-hidden="true" />
       </button>
       <input
         type="range"
@@ -658,10 +675,10 @@ export function TimelineZoom({
         {zoomPercent(pxPerFrame)}%
       </span>
       <button type="button" onClick={() => onZoom(clampPxPerFrame(pxPerFrame * 1.4))} aria-label="Zoom in" title="Zoom in, until a single frame is clearly visible ( + )" className={btn}>
-        <ZoomIn className="h-2 w-2" aria-hidden="true" />
+        <ZoomIn className="h-2.5 w-2.5" aria-hidden="true" />
       </button>
       <button type="button" onClick={onFit} aria-label="Reset zoom" title={`Back to 100% — ${DEFAULT_PX_PER_FRAME} pixels per frame ( 0 )`} className={btn}>
-        <Minus className="h-2 w-2" aria-hidden="true" />
+        <Minus className="h-2.5 w-2.5" aria-hidden="true" />
       </button>
     </div>
   );

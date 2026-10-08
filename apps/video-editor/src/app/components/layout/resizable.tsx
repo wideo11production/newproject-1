@@ -1,6 +1,21 @@
 "use client";
 
 // ============================================================================
+// BORDERLESS LAYOUT DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Resize handle ek borderless divider hai — uski identity `bg-[#ff6500]`
+// (dragging) aur `hover:bg-[#ff6500]/40` se bani hai, koi `border-edge`
+// line nahi. Ye principle hai: divider ko define karna hai uski STATE se,
+// nahi ek permanent line se — isliye dragging par wo solid orange-red
+// hota hai, hover par 40% tint, default me transparent (invisible until
+// needed). Saare states `duration-150` transition hain.
+//
+// `rounded-full` grip dot KEEP hai — wo ek decorative affordance hai
+// (pointer-events-none), interactive element nahi, isliye `rounded-md`
+// ki zaroorat nahi. Divider khud interactive hai aur uske saare states
+// transition hain.
+// ============================================================================
 // Resizable panels
 // ============================================================================
 //

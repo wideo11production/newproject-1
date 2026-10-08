@@ -430,14 +430,14 @@ export default function UserSettingsPage() {
   return (
     <div className="min-h-screen bg-[#111217] text-[#d8d9da]">
       {/* ---- Header ---- */}
-      <header className="border-b border-[#2c3235] bg-[#181b1f]">
+      <header className="border-b-[#2c3235] bg-[#181b1f]">
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <Link
             href="/dashboard"
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+            className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
             aria-label="Back to dashboard"
           >
-            <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+            <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
           </Link>
           <BrandLockup size={24} />
           <span className="text-sm font-semibold">Settings</span>
@@ -456,16 +456,16 @@ export default function UserSettingsPage() {
         {toast ? (
           <div
             role="status"
-            className={`flex items-start gap-2.5 rounded-lg border p-3 text-sm ${
+            className={`flex items-start gap-2.5 rounded-md p-3 text-sm ${
               toast.ok
                 ? 'border-emerald-700/50 bg-emerald-950/30 text-emerald-300'
                 : 'border-red-700/50 bg-red-950/30 text-red-300'
             }`}
           >
             {toast.ok ? (
-              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <CheckCircle2 className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
             )}
             <p className="leading-relaxed">{toast.text}</p>
           </div>
@@ -476,14 +476,14 @@ export default function UserSettingsPage() {
             ================================================================== */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* ---- CARD 1: PROFILE + AVATAR ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <CircleUser className="h-4 w-4 text-[#5794f2]" aria-hidden="true" />
+              <CircleUser className="h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" />
               Profile
             </h2>
 
             <div className="mt-4 flex items-center gap-4">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full border-2 border-[#2c3235] bg-[#0d0f11]">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full-[#2c3235] bg-[#0d0f11]">
                 {settings?.avatar_url ? (
                   <img
                     src={settings.avatar_url}
@@ -517,7 +517,7 @@ export default function UserSettingsPage() {
                   value={avatarInput}
                   onChange={(e) => setAvatarInput(e.target.value)}
                   placeholder="https://... ya /avatars/me.png"
-                  className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
+                  className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
                 />
                 <Button
                   onClick={saveAvatar}
@@ -525,10 +525,10 @@ export default function UserSettingsPage() {
                   className="h-10 shrink-0 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
                 >
                   {avatarBusy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" />
                   ) : (
                     <>
-                      <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                       Save
                     </>
                   )}
@@ -541,9 +541,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 2: APPEARANCE (theme + accent) ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Palette className="h-4 w-4 text-[#a78bfa]" aria-hidden="true" />
+              <Palette className="h-2.5 w-2.5 text-[#a78bfa]" aria-hidden="true" />
               Appearance
             </h2>
 
@@ -564,7 +564,7 @@ export default function UserSettingsPage() {
                         setSettings((prev) => (prev ? { ...prev, theme } : prev));
                         applyThemeInstant(theme);
                       }}
-                      className={`rounded-lg border p-2.5 text-left transition-colors ${
+                      className={`rounded-md p-2.5 text-left transition-colors ${
                         active
                           ? 'border-[#5794f2] bg-[#1f2227]'
                           : 'border-[#2c3235] hover:border-[#3d4348]'
@@ -574,12 +574,12 @@ export default function UserSettingsPage() {
                         {(m?.swatch ?? ['#2c3235', '#2c3235', '#2c3235']).map((c, i) => (
                           <span
                             key={i}
-                            className="h-3 w-3 rounded-full"
+                            className="h-2.5 w-2.5 rounded-full"
                             style={{ background: c }}
                           />
                         ))}
                         {active ? (
-                          <Check className="ml-auto h-3.5 w-3.5 text-[#5794f2]" aria-hidden="true" />
+                          <Check className="ml-auto h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" />
                         ) : null}
                       </span>
                       <span className="mt-1.5 block text-xs font-medium">
@@ -611,8 +611,8 @@ export default function UserSettingsPage() {
                       onClick={() =>
                         setSettings((prev) => (prev ? { ...prev, accent: a.Hex } : prev))
                       }
-                      className={`h-8 w-8 rounded-full border-2 transition-transform ${
-                        active ? 'scale-110 border-white' : 'border-transparent hover:scale-105'
+                      className={`h-8 w-8 rounded-full transition-transform ${
+                        active ? 'scale-110' : 'border-transparent hover:scale-105'
                       }`}
                       style={{ background: a.Hex }}
                     />
@@ -632,10 +632,10 @@ export default function UserSettingsPage() {
               className="mt-4 h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
             >
               {saving === 'appearance' ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
               ) : (
                 <>
-                  <Save className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  <Save className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                   Save appearance
                 </>
               )}
@@ -643,9 +643,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 3: LANGUAGE ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Languages className="h-4 w-4 text-[#73bf69]" aria-hidden="true" />
+              <Languages className="h-2.5 w-2.5 text-[#73bf69]" aria-hidden="true" />
               Language
             </h2>
 
@@ -659,7 +659,7 @@ export default function UserSettingsPage() {
                 onChange={(e) =>
                   setSettings((prev) => (prev ? { ...prev, language: e.target.value } : prev))
                 }
-                className="h-10 w-full rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3 text-sm text-[#d8d9da] focus:border-[#5794f2] focus:outline-none"
+                className="h-10 w-full rounded-md bg-[#0d0f11] px-3 text-sm text-[#d8d9da] focus:border-[#5794f2] focus:outline-none"
               >
                 {(meta?.languages ?? []).map((l) => (
                   <option key={l.Code} value={l.Code} className="bg-[#181b1f]">
@@ -675,7 +675,7 @@ export default function UserSettingsPage() {
               className="mt-4 h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
             >
               {saving === 'language' ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
               ) : (
                 'Save language'
               )}
@@ -683,9 +683,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 4: CONTENT + SUBSCRIPTIONS ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Video className="h-4 w-4 text-[#f2495c]" aria-hidden="true" />
+              <Video className="h-2.5 w-2.5 text-[#f2495c]" aria-hidden="true" />
               Content and subscriptions
             </h2>
 
@@ -702,7 +702,7 @@ export default function UserSettingsPage() {
                * WHY, and the message tells them what they can actually do.
                */}
               <ToggleRow
-                icon={<Upload className="h-4 w-4" />}
+                icon={<Upload className="h-2.5 w-2.5" />}
                 label="Allow me to upload content"
                 hint={
                   settings?.content_upload_enabled &&
@@ -722,17 +722,17 @@ export default function UserSettingsPage() {
               settings?.content_upload_allowed === false ? (
                 <p
                   role="status"
-                  className="flex items-start gap-1.5 rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
+                  className="flex items-start gap-1.5 rounded-md border-700/50 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
                 >
                   <AlertTriangle
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                    className="mt-0.5 h-2.5 w-2.5 shrink-0"
                     aria-hidden="true"
                   />
                   <span>{uploadBlockedMessage(settings.content_upload_reason)}</span>
                 </p>
               ) : null}
               <ToggleRow
-                icon={<Users className="h-4 w-4" />}
+                icon={<Users className="h-2.5 w-2.5" />}
                 label="Allow viewer subscriptions"
                 hint="Viewers can subscribe to your channel"
                 checked={settings?.subscriptions_enabled ?? true}
@@ -744,7 +744,7 @@ export default function UserSettingsPage() {
                 }}
               />
               <ToggleRow
-                icon={<Bell className="h-4 w-4" />}
+                icon={<Bell className="h-2.5 w-2.5" />}
                 label="Email notifications"
                 hint="Payout and security alerts"
                 checked={settings?.email_notifications ?? true}
@@ -759,9 +759,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 5: SECURITY PIN (locked -> unlocked) ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <KeyRound className="h-4 w-4 text-[#f2cc0c]" aria-hidden="true" />
+              <KeyRound className="h-2.5 w-2.5 text-[#f2cc0c]" aria-hidden="true" />
               Security PIN
             </h2>
             <p className="mt-1 text-xs text-[#9fa7b3]">
@@ -787,10 +787,10 @@ export default function UserSettingsPage() {
                   className="h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
                 >
                   {pinCheckBusy ? (
-                    <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                    <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
                   ) : (
                     <>
-                      <Lock className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      <Lock className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                       Confirm PIN
                     </>
                   )}
@@ -826,7 +826,7 @@ export default function UserSettingsPage() {
                       setConfirmPin('');
                     }}
                     variant="ghost"
-                    className="h-10 shrink-0 border border-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
+                    className="h-10 shrink-0-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
                   >
                     Cancel
                   </Button>
@@ -836,7 +836,7 @@ export default function UserSettingsPage() {
                     className="h-10 flex-1 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
                   >
                     {pinBusy ? (
-                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                      <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
                     ) : (
                       'Change PIN'
                     )}
@@ -850,9 +850,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 6: PASSWORD (locked -> unlocked) ---- */}
-          <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+          <section className="rounded-md bg-[#181b1f] p-5">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <ShieldCheck className="h-4 w-4 text-[#8ab8ff]" aria-hidden="true" />
+              <ShieldCheck className="h-2.5 w-2.5 text-[#8ab8ff]" aria-hidden="true" />
               Password
             </h2>
             <p className="mt-1 text-xs text-[#9fa7b3]">
@@ -882,7 +882,7 @@ export default function UserSettingsPage() {
                     onValueChange={setCurrentPassword}
                     revealLabel="Show current password"
                     hideLabel="Hide current password"
-                    className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
+                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                 </div>
                 <Button
@@ -891,10 +891,10 @@ export default function UserSettingsPage() {
                   className="h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
                 >
                   {pwCheckBusy ? (
-                    <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                    <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
                   ) : (
                     <>
-                      <Lock className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      <Lock className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
                       Confirm password
                     </>
                   )}
@@ -914,7 +914,7 @@ export default function UserSettingsPage() {
                     onValueChange={setNewPassword}
                     revealLabel="Show new password"
                     hideLabel="Hide new password"
-                    className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
+                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                   {newPassword.length > 0 && newPassword.length < 12 ? (
                     <p className="text-[11px] text-amber-400">
@@ -946,7 +946,7 @@ export default function UserSettingsPage() {
                     onValueChange={setConfirmPassword}
                     revealLabel="Show confirmed password"
                     hideLabel="Hide confirmed password"
-                    className="h-10 border-[#2c3235] bg-[#0d0f11] text-sm"
+                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
                   />
                   {confirmPassword.length > 0 &&
                   confirmPassword !== newPassword ? (
@@ -964,7 +964,7 @@ export default function UserSettingsPage() {
                       setConfirmPassword('');
                     }}
                     variant="ghost"
-                    className="h-10 shrink-0 border border-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
+                    className="h-10 shrink-0-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
                   >
                     Cancel
                   </Button>
@@ -974,7 +974,7 @@ export default function UserSettingsPage() {
                     className="h-10 flex-1 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
                   >
                     {passwordBusy ? (
-                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                      <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
                     ) : (
                       'Change password'
                     )}
@@ -1036,7 +1036,7 @@ function PinField({
         placeholder="••••••"
         revealLabel={`Show ${label}`}
         hideLabel={`Hide ${label}`}
-        className="h-10 border-[#2c3235] bg-[#0d0f11] font-mono tracking-widest"
+        className="h-10-[#2c3235] bg-[#0d0f11] font-mono tracking-widest"
       />
       {error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
     </div>
@@ -1058,7 +1058,7 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-[#2c3235] bg-[#0d0f11] p-3">
+    <div className="flex items-center gap-3 rounded-md bg-[#0d0f11] p-3">
       <span className="shrink-0 text-[#9fa7b3]" aria-hidden="true">
         {icon}
       </span>
@@ -1077,7 +1077,7 @@ function ToggleRow({
         }`}
       >
         <span
-          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${
+          className={`absolute top-0.5 h-2.5 w-2.5 rounded-full bg-white transition-transform ${
             checked ? 'left-[18px]' : 'left-0.5'
           }`}
         />
@@ -1085,3 +1085,4 @@ function ToggleRow({
     </div>
   );
 }
+

@@ -100,7 +100,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
   return (
     <div className="space-y-2">
       {/* 16:9 banner preview */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-lg border border-[#2c3235] bg-[#0d0f11]">
+      <div className="relative aspect-video w-full overflow-hidden rounded-md bg-[#0d0f11]">
         {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -110,7 +110,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center">
-            <ImageIcon className="h-5 w-5 text-[#9fa7b3]" aria-hidden="true" />
+            <ImageIcon className="h-2.5 w-2.5 text-[#9fa7b3]" aria-hidden="true" />
             <p className="mt-1 text-[11px] text-[#9fa7b3]">No cover image</p>
           </div>
         )}
@@ -148,9 +148,9 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
           <div className="flex flex-wrap items-center gap-2">
             <label
               htmlFor={inputId}
-              className="inline-flex h-9 cursor-pointer items-center rounded-lg bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
+              className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
             >
-              <Upload className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
               {preview || currentUrl ? 'Replace cover' : 'Upload cover'}
             </label>
 
@@ -167,7 +167,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
                 className="h-9 px-2 text-[#9fa7b3] hover:text-[#d8d9da]"
                 aria-label="Clear selection"
               >
-                <X className="h-4 w-4" aria-hidden="true" />
+                <X className="h-2.5 w-2.5" aria-hidden="true" />
               </Button>
             ) : null}
           </div>

@@ -83,31 +83,31 @@ export function FinancialLedgerView() {
       </h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-4">
+        <div className="rounded-md bg-[#181b1f] p-4">
           <p className="text-[11px] uppercase text-[#9fa7b3]">Gross Revenue</p>
           <p className="mt-1 text-xl font-bold text-[#d8d9da]">
             {formatCurrency(monthTotal.gross)}
           </p>
         </div>
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-4">
+        <div className="rounded-md bg-[#181b1f] p-4">
           <p className="text-[11px] uppercase text-[#9fa7b3]">GST (18% IN)</p>
           <p className="mt-1 text-xl font-bold text-[#f2495c]">
             {formatCurrency(monthTotal.gst)}
           </p>
         </div>
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-4">
+        <div className="rounded-md bg-[#181b1f] p-4">
           <p className="text-[11px] uppercase text-[#9fa7b3]">Sister Share (5%)</p>
           <p className="mt-1 text-xl font-bold text-[#f7c548]">
             {formatCurrency(monthTotal.sister)}
           </p>
         </div>
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-4">
+        <div className="rounded-md bg-[#181b1f] p-4">
           <p className="text-[11px] uppercase text-[#9fa7b3]">Net to Wallets</p>
           <p className="mt-1 text-xl font-bold text-[#73bf69]">
             {formatCurrency(monthTotal.net)}
           </p>
         </div>
-        <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-4">
+        <div className="rounded-md bg-[#181b1f] p-4">
           <p className="text-[11px] uppercase text-[#9fa7b3]">Your Share (20%)</p>
           <p className="mt-1 text-xl font-bold text-[#5794f2]">
             {formatCurrency(monthTotal.yours)}
@@ -115,13 +115,13 @@ export function FinancialLedgerView() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="rounded-md bg-[#181b1f] p-5">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-[#d8d9da]">
             Settlement History (last 30)
           </h3>
           <button className="text-xs text-[#9fa7b3] hover:text-[#d8d9da]">
-            <Calendar className="inline h-3 w-3 mr-1" />
+            <Calendar className="inline h-2.5 w-2.5 mr-1" />
             This month
           </button>
         </div>
@@ -135,7 +135,7 @@ export function FinancialLedgerView() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b border-[#2c3235]">
+                <tr className="border-b-[#2c3235]">
                   <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Settlement</th>
                   <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Gross</th>
                   <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">GST</th>
@@ -148,7 +148,7 @@ export function FinancialLedgerView() {
               </thead>
               <tbody>
                 {entries.map((e) => (
-                  <tr key={e.uuid} className="border-b border-[#2c3235]/40">
+                  <tr key={e.uuid} className="border-b-[#2c3235]/40">
                     <td className="py-2">
                       <span className="font-mono text-[10px] text-[#9fa7b3]">
                         {e.uuid.slice(0, 8)}...
@@ -171,3 +171,4 @@ export function FinancialLedgerView() {
     </div>
   );
 }
+

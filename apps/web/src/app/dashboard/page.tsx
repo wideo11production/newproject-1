@@ -473,14 +473,14 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
       id: 'install',
       label: 'Install app',
       hint: 'Add Wideo11 to this device',
-      icon: <Download className="h-4 w-4" />,
+      icon: <Download className="h-2.5 w-2.5" />,
       onSelect: () => setPanel('install'),
     },
     {
       id: 'console',
       label: 'Console',
       hint: 'Analytics, alerts and settings',
-      icon: <Settings className="h-4 w-4" />,
+      icon: <Settings className="h-2.5 w-2.5" />,
       onSelect: () => {
         window.location.href = '/settings';
       },
@@ -489,7 +489,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
       id: 'browse',
       label: 'Browse',
       hint: 'Public pages',
-      icon: <Compass className="h-4 w-4" />,
+      icon: <Compass className="h-2.5 w-2.5" />,
       onSelect: () => {
         window.location.href = '/';
       },
@@ -498,7 +498,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
       id: 'logout',
       label: 'Log out',
       hint: 'Sign out on this device',
-      icon: <LogOut className="h-4 w-4" />,
+      icon: <LogOut className="h-2.5 w-2.5" />,
       onSelect: () => void logout(),
       danger: true,
     },
@@ -548,7 +548,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
       {/* ==================================================================
           HEADER
           ================================================================== */}
-      <header className="shrink-0 border-b border-[#2c3235] bg-[#181b1f]">
+      <header className="shrink-0-[#2c3235] bg-[#181b1f]">
         <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2.5">
             {/* ---- Page title inline (sidebar pe brand already hai, isliye
@@ -569,9 +569,9 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
             <Link
               href="/dashboard/settings"
               title="Your profile"
-              className="flex items-center gap-2 rounded-lg p-1 pr-2 transition-colors hover:bg-[#1f2227]"
+              className="flex items-center gap-2 rounded-md p-1 pr-2 transition-colors hover:bg-[#1f2227]"
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#2c3235] bg-[#0d0f11] text-xs font-bold text-[#5794f2]">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full-[#2c3235] bg-[#0d0f11] text-xs font-bold text-[#5794f2]">
                 {identity.avatar_url ? (
                   <img
                     src={identity.avatar_url}
@@ -642,9 +642,9 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
         {/* ==================================================================
             PANEL 1: PROFILE  (avatar + change image)
             ================================================================== */}
-        <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <section className="rounded-md bg-[#181b1f] p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-[#d8d9da]">
-            <User className="h-4 w-4 text-[#5794f2]" />
+            <User className="h-2.5 w-2.5 text-[#5794f2]" />
             Profile
           </h2>
 
@@ -653,7 +653,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                 Image ho to dikhta hai; nahi ho to initials fallback
                 (brand ke saath consistent). */}
             <div className="flex shrink-0 flex-col items-center gap-2">
-              <div className="relative h-24 w-24 overflow-hidden rounded-full border-2 border-[#2c3235] bg-[#111217]">
+              <div className="relative h-24 w-24 overflow-hidden rounded-full-[#2c3235] bg-[#111217]">
                 {profile?.avatar_url ? (
                   // NOTE: plain <img> - next/image se remote MinIO URL load
                   // karne ke liye hostname allowlist karni padti. Yahan plain
@@ -670,7 +670,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   </div>
                 )}
               </div>
-              <Camera className="h-3.5 w-3.5 text-[#9fa7b3]" />
+              <Camera className="h-2.5 w-2.5 text-[#9fa7b3]" />
             </div>
 
             {/* ---- Details + avatar editor ---- */}
@@ -689,7 +689,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
               <div className="flex items-center gap-2 text-xs">
                 {profile?.is_verified ? (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-950/60 px-2 py-1 text-emerald-300">
-                    <Check className="h-3 w-3" /> Verified
+                    <Check className="h-2.5 w-2.5" /> Verified
                   </span>
                 ) : (
                   <span className="rounded-full bg-amber-950/60 px-2 py-1 text-amber-300">
@@ -697,7 +697,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   </span>
                 )}
                 <span className="inline-flex items-center gap-1 rounded-full bg-[#1f2227] px-2 py-1 text-[#9fa7b3]">
-                  <ShieldCheck className="h-3 w-3" /> Security setup complete
+                  <ShieldCheck className="h-2.5 w-2.5" /> Security setup complete
                 </span>
               </div>
 
@@ -708,7 +708,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   `onUploaded` ke baad `identity.refresh()` call hota hai taaki
                   naya avatar POORI APP me turant dikhe (header, sidebar) -
                   page reload ke bina. */}
-              <div className="space-y-2 border-t border-[#2c3235] pt-3">
+              <div className="space-y-2-[#2c3235] pt-3">
                 <AvatarUploader
                   currentUrl={profile?.avatar_url}
                   initials={initialsOf(profile)}
@@ -734,10 +734,10 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
         {/* ==================================================================
             PANEL 2: CHANNELS  (+ create form)
             ================================================================== */}
-        <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <section className="rounded-md bg-[#181b1f] p-5">
           <div className="flex items-center justify-between">
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Youtube className="h-4 w-4 text-[#f2495c]" />
+              <Youtube className="h-2.5 w-2.5 text-[#f2495c]" />
               My channels
               <span className="rounded-full bg-[#1f2227] px-2 py-0.5 text-[11px] font-normal text-[#9fa7b3]">
                 {channels.length}
@@ -749,7 +749,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                 size="sm"
                 className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
               >
-                <Plus className="mr-1.5 h-4 w-4" />
+                <Plus className="mr-1.5 h-2.5 w-2.5" />
                 Create channel
               </Button>
             ) : null}
@@ -757,7 +757,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
 
           {/* ---- Create form (collapsible) ---- */}
           {showChannelForm ? (
-            <form onSubmit={createChannel} className="mt-4 space-y-3 rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+            <form onSubmit={createChannel} className="mt-4 space-y-3 rounded-md bg-[#0d0f11] p-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-[#d8d9da]">New channel</p>
                 <button
@@ -769,7 +769,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   className="text-[#9fa7b3] transition-colors hover:text-[#d8d9da]"
                   aria-label="Close"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-2.5 w-2.5" />
                 </button>
               </div>
 
@@ -786,7 +786,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                       onChange={(e) => setHandle(e.target.value.toLowerCase().replace(/\s/g, ''))}
                       placeholder="aarav"
                       maxLength={30}
-                      className="h-10 border-[#2c3235] bg-[#181b1f] text-sm"
+                      className="h-10-[#2c3235] bg-[#181b1f] text-sm"
                     />
                   </div>
                 </div>
@@ -800,7 +800,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Aarav Sharma"
                     maxLength={80}
-                    className="h-10 border-[#2c3235] bg-[#181b1f] text-sm"
+                    className="h-10-[#2c3235] bg-[#181b1f] text-sm"
                   />
                 </div>
               </div>
@@ -816,7 +816,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   rows={2}
                   maxLength={2000}
                   placeholder="What is this channel about?"
-                  className="w-full rounded-lg border border-[#2c3235] bg-[#181b1f] px-3 py-2 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/50 focus:border-[#5794f2] focus:outline-none"
+                  className="w-full rounded-md bg-[#181b1f] px-3 py-2 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/50 focus:border-[#5794f2] focus:outline-none"
                 />
               </div>
 
@@ -837,7 +837,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                 disabled={channelBusy}
                 className="h-10 w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
               >
-                {channelBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create channel'}
+                {channelBusy ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 'Create channel'}
               </Button>
             </form>
           ) : null}
@@ -845,7 +845,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
           {/* ---- Channel list ---- */}
           <div className="mt-4">
             {channels.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-[#2c3235] p-6 text-center">
+              <div className="rounded-md-dashed-[#2c3235] p-6 text-center">
                 <Youtube className="mx-auto h-6 w-6 text-[#9fa7b3]" />
                 <p className="mt-2 text-sm text-[#d8d9da]">No channels yet</p>
                 <p className="mt-1 text-xs text-[#9fa7b3]">
@@ -870,9 +870,9 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
         {/* ==================================================================
             PANEL 3: DEVICES  (kis device par login hai)
             ================================================================== */}
-        <section className="rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+        <section className="rounded-md bg-[#181b1f] p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
-            <Monitor className="h-4 w-4 text-[#73bf69]" />
+            <Monitor className="h-2.5 w-2.5 text-[#73bf69]" />
             Signed-in devices
             <span className="rounded-full bg-[#1f2227] px-2 py-0.5 text-[11px] font-normal text-[#9fa7b3]">
               {devices.length}
@@ -885,14 +885,14 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
 
           <ul className="mt-4 space-y-2">
             {devices.length === 0 ? (
-              <li className="rounded-lg border border-dashed border-[#2c3235] p-4 text-center text-xs text-[#9fa7b3]">
+              <li className="rounded-md-dashed-[#2c3235] p-4 text-center text-xs text-[#9fa7b3]">
                 No active devices found.
               </li>
             ) : (
               devices.map((d) => (
                 <li
                   key={d.id}
-                  className="flex flex-col gap-1 rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-1 rounded-md bg-[#0d0f11] px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium">{deviceLabel(d.user_agent)}</p>

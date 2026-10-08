@@ -94,9 +94,9 @@ export function CreatorBroadcastView() {
       </h1>
 
       {/* Quota card */}
-      <div className="mb-6 rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="mb-6 rounded-md bg-[#181b1f] p-5">
         <div className="flex items-center gap-3">
-          <Database className="h-5 w-5 text-[#5794f2]" />
+          <Database className="h-2.5 w-2.5 text-[#5794f2]" />
           <div>
             <h3 className="font-semibold text-[#d8d9da]">Upload Quota</h3>
             {quota ? (
@@ -114,9 +114,9 @@ export function CreatorBroadcastView() {
 
       {/* Blacklist alert */}
       {blacklist ? (
-        <div className="mb-6 rounded-xl border border-[#f2495c]/30 bg-[#f2495c]/10 p-4">
+        <div className="mb-6 rounded-md/30 bg-[#f2495c]/10 p-4">
           <div className="flex items-center gap-2 text-[#f2495c]">
-            <AlertTriangle className="h-5 w-5" />
+            <AlertTriangle className="h-2.5 w-2.5" />
             <span className="font-semibold">Account Blacklisted</span>
           </div>
           <p className="mt-1 text-sm text-[#f2495c]/80">
@@ -135,7 +135,7 @@ export function CreatorBroadcastView() {
             window.location.href = '/broadcast/new';
           }}
         >
-          <Upload className="mr-2 h-4 w-4" />
+          <Upload className="mr-2 h-2.5 w-2.5" />
           New Upload
         </Button>
       </div>
@@ -144,7 +144,7 @@ export function CreatorBroadcastView() {
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-[#d8d9da]">Recent Uploads</h3>
         {sessions.length === 0 ? (
-          <div className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-6 text-center">
+          <div className="rounded-md bg-[#0d0f11] p-6 text-center">
             <Upload className="mx-auto h-6 w-6 text-[#9fa7b3]" />
             <p className="mt-2 text-sm text-[#9fa7b3]">No uploads yet.</p>
           </div>
@@ -154,7 +154,7 @@ export function CreatorBroadcastView() {
             return (
               <div
                 key={s.uuid}
-                className="flex items-center justify-between rounded-lg border border-[#2c3235] bg-[#0d0f11] p-3"
+                className="flex items-center justify-between rounded-md bg-[#0d0f11] p-3"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-[#d8d9da]">
@@ -174,7 +174,7 @@ export function CreatorBroadcastView() {
                     Safety: {safety.status}
                   </span>
                 ) : (
-                  <Shield className="ml-3 h-4 w-4 text-[#9fa7b3]" />
+                  <Shield className="ml-3 h-2.5 w-2.5 text-[#9fa7b3]" />
                 )}
               </div>
             );
@@ -184,3 +184,4 @@ export function CreatorBroadcastView() {
     </div>
   );
 }
+

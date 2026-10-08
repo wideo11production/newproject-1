@@ -81,7 +81,7 @@ export default function ContentRow({ row, className }: ContentRowProps) {
         <div className="min-w-0">
           <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#d8d9da]">
             {/* Row icon - title-based, optional */}
-            {Icon ? <Icon className="h-5 w-5 text-[#5794f2]" aria-hidden="true" /> : null}
+            {Icon ? <Icon className="h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" /> : null}
             {row.title}
           </h3>
           {/* Optional subtitle */}
@@ -98,17 +98,17 @@ export default function ContentRow({ row, className }: ContentRowProps) {
             type="button"
             onClick={() => scrollByPage(-1)}
             aria-label={`Scroll ${row.title} left`}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+            className="flex h-8 w-8 items-center justify-center rounded-full-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
           >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+            <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
           </button>
           <button
             type="button"
             onClick={() => scrollByPage(1)}
             aria-label={`Scroll ${row.title} right`}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+            className="flex h-8 w-8 items-center justify-center rounded-full-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
           >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -197,7 +197,7 @@ function ContentTile({ tile }: { tile: PoolTile }) {
 
   // Shared tile shell classes - dono branches identical
   const shellClass = cn(
-    'group relative block w-[160px] shrink-0 snap-start overflow-hidden rounded-lg border border-[#2c3235] bg-[#181b1f] transition-colors hover:border-[#5794f2]/50 sm:w-[200px] lg:w-[240px]'
+    'group relative block w-[160px] shrink-0 snap-start overflow-hidden rounded-md bg-[#181b1f] transition-colors hover:border-[#5794f2]/50 sm:w-[200px] lg:w-[240px]'
   );
 
   // ---- BRANCH A: tile has an internal route -> render a <Link> ----
@@ -227,3 +227,4 @@ function ContentTile({ tile }: { tile: PoolTile }) {
     </div>
   );
 }
+

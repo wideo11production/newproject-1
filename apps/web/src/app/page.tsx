@@ -43,7 +43,7 @@ import { FaqPortal } from '@/components/landing/faq-portal';
 // ---------------------------------------------------------------------------
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-[#2c3235] bg-[#111217]/90 backdrop-blur">
+    <header className="sticky top-0 z-40-[#2c3235] bg-[#111217]/90 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
         {/* Brand - Wino + Rino lockup (manifest-locked vectors, inline SVG) */}
         <Link href="/" className="flex items-center gap-2.5">
@@ -122,7 +122,7 @@ function HeroStrip() {
 // ---------------------------------------------------------------------------
 function SiteFooter() {
   return (
-    <footer className="w-full border-t border-[#2c3235] bg-[#0f1115] px-4 py-8 text-center sm:px-6 lg:px-8">
+    <footer className="w-full-[#2c3235] bg-[#0f1115] px-4 py-8 text-center sm:px-6 lg:px-8">
       <p className="text-xs text-[#6b7280]">
         Wideo11 - publish to the edge, keep every rupee.
       </p>

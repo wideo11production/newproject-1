@@ -191,7 +191,7 @@ export function ExpressionsPanel({ clip, onApplyExpression, onClearExpression, o
                       ].join(' ')}
                     >
                       <span>{p.label}</span>
-                      {has && <FunctionSquare className="h-4 w-4 text-[#ff6500]" aria-hidden="true" />}
+                      {has && <FunctionSquare className="h-2.5 w-2.5 text-[#ff6500]" aria-hidden="true" />}
                     </button>
                   );
                 })}
@@ -211,7 +211,7 @@ export function ExpressionsPanel({ clip, onApplyExpression, onClearExpression, o
             action={
               activeExpressions[selectedProp] ? (
                 <Button variant="outline" onClick={() => { onClearExpression(selectedProp); }} ariaLabel={`Clear expression on ${selectedProp}`}>
-<Trash2 className="h-4 w-4" aria-hidden="true" />
+<Trash2 className="h-2.5 w-2.5" aria-hidden="true" />
                 </Button>
               ) : undefined
             }

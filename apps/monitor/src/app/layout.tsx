@@ -82,7 +82,7 @@ export default function Layout({
       {/* Main dashboard area: @metrics parallel slot */}
       <main className="flex-1 overflow-auto">{metrics}</main>
       {/* Side panel area: @telemetry parallel slot */}
-      <aside className="w-96 shrink-0 overflow-auto border-l border-gray-800">
+      <aside className="w-96 shrink-0 overflow-auto-800">
         {telemetry}
       </aside>
       {/* children ko render karte hain taaki default slot bhi available rahe */}

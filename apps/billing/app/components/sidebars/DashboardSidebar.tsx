@@ -24,7 +24,7 @@ export default function DashboardSidebar() {
       <h2 className="text-lg font-semibold">Key Metrics</h2>
       <div className="grid gap-3 grid-cols-2">
         {quickStats.map((stat) => (
-          <Card key={stat.label} className="bg-card border-border">
+          <Card key={stat.label} className="bg-card">
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -43,13 +43,13 @@ export default function DashboardSidebar() {
         ))}
       </div>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Top Customers by MRR</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {topCustomers.map((customer) => (
-            <div key={customer.name} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div key={customer.name} className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
               <div>
                 <p className="text-sm font-medium">{customer.name}</p>
                 <p className="text-xs text-muted-foreground">{customer.plan}</p>
@@ -71,33 +71,33 @@ export default function DashboardSidebar() {
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border">
+      <Card className="bg-card">
         <CardHeader>
           <CardTitle className="text-base">Payment Methods</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                <CreditCard className="h-4 w-4 text-blue-500" />
+                <CreditCard className="h-2.5 w-2.5 text-blue-500" />
               </div>
               <span className="text-sm font-medium">Credit Card</span>
             </div>
             <span className="text-sm text-muted-foreground">65%</span>
           </div>
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
-                <DollarSign className="h-4 w-4 text-green-500" />
+                <DollarSign className="h-2.5 w-2.5 text-green-500" />
               </div>
               <span className="text-sm font-medium">Bank Transfer</span>
             </div>
             <span className="text-sm text-muted-foreground">25%</span>
           </div>
-          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-muted/50 rounded-md">
             <div className="flex items-center space-x-3">
               <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
-                <CreditCard className="h-4 w-4 text-purple-500" />
+                <CreditCard className="h-2.5 w-2.5 text-purple-500" />
               </div>
               <span className="text-sm font-medium">PayPal</span>
             </div>

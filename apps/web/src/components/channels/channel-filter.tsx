@@ -12,7 +12,7 @@
 // WHY THIS IS A ROW OF WORDS AND NOT A ROW OF PILLS
 // =============================================================================
 //
-// Thirteen rounded chips, each with its own border, is the loudest element on a
+// Thirteen rounded chips, each with its own, is the loudest element on a
 // gallery page - and the least important one. Filters are navigation, not
 // content, and navigation should be quieter than the thing it navigates.
 //
@@ -55,7 +55,7 @@ export default function ChannelFilter({
   onChange: (next: string) => void;
 }) {
   return (
-    <nav aria-label="Channel categories" className="border-b border-white/[0.07] pb-4">
+    <nav aria-label="Channel categories" className="border-b/[0.07] pb-4">
       {/*
         `overflow-x-auto` with a hidden scrollbar rather than `flex-wrap`.
 
@@ -87,9 +87,9 @@ export default function ChannelFilter({
                 {f.label}
                 {/*
                   The active marker is an underline on a pseudo-element rather than
-                  a background or a border on the button.
+                  a background or a on the button.
 
-                  A border on the button would change its box and shift the row as
+                  A on the button would change its box and shift the row as
                   you click - the layout moves under the pointer, which is the one
                   thing a filter must never do. An absolutely-positioned rule inside
                   a `relative` button occupies no layout space at all.

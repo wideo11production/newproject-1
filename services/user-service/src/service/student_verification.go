@@ -67,14 +67,110 @@ func NewStudentVerificationEngine(
 // StudentIdentityTokenTTL — 365-day absolute lifecycle (matches billing-service).
 const StudentIdentityTokenTTL = 365 * 24 * time.Hour
 
-// VerifyStudentGateA — Gate A: instant domain check.
+// ============================================================================
+// PROFESSIONAL ROLE VERIFICATION (Student / Tutor / Advocate)
+// ============================================================================
 //
-// Agar user ka email academic domain pe match kare to instant verification.
-// Token mint kiya jata hai (365-day). Status = verified_by_domain.
+// Hinglish: VerifyStudentGateA sirf student role ke liye tha. Ab ye teeno
+// professional roles (student, tutor, advocate) ke liye ek unified Gate A
+// function provide karta hai. ProfessionalRole determine karta hai ki
+// kis domain seed list ka use karenge.
 //
-// Hinglish: yehi function AURA student gate ka "automatic academic check"
-// hai — user directive ke hisaab se, agar email academic institution se
-// hai to automatically verified.
+// Gate A routing logic:
+//   1. User ka ProfessionalRole check karo
+//   2. Student/Tutor → academic domain list
+//   3. Advocate → Bar Council domain list (ya document fallback)
+//   4. Agar domain match kare → instant verified_by_domain
+//
+// Hinglish: ye unified function CreateUser handler se turant call hota hai
+// registration ke baad, aur role-based auto-approval deta hai.
+
+// VerifyProfessionalGateA — unified Gate A for student, tutor, advocate.
+//
+// Hinglish: user ka professional role dekhte hue appropriate domain seed list
+// match karta hai. Match hone par instant verified_by_domain status ke saath
+// 365-day JWT token mint karta hai.
+func (e *StudentVerificationEngine) VerifyProfessionalGateA(ctx context.Context, userID uint, role model.ProfessionalRole) (*model.StudentVerification, error) {
+	user, err := e.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("gate A: user lookup failed: %w", err)
+	}
+
+	domain := extractUserDomain(user.Email)
+	if domain == "" {
+		return nil, ErrDomainNotAcademic
+	}
+
+	// Role-based domain check
+	var domainMatch bool
+	var seedListUsed string
+
+	switch role {
+	case model.RoleStudent:
+		domainMatch = model.IsAcademicDomain(user.Email)
+		seedListUsed = "academic"
+	case model.RoleTutor:
+		domainMatch = model.IsAcademicDomain(user.Email) || model.IsProfessionalDomain(user.Email)
+		seedListUsed = "academic+tutor"
+	case model.RoleAdvocate:
+		domainMatch = model.IsBarCouncilDomain(user.Email) || model.IsProfessionalDomain(user.Email)
+		seedListUsed = "bar_council+professional"
+	default:
+		// Unknown role: try academic as fallback
+		domainMatch = model.IsAcademicDomain(user.Email)
+		seedListUsed = "academic (fallback)"
+	}
+
+	if !domainMatch {
+		return nil, fmt.Errorf("%w: domain %s not in %s seed list for role %s", ErrDomainNotAcademic, domain, seedListUsed, role)
+	}
+
+	now := time.Now().UTC()
+	exp := now.Add(e.tokenTTL)
+	token, err := e.mintVerificationToken(userID, exp)
+	if err != nil {
+		return nil, fmt.Errorf("gate A: token mint failed: %w", err)
+	}
+
+	sv := &model.StudentVerification{
+		UserID:            userID,
+		ProfessionalRole:  role,
+		Status:            model.VerificationVerifiedByDomain,
+		EmailDomain:       domain,
+		VerificationToken: token,
+		TokenExpiresAt:    &exp,
+		UUID:              uuid.New(),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+
+	if err := e.repo.Create(ctx, sv); err != nil {
+		existing, getErr := e.repo.GetByUserID(ctx, userID)
+		if getErr == nil {
+			existing.Status = sv.Status
+			existing.EmailDomain = domain
+			existing.VerificationToken = token
+			existing.TokenExpiresAt = &exp
+			existing.UpdatedAt = now
+			if updateErr := e.repo.Update(ctx, existing); updateErr != nil {
+				return nil, updateErr
+			}
+			return existing, nil
+		}
+		return nil, fmt.Errorf("gate A: repo create failed: %w", err)
+	}
+
+	return sv, nil
+}
+
+// ============================================================================
+// Gate A backwards compatibility
+// ============================================================================
+
+// VerifyStudentGateA — legacy Gate A for student role (backward compatibility).
+// Hinglish: old callers ke liye — new code should use VerifyProfessionalGateA.
+// User directive: "Match the incoming registration payload instantly against
+// our static global academic domain array grid."
 func (e *StudentVerificationEngine) VerifyStudentGateA(ctx context.Context, userID uint) (*model.StudentVerification, error) {
 	user, err := e.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -124,21 +220,30 @@ func (e *StudentVerificationEngine) VerifyStudentGateA(ctx context.Context, user
 	return sv, nil
 }
 
-// SubmitIDDocument — Gate B: ID card upload fallback.
+// SubmitIDDocument — Gate B: ID card upload fallback for Student/Tutor/Advocate.
 //
 // Agar Gate A fail hua, user ID card image upload karta hai.
-// Status = pending_document. 365-day token mint karo (document review
-// ke baad verified status tak).
+// Status = pending_document. 365-day token mint karo.
 //
 // Hinglish: ye function document URL set karta hai (actual file upload
 // MinIO/S3 pe parallel hoga — yeh sirf URL reference store karta hai).
-func (e *StudentVerificationEngine) SubmitIDDocument(ctx context.Context, userID uint, documentURL string, documentType string) (*model.StudentVerification, error) {
+// Advocate ke case mein BarAssociationID mandatory hota hai, kyunki
+// Bar Council ka ID card legally verify karne ke liye zaroori hai.
+//
+// documentType options: college_id, bar_council_id, bar_card, tutor_certificate, other
+func (e *StudentVerificationEngine) SubmitIDDocument(ctx context.Context, userID uint, documentURL string, documentType model.DocumentType, role model.ProfessionalRole, barAssociationID string) (*model.StudentVerification, error) {
 	if strings.TrimSpace(documentURL) == "" {
 		return nil, errors.New("document URL is required")
 	}
 
+	// Advocate ke liye Bar Association ID mandatory check
+	if role == model.RoleAdvocate && strings.TrimSpace(barAssociationID) == "" {
+		return nil, errors.New("bar_association_id is required for advocate verification")
+	}
+
 	// Verify user exists.
-	if _, err := e.userRepo.GetByID(ctx, userID); err != nil {
+	user, err := e.userRepo.GetByID(ctx, userID)
+	if err != nil {
 		return nil, fmt.Errorf("gate B: user lookup failed: %w", err)
 	}
 
@@ -156,16 +261,23 @@ func (e *StudentVerificationEngine) SubmitIDDocument(ctx context.Context, userID
 			return nil, fmt.Errorf("gate B: repo get failed: %w", err)
 		}
 		// Create new record.
+		// Hinglish: agar existing record nahi hai to nayi verification create
+		// karte waqt professional role, document type, aur bar association ID
+		// sabhi set karte hain.
 		sv = &model.StudentVerification{
-			UserID:            userID,
-			Status:            model.VerificationPendingDocument,
-			IDDocumentURL:     documentURL,
+			UserID:               userID,
+			ProfessionalRole:     role,
+			BarAssociationID:     barAssociationID,
+			Status:               model.VerificationPendingDocument,
+			EmailDomain:          extractUserDomain(user.Email),
+			IDDocumentURL:        documentURL,
 			IDDocumentUploadedAt: &now,
-			VerificationToken: token,
-			TokenExpiresAt:    &exp,
-			UUID:              uuid.New(),
-			CreatedAt:         now,
-			UpdatedAt:         now,
+			DocumentType:         documentType,
+			VerificationToken:    token,
+			TokenExpiresAt:       &exp,
+			UUID:                 uuid.New(),
+			CreatedAt:            now,
+			UpdatedAt:            now,
 		}
 		if err := e.repo.Create(ctx, sv); err != nil {
 			return nil, fmt.Errorf("gate B: repo create failed: %w", err)
@@ -175,8 +287,11 @@ func (e *StudentVerificationEngine) SubmitIDDocument(ctx context.Context, userID
 
 	// Update existing record.
 	sv.Status = model.VerificationPendingDocument
+	sv.ProfessionalRole = role
+	sv.BarAssociationID = barAssociationID
 	sv.IDDocumentURL = documentURL
 	sv.IDDocumentUploadedAt = &now
+	sv.DocumentType = documentType
 	sv.VerificationToken = token
 	sv.TokenExpiresAt = &exp
 	sv.UpdatedAt = now
@@ -272,22 +387,31 @@ func extractUserDomain(email string) string {
 }
 
 // mintVerificationToken — 365-day JWT (proof-of-issuance).
-// Claims: degree_verified=true, user_id, issuer, exp, iat.
+// Claims: professionally_verified=true, user_id, role, bar_association_id (if advocate),
+// issuer, exp, iat.
 //
 // Hinglish: ye token billing-service ke StudentIdentity.VerificationToken
 // ya usi jaisa hota hai — isliye cross-service proof ban sakta hai.
+// Professional role aur bar association ID token mein embed karte hain
+// taaki downstream services ko pata chal sake ki ye kaunse role ka verified user hai.
 func (e *StudentVerificationEngine) mintVerificationToken(userID uint, exp time.Time) (string, error) {
 	now := time.Now().UTC()
+	// Hinglish: token me professional_verified + user_id + role embed karte
+	// hain. Advocate ke case mein bar_association_id bhi token mein jaaye ga
+	// taaki downstream services (billing, upload) ko pata chal sake ki
+	// ye legally verified advocate hai.
 	claims := struct {
-		DegreeVerified bool `json:"degree_verified"`
-		UserID         uint `json:"user_id"`
+		ProfessionallyVerified bool                   `json:"professionally_verified"`
+		UserID                 uint                   `json:"user_id"`
+		ProfessionalRole       string                 `json:"professional_role"`
+		BarAssociationID       string                 `json:"bar_association_id,omitempty"`
 		jwt.RegisteredClaims
 	}{
-		DegreeVerified: true,
-		UserID:         userID,
+		ProfessionallyVerified: true,
+		UserID:                 userID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    "user-service-student-gate",
-			Subject:   fmt.Sprintf("student:%d", userID),
+			Issuer:    "user-service-professional-gate",
+			Subject:   fmt.Sprintf("professional:%d", userID),
 			ExpiresAt: jwt.NewNumericDate(exp),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ID:        uuid.NewString(),

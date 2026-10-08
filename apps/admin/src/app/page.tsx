@@ -23,7 +23,7 @@ export default function AdminDashboard() {
           <h2 className="text-lg font-semibold mb-2">Knowledge Bot Chat</h2>
           <p>Chat ID: {chatId ?? 'None'}</p>
           {loading ? <p>Loading...</p> : null}
-          <div className="mt-2 h-64 overflow-y-auto border p-2">
+          <div className="mt-2 h-64 overflow-y-auto p-2">
             {messages.map((msg) => (
               <div key={msg.id} className={`mb-2 ${msg.isBot ? 'text-blue-500' : 'text-gray-700'}`}>
                 {msg.content}
@@ -34,7 +34,7 @@ export default function AdminDashboard() {
             <input
               ref={inputRef}
               type="text"
-              className="flex-1 p-2 border rounded-l"
+              className="flex-1 p-2 rounded-l"
               placeholder="Type a message"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
@@ -63,7 +63,7 @@ export default function AdminDashboard() {
           {feedLoading ? <p>Loading feed...</p> : feed.length === 0 ? <p>No feed items</p> : (
             <ul className="space-y-2">
               {feed.map((item) => (
-                <li key={item.id} className="p-2 border rounded">
+                <li key={item.id} className="p-2 rounded">
                   <h3 className="font-medium">{item.title}</h3>
                   <p className="text-sm text-gray-600">{item.description}</p>
                   {item.thumbnailUrl && (

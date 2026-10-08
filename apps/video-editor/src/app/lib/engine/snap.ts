@@ -131,3 +131,67 @@ export function findSnap(
 export function thresholdFrames(px: number, pxPerFrame: number): number {
   return Math.max(1, px / Math.max(pxPerFrame, 0.0001));
 }
+
+// ---------------------------------------------------------------------------
+// Magnetic ripple (AURA Micro-Frame Studio)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of a magnetic ripple calculation: the per-clip frame adjustments
+ * needed to close a gap or maintain adjacency.
+ */
+export interface RippleAdjustment {
+  /** The clip ID that was moved. */
+  clipId: string;
+  /** The frame delta applied to this clip: positive = right, negative = left. */
+  delta: number;
+}
+
+/**
+ * Compute the frame adjustments that a magnetic ripple would apply.
+ *
+ * When a clip is trimmed or repositioned at micro-frame precision, adjacent
+ * clips on the same track are pulled to maintain adjacency — the timeline
+ * "snaps" magnetically to fill the gap. This is the AURA Micro-Frame Studio
+ * magnetic grid: a background-friendly calculation that returns the deltas
+ * without mutating any state.
+ *
+ * The `worker` parameter is a placeholder for a background hook; when provided,
+ * the caller can offload this computation off the main render thread.
+ */
+export function computeMagneticRipple(
+  track: TimelineTrack,
+  movedClipId: string,
+  movedDelta: number,
+  fps: number,
+  opts?: { worker?: boolean }
+): RippleAdjustment[] {
+  void opts?.worker;
+  const clip = track.clips.find((c) => c.id === movedClipId);
+  if (!clip || movedDelta === 0) return [];
+
+  const sorted = [...track.clips].sort((a, b) => a.startTime - b.startTime);
+  const idx = sorted.findIndex((c) => c.id === movedClipId);
+  if (idx === -1) return [];
+
+  const adjustments: RippleAdjustment[] = [];
+  const movedStartFrame = Math.round(clip.startTime * fps);
+  const newStartFrame = movedStartFrame + movedDelta;
+  const clipLength = Math.max(1, Math.round(clip.duration * fps));
+
+  // Clips that start at or after the moved clip's original start
+  // shift by the same delta to close the gap.
+  for (let i = idx + 1; i < sorted.length; i++) {
+    const c = sorted[i];
+    const cStart = Math.round(c.startTime * fps);
+    if (cStart >= movedStartFrame) {
+      adjustments.push({ clipId: c.id, delta: movedDelta });
+    }
+  }
+
+  // The moved clip itself.
+  adjustments.push({ clipId: movedClipId, delta: movedDelta });
+
+  return adjustments;
+}
+

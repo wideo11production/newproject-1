@@ -36,6 +36,11 @@
 //   scroll sirf tab aata hai jab viewport SAHI se chhota ho, hamesha nahi.
 //
 // Hinglish comments: har block ka arth
+//
+// BORDERLESS DESIGN: Auth card uses bg-[#181b1f] surface with no hard.
+// Visual separation from page bg-[#111217] comes from background contrast,
+// not lines. All interactive inputs use rounded-md geometry and 150ms
+// color transitions. Active/hover states use orange-red (#ff6500) accent.
 
 'use client';
 
@@ -179,7 +184,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         //     hi - chhote screens par shrink, bade par 450px cap.
         //
         // GRAFANA SURFACE MAPPING (card par):
-        //   border = #2c3235 (grafanaBorderHex) - pehle `border-gray-800` (#1f2937)
+        // = #2c3235 (grafanaBorderHex) - pehle `border-gray-800` (#1f2937)
         //   bg     = #181b1f @ 70% (grafanaPanelHex) - pehle `bg-gray-900/70` (#111827/70)
         //   Ye card ko landing page ke hero/content panels se EXACTLY same surface
         //   deta hai, to page-to-page transition me color shift nahi dikhta.
@@ -213,7 +218,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         // `overflow-hidden` rakha hai - future me koi bahut lamba field
         // add ho to overflow card se bahar na nikle.
         // Hinglish: height apne aap content ke hisaab se - khaali jagah nahi
-        className="relative box-border flex h-auto w-full min-w-0 max-w-[450px] flex-col overflow-hidden rounded-2xl border border-[#2c3235] bg-[#181b1f]/70 shadow-2xl shadow-black/40 backdrop-blur-sm"
+         className="relative box-border flex h-auto w-full min-w-0 max-w-[450px] flex-col overflow-hidden rounded-md bg-[#1a1a1a] shadow-2xl shadow-black/40 backdrop-blur-sm"
       >
         {/* ---- COMPACT HEADER ----
             600px budget me header ko ~230px se ~90px par laaya gaya:
@@ -385,9 +390,9 @@ function LabelHtml({
  *                   `input` token ke saath match karta hai (bhi `h-11`).
  *                   Pehle `h-10` (40px) tha jo design system se DRIFT kar
  *                   raha tha - ab dono ek hi value pe lock hain.
- *   - border/ring : blue-500 focus state (premium SaaS feel)
+ *   -/ring : blue-500 focus state (premium SaaS feel)
  *   - placeholder : gray-600 taaki hierarchy clear rahe
- *   - aria-invalid: error state me border red ho jaata hai
+ *   - aria-invalid: error state me red ho jaata hai
  *
  * Ye export karna zaroori hai taaki register/login dono EXACT same input
  * styling use karein - manually likhne se drift hota hai.
@@ -410,10 +415,10 @@ export const INPUT_CLASS =
   // NOTE: 40px abhi bhi WCAG 2.5.8 (Target Size Minimum = 24px) se kahin
   // upar hai, to accessibility compromise nahi hai - sirf 2 column grid
   // wale dense layout se zyada compact ho gaya.
-  'h-10 w-full min-w-0 rounded-lg border border-[#2c3235] bg-[#0d0f11] px-3.5 text-sm text-[#d8d9da] ' +
-  'placeholder:text-[#9fa7b3]/60 transition-colors duration-200 ' +
-  'focus-visible:border-[#5794f2] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/30 ' +
-  'aria-[invalid=true]:border-[#f2495c]/70 aria-[invalid=true]:focus-visible:ring-[#f2495c]/25 disabled:opacity-60';
+   'h-10 w-full min-w-0 rounded-md border-0 bg-[#0a0a0a] px-3.5 text-sm text-[#d8d9da] ' +
+   'placeholder:text-[#9fa7b3]/60 transition-colors duration-150 ' +
+   'focus-visible:ring-2 focus-visible:ring-[#ff6500]/30 focus-visible:outline-none ' +
+   'aria-[invalid=true]:ring-[#f2495c]/25 aria-[invalid=true]:focus-visible:ring-[#f2495c]/25 disabled:opacity-60';
 
 /**
  * PRIMARY_BUTTON_CLASS - primary CTA styling (dono forms me identical)
@@ -425,8 +430,8 @@ export const INPUT_CLASS =
  * hai. `inline-flex` se dono cases me sahi full-width button banta hai.
  */
 export const PRIMARY_BUTTON_CLASS =
-  'inline-flex h-10 w-full min-w-0 items-center justify-center rounded-lg bg-blue-600 font-medium text-sm text-white shadow-sm transition-colors duration-200 ' +
-  'hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/60 ' +
+  'inline-flex h-10 w-full min-w-0 items-center justify-center rounded-md bg-[#ff6500] font-medium text-sm text-white shadow-sm transition-colors duration-150 ' +
+  'hover:bg-[#ff6500]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/60 ' +
   'disabled:cursor-not-allowed disabled:opacity-50';
 
 /**

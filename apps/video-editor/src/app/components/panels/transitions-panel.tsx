@@ -153,7 +153,7 @@ export function TransitionsPanel({
           <PanelSection title="Transitions" hint="Pick one to drop it on the join at the end of the selected clip.">
             {target && clip ? (
               <>
-                <p className="mb-2 flex items-center gap-1.5 rounded border border-edge bg-surface-raised/60 px-2 py-1 text-[8px] text-fg-secondary">
+                <p className="mb-2 flex items-center gap-1.5 rounded-edge bg-surface-raised/60 px-2 py-1 text-[8px] text-fg-secondary">
                   <Shuffle className="h-2 w-2 shrink-0 text-[#ff6500]" aria-hidden="true" />
                   <span className="truncate">
                     {clip.mediaName} → next clip, at {target.atTime.toFixed(2)}s
@@ -198,7 +198,7 @@ export function TransitionsPanel({
                               onSelectTransition(existing?.id ?? null);
                             }
                           }}
-                          className="w-full truncate rounded border border-edge px-2 py-1 text-left text-[8px] text-fg-secondary hover:border-edge-strong hover:text-fg"
+                          className="w-full truncate rounded-edge px-2 py-1 text-left text-[8px] text-fg-secondary hover:border-edge-strong hover:text-fg"
                           title={j.label}
                         >
                           {j.label} · {j.atTime.toFixed(2)}s

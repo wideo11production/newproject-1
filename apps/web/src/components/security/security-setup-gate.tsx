@@ -515,7 +515,7 @@ export default function SecuritySetupGate({
           NOTE: `transition` nahi lagaya height par - flex centering me
           height transition karne se card "jump" karta hai jo awkward
           lagta hai. Content change par seedha settle hona better hai. */}
-      <Card className="w-full max-w-[450px] border-gray-800 bg-gray-900/70">
+      <Card className="w-full max-w-[450px]-800 bg-gray-900/70">
         <CardHeader className="space-y-3 px-8 pt-8">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-6 w-6 text-blue-400" />
@@ -546,8 +546,8 @@ export default function SecuritySetupGate({
 
         <CardContent className="px-8 pb-8">
           {error ? (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-700/60 bg-red-950/40 p-3 text-sm text-red-300">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="mb-4 flex items-start gap-2 rounded-md border-700/60 bg-red-950/40 p-3 text-sm text-red-300">
+              <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
               <span>{error}</span>
             </div>
           ) : null}
@@ -556,7 +556,7 @@ export default function SecuritySetupGate({
           {step === 1 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-gray-300">
-                <KeyRound className="h-4 w-4 text-blue-400" />
+                <KeyRound className="h-2.5 w-2.5 text-blue-400" />
                 {changingPin
                   ? 'Change your 6-digit security PIN'
                   : status?.pin_configured
@@ -582,7 +582,7 @@ export default function SecuritySetupGate({
                     value={currentPin}
                     onChange={(e) => setCurrentPin(e.target.value.replace(/\D/g, ''))}
                     placeholder="Current PIN"
-                    className="h-11 border-gray-700 bg-gray-950 text-ink"
+                    className="h-11-700 bg-gray-950 text-ink"
                   />
                 </div>
               ) : null}
@@ -603,7 +603,7 @@ export default function SecuritySetupGate({
                   value={pin}
                   onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                   placeholder="******"
-                  className="h-11 border-gray-700 bg-gray-950 text-ink"
+                  className="h-11-700 bg-gray-950 text-ink"
                 />
               </div>
               <div className="space-y-2">
@@ -619,16 +619,16 @@ export default function SecuritySetupGate({
                   value={confirmPin}
                   onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
                   placeholder="******"
-                  className="h-11 border-gray-700 bg-gray-950 text-ink"
+                  className="h-11-700 bg-gray-950 text-ink"
                 />
               </div>
               <Button
                 onClick={submitPin}
                 disabled={busy}
-                className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                className="h-11 w-full rounded-md bg-blue-600 text-white hover:bg-blue-500"
               >
                 {busy ? (
-                  <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                  <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
                 ) : changingPin ? (
                   'Change PIN'
                 ) : (
@@ -659,7 +659,7 @@ export default function SecuritySetupGate({
                   User ko bataya jaata hai ki PIN change karne par kya
                   hota hai - transparency best practice hai. */}
       {changingPin ? (
-        <p className="rounded-md border border-amber-700/40 bg-amber-950/20 p-2.5 text-[11px] leading-relaxed text-amber-300/90">
+        <p className="rounded-md border-700/40 bg-amber-950/20 p-2.5 text-[11px] leading-relaxed text-amber-300/90">
           When you change your PIN, every other signed-in device is signed
           out - including this one. Your old PIN stops working immediately,
           and you will be asked to log in again with the new PIN.
@@ -672,17 +672,17 @@ export default function SecuritySetupGate({
           {step === 2 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-gray-300">
-                <HelpCircle className="h-4 w-4 text-blue-400" />
+                <HelpCircle className="h-2.5 w-2.5 text-blue-400" />
                 Select exactly 3 security questions
               </div>
 
               {[1, 2, 3].map((pos) => (
-                <div key={pos} className="space-y-2 rounded-lg border border-gray-800 p-3">
+                <div key={pos} className="space-y-2 rounded-md border-800 p-3">
                   <Label className="text-xs text-gray-400">Question {pos}</Label>
                   <select
                     value={picked[pos] ?? ''}
                     onChange={(e) => setPicked((p) => ({ ...p, [pos]: e.target.value }))}
-                    className="h-10 w-full rounded-lg border border-gray-700 bg-gray-950 px-3 text-sm text-ink focus:border-blue-500 focus:outline-none"
+                    className="h-10 w-full rounded-md border-700 bg-gray-950 px-3 text-sm text-ink focus:border-blue-500 focus:outline-none"
                   >
                     <option value="">Select a question...</option>
                     {availableQuestions.map((q) => (
@@ -697,7 +697,7 @@ export default function SecuritySetupGate({
                       value={answers[pos] ?? ''}
                       onChange={(e) => setAnswers((a) => ({ ...a, [pos]: e.target.value }))}
                       placeholder="Your answer"
-                      className="h-10 border-gray-700 bg-gray-950 text-sm text-ink"
+                      className="h-10-700 bg-gray-950 text-sm text-ink"
                     />
                   ) : null}
                 </div>
@@ -706,9 +706,9 @@ export default function SecuritySetupGate({
               <Button
                 onClick={submitQuestions}
                 disabled={busy}
-                className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                className="h-11 w-full rounded-md bg-blue-600 text-white hover:bg-blue-500"
               >
-                {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Complete setup'}
+                {busy ? <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" /> : 'Complete setup'}
               </Button>
             </div>
           )}
@@ -716,7 +716,7 @@ export default function SecuritySetupGate({
           {step === 3 && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm text-gray-300">
-                <Fingerprint className="h-4 w-4 text-blue-400" />
+                <Fingerprint className="h-2.5 w-2.5 text-blue-400" />
                 Register biometric authentication
               </div>
 
@@ -729,11 +729,11 @@ export default function SecuritySetupGate({
                   <Button
                     onClick={registerBiometric}
                     disabled={busy}
-                    className="h-11 w-full rounded-lg bg-blue-600 text-white hover:bg-blue-500"
+                    className="h-11 w-full rounded-md bg-blue-600 text-white hover:bg-blue-500"
                   >
                     {busy ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <Loader2 className="mr-2 h-2.5 w-2.5 animate-spin" />
                         Touch your sensor
                       </>
                     ) : (
@@ -795,7 +795,7 @@ export default function SecuritySetupGate({
                    - device me sensor nahi  -> skip + PIN/Questions se aage
                 */
                   <div className="space-y-3">
-                    <div className="rounded-lg border border-gray-700 bg-gray-900/50 p-3 text-sm text-gray-300">
+                    <div className="rounded-md border-700 bg-gray-900/50 p-3 text-sm text-gray-300">
                       <p className="font-medium">Biometrics not available on this device</p>
 
                       {/* ---- DIAGNOSTIC: ASLI WAJAH BATHAO ----
@@ -841,9 +841,9 @@ export default function SecuritySetupGate({
                   <Button
                     onClick={skipBiometric}
                     disabled={busy}
-                    className="h-11 w-full rounded-lg border border-gray-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
+                    className="h-11 w-full rounded-md border-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
                   >
-                    {busy ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Continue without biometric'}
+                    {busy ? <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" /> : 'Continue without biometric'}
                   </Button>
                 </div>
               )}
@@ -862,10 +862,10 @@ export default function SecuritySetupGate({
               redirect karta hai. Ye effect har render check karta hai, isliye
               chahe complete status kaise bhi aaye - redirect ho jayega. */}
           {status?.setup_complete && (
-            <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-700/60 bg-emerald-950/40 p-3 text-sm text-emerald-300">
-              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <div className="mt-4 flex items-center gap-2 rounded-md border-700/60 bg-emerald-950/40 p-3 text-sm text-emerald-300">
+              <CheckCircle2 className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
               <span>Security setup complete. Taking you to your dashboard...</span>
-              <Loader2 className="ml-auto h-4 w-4 animate-spin" aria-hidden="true" />
+              <Loader2 className="ml-auto h-2.5 w-2.5 animate-spin" aria-hidden="true" />
             </div>
           )}
         </CardContent>

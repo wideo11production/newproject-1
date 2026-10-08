@@ -51,7 +51,7 @@ export default function RootLayout({
         <PresenceTracker />
         <Providers>
           <div className="flex h-screen overflow-hidden bg-background">
-            <nav className="w-64 border-r border-border bg-card overflow-y-auto flex-shrink-0">
+            <nav className="w-64 bg-card overflow-y-auto flex-shrink-0">
               <Navigation />
             </nav>
             <main className="flex-1 overflow-auto min-w-0">

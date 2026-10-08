@@ -25,7 +25,7 @@ import { Suspense } from 'react';
 function WorkspaceLoading() {
   return (
     <div className="flex items-center justify-center gap-3 p-8 text-[#9fa7b3]">
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#5794f2] border-t-transparent" />
+      <div className="h-2.5 w-2.5 animate-spin rounded-full-[#5794f2]-transparent" />
       <span>Loading workspace...</span>
     </div>
   );

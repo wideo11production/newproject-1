@@ -181,10 +181,10 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
   };
 
   return (
-    <li className="rounded-lg border border-[#2c3235] bg-[#0d0f11] p-4">
+    <li className="rounded-md bg-[#0d0f11] p-4">
       <div className="flex flex-wrap items-start gap-3">
         {/* 16:9 cover thumbnail */}
-        <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-md border border-[#2c3235] bg-[#111217]">
+        <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-[#111217]">
           {channel.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -234,9 +234,9 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               className="h-8 bg-[#1f2227] px-2.5 text-xs text-[#d8d9da] hover:bg-[#2c3235]"
             >
               {open ? (
-                <X className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <X className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
               ) : (
-                <Pencil className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <Pencil className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
               )}
               {open ? 'Close' : 'Edit'}
             </Button>
@@ -248,9 +248,9 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               className="h-8 bg-[#1f2227] px-2.5 text-xs text-[#d8d9da] hover:bg-[#2c3235]"
             >
               {channel.is_public ? (
-                <EyeOff className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <EyeOff className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
               ) : (
-                <Eye className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <Eye className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
               )}
               {channel.is_public ? 'Make private' : 'Make public'}
             </Button>
@@ -261,7 +261,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 onClick={() => setConfirmingDelete(true)}
                 className="h-8 bg-[#1f2227] px-2.5 text-xs text-red-400 hover:bg-[#2c3235]"
               >
-                <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+                <Trash2 className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
                 Delete
               </Button>
             ) : (
@@ -274,7 +274,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                   className="h-8 bg-red-600 px-2.5 text-xs text-white hover:bg-red-500"
                 >
                   {busy ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    <Loader2 className="h-2.5 w-2.5 animate-spin" aria-hidden="true" />
                   ) : (
                     'Yes, delete'
                   )}
@@ -294,16 +294,16 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
 
       {/* ---- Inline editor (no modal) - matches the create-form pattern ---- */}
       {open ? (
-        <div className="mt-4 space-y-4 border-t border-[#2c3235] pt-4">
+        <div className="mt-4 space-y-4-[#2c3235] pt-4">
           {error ? (
             <p className="flex items-start gap-1.5 text-[11px] text-red-400">
-              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
               <span>{error}</span>
             </p>
           ) : null}
           {ok ? (
             <p className="flex items-start gap-1.5 text-[11px] text-emerald-400">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              <CheckCircle2 className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
               <span>{ok}</span>
             </p>
           ) : null}
@@ -321,7 +321,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 value={displayName}
                 maxLength={DISPLAY_NAME_MAX}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="h-9 border-[#2c3235] bg-[#111217] text-[#d8d9da]"
+                className="h-9-[#2c3235] bg-[#111217] text-[#d8d9da]"
               />
             </div>
 
@@ -338,7 +338,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 maxLength={DESCRIPTION_MAX}
                 rows={3}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md border border-[#2c3235] bg-[#111217] p-2 text-sm text-[#d8d9da] outline-none focus:border-[#5794f2] focus:ring-2 focus:ring-[#5794f2]/30"
+                className="w-full rounded-md bg-[#111217] p-2 text-sm text-[#d8d9da] outline-none focus:border-[#5794f2] focus:ring-2 focus:ring-[#5794f2]/30"
               />
               <p className="mt-0.5 text-[10px] text-[#6f7783]">
                 {description.length}/{DESCRIPTION_MAX}
@@ -351,7 +351,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               className="h-9 w-full bg-[#5794f2] text-sm text-white hover:bg-[#5794f2]/85"
             >
               {busy ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" aria-hidden="true" />
+                <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" aria-hidden="true" />
               ) : (
                 'Save changes'
               )}
@@ -375,3 +375,4 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
 }
 
 export default ChannelManager;
+

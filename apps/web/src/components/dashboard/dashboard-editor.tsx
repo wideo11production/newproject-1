@@ -140,7 +140,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
     <TooltipProvider delayDuration={200}>
     <div className="h-full flex">
       {/* Panel Picker Sidebar (draggable from) */}
-      <div className="w-64 border-r border-gray-800 p-4 overflow-y-auto">
+      <div className="w-64-800 p-4 overflow-y-auto">
         <h3 className="text-sm font-medium text-gray-300 mb-3">Panel Types</h3>
         <div className="space-y-2">
           {panelTypes.map((pt) => {
@@ -149,18 +149,18 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
               <Tooltip key={pt.type}>
                 <TooltipTrigger asChild>
                   <div
-                    className="bg-gray-900/50 border border-gray-700 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-gray-600 transition-colors"
+                    className="bg-gray-900/50 border-700 rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-gray-600 transition-colors"
                     draggable
                     onDragStart={() => setDraggedPanel(pt)}
                     onDragEnd={() => setDraggedPanel(null)}
                   >
                     <div className="flex items-center space-x-2">
-                      <Icon className="h-4 w-4 text-blue-400" />
+                      <Icon className="h-2.5 w-2.5 text-blue-400" />
                       <span className="text-sm text-gray-200">{pt.name}</span>
                     </div>
                   </div>
                 </TooltipTrigger>
-                <TooltipContent side="right" className="bg-gray-800 border-gray-700">
+                <TooltipContent side="right" className="bg-gray-800-700">
                   <p>Drag to add {pt.name} panel</p>
                 </TooltipContent>
               </Tooltip>
@@ -178,7 +178,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
             className="w-full text-gray-300 hover:text-ink hover:bg-gray-800"
             onClick={handleSave}
           >
-            <Layers className="h-4 w-4 mr-2" /> Save Dashboard
+            <Layers className="h-2.5 w-2.5 mr-2" /> Save Dashboard
           </Button>
         </div>
       </div>
@@ -192,7 +192,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
       >
         {panels.length === 0 ? (
           <div 
-            className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center h-full flex items-center justify-center"
+            className="border-2-dashed-700 rounded-md p-8 text-center h-full flex items-center justify-center"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
           >
@@ -208,7 +208,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
             {panels.map((panel, index) => (
               <div 
                 key={panel.id} 
-                className="col-span-4 bg-gray-900/50 border border-gray-700 rounded-lg shadow-lg cursor-move hover:shadow-xl transition-shadow"
+                className="col-span-4 bg-gray-900/50 border-700 rounded-md shadow-lg cursor-move hover:shadow-xl transition-shadow"
                 style={{ order: index }}
                 draggable
               >
@@ -218,15 +218,15 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 opacity-50 hover:opacity-100">
-                          <Settings className="h-3 w-3" />
+                          <Settings className="h-2.5 w-2.5" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-gray-800 border-gray-700">
+                      <DropdownMenuContent align="end" className="bg-gray-800-700">
                         <DropdownMenuItem onClick={() => handleEditPanel(panel)}>
-                          <Settings className="h-4 w-4 mr-2" /> Edit
+                          <Settings className="h-2.5 w-2.5 mr-2" /> Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleRemovePanel(panel.id)} className="text-red-400">
-                          <Trash2 className="h-4 w-4 mr-2" /> Remove
+                          <Trash2 className="h-2.5 w-2.5 mr-2" /> Remove
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -242,7 +242,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
 
         {/* Panel Editor Dialog */}
         <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
-          <DialogContent className="bg-gray-800 border-gray-700 text-gray-100 max-w-2xl">
+          <DialogContent className="bg-gray-800-700 text-gray-100 max-w-2xl">
             <DialogHeader>
               <DialogTitle>Edit Panel</DialogTitle>
               <DialogDescription>Update panel configuration and settings</DialogDescription>
@@ -254,16 +254,16 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
                   <Input
                     id="panel-title"
                     defaultValue={selectedPanel.title}
-                    className="bg-gray-700 border-gray-600 text-ink mt-1"
+                    className="bg-gray-700-600 text-ink mt-1"
                   />
                 </div>
                 <div>
                   <Label htmlFor="panel-type">Visualization Type</Label>
                   <Select defaultValue={selectedPanel.type}>
-                    <SelectTrigger className="bg-gray-700 border-gray-600 text-ink mt-1">
+                    <SelectTrigger className="bg-gray-700-600 text-ink mt-1">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectContent className="bg-gray-800-700">
                       {panelTypes.map(pt => (
                         <SelectItem key={pt.type} value={pt.type}>{pt.name}</SelectItem>
                       ))}
@@ -279,12 +279,12 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
                   <Input
                     id="panel-query"
                     placeholder="sum(rate(http_requests_total[5m]))"
-                    className="bg-gray-700 border-gray-600 text-ink mt-1 font-mono"
+                    className="bg-gray-700-600 text-ink mt-1 font-mono"
                   />
                 </div>
               </div>
             )}
-            <div className="flex justify-end space-x-2 pt-4 border-t border-gray-700">
+            <div className="flex justify-end space-x-2 pt-4-700">
               <Button variant="outline" onClick={() => setEditorOpen(false)}>Cancel</Button>
               <Button onClick={() => setEditorOpen(false)}>Save</Button>
             </div>
@@ -321,7 +321,7 @@ function renderPanelContent(panel: Panel) {
             {Math.floor(Math.random() * 10000).toLocaleString()}
           </div>
           <p className="text-sm text-gray-400 mt-2">{panel.title}</p>
-          <Badge className="mt-2 bg-blue-500/20 text-blue-400 border-blue-500/30">
+          <Badge className="mt-2 bg-blue-500/20 text-blue-400-500/30">
             +{Math.floor(Math.random() * 20)}.{Math.floor(Math.random() * 10)}%
           </Badge>
         </div>
@@ -339,7 +339,7 @@ function renderPanelContent(panel: Panel) {
             </thead>
             <tbody>
               {Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i} className="border-t border-gray-800">
+                <tr key={i} className="border-t-800">
                   <td className="p-2 text-gray-300">endpoint-{i + 1}</td>
                   <td className="text-right p-2 text-gray-400">{Math.floor(Math.random() * 1000)}</td>
                   <td className="text-right p-2">
@@ -407,7 +407,7 @@ function renderPanelContent(panel: Panel) {
                   <span className="text-gray-500">
                     {new Date(Date.now() - (i * 1000 * 30)).toISOString().slice(11, 19)}
                   </span>
-                  <Badge variant="outline" className={`text-xs ${colors[level as keyof typeof colors]} border-current`}>
+                  <Badge variant="outline" className={`text-xs ${colors[level as keyof typeof colors]}-current`}>
                     {level}
                   </Badge>
                   <span className="text-gray-300">
@@ -424,8 +424,8 @@ function renderPanelContent(panel: Panel) {
         <ScrollArea className="h-full">
           <div className="space-y-2 p-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-start space-x-3 p-2 rounded border border-red-500/20 bg-red-500/5">
-                <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+              <div key={i} className="flex items-start space-x-3 p-2 rounded border-500/20 bg-red-500/5">
+                <AlertCircle className="h-2.5 w-2.5 text-red-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <div className="font-medium text-ink">
                     {['HighMemoryUsage', 'APIHighLatency', 'DiskSpaceLow'][i % 3]}

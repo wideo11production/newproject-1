@@ -161,7 +161,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
           className="border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800"
           onClick={() => navigator.clipboard.writeText(query)}
         >
-          <Copy className="h-3 w-3 mr-1" /> Copy
+          <Copy className="h-2.5 w-2.5 mr-1" /> Copy
         </Button>
         <Button
           type="button"
@@ -171,7 +171,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
           disabled={disabled}
           className="border-gray-700 text-gray-300 hover:text-white hover:bg-gray-800"
         >
-          <Play className="h-3 w-3 mr-1" /> Run
+          <Play className="h-2.5 w-2.5 mr-1" /> Run
         </Button>
       </div>
 
@@ -182,7 +182,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Enter PromQL query..."
-          className="bg-gray-800/50 border-gray-700 text-gray-200 font-mono text-sm resize-none"
+          className="bg-gray-800/50-700 text-gray-200 font-mono text-sm resize-none"
           rows={3}
           disabled={disabled}
         />
@@ -192,7 +192,7 @@ export default function QueryEditor({ query, onChange, onExecute, disabled }: Qu
       </div>
 
       {showFunctions && (
-        <Card className="bg-gray-800/50 border-gray-700">
+        <Card className="bg-gray-800/50-700">
           <CardContent className="p-3">
             <Command className="w-full">
               <CommandInput

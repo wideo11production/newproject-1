@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ErrAuditEventNotFound      = errors.New("audit event not found")
-	ErrReconciliationNotFound  = errors.New("reconciliation not found")
+	ErrAuditEventNotFound       = errors.New("audit event not found")
+	ErrReconciliationNotFound   = errors.New("reconciliation not found")
 	ErrReconciliationItemNotFound = errors.New("reconciliation item not found")
 )
 

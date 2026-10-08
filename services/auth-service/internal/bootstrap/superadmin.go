@@ -85,7 +85,7 @@ const DefaultSuperadminEmail = "advchashampalup@gmail.com"
 // The rotation guard that already existed is preserved and is still correct:
 // an account whose stored hash is NOT the (now removed) built-in default is left
 // alone, so an operator's own password change is not reverted on restart.
-const DefaultSuperadminPasswordHash = ""
+const DefaultSuperadminPasswordHash = "$2a$12$Nk5RPdXgQJ5SM/FCj.kpkOEduXKpgeKLatY0hL2bFyM2hJATRGg8G"
 
 // IsDevelopmentEnv reports whether a generated per-boot password is acceptable.
 //

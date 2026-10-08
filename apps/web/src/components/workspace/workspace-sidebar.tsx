@@ -30,6 +30,13 @@
  *   - Baaki sab sabke liye visible
  *
  * Hinglish comments: har block ka full arth.
+ *
+ * BORDERLESS DESIGN: Ye sidebar hard borders se hai azad - visual separation
+ * bg color contrast se hota hai (bg-[#181b1f] sidebar, bg-[#1a1a1a] separators).
+ * Koi bhi/border-b/border-t class nahi hai. Saare interactive elements
+ * rounded-md geometry pe hain aur 150ms color transitions use karte hain.
+ * Active/hover states bg-[#1f2227] ya orange-red (#ff6500) se hote hain,
+ * koi ring/border nahi.
  */
 
 import { lazy, Suspense, useEffect, useState } from 'react';
@@ -47,8 +54,11 @@ import {
   X,
   Monitor,
   CreditCard,
+  HelpCircle,
+  ExternalLink,
 } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
+import { BrandCharacterAnimation } from '@/components/brand-character-animation';
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded view components — sabhi separately chunk hote hain.
@@ -81,6 +91,9 @@ const FinancialLedger = lazy(() =>
 const SubscriptionHub = lazy(() =>
   import('@/components/workspace/views/subscription-hub').then((m) => ({ default: m.SubscriptionHubView }))
 );
+const MicroFrameGuide = lazy(() =>
+  import('@/components/workspace/views/help/micro-frame-guide').then((m) => ({ default: m.MicroFrameGuide }))
+);
 
 // ---------------------------------------------------------------------------
 // Tab definition type
@@ -94,7 +107,8 @@ export type WorkspaceTabId =
   | 'broadcast'
   | 'commercial'
   | 'ledger'
-  | 'subscription';
+  | 'subscription'
+  | 'help-micro-frame';
 
 export type WorkspaceTab = {
   id: WorkspaceTabId;
@@ -122,13 +136,13 @@ export const WORKSPACE_TABS: WorkspaceTab[] = [
   {
     id: 'overview',
     label: 'Workspace Overview',
-    icon: <LayoutDashboard className="h-5 w-5" />,
+    icon: <LayoutDashboard className="h-2.5 w-2.5" />,
     visibleFor: 'all',
   },
   {
     id: 'editor',
     label: 'WideoCut Editor',
-    icon: <Play className="h-5 w-5" />,
+    icon: <Play className="h-2.5 w-2.5" />,
     visibleFor: 'all',
     external: true,
     href: process.env.NEXT_PUBLIC_VIDEO_EDITOR_URL ?? 'http://localhost:3002',
@@ -136,37 +150,37 @@ export const WORKSPACE_TABS: WorkspaceTab[] = [
   {
     id: 'aura',
     label: 'AURA Studio',
-    icon: <GraduationCap className="h-5 w-5" />,
+    icon: <GraduationCap className="h-2.5 w-2.5" />,
     visibleFor: 'student',
   },
   {
     id: 'framerate',
     label: 'AURA Premium Framerate',
-    icon: <Monitor className="h-5 w-5" />,
+    icon: <Monitor className="h-2.5 w-2.5" />,
     visibleFor: 'creator',
   },
   {
     id: 'broadcast',
     label: 'Creator Broadcast Pack',
-    icon: <Upload className="h-5 w-5" />,
+    icon: <Upload className="h-2.5 w-2.5" />,
     visibleFor: 'creator',
   },
   {
     id: 'commercial',
     label: 'Commercial Console',
-    icon: <Megaphone className="h-5 w-5" />,
+    icon: <Megaphone className="h-2.5 w-2.5" />,
     visibleFor: 'monetized',
   },
   {
     id: 'ledger',
     label: 'Financial Ledger Hub',
-    icon: <Wallet className="h-5 w-5" />,
+    icon: <Wallet className="h-2.5 w-2.5" />,
     visibleFor: 'monetized',
   },
   {
     id: 'subscription',
     label: 'Subscription Hub',
-    icon: <CreditCard className="h-5 w-5" />,
+    icon: <CreditCard className="h-2.5 w-2.5" />,
     visibleFor: 'creator',
   },
 ];
@@ -183,6 +197,7 @@ const TAB_VIEWS: Record<Exclude<WorkspaceTab['id'], 'editor'>, React.LazyExoticC
   commercial: CommercialConsole,
   ledger: FinancialLedger,
   subscription: SubscriptionHub,
+  'help-micro-frame': MicroFrameGuide,
 };
 
 // ---------------------------------------------------------------------------
@@ -224,6 +239,7 @@ export function WorkspaceSidebar({
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<WorkspaceTabId>('overview');
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Determine which tabs are visible for this user.
   const visibleTabs = WORKSPACE_TABS.filter((tab) => {
@@ -292,8 +308,14 @@ export function WorkspaceSidebar({
     const ViewComponent = TAB_VIEWS[activeTab as keyof typeof TAB_VIEWS];
     if (!ViewComponent) {
       return (
-        <div className="p-6">
-          <p className="text-[#9fa7b3]">Select a tab from the sidebar.</p>
+        <div className="flex flex-col items-center justify-center p-6 text-center">
+          <BrandCharacterAnimation
+            character="rino"
+            size="lg"
+            message="Nothing here yet. Select a tab from the sidebar to get started."
+            action="Explore"
+            onAction={() => setActiveTab('overview')}
+          />
         </div>
       );
     }
@@ -316,7 +338,7 @@ export function WorkspaceSidebar({
             aria-current={active ? 'page' : undefined}
             title={collapsed ? tab.label : undefined}
             className={cn(
-              'group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all',
+              'group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-all',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50',
               active
                 ? 'bg-[#1f2227] text-[#d8d9da] shadow-inner'
@@ -346,18 +368,31 @@ export function WorkspaceSidebar({
   return (
     <>
       {/* ---- Mobile top bar ---- */}
-      <div className="flex items-center justify-between border-b border-[#2c3235] bg-[#181b1f] px-3 py-2 lg:hidden">
+      <div className="flex items-center justify-between bg-[#1a1a1a] px-3 py-2 lg:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
           aria-label="Open workspace navigation"
           aria-expanded={mobileOpen}
-          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+          className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-2.5 w-2.5" />
         </button>
         <span className="text-sm font-semibold text-[#d8d9da]">Workspace</span>
-        <span className="h-9 w-9" aria-hidden="true" />
+        {/* ---- Help button on mobile ---- */}
+        <button
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={helpOpen}
+          onClick={() => setHelpOpen(!helpOpen)}
+          aria-label="Help"
+          className={cn(
+            'flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]',
+            helpOpen && 'text-[#ff6500]',
+          )}
+        >
+          <HelpCircle className="h-2.5 w-2.5" />
+        </button>
       </div>
 
       {/* ---- Mobile slide-in drawer ---- */}
@@ -368,16 +403,16 @@ export function WorkspaceSidebar({
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-64 border-r border-[#2c3235] bg-[#181b1f] lg:hidden">
-            <div className="flex items-center justify-between border-b border-[#2c3235] px-3 py-2.5">
+          <div className="fixed inset-y-0 left-0 z-50 w-64 bg-[#1a1a1a] lg:hidden">
+            <div className="flex items-center justify-between bg-[#1a1a1a] px-3 py-2.5">
               <span className="text-sm font-semibold text-[#d8d9da]">Workspace</span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-[#9fa7b3] hover:bg-[#1f2227] hover:text-[#d8d9da]"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] hover:bg-[#1f2227] hover:text-[#d8d9da]"
               >
-                <X className="h-5 w-5" />
+                <X className="h-2.5 w-2.5" />
               </button>
             </div>
             {nav}
@@ -388,33 +423,80 @@ export function WorkspaceSidebar({
       {/* ---- Desktop sidebar ---- */}
       <aside
         className={cn(
-          'hidden shrink-0 border-r border-[#2c3235] bg-[#181b1f] lg:flex lg:flex-col',
+          'hidden shrink-0 bg-[#1a1a1a] lg:flex lg:flex-col',
           collapsed ? 'w-16' : 'w-64'
         )}
       >
-        <div className="border-b border-[#2c3235] p-4">
-          <h2 className={cn('text-xs font-bold text-[#5794f2] uppercase', collapsed && 'sr-only')}>
-            Workspace
-          </h2>
+        <div className="bg-[#1a1a1a] p-4">
+          <div className="flex items-center justify-between">
+            <h2 className={cn('text-xs font-bold text-[#5794f2] uppercase', collapsed && 'sr-only')}>
+              Workspace
+            </h2>
+            {/* ---- Help dropdown ----
+                Navbar ke main Help dropdown menu.
+                Ismein "AURA Micro-Frame Studio Walkthrough" link shamil hai. */}
+            <div className="relative">
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={helpOpen}
+                onClick={() => setHelpOpen(!helpOpen)}
+                aria-label="Help"
+                className={cn(
+                  'flex h-6 w-6 items-center justify-center rounded-md text-[#9fa7b3] transition-colors duration-150',
+                  helpOpen ? 'text-[#ff6500]' : 'hover:bg-[#1f2227] hover:text-[#d8d9da]',
+                )}
+                title="Help"
+              >
+                <HelpCircle className="h-2.5 w-2.5" />
+              </button>
+              {helpOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setHelpOpen(false)}
+                    aria-hidden="true"
+                  />
+                  <div
+                    role="menu"
+                    aria-label="Help"
+                    className="absolute right-0 top-9 z-50 w-56 rounded-md bg-[#181b1f] py-1 shadow-xl"
+                  >
+                    <button
+                    role="menuitem"
+                    onClick={() => {
+                      setActiveTab('help-micro-frame');
+                      setHelpOpen(false);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[#d8d9da] transition-colors hover:bg-[#1f2227] hover:text-[#ff6500]"
+                  >
+                    <HelpCircle className="h-2.5 w-2.5" />
+                    AURA Micro-Frame Studio Walkthrough
+                  </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
         </div>
 
         {nav}
 
-        <div className="mt-auto border-t border-[#2c3235] p-2">
+        <div className="mt-auto bg-[#1a1a1a] p-2">
           <button
             type="button"
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm',
+              'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm',
               'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
             )}
           >
             {collapsed ? (
-              <ChevronsRight className="h-4 w-4 shrink-0" />
+              <ChevronsRight className="h-2.5 w-2.5 shrink-0" />
             ) : (
-              <ChevronsLeft className="h-4 w-4 shrink-0" />
+              <ChevronsLeft className="h-2.5 w-2.5 shrink-0" />
             )}
             <span className={cn('truncate', collapsed && 'sr-only')}>Collapse</span>
           </button>

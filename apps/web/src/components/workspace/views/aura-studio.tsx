@@ -101,12 +101,12 @@ export function AuraStudioView() {
   };
 
   const statusIcon: Record<VerificationStatus, React.ReactNode> = {
-    pending: <Clock className="h-5 w-5" />,
-    verified_by_domain: <Shield className="h-5 w-5" />,
-    pending_document: <Upload className="h-5 w-5" />,
-    verified: <CheckCircle className="h-5 w-5" />,
-    rejected: <XCircle className="h-5 w-5" />,
-    expired: <Clock className="h-5 w-5" />,
+    pending: <Clock className="h-2.5 w-2.5" />,
+    verified_by_domain: <Shield className="h-2.5 w-2.5" />,
+    pending_document: <Upload className="h-2.5 w-2.5" />,
+    verified: <CheckCircle className="h-2.5 w-2.5" />,
+    rejected: <XCircle className="h-2.5 w-2.5" />,
+    expired: <Clock className="h-2.5 w-2.5" />,
   };
 
   return (
@@ -117,7 +117,7 @@ export function AuraStudioView() {
         </h1>
       </div>
 
-      <div className="mb-6 rounded-xl border border-[#2c3235] bg-[#181b1f] p-5">
+      <div className="mb-6 rounded-md bg-[#181b1f] p-5">
         <div className="flex items-center gap-3">
           <span className={statusColor[status?.status || 'pending']}>
             {statusIcon[status?.status || 'pending']}
@@ -141,9 +141,9 @@ export function AuraStudioView() {
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-xl border border-[#2c3235] bg-[#0d0f11] p-4">
+        <div className="rounded-md bg-[#0d0f11] p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-[#d8d9da]">
-            <GraduationCap className="h-4 w-4 text-[#5794f2]" />
+            <GraduationCap className="h-2.5 w-2.5 text-[#5794f2]" />
             Gate A — Instant Domain Verification
           </h3>
           <p className="mt-1 text-xs text-[#9fa7b3]">
@@ -159,9 +159,9 @@ export function AuraStudioView() {
           </Button>
         </div>
 
-        <div className="rounded-xl border border-[#2c3235] bg-[#0d0f11] p-4">
+        <div className="rounded-md bg-[#0d0f11] p-4">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-[#d8d9da]">
-            <Upload className="h-4 w-4 text-[#5794f2]" />
+            <Upload className="h-2.5 w-2.5 text-[#5794f2]" />
             Gate B — ID Card Document Upload
           </h3>
           <p className="mt-1 text-xs text-[#9fa7b3]">
@@ -218,3 +218,4 @@ export function AuraStudioView() {
     </div>
   );
 }
+

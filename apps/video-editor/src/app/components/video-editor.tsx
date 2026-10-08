@@ -1822,7 +1822,7 @@ if (!mod) {
   );
 
   return (
-    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-background">
+    <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#0a0a0a]">
       <input
         ref={fileInputRef}
         type="file"
@@ -1930,7 +1930,7 @@ if (!mod) {
         />
 
         {settings.binWidth > 0 && (
-          <div style={{ width: settings.binWidth }} className="shrink-0 overflow-hidden border-r border-edge bg-surface">
+          <div style={{ width: settings.binWidth }} className="shrink-0 overflow-hidden bg-[#1a1a1a]">
             <div className="h-full overflow-y-auto p-2.5">
               {mode === 'media' && (
                 <MediaBin selectedId={selectedMediaId} onAdd={(item) => { setSelectedMediaId(item.id); addMedia(item); }} />
@@ -2184,7 +2184,7 @@ if (!mod) {
             so growing the timeline shrinks the preview rather than pushing the
             status strip off the screen. */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div data-preview-pane className="min-h-0 flex-1 overflow-hidden">
+          <div data-preview-pane className="min-h-0 flex-1 overflow-hidden bg-[#0a0a0a]">
             <PreviewCanvas
               tracks={tracks}
               transitions={transitions}
@@ -2267,7 +2267,7 @@ if (!mod) {
           Only overflows horizontally, synced to the tracks below.
           The ruler's own TimelineRuler component renders its internal playhead
           (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
-        <div className="relative shrink-0 overflow-hidden will-change-scroll-position">
+        <div className="relative shrink-0 overflow-hidden bg-[#1a1a1a]">
           <div
             ref={rulerScrollRef}
             className="overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position"
@@ -2314,7 +2314,7 @@ if (!mod) {
           </div>
           <div
             ref={laneScrollRef}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-surface will-change-transform"
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] will-change-transform"
           >
             <div className="relative" style={{ width: laneWidth }}>
               <TimelineTracks
@@ -2545,7 +2545,7 @@ if (!mod) {
       {toast && (
         <div
           role="status"
-          className="pointer-events-none fixed bottom-12 left-1/2 z-50 max-w-[70vw] -translate-x-1/2 rounded-full border border-edge-strong bg-surface-raised/95 px-4 py-1.5 text-center text-[8px] text-fg shadow-lg"
+          className="pointer-events-none fixed bottom-12 left-1/2 z-50 max-w-[70vw] -translate-x-1/2 rounded-full-edge-strong bg-surface-raised/95 px-4 py-1.5 text-center text-[8px] text-fg shadow-lg"
         >
           {toast}
         </div>

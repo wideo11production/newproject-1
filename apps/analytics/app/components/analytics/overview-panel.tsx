@@ -64,7 +64,7 @@ export function OverviewPanel({ state }: { state: AnalyticsState }) {
       )}
 
       {/* Columns that used to sit here with invented values. */}
-      <div className="mt-3 space-y-1.5 border-t border-gray-800 pt-3 text-[11px] leading-snug text-gray-500">
+      <div className="mt-3 space-y-1.5-800 pt-3 text-[11px] leading-snug text-gray-500">
         <p className="font-medium text-gray-400">Not instrumented</p>
         <p>
           <span className="text-gray-600">Total views, avg watch time, revenue</span> — this system has
@@ -73,19 +73,19 @@ export function OverviewPanel({ state }: { state: AnalyticsState }) {
         </p>
         <div className="flex flex-wrap gap-3 pt-1 text-gray-600">
           <span className="inline-flex items-center gap-1">
-            <Activity className="h-3 w-3" /> views
+            <Activity className="h-2.5 w-2.5" /> views
           </span>
           <span className="inline-flex items-center gap-1">
-            <Clock3 className="h-3 w-3" /> watch time
+            <Clock3 className="h-2.5 w-2.5" /> watch time
           </span>
           <span className="inline-flex items-center gap-1">
-            <Users className="h-3 w-3" /> active creators
+            <Users className="h-2.5 w-2.5" /> active creators
           </span>
           <span className="inline-flex items-center gap-1">
-            <UserPlus className="h-3 w-3" /> signups/day history
+            <UserPlus className="h-2.5 w-2.5" /> signups/day history
           </span>
           <span className="inline-flex items-center gap-1">
-            <CheckCircle2 className="h-3 w-3" /> engagement rate
+            <CheckCircle2 className="h-2.5 w-2.5" /> engagement rate
           </span>
         </div>
       </div>

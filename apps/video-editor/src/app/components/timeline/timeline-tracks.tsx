@@ -1,6 +1,28 @@
 'use client';
 
 // ============================================================================
+// BORDERLESS TIMELINE DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// classes (border-edge,-edge-strong,/b/l/r) hata diye
+// gaye hain aur unki jagah background colour contrast li gayi hai. Reason:
+// ek ek LINE hai — do surface ke beech ka gap. Dark UI me wo line
+// chrome ko define karta hai, lekin timeline me har lane ki own clip-fill
+// hoti hai aur wo fill hi boundary ka kaam karti hai. Extra = visual
+// noise jo clip ki identity ko kam karta hai.
+//
+// Colour mapping:
+//   #0a0a0a  Deep Pitch Black          — player preview grid (background behind video)
+//   #1a1a1a  Rich Charcoal            — sidebars, track header column, chrome strips
+//   #2a2a2a  Lighter Deep Grayish-Black — timeline track lanes / layout containers
+//   #ff6500  Orange-Red accent        — active / hover / selected state ONLY, never a separator
+//
+// Geometry: saare interactive elements `rounded-md` hain — koi bhi rounded
+// corner ek visual transition hai jo ki tarah noise deti hai. 150ms
+// transition duration hai colour changes ke liye (`transition-colors duration-150`).
+// Accent rings (`ring-1 ring-inset ring-[#ff6500]/60`) KEEP hain — wo highlight
+// hain, nahi.
+// ============================================================================
 // Timeline lanes
 // ============================================================================
 //
@@ -168,7 +190,7 @@ export function TrackHeaders({
     <div
       data-track-header=""
       style={{ width: TRACK_HEADER_W }}
-      className="shrink-0 overflow-hidden border-r border-edge bg-surface"
+      className="shrink-0 overflow-hidden bg-[#1a1a1a]"
     >
       {/*
         Only the add-track button lives here.
@@ -190,7 +212,7 @@ export function TrackHeaders({
       */}
       <div
         style={{ height: RULER_HEIGHT }}
-        className="flex items-center justify-center border-b border-edge"
+        className="flex items-center justify-center bg-[#1a1a1a]"
       >
         <button
           type="button"
@@ -200,14 +222,14 @@ export function TrackHeaders({
           }}
           aria-label="Add a track"
           title={`Add a track\nA second video lane is how picture-in-picture works.`}
-          className="flex h-4 w-4 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]"
+          className="flex h-2.5 w-2.5 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]"
         >
-          <Plus className="h-4 w-4" aria-hidden="true" />
+          <Plus className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         {menuOpen && (
           <div
             onPointerDown={(e) => e.stopPropagation()}
-            className="absolute left-7 top-6 z-40 w-40 border border-edge bg-surface-raised py-1"
+            className="absolute left-7 top-6 z-40 w-40 bg-[#1a1a1a] py-1"
           >
             {(['video', 'audio', 'text', 'image'] as TrackType[]).map((t) => {
               const { Icon: TIcon, label } = TRACK_STYLE[t];
@@ -221,7 +243,7 @@ export function TrackHeaders({
                   }}
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[8px] text-fg hover:bg-[#ff6500] hover:text-white"
                 >
-                  <TIcon className="h-4 w-4" style={{ color: TRACK_TINT[t] }} aria-hidden="true" />
+                  <TIcon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[t] }} aria-hidden="true" />
                   {t === 'text' ? 'Text / title track' : `${label} track`}
                 </button>
               );
@@ -253,7 +275,7 @@ export function TrackHeaders({
             style={{ height }}
             title={summary}
             className={[
-              'group relative flex flex-col items-center justify-center gap-0.5 border-b border-edge',
+              'group relative flex flex-col items-center justify-center gap-0.5 bg-[#1a1a1a]',
               track.visible ? '' : 'opacity-40',
             ].join(' ')}
           >
@@ -269,7 +291,7 @@ export function TrackHeaders({
             />
 
             {/* The type icon IS the lane's name. */}
-            <Icon className="h-4 w-4" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
+            <Icon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
 
             <div className="flex items-center gap-0.5">
               {track.type === 'audio' && (
@@ -312,7 +334,7 @@ export function TrackHeaders({
                 title={`Remove ${track.name} and the clips on it`}
                 className="absolute right-0.5 top-0.5 rounded p-0.5 text-fg-muted opacity-0 transition-opacity hover:text-rose-400 focus:opacity-100 group-hover:opacity-100"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-2.5 w-2.5" />
               </button>
             )}
 
@@ -323,7 +345,7 @@ export function TrackHeaders({
                 in the preview, and concludes the logo is broken rather than the
                 slider being unwired. */}
             {track.type === 'branding' && track.clips[0] && (
-              <div className="absolute right-0.5 top-0.5 flex items-center gap-1 border border-edge px-1 py-0.5">
+              <div className="absolute right-0.5 top-0.5 flex items-center gap-1 bg-[#1a1a1a] px-1 py-0.5">
                 <span className="text-[8px] text-fg-muted">Opacity</span>
                 <input
                   type="range"
@@ -424,11 +446,11 @@ function IconToggle({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className={`flex h-4 w-4 items-center justify-center text-fg-muted transition-colors duration-150 hover:will-change-transform ${
+      className={`flex h-2.5 w-2.5 items-center justify-center text-fg-muted transition-colors duration-150 hover:will-change-transform ${
         active ? 'text-[#ff6500]' : 'hover:text-fg'
       }`}
     >
-      <Ico className="h-4 w-4" aria-hidden="true" />
+      <Ico className="h-2.5 w-2.5" aria-hidden="true" />
     </button>
   );
 }
@@ -1122,8 +1144,8 @@ export function TimelineTracks({
               onDropMedia(mediaId, track.id, frameAt(e.clientX));
             }}
             className={[
-              'relative border-b border-edge',
-              track.locked ? 'bg-surface/60' : 'hover:bg-surface-raised/40',
+              'relative bg-[#2a2a2a]',
+              track.locked ? 'bg-[#2a2a2a]/60' : 'hover:bg-[#2a2a2a]/80 transition-colors duration-150',
               hoverTrack === track.id ? 'bg-[#ff6500]/10 ring-1 ring-inset ring-[#ff6500]/60' : '',
               binDropTrack === track.id ? 'bg-emerald-500/10 ring-1 ring-inset ring-emerald-400/70' : '',
             ].join(' ')}
@@ -1188,10 +1210,10 @@ export function TimelineTracks({
                   title={`${clip.mediaName} · frames ${startFrame}–${startFrame + lengthFrames} (${lengthFrames}f, ${frameToTimecode(lengthFrames, fps)}) — drag to move (lanes included), an edge to trim, the amber corner to fade, double-click for properties`}
                   className={[
                     // `gap` and `border` pulled back to 1px: at the old density
-                    // every clip carried a visible frame plus a rounded border,
+                    // every clip carried a visible frame plus a rounded,
                     // and a lane of them read as a stack of buttons rather than
                     // as a timeline.
-                    've-shimmer absolute flex items-center gap-0.5 overflow-hidden rounded-[3px] border text-left',
+                    've-shimmer absolute flex items-center gap-0.5 overflow-hidden rounded-[3px] text-left',
                     moving ? 'z-30 cursor-grabbing select-none opacity-90 shadow-lg' : 'cursor-grab',
                     cStyle.clip,
                     // Glow replaces the old 2px white ring, so the SELECTED
@@ -1296,7 +1318,7 @@ export function TimelineTracks({
                         title={`Fade in ${clip.fadeIn.toFixed(2)}s — drag up to lengthen`}
                         className="absolute left-0 top-0 z-10 h-2.5 w-2.5 cursor-ns-resize"
                       >
-                        <span className="block h-0 w-0 border-l-[6px] border-t-[6px] border-l-transparent border-t-amber-300/80" />
+                        <span className="block h-0 w-0-[6px]-[6px]-transparent-amber-300/80" />
                       </span>
                       <span
                         role="separator"
@@ -1307,13 +1329,13 @@ export function TimelineTracks({
                         title={`Fade out ${clip.fadeOut.toFixed(2)}s — drag up to lengthen`}
                         className="absolute right-0 top-0 z-10 h-2.5 w-2.5 cursor-ns-resize"
                       >
-                        <span className="ml-auto block h-0 w-0 border-r-[6px] border-t-[6px] border-r-transparent border-t-amber-300/80" />
+                        <span className="ml-auto block h-0 w-0-[6px]-[6px]-transparent-amber-300/80" />
                       </span>
                     </>
                   )}
 
                   {!clip.poster && !clip.peaks && rowH >= 20 && (
-                    <cStyle.Icon className="relative h-4 w-4 shrink-0" aria-hidden="true" />
+                    <cStyle.Icon className="relative h-2.5 w-2.5 shrink-0" aria-hidden="true" />
                   )}
                   <span
                     className="pointer-events-none relative min-w-0 flex-1 truncate text-[8px] font-medium text-white/90 drop-shadow"
@@ -1336,12 +1358,12 @@ export function TimelineTracks({
                   )}
                   {clip.linkedId && (
                     <span className="pointer-events-none relative shrink-0 text-emerald-300" title="Linked to another clip — moving one moves the other">
-                      <Link2 className="h-4 w-4" />
+                      <Link2 className="h-2.5 w-2.5" />
                     </span>
                   )}
                   {clip.effects.length > 0 && (
                     <span className="pointer-events-none relative shrink-0 text-amber-300" title={`${clip.effects.length} effect(s) applied`}>
-                      <Wand2 className="h-4 w-4" />
+                      <Wand2 className="h-2.5 w-2.5" />
                     </span>
                   )}
 
@@ -1392,14 +1414,14 @@ export function TimelineTracks({
                         }
                         onClick={() => onToggleLink(clip.id)}
                       >
-                        {clip.linkedId ? <Unlink className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+                        {clip.linkedId ? <Unlink className="h-2.5 w-2.5" /> : <Link2 className="h-2.5 w-2.5" />}
                       </ClipAction>
                       <ClipAction
                         label={`Properties of ${clip.mediaName}`}
                         title="Speed, volume, fades, colour, position and fit"
                         onClick={() => onOpenInspector(clip.id)}
                       >
-                        <Wand2 className="h-4 w-4" />
+                        <Wand2 className="h-2.5 w-2.5" />
                       </ClipAction>
                       <ClipAction
                         label={`Remove ${clip.mediaName}`}
@@ -1407,7 +1429,7 @@ export function TimelineTracks({
                         danger
                         onClick={() => onRemoveClip(clip.id)}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-2.5 w-2.5" />
                       </ClipAction>
                     </div>
                   )}
@@ -1446,10 +1468,10 @@ export function TimelineTracks({
                     // The fill is OPAQUE, not a translucent amber. Over a clip
                     // (which is always dark) a 40%-opacity amber reads as a
                     // pale wash and the glyph inside it disappears.
-                    'absolute top-1/2 z-40 flex -translate-y-1/2 items-center justify-center overflow-hidden rounded border',
+                    'absolute top-1/2 z-40 flex -translate-y-1/2 items-center justify-center overflow-hidden rounded',
                     selected
-                    ? 'border-[#ff6500] bg-[#ff6500]/20 ring-1 ring-[#ff6500]/40'
-                    : 'border-amber-300/70 bg-amber-500 hover:bg-amber-400',
+                    ? 'bg-[#ff6500]/20 ring-1 ring-[#ff6500]/40'
+                    : 'bg-amber-500 hover:bg-amber-400',
                   ].join(' ')}
                   // The badge SPANS the transition - it represents the overlap,
                   // not the cut - so its centre is the middle of the blend and
@@ -1485,7 +1507,7 @@ export function TimelineTracks({
                       ))}
                     </>
                   )}
-                  {w > 22 && <Shuffle className="h-4 w-4 text-white/90" aria-hidden="true" />}
+                  {w > 22 && <Shuffle className="h-2.5 w-2.5 text-white/90" aria-hidden="true" />}
                 </div>
               );
             })}
@@ -1496,7 +1518,7 @@ export function TimelineTracks({
       {/* Marquee */}
       {marquee && (
         <div
-                className="pointer-events-none absolute z-40 border border-[#ff6500]/70 bg-[#ff6500]/10"
+                className="pointer-events-none absolute z-40-[#ff6500]/70 bg-[#ff6500]/10"
           style={{
             left: Math.min(marquee.x0, marquee.x1),
             top: Math.min(marquee.y0, marquee.y1),
@@ -1725,7 +1747,7 @@ function ClipAction({
       }}
       onPointerDown={(e) => e.stopPropagation()}
       className={[
-        'flex h-4 w-4 items-center justify-center transition-colors duration-150 duration-150',
+        'flex h-2.5 w-2.5 items-center justify-center transition-colors duration-150',
         danger ? 'text-slate-300 hover:text-[#ff6500]' : 'text-slate-300 hover:text-[#ff6500]',
       ].join(' ')}
     >
@@ -1749,11 +1771,11 @@ const TRACK_STYLE: Record<
   // The tokens are defined in `:root` and deliberately NOT overridden in
   // `.light`: a clip is MEDIA, not chrome. Resolve and Premiere both keep clips
   // dark in a light UI for the same reason.
-  video: { chip: 'bg-[#ff6500]/15 text-[#ff6500]', clip: 'bg-[color:var(--ve-clip-video)] border-[#ff6500]/60', border: 'border-[#ff6500]/30', Icon: Film, label: 'Video' },
-  audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-[color:var(--ve-clip-audio)] border-violet-400/60', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
-  text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-[color:var(--ve-clip-text)] border-amber-400/60', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
-  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)] border-emerald-400/60', border: 'border-emerald-500/30', Icon: ImageIcon, label: 'Image' },
-  branding: { chip: 'bg-pink-500/15 text-pink-300', clip: 'bg-[color:var(--ve-clip-branding)] border-pink-400/60', border: 'border-pink-500/30', Icon: Badge, label: 'Branding' },
+  video: { chip: 'bg-[#ff6500]/15 text-[#ff6500]', clip: 'bg-[color:var(--ve-clip-video)]', border: 'border-[#ff6500]/30', Icon: Film, label: 'Video' },
+  audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-[color:var(--ve-clip-audio)]', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
+  text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-[color:var(--ve-clip-text)]', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
+  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)]', border: 'border-emerald-500/30', Icon: loadImage, label: 'Image' },
+  branding: { chip: 'bg-pink-500/15 text-pink-300', clip: 'bg-[color:var(--ve-clip-branding)]', border: 'border-pink-500/30', Icon: Badge, label: 'Branding' },
 };
 
 /**
@@ -1801,8 +1823,10 @@ export function TimelineFooter({
   const total = tracks.reduce((n, t) => n + t.clips.length, 0);
   const totalFrames = Math.max(1, Math.round(duration * fps));
   const measureLen = measure.start >= 0 && measure.end > measure.start ? measure.end - measure.start : 0;
+  const audioTracks = tracks.filter((t) => t.type === 'audio' && t.visible);
+  const hasAudio = audioTracks.length > 0;
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between border-t border-edge bg-surface px-3 font-mono text-[8px]">
+    <div className="flex h-7 shrink-0 items-center justify-between bg-[#1a1a1a] px-3 font-mono text-[8px]">
       <div className="flex items-center gap-3 text-fg-secondary">
         <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
         <span className="text-fg-muted/40">|</span>
@@ -1829,6 +1853,17 @@ export function TimelineFooter({
         </span>
       </div>
       <div className="flex items-center gap-3 text-fg-muted">
+        {hasAudio && (
+          <AudioEqualizer tracks={audioTracks} />
+        )}
+        <button
+          type="button"
+          title="Recover deleted items from the undo history (Ctrl+Z)"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[8px] text-fg-muted transition-colors duration-150 hover:bg-[#2a2a2a] hover:text-[#ff6500]"
+        >
+          <Shuffle className="h-2.5 w-2.5" aria-hidden="true" />
+          Recover
+        </button>
         <span className="truncate max-w-[28ch]" title={projectName}>
           {projectName}
           <span className={dirty ? 'ml-1 text-[#ff6500]' : 'ml-1'}>
@@ -1844,6 +1879,51 @@ export function TimelineFooter({
         {markers.length > 0 && <span>{markers.length} marker{markers.length === 1 ? '' : 's'}</span>}
         {transitions.length > 0 && <span>{transitions.length} transition{transitions.length === 1 ? '' : 's'}</span>}
       </div>
+    </div>
+  );
+};
+
+/**
+ * Audio Multi-Color Monitor — vertical LED equalizer strip on the far right
+ * of the timeline workspace. Each active stereo channel renders its own
+ * column of 5 LEDs that blink in response to the track's volume level.
+ *
+ * Hinglish: ye timeline ke right edge par ek live audio meter hai — har
+ * audio track ke liye ek column of 5 LEDs jo volume ke hisaab blink karte
+ * hain. Koi border nahi, koi shadow frame nahi — sirf LED grid.
+ */
+function AudioEqualizer({ tracks }: { tracks: TimelineTrack[] }) {
+  return (
+    <div className="flex items-end gap-0.5" aria-label="Audio level monitor">
+      {tracks.map((track, ti) => {
+        const level = track.muted ? 0 : Math.min(1, track.volume);
+        const lit = Math.round(level * 5);
+        return (
+          <div key={track.id} className="flex flex-col-reverse gap-0.5" aria-label={`${track.name} level`}>
+            {[0, 1, 2, 3, 4].map((i) => {
+              const on = i < lit;
+              const hue = on
+                ? i >= 4
+                  ? '#ef4444'
+                  : i >= 3
+                    ? '#f59e0b'
+                    : '#22c55e'
+                : '#2a2a2a';
+              return (
+                <span
+                  key={i}
+                  className={`h-1.5 w-1.5 rounded-sm transition-colors duration-150`}
+                  style={{
+                    background: hue,
+                    animation: on ? 'pulse-soft 1s ease-in-out infinite' : 'none',
+                  }}
+                  aria-hidden="true"
+                />
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }

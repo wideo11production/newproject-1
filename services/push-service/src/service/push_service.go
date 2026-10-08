@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"newproject/services/push-service/src/model"
 	"newproject/services/push-service/src/repository"
 )
@@ -91,6 +92,9 @@ func NewPushService(
 	}, nil
 }
 
+// SendMessage — single-user push message (existing API).
+// Hinglish: ek specific user ke liye push bhejta hai. Database me msg record
+// hota hai, phir processMessage se delivery attempt hoti hai.
 func (s *PushService) SendMessage(ctx context.Context, userID uint, title, body, icon, urlStr, tag string) (*model.PushMessage, error) {
 	msg := &model.PushMessage{
 		MessageID: uuid.New(),
@@ -122,6 +126,10 @@ func (s *PushService) UnsubscribeByUser(ctx context.Context, userID uint) error 
 	return s.subRepo.DeleteByUserID(ctx, userID)
 }
 
+// Subscribe — user ka device subscription save karta hai (with optional creator binding).
+// Hinglish: browser se WebPush subscription aata hai — endpoint, p256dh,
+// auth_secret ke saath. Agar creator_id diya gaya hai to ye subscription
+// sirf us creator ke live stream notifications ke liye bind ho jayega.
 func (s *PushService) Subscribe(ctx context.Context, sub *model.PushSubscription) error {
 	existing, err := s.subRepo.GetByEndpoint(ctx, sub.Endpoint)
 	if err != nil && !errors.Is(err, repository.ErrSubscriptionNotFound) {
@@ -134,6 +142,113 @@ func (s *PushService) Subscribe(ctx context.Context, sub *model.PushSubscription
 		return s.subRepo.Update(ctx, existing)
 	}
 	return s.subRepo.Create(ctx, sub)
+}
+
+// BroadcastToCreatorFollowers — jab ek creator apna live stream shuru karta hai,
+// to sirf uss creator ke followers ko real-time WebPush bhejta hai.
+//
+// Hinglish: NATS JetStream se `live.stream.start` event aata hai, jismein
+// creator_id hota hai. Is function ko turant call karte hue sabhi jinke
+// CreatorID is creator ke barabar set hain, unke devices par push jaayega.
+//
+// Yeh zero-cost broadcast hai — sirf local NATS + local WebPush, koi
+// paid third-party (Firebase, OneSignal) nahi. Sabhi push subscription
+// database me stored hain, aur delivery direct browser endpoints par hoti
+// hai via encrypted AES-GCM payload.
+func (s *PushService) BroadcastToCreatorFollowers(ctx context.Context, creatorID uint, title, body, icon, urlStr, tag string) (int, error) {
+	subs, err := s.subRepo.GetByCreatorID(ctx, creatorID)
+	if err != nil {
+		return 0, fmt.Errorf("broadcast: failed to get creator subscriptions: %w", err)
+	}
+
+	delivered := 0
+	for _, sub := range subs {
+		// Create a transient push message record for auditing.
+		msg := &model.PushMessage{
+			MessageID:  uuid.New(),
+			UserID:     sub.UserID,
+			Title:      title,
+			Body:       body,
+			Icon:       icon,
+			URL:        urlStr,
+			Tag:        tag,
+			Status:     "pending",
+			TTL:        2419200,
+			CreatorID:  &creatorID,
+		}
+		if err := s.msgRepo.Create(ctx, msg); err != nil {
+			log.Warn().Err(err).Uint("user_id", sub.UserID).Msg("failed to record broadcast message")
+			continue
+		}
+
+		// Deliver in a goroutine for parallel fan-out.
+		go func(sub *model.PushSubscription, msg *model.PushMessage) {
+			result := s.deliver(ctx, sub, msg)
+			if result.Success {
+				msg.Status = "delivered"
+			} else {
+				msg.Status = "failed"
+				msg.LastError = result.Err.Error()
+			}
+			now := time.Now()
+			msg.DeliveredAt = &now
+			_ = s.msgRepo.Update(ctx, msg)
+		}(sub, msg)
+
+		delivered++
+	}
+
+	log.Info().Uint("creator_id", creatorID).Int("recipients", delivered).Msg("live stream broadcast dispatched")
+	return delivered, nil
+}
+
+// BroadcastToAll — platform-wide broadcast to ALL subscribed devices.
+//
+// Hinglish: agar koi global event hai (platform maintenance, breaking news,
+// etc.) to sabhi devices ko ek saath bhejne ke liye. CreatorID field NULL
+// rehne par ye subscription general broadcast me included hoti hai.
+func (s *PushService) BroadcastToAll(ctx context.Context, title, body, icon, urlStr, tag string) (int, error) {
+	subs, err := s.subRepo.GetAll(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("broadcast-all: failed to get subscriptions: %w", err)
+	}
+
+	delivered := 0
+	for _, sub := range subs {
+		msg := &model.PushMessage{
+			MessageID:  uuid.New(),
+			UserID:     sub.UserID,
+			Title:      title,
+			Body:       body,
+			Icon:       icon,
+			URL:        urlStr,
+			Tag:        tag,
+			Status:     "pending",
+			TTL:        2419200,
+		}
+		if err := s.msgRepo.Create(ctx, msg); err != nil {
+			log.Warn().Err(err).Uint("user_id", sub.UserID).Msg("failed to record broadcast-all message")
+			continue
+		}
+
+		go func(sub *model.PushSubscription, msg *model.PushMessage) {
+			result := s.deliver(ctx, sub, msg)
+			if result.Success {
+				msg.Status = "delivered"
+			} else {
+				msg.Status = "failed"
+				msg.LastError = result.Err.Error()
+			}
+			now := time.Now()
+			msg.DeliveredAt = &now
+			_ = s.msgRepo.Update(ctx, msg)
+		}(sub, msg)
+
+		delivered++
+	}
+
+	log.Info().Int("recipients", delivered).Msg("platform-wide broadcast dispatched")
+	return delivered, nil
 }
 
 func (s *PushService) processMessage(ctx context.Context, msg *model.PushMessage) {

@@ -59,7 +59,7 @@ function HealthChecks() {
         const isDegraded = check.status === 'degraded';
         
         return (
-          <Card key={check.name} className={`bg-gray-900/50 border ${
+          <Card key={check.name} className={`bg-gray-900/50 ${
             isHealthy ? 'border-green-500/30' : 
             isDegraded ? 'border-yellow-500/30' : 
             'border-red-500/30'
@@ -67,7 +67,7 @@ function HealthChecks() {
             <CardContent className="p-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <Icon className={`h-4 w-4 ${
+                  <Icon className={`h-2.5 w-2.5 ${
                     isHealthy ? 'text-green-400' : 
                     isDegraded ? 'text-yellow-400' : 
                     'text-red-400'
@@ -115,7 +115,7 @@ function LiveMetrics() {
   }, [ws]);
 
   return (
-    <Card className="bg-gray-900/50 border-gray-800">
+    <Card className="bg-gray-900/50-800">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-gray-300">Live Metrics</CardTitle>
       </CardHeader>
@@ -148,7 +148,7 @@ function RecentAlerts() {
   if (isLoading) return <AlertsSkeleton />;
 
   return (
-    <Card className="bg-gray-900/50 border-gray-800">
+    <Card className="bg-gray-900/50-800">
       <CardHeader>
         <CardTitle className="text-sm font-medium text-gray-300">Recent Alerts</CardTitle>
       </CardHeader>
@@ -191,7 +191,7 @@ function HealthSkeleton() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {Array.from({ length: 6 }).map((_, i) => (
-        <Card key={i} className="bg-gray-900/50 border-gray-800">
+        <Card key={i} className="bg-gray-900/50-800">
           <CardContent className="p-3">
             <div className="flex items-center justify-between">
               <Skeleton className="h-4 w-24 bg-gray-700/50" />
@@ -206,7 +206,7 @@ function HealthSkeleton() {
 
 function MetricsSkeleton() {
   return (
-    <Card className="bg-gray-900/50 border-gray-800">
+    <Card className="bg-gray-900/50-800">
       <CardHeader>
         <Skeleton className="h-4 w-32 bg-gray-700/50" />
       </CardHeader>
@@ -226,7 +226,7 @@ function MetricsSkeleton() {
 
 function AlertsSkeleton() {
   return (
-    <Card className="bg-gray-900/50 border-gray-800">
+    <Card className="bg-gray-900/50-800">
       <CardHeader>
         <Skeleton className="h-4 w-32 bg-gray-700/50" />
       </CardHeader>

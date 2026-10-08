@@ -828,7 +828,7 @@ export default function SuperadminDashboard() {
   if (authState !== 'signed-in') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-950">
-        <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+        <Loader2 className="h-2.5 w-2.5 animate-spin text-gray-500" />
       </div>
     );
   }
@@ -865,9 +865,9 @@ export default function SuperadminDashboard() {
   return (
     <div className="min-h-screen bg-gray-950">
       {/* ---- Top bar: sticky, so the controls never scroll away ---- */}
-      <header className="sticky top-0 z-20 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
+      <header className="sticky top-0 z-20-800 bg-gray-950/95 backdrop-blur">
         <div className="flex h-14 items-center gap-3 px-4">
-          <ShieldAlert className="h-5 w-5 shrink-0 text-red-500" />
+          <ShieldAlert className="h-2.5 w-2.5 shrink-0 text-red-500" />
           <h1 className="text-sm font-semibold text-gray-50">Superadmin</h1>
           <span className="hidden text-xs text-gray-500 sm:inline">
             Security, click ledger and user intelligence
@@ -884,12 +884,12 @@ export default function SuperadminDashboard() {
               onClick={() => loadAll()}
               disabled={loading}
               aria-label="Refresh all panels"
-              className="flex h-9 items-center gap-2 rounded-lg border border-gray-800 bg-gray-900/60 px-3 text-xs text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+              className="flex h-9 items-center gap-2 rounded-md border-800 bg-gray-900/60 px-3 text-xs text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
             >
               {loading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
               ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
+                <RefreshCw className="h-2.5 w-2.5" />
               )}
               <span className="hidden sm:inline">Refresh</span>
             </button>
@@ -908,16 +908,16 @@ export default function SuperadminDashboard() {
               }}
               title="Reset panel layout"
               aria-label="Reset panel layout to default"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-800 bg-gray-900/60 text-gray-400 transition-colors hover:bg-gray-800"
+              className="flex h-9 w-9 items-center justify-center rounded-md border-800 bg-gray-900/60 text-gray-400 transition-colors hover:bg-gray-800"
             >
-              <LayoutGrid className="h-3.5 w-3.5" />
+              <LayoutGrid className="h-2.5 w-2.5" />
             </button>
 
             <ThemeToggle />
 
             <button
               onClick={() => void signOut()}
-              className="h-9 rounded-lg border border-gray-800 bg-gray-900/60 px-3 text-xs text-gray-400 transition-colors hover:bg-gray-800"
+              className="h-9 rounded-md border-800 bg-gray-900/60 px-3 text-xs text-gray-400 transition-colors hover:bg-gray-800"
             >
               Sign out
             </button>
@@ -929,7 +929,7 @@ export default function SuperadminDashboard() {
         {/* ---- Section rail ----
             Hidden below `lg`. On a phone a fixed 200px rail costs more than it
             gives, and the panels are the point. */}
-        <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto border-r border-gray-800 px-3 py-4 lg:block">
+        <nav className="sticky top-14 hidden h-[calc(100vh-3.5rem)] w-52 shrink-0 overflow-y-auto-800 px-3 py-4 lg:block">
           <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
             Sections
           </p>
@@ -967,7 +967,7 @@ export default function SuperadminDashboard() {
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 text-xs text-gray-500 transition-colors hover:bg-gray-800/60 hover:text-gray-300"
                 >
                   {a.label}
-                  <ExternalLink className="ml-auto h-3 w-3" />
+                  <ExternalLink className="ml-auto h-2.5 w-2.5" />
                 </a>
               </li>
             ))}
@@ -978,7 +978,7 @@ export default function SuperadminDashboard() {
         <div className="space-y-4">
 
         {authError ? (
-          <div className="rounded-lg border border-red-700/60 bg-red-950/40 p-4 text-sm text-red-300">
+          <div className="rounded-md border-700/60 bg-red-950/40 p-4 text-sm text-red-300">
             {authError}
           </div>
         ) : null}
@@ -987,7 +987,7 @@ export default function SuperadminDashboard() {
               Shows only UNACKNOWLEDGED critical events, so it can be quiet without
               being silenced — see the acknowledgement block above. */}
           {criticalCount > 0 && (
-            <div className="space-y-3 rounded-lg border-2 border-red-600/60 bg-red-950/40 p-4">
+            <div className="space-y-3 rounded-md-600/60 bg-red-950/40 p-4">
               <div className="flex flex-wrap items-center gap-3">
                 <ShieldAlert className="h-6 w-6 shrink-0 text-red-600" />
                 <div className="min-w-0 flex-1">
@@ -1009,7 +1009,7 @@ export default function SuperadminDashboard() {
                 {unacknowledgedCritical.map((e) => (
                   <li
                     key={e.event.id}
-                    className="flex flex-wrap items-center gap-3 rounded-md border border-red-800/50 bg-red-950/30 p-3"
+                    className="flex flex-wrap items-center gap-3 rounded-md border-800/50 bg-red-950/30 p-3"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="font-mono text-xs font-semibold text-red-300">
@@ -1042,12 +1042,12 @@ export default function SuperadminDashboard() {
             id="acknowledgements"
             title="Alert Acknowledgements"
             subtitle={`${acknowledgements.length} recorded · "seen", not "resolved"`}
-            icon={<CheckCircle2 className="h-4 w-4" />}
+            icon={<CheckCircle2 className="h-2.5 w-2.5" />}
             actions={
               <button
                 type="button"
                 onClick={() => setShowAcked((v) => !v)}
-                className="rounded-md border border-gray-800 bg-gray-900/60 px-2.5 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
+                className="rounded-md border-800 bg-gray-900/60 px-2.5 py-1 text-xs text-gray-400 transition-colors hover:bg-gray-800"
               >
                 {showAcked ? 'Hide' : 'Show'}
               </button>
@@ -1060,7 +1060,7 @@ export default function SuperadminDashboard() {
               <div className="max-h-80 overflow-auto">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-gray-900/95 text-left text-xs uppercase text-gray-500">
-                    <tr className="border-b border-gray-800">
+                    <tr className="border-b-800">
                       <th className="px-3 py-2">When</th>
                       <th className="px-3 py-2">Acknowledged by</th>
                       <th className="px-3 py-2">Event</th>
@@ -1069,7 +1069,7 @@ export default function SuperadminDashboard() {
                   </thead>
                   <tbody>
                     {acknowledgements.map((a) => (
-                      <tr key={a.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                      <tr key={a.id} className="border-b-800/50 hover:bg-gray-800/30">
                         <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-400">
                           {new Date(a.acknowledged_at).toLocaleString()}
                         </td>
@@ -1104,40 +1104,40 @@ export default function SuperadminDashboard() {
           <StatCard
             label="Total Clicks"
             value={stats?.total_clicks ?? 0}
-            icon={<MousePointerClick className="h-5 w-5" />}
+            icon={<MousePointerClick className="h-2.5 w-2.5" />}
             color="text-blue-400"
           />
           <StatCard
             label="Clicks (24h)"
             value={stats?.clicks_24h ?? 0}
-            icon={<Activity className="h-5 w-5" />}
+            icon={<Activity className="h-2.5 w-2.5" />}
             color="text-green-400"
           />
           <StatCard
             label="Unique Users"
             value={stats?.unique_users ?? 0}
-            icon={<Users className="h-5 w-5" />}
+            icon={<Users className="h-2.5 w-2.5" />}
             color="text-purple-400"
           />
           <StatCard
             label="Security Events"
             value={security.length}
-            icon={<ShieldAlert className="h-5 w-5" />}
+            icon={<ShieldAlert className="h-2.5 w-2.5" />}
             color={criticalCount > 0 ? 'text-red-400' : 'text-gray-400'}
           />
           <StatCard
             label="Online Now"
             value={activity.filter((a) => a.is_online).length}
-            icon={<Activity className="h-5 w-5" />}
+            icon={<Activity className="h-2.5 w-2.5" />}
             color="text-emerald-400"
           />
         </div>
 
         {/* ---- Retention banner ---- */}
         {stats && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-800 bg-gray-900/50 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border-800 bg-gray-900/50 p-4">
             <div className="flex items-center gap-3">
-              <Database className="h-5 w-5 text-gray-400" />
+              <Database className="h-2.5 w-2.5 text-gray-400" />
               <div>
                 <p className="text-sm text-gray-300">
                   Click history auto-purges after {stats.retention_days} days
@@ -1152,9 +1152,9 @@ export default function SuperadminDashboard() {
             <button
               onClick={handlePurge}
               disabled={purging}
-              className="flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-md border-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 disabled:opacity-50"
             >
-              {purging ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {purging ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
               Purge now
             </button>
           </div>
@@ -1185,14 +1185,14 @@ export default function SuperadminDashboard() {
           subtitle={`${clickTotal.toLocaleString()} total events · newest first${
             lastRefresh ? ` · refreshed ${new Date(lastRefresh).toLocaleTimeString()}` : ''
           }`}
-          icon={<MousePointerClick className="h-5 w-5" />}
+          icon={<MousePointerClick className="h-2.5 w-2.5" />}
           actions={
             <label className="flex cursor-pointer items-center gap-2 text-xs text-gray-400">
               <input
                 type="checkbox"
                 checked={live}
                 onChange={(e) => setLive(e.target.checked)}
-                className="h-3.5 w-3.5 accent-blue-500"
+                className="h-2.5 w-2.5 accent-blue-500"
               />
               Live (5s)
             </label>
@@ -1214,7 +1214,7 @@ export default function SuperadminDashboard() {
             <select
               value={surfaceFilter}
               onChange={(e) => setSurfaceFilter(e.target.value)}
-              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-300"
+              className="rounded-md border-700 bg-gray-900 px-2 py-1 text-xs text-gray-300"
               aria-label="Filter by app"
             >
               <option value="all">All apps</option>
@@ -1228,7 +1228,7 @@ export default function SuperadminDashboard() {
             <select
               value={attributionFilter}
               onChange={(e) => setAttributionFilter(e.target.value)}
-              className="rounded-md border border-gray-700 bg-gray-900 px-2 py-1 text-xs text-gray-300"
+              className="rounded-md border-700 bg-gray-900 px-2 py-1 text-xs text-gray-300"
               aria-label="Filter by attribution"
             >
               <option value="all">Any attribution</option>
@@ -1238,7 +1238,7 @@ export default function SuperadminDashboard() {
             </select>
 
             {attributionFilter === 'forged' && (
-              <span className="rounded-md border border-red-800 bg-red-950/40 px-2 py-1 text-xs font-semibold text-red-300">
+              <span className="rounded-md border-800 bg-red-950/40 px-2 py-1 text-xs font-semibold text-red-300">
                 Showing rows whose session cookie failed signature verification
               </span>
             )}
@@ -1255,7 +1255,7 @@ export default function SuperadminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <tr className="border-b-800 text-left text-xs uppercase text-gray-500">
                     <th className="px-3 py-2">Time</th>
                     <th className="px-3 py-2">App</th>
                     <th className="px-3 py-2">Page</th>
@@ -1272,7 +1272,7 @@ export default function SuperadminDashboard() {
                     )
                     .slice(0, 200)
                     .map((c) => (
-                      <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                      <tr key={c.id} className="border-b-800/50 hover:bg-gray-800/30">
                         <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-gray-400">
                           {/* occurred_at, with created_at as the authority.
                               occurred_at is client-reported - though the shared
@@ -1321,7 +1321,7 @@ export default function SuperadminDashboard() {
             id="targets"
             title="Most-pressed controls (30 days)"
             subtitle="Aggregate, not per-user"
-            icon={<MousePointerClick className="h-5 w-5" />}
+            icon={<MousePointerClick className="h-2.5 w-2.5" />}
           >
             <div className="space-y-2">
               {topTargets.map((t) => {
@@ -1353,7 +1353,7 @@ export default function SuperadminDashboard() {
 
         {/* ---- Top pages ---- */}
         {stats && stats.top_pages.length > 0 && (
-          <Panel id="top-pages" title="Top Pages (7 days)" icon={<Activity className="h-5 w-5" />}>
+          <Panel id="top-pages" title="Top Pages (7 days)" icon={<Activity className="h-2.5 w-2.5" />}>
             <div className="space-y-2">
               {stats.top_pages.map((p) => {
                 const max = stats.top_pages[0]?.clicks || 1;
@@ -1384,7 +1384,7 @@ export default function SuperadminDashboard() {
           id="security"
           title="Security Events"
           subtitle={`${security.length} events`}
-          icon={<ShieldAlert className="h-5 w-5" />}
+          icon={<ShieldAlert className="h-2.5 w-2.5" />}
         >
           {security.length === 0 ? (
             <Empty icon={<CheckCircle2 className="h-8 w-8 text-green-600" />} text="No security events" />
@@ -1393,7 +1393,7 @@ export default function SuperadminDashboard() {
               {security.slice(0, 25).map((e) => (
                 <div
                   key={e.event.id}
-                  className={`flex items-start gap-3 rounded-lg border p-3 ${
+                  className={`flex items-start gap-3 rounded-md p-3 ${
                     e.critical
                       ? 'border-red-800/50 bg-red-950/20'
                       : 'border-gray-800 bg-gray-950/40'
@@ -1423,7 +1423,7 @@ export default function SuperadminDashboard() {
           id="activity"
           title="User Activity"
           subtitle="Sessions and online time"
-          icon={<Users className="h-5 w-5" />}
+          icon={<Users className="h-2.5 w-2.5" />}
         >
           {activity.length === 0 ? (
             <Empty icon={<Users className="h-8 w-8" />} text="No activity recorded" />
@@ -1431,7 +1431,7 @@ export default function SuperadminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <tr className="border-b-800 text-left text-xs uppercase text-gray-500">
                     <th className="px-3 py-2">User</th>
                     <th className="px-3 py-2">Sessions</th>
                     <th className="px-3 py-2">Online</th>
@@ -1441,7 +1441,7 @@ export default function SuperadminDashboard() {
                 </thead>
                 <tbody>
                   {activity.map((a) => (
-                    <tr key={a.email} className="border-b border-gray-800/50">
+                    <tr key={a.email} className="border-b-800/50">
                       <td className="px-3 py-2 font-mono text-xs text-gray-300">
                         {a.email}
                       </td>
@@ -1477,7 +1477,7 @@ export default function SuperadminDashboard() {
           id="ledger"
           title="User Ledger"
           subtitle="Registration date + per-device earnings"
-          icon={<Database className="h-5 w-5" />}
+          icon={<Database className="h-2.5 w-2.5" />}
         >
           {activity.length === 0 ? (
             <Empty icon={<Users className="h-8 w-8" />} text="No user activity recorded" />
@@ -1485,7 +1485,7 @@ export default function SuperadminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <tr className="border-b-800 text-left text-xs uppercase text-gray-500">
                     <th className="px-3 py-2">User</th>
                     {/* NEW COLUMN: registration date (auth DB) */}
                     <th className="px-3 py-2">Registered</th>
@@ -1500,7 +1500,7 @@ export default function SuperadminDashboard() {
                   {activity.map((a) => {
                     const reg = a.registered_at ? new Date(a.registered_at) : null;
                     return (
-                      <tr key={a.email} className="border-b border-gray-800/50">
+                      <tr key={a.email} className="border-b-800/50">
                         <td className="px-3 py-2 font-mono text-xs text-gray-300">
                           {a.email}
                         </td>
@@ -1551,7 +1551,7 @@ export default function SuperadminDashboard() {
               ? `cap ₹${ledger.cap_inr} · review at ₹${ledger.review_at_inr}`
               : 'device-level revenue ledger'
           }
-          icon={<Database className="h-5 w-5" />}
+          icon={<Database className="h-2.5 w-2.5" />}
         >
           {ledger.devices.length === 0 ? (
             <Empty
@@ -1562,7 +1562,7 @@ export default function SuperadminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-800 text-left text-xs uppercase text-gray-500">
+                  <tr className="border-b-800 text-left text-xs uppercase text-gray-500">
                     <th className="px-3 py-2">Device</th>
                     <th className="px-3 py-2">Revenue</th>
                     <th className="px-3 py-2">Impressions</th>
@@ -1577,7 +1577,7 @@ export default function SuperadminDashboard() {
     // ko number me cast karna padta hai - warna TS comparison error deta hai.
     const over = d.cap_usage_pct > 100;
                     return (
-                      <tr key={String(d.device_id)} className="border-b border-gray-800/50">
+                      <tr key={String(d.device_id)} className="border-b-800/50">
                         <td className="px-3 py-2 font-mono text-xs text-gray-300">
                           {d.device_id}
                         </td>
@@ -1651,7 +1651,7 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+    <div className="rounded-md border-800 bg-gray-900/60 p-4">
       <div className={`mb-2 flex items-center gap-2 ${color}`}>{icon}</div>
       <p className="font-mono text-2xl font-bold text-gray-50">
         {value.toLocaleString()}
@@ -1695,8 +1695,8 @@ function Empty({ icon, text }: { icon: React.ReactNode; text: string }) {
  */
 function PanelError({ msg }: { msg: string }) {
   return (
-    <div className="flex items-start gap-3 rounded-lg border border-amber-800/60 bg-amber-950/20 p-3">
-      <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+    <div className="flex items-start gap-3 rounded-md border-800/60 bg-amber-950/20 p-3">
+      <ShieldAlert className="mt-0.5 h-2.5 w-2.5 shrink-0 text-amber-500" />
       <div>
         <p className="text-sm font-semibold text-amber-300">
           This panel could not load ({msg})
@@ -1762,16 +1762,16 @@ function AttributionBadge({ value }: { value: string }) {
 function eventIcon(type: string) {
   switch (type) {
     case 'LOCKOUT_TRIGGERED':
-      return <Lock className="h-4 w-4" />;
+      return <Lock className="h-2.5 w-2.5" />;
     case 'PIN_FAILED':
-      return <Fingerprint className="h-4 w-4" />;
+      return <Fingerprint className="h-2.5 w-2.5" />;
     case 'DEVICE_LIMIT_EXCEEDED':
-      return <Users className="h-4 w-4" />;
+      return <Users className="h-2.5 w-2.5" />;
     case 'CONFIG_TAMPER':
-      return <ShieldAlert className="h-4 w-4" />;
+      return <ShieldAlert className="h-2.5 w-2.5" />;
     case 'LOGIN_FAILED':
-      return <LogIn className="h-4 w-4" />;
+      return <LogIn className="h-2.5 w-2.5" />;
     default:
-      return <Clock className="h-4 w-4" />;
+      return <Clock className="h-2.5 w-2.5" />;
   }
 }

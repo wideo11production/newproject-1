@@ -16,6 +16,8 @@ var (
 type SubscriptionRepository interface {
 	Create(ctx context.Context, sub *model.PushSubscription) error
 	GetByUserID(ctx context.Context, userID uint) ([]*model.PushSubscription, error)
+	GetByCreatorID(ctx context.Context, creatorID uint) ([]*model.PushSubscription, error)
+	GetAll(ctx context.Context) ([]*model.PushSubscription, error)
 	GetByEndpoint(ctx context.Context, endpoint string) (*model.PushSubscription, error)
 	GetByID(ctx context.Context, id uint) (*model.PushSubscription, error)
 	Update(ctx context.Context, sub *model.PushSubscription) error
@@ -47,6 +49,24 @@ func (r *subscriptionRepository) Create(ctx context.Context, sub *model.PushSubs
 func (r *subscriptionRepository) GetByUserID(ctx context.Context, userID uint) ([]*model.PushSubscription, error) {
 	var subs []*model.PushSubscription
 	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&subs).Error
+	return subs, err
+}
+
+// GetByCreatorID — saare subscriptions jo is creator ke live stream ke liye hain.
+// Hinglish: jab koi creator live stream shuru karta hai, to sirf uss creator
+// ke followers ko push bhejne ke liye use hota hai.
+func (r *subscriptionRepository) GetByCreatorID(ctx context.Context, creatorID uint) ([]*model.PushSubscription, error) {
+	var subs []*model.PushSubscription
+	err := r.db.WithContext(ctx).Where("creator_id = ?", creatorID).Find(&subs).Error
+	return subs, err
+}
+
+// GetAll — ALL active subscriptions. Broadcast-to-all ke liye use hota hai.
+// Hinglish: jab koi global event (jaise platform-wide maintenance ya
+// breaking news) ho to sabhi subscribed devices ko ek saath bhejne ke liye.
+func (r *subscriptionRepository) GetAll(ctx context.Context) ([]*model.PushSubscription, error) {
+	var subs []*model.PushSubscription
+	err := r.db.WithContext(ctx).Find(&subs).Error
 	return subs, err
 }
 

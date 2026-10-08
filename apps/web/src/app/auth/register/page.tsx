@@ -10,7 +10,7 @@
 //   outermost element hai. Isliye box-model refactor yahan nahi, balki
 //   `components/auth/auth-shell.tsx` me kiya gaya hai:
 //     - Card par `box-content` (content-box) - 500px ab sirf content ka
-//       budget hai, border uske bahar.
+//       budget hai, uske bahar.
 //     - Page wrapper par `box-border` PIN kiya gaya hai, kyunki uska
 //       `min-h-screen` (100vh) + `py-6 sm:py-8` padding hai - content-box
 //       hota to 100vh + 48/64px ho jata aur har page par scrollbar aa jata.
@@ -558,7 +558,7 @@ return (
             aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
             className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
           </button>
         </div>
 
@@ -637,14 +637,14 @@ return (
             aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
             className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
           >
-            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
           </button>
         </div>
       </Field>
 
       {/* ---- Terms & Conditions consent - SIMPLIFIED (single line) ----
-          Hinglish: pehle ye ek BORDERED BOX (p-2.5 + border + background) tha
-          jo ~40px leta tha. Ab plain ek-line row hai (~24px). Border/box hata
+          Hinglish: pehle ye ek BORDERED BOX (p-2.5 + + background) tha
+          jo ~40px leta tha. Ab plain ek-line row hai (~24px)./box hata
           diya gaya taaki 600px card me jagah bache.
           Checkbox + text ek hi line pe - checkbox `mt-0` se text ke saath
           baseline align hota hai (multi-line wrap hone par bhi theek).
@@ -655,7 +655,7 @@ return (
           id="terms"
           checked={acceptedTerms}
           onCheckedChange={(v) => setAcceptedTerms(v === true)}
-          className="mt-px border-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+          className="mt-px-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
         />
         <label
           htmlFor="terms"
@@ -716,7 +716,7 @@ return (
                 );
               }
             }}
-            className="mt-px shrink-0 border-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
+            className="mt-px shrink-0-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
           />
           <label
             htmlFor="biometric"
@@ -754,7 +754,7 @@ return (
             aria-expanded={showBiometricHelp}
             aria-controls="biometric-help"
             aria-label="About biometric login"
-            className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#3d4348] text-[10px] font-bold leading-none text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+            className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full-[#3d4348] text-[10px] font-bold leading-none text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
           >
             ?
           </button>
@@ -799,7 +799,7 @@ return (
             id="biometric-help"
             role="region"
             aria-label="About biometric login"
-            className="mt-1.5 space-y-1.5 rounded-md border border-[#2c3235] bg-[#0d0f11]/70 p-2.5"
+            className="mt-1.5 space-y-1.5 rounded-md bg-[#0d0f11]/70 p-2.5"
           >
             <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
               Biometric login uses your device&apos;s own security hardware - a
@@ -832,16 +832,16 @@ return (
       {message ? (
         <div
           role="status"
-          className={`flex items-start gap-2 rounded-lg border p-2.5 text-xs ${
+          className={`flex items-start gap-2 rounded-md p-2.5 text-xs ${
             status === 'success'
               ? 'border-emerald-700/60 bg-emerald-950/40 text-emerald-300'
               : 'border-red-700/60 bg-red-950/40 text-red-300'
           }`}
         >
           {status === 'success' ? (
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <CheckCircle2 className="mt-0.5 h-2.5 w-2.5 shrink-0" />
           ) : (
-            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
           )}
           <span className="leading-relaxed">{message}</span>
         </div>
@@ -855,12 +855,12 @@ return (
       >
         {status === 'submitting' ? (
           <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-2.5 w-2.5 animate-spin" />
             Creating account
           </>
         ) : status === 'success' ? (
           <>
-            <ShieldCheck className="mr-2 h-4 w-4" />
+            <ShieldCheck className="mr-2 h-2.5 w-2.5" />
             Account created
           </>
         ) : (
@@ -871,3 +871,4 @@ return (
     </AuthShell>
   );
 }
+

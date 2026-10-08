@@ -113,8 +113,8 @@ export function ExportDialog({
         if (e.target === e.currentTarget && !running) onClose();
       }}
     >
-      <div className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-lg border border-edge-strong bg-surface-raised shadow-2xl">
-        <header className="flex items-center justify-between border-b border-edge px-4 py-2.5">
+      <div className="flex max-h-full w-full max-w-xl flex-col overflow-hidden rounded-md-edge-strong bg-surface-raised shadow-2xl">
+        <header className="flex items-center justify-between-edge px-4 py-2.5">
           <h2 className="text-[10px] font-medium text-fg">Export video</h2>
           <button
             type="button"
@@ -138,7 +138,7 @@ export function ExportDialog({
                   onChange={(v) => setPresetId(v)}
                 />
               </Field>
-              <div className="flex items-center gap-2 rounded border border-edge bg-surface/60 px-2 py-1.5 text-[8px] text-fg-muted">
+              <div className="flex items-center gap-2 rounded-edge bg-surface/60 px-2 py-1.5 text-[8px] text-fg-muted">
                 <Film className="h-2 w-2 shrink-0" aria-hidden="true" />
                 {preset.width || settings.width}×{preset.height || settings.height} at {preset.fps || settings.fps} fps
                 {' · '}
@@ -209,10 +209,10 @@ export function ExportDialog({
             </div>
           )}
 
-          {error && <p className="rounded border border-rose-900 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}
+          {error && <p className="rounded border-900 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}
 
           {result && (
-            <div className="rounded border border-emerald-900 bg-emerald-950/20 p-2">
+            <div className="rounded border-900 bg-emerald-950/20 p-2">
               <p className="flex items-center gap-1.5 text-[8px] text-emerald-300">
                 <Check className="h-2 w-2" aria-hidden="true" />
                 {result.name} · {(result.size / 1024 ** 2).toFixed(1)} MB
@@ -233,7 +233,7 @@ export function ExportDialog({
           )}
         </div>
 
-        <footer className="flex items-center justify-between border-t border-edge px-4 py-2.5">
+        <footer className="flex items-center justify-between-edge px-4 py-2.5">
           <TextInput value={fileName} ariaLabel="Output file name" onChange={setFileName} placeholder="video" />
           <div className="flex gap-1.5">
             {running ? (

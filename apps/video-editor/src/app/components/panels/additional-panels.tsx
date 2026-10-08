@@ -8,7 +8,7 @@
 // tha — "sample videos, backgrounds, intro videos, effects, tools".
 // Har panel ek grid-based layout use karta hai jo Movavi-style banata hai.
 //
-// Zero background framing boxes — flat design with sharp border outlines only.
+// Zero background framing boxes — flat design with sharp outlines only.
 // Active highlights use orange-red (#ff6500) signature theme.
 
 import { useMemo } from 'react';
@@ -145,7 +145,7 @@ export function BackgroundsPanel() {
           <input
             type="text"
             defaultValue="#000000"
-            className="w-full rounded border border-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+            className="w-full rounded-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
             aria-label="Custom background hex"
           />
         </Field>
@@ -339,7 +339,7 @@ export function ToolsPanel({ settings, onToggle }: ToolsPanelProps) {
               return (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between border-b border-edge py-1.5 last:border-b-0"
+                  className="flex items-center justify-between-edge py-1.5 last:border-b-0"
                 >
                   <div>
                     <span className="text-[8px] font-medium text-fg">{t.label}</span>

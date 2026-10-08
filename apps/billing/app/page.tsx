@@ -18,28 +18,28 @@ export default function BillingDashboard() {
           </div>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="bg-card border-border p-4 rounded-lg">
+          <div className="bg-card p-4 rounded-md">
             <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
             <p className="text-2xl font-bold">$127,432</p>
           </div>
         </div>
       </div>
-      <aside className="w-80 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
+      <aside className="w-80 bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
         <Suspense fallback={<Loading />}>
           <DashboardSidebar />
         </Suspense>
       </aside>
-      <div className="w-80 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
+      <div className="w-80 bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
         <Suspense fallback={<Loading />}>
           <SubscriptionsSidebar />
         </Suspense>
       </div>
-      <div className="w-80 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
+      <div className="w-80 bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
         <Suspense fallback={<Loading />}>
           <InvoicesSidebar />
         </Suspense>
       </div>
-      <div className="w-80 border-l border-border bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
+      <div className="w-80 bg-card/50 overflow-y-auto flex-shrink-0 hidden lg:flex lg:flex-col">
         <Suspense fallback={<Loading />}>
           <PaymentsSidebar />
         </Suspense>
@@ -51,7 +51,7 @@ export default function BillingDashboard() {
 function Loading() {
   return (
     <div className="flex items-center justify-center h-full space-x-2 text-muted-foreground">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+      <div className="animate-spin rounded-full h-6 w-6-2"></div>
       <span>Loading...</span>
     </div>
   );

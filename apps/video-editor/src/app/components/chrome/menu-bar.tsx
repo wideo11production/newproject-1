@@ -1,6 +1,21 @@
 "use client";
 
 // ============================================================================
+// BORDERLESS CHROME DESIGN — Hinglish architecture note
+// ============================================================================
+//
+// Is file me saare `border-edge` / `border-edge-strong` separators hata diye
+// gaye hain. Unki jagah background tone contrast li gayi hai: menu bar aur
+// toolbar ek `#1a1a1a` Rich Charcoal band hain (sidebar role), aur dropdown /
+// menu popovers apna `bg-surface-raised` maintain karte hain. Ek doosre ke
+// saath boundary ek LINE (border) ki jagah ek TONE difference se bani hai —
+// ye clean hai kyunki tone difference permanent hai, ki tarah hover
+// par nahi badalta.
+//
+// Accent rule: `#ff6500` orange-red sirf active / hover / selected state ka
+// hai, koi bhi separator nahi. `border-[#ff6500]` on hover/focus KEEP hain.
+// Saare interactive elements `rounded-md` hain, 150ms transition ke saath.
+// ============================================================================
 // Top menu bar
 // ============================================================================
 //
@@ -98,7 +113,7 @@ export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.R
       ref={barRef}
       role="menubar"
       aria-label="Main menu"
-      className="flex h-8 shrink-0 items-center gap-0.5 border-b border-edge bg-surface px-2"
+      className="flex h-8 shrink-0 items-center gap-0.5 bg-[#1a1a1a] px-2"
     >
       {menus.map((menu) => {
         const open = openId === menu.id;
@@ -118,7 +133,7 @@ export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.R
                 if (openId) setOpenId(menu.id);
               }}
               className={[
-                'rounded px-2.5 py-1 text-[8px] font-medium transition-colors',
+                'rounded-md px-2.5 py-1 text-[8px] font-medium transition-colors',
                 open
                   ? 'bg-surface-overlay text-white'
                   : 'text-fg-secondary hover:bg-surface-overlay/60 hover:text-fg',
@@ -131,7 +146,7 @@ export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.R
               <div
                 role="menu"
                 aria-label={menu.label}
-                className="absolute left-0 top-full z-50 mt-0.5 min-w-[240px] rounded-md border border-edge-strong bg-surface-raised py-1 shadow-xl"
+                className="absolute left-0 top-full z-50 mt-0.5 min-w-[240px] bg-[#1a1a1a] py-1 shadow-xl"
               >
                 {menu.items.map((item, i) => (
                   <div key={`${item.label}-${i}`}>
@@ -155,7 +170,7 @@ export function MenuBar({ menus, children }: { menus: Menu[]; children?: React.R
                       {item.shortcut && (
                         <kbd
                           className={[
-                            'shrink-0 rounded border px-1 py-0.5 font-mono text-[8px]',
+                            'shrink-0 rounded px-1 py-0.5 font-mono text-[8px]',
                             item.disabled
                               ? 'border-edge text-fg-muted'
                               : 'border-edge-strong text-fg-secondary',
@@ -191,7 +206,7 @@ export function ToolbarGroup({ title, children }: { title: string; children: Rea
       role="group"
       aria-label={title}
       title={title}
-      className="flex items-center gap-0.5 border-r border-edge px-2 last:border-r-0"
+      className="flex items-center gap-0.5 bg-[#1a1a1a] px-2 last:bg-[#0a0a0a]"
     >
       {children}
     </div>
