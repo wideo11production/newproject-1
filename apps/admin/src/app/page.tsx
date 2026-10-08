@@ -23,7 +23,7 @@ export default function AdminDashboard() {
           <h2 className="text-lg font-semibold mb-2">Knowledge Bot Chat</h2>
           <p>Chat ID: {chatId ?? 'None'}</p>
           {loading ? <p>Loading...</p> : null}
-          <div className="mt-2 h-64 overflow-y-auto p-2">
+          <div className="mt-2 h-64 overflow-y-auto p-2 custom-scrollbar">
             {messages.map((msg) => (
               <div key={msg.id} className={`mb-2 ${msg.isBot ? 'text-blue-500' : 'text-gray-700'}`}>
                 {msg.content}

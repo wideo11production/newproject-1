@@ -56,7 +56,7 @@ const SETTINGS_KEY = 'wideo11.video-editor.settings.v1';
  * Chrome 121+ ignores every `::-webkit-scrollbar` rule in the document when it
  * is. See the comment at the top of that file.
  */
-const SCROLLBAR_PX = 2;
+const SCROLLBAR_PX = 0;
 
 const userDir = mkdtempSync(join(tmpdir(), 've-'));
 const PORT = 9600 + Math.floor(Math.random() * 90);
@@ -1231,7 +1231,7 @@ try {
       const px = (v) => parseFloat(v) || 0;
       const barW = vS ? el.offsetWidth - el.clientWidth - px(cs.borderLeftWidth) - px(cs.borderRightWidth) : 0;
       const barH = hS ? el.offsetHeight - el.clientHeight - px(cs.borderTopWidth) - px(cs.borderBottomWidth) : 0;
-      if (barW <= 0 && barH <= 0) continue;
+      // For 0px scrollbars, barW/barH will be 0. Keep them to verify they're invisible.
       const sb = getComputedStyle(el, '::-webkit-scrollbar');
       out.push({
         tag: el.tagName.toLowerCase(),

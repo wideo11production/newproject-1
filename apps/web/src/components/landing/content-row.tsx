@@ -122,7 +122,7 @@ export default function ContentRow({ row, className }: ContentRowProps) {
           `[&::-webkit-scrollbar]:hidden` (WebKit) via arbitrary variants. */}
       <div
         ref={scrollRef}
-        className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 lg:px-8 [&::-webkit-scrollbar]:hidden"
+        className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:px-6 lg:px-8 [&::-webkit-scrollbar]:hidden custom-scrollbar horizontal"
       >
         {row.tiles.map((tile) => (
           <ContentTile key={tile.id} tile={tile} />

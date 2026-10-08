@@ -101,6 +101,61 @@ interface ToolButton {
   active?: boolean;
 }
 
+interface EditorToolbarProps {
+  canSplit: boolean;
+  canDelete: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+  canSelectAll: boolean;
+  canProcessAudio: boolean;
+  selectedCount: number;
+  isPlaying: boolean;
+  recording: boolean;
+  linkedSelection: boolean;
+  ripple: boolean;
+  dirty: boolean;
+  projectName: string;
+  savedAt: number | null;
+  loopOn: boolean;
+  onTogglePlay: () => void;
+  onStep: (frames: number) => void;
+  onSplit: () => void;
+  onDelete: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  onSelectAll: () => void;
+  onCopy: () => void;
+  onPaste: () => void;
+  onDuplicate: () => void;
+  onToggleSnapping: () => void;
+  snapping: boolean;
+  onToggleRipple: () => void;
+  onZoom: (delta: number) => void;
+  onZoomTo: (pxPerFrame: number) => void;
+  pxPerFrame: number;
+  onFit: () => void;
+  onFullscreen: () => void;
+  onOpenBin: () => void;
+  onRecord: () => void;
+  onNewProject: () => void;
+  onSave: () => void;
+  onExport: () => void;
+  onSnapshot: () => void;
+  onToggleLoop: () => void;
+  onOpenProject: () => void;
+  onAddMarker: () => void;
+  markerCount: number;
+  onClearMarkers: () => void;
+  onMarkerStep: (dir: -1 | 1) => void;
+  onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
+  onFpsChange: (fps: number) => void;
+  fps: number;
+  playbackRate: number;
+  onPlaybackRate: (rate: number) => void;
+  /** Whether to render the icon toolbar below the menu bar. Default true. */
+  showToolbar?: boolean;
+}
+
 export function EditorToolbar({
   canSplit,
   canDelete,
@@ -152,67 +207,8 @@ export function EditorToolbar({
   fps,
   playbackRate,
   onPlaybackRate,
-}: {
-  canSplit: boolean;
-  canDelete: boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-  canSelectAll: boolean;
-  canProcessAudio: boolean;
-  selectedCount: number;
-  isPlaying: boolean;
-  recording: boolean;
-  linkedSelection: boolean;
-  ripple: boolean;
-  dirty: boolean;
-  projectName: string;
-  savedAt: number | null;
-  loopOn: boolean;
-  onTogglePlay: () => void;
-  onStep: (frames: number) => void;
-  onSplit: () => void;
-  onDelete: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  onSelectAll: () => void;
-  onCopy: () => void;
-  onPaste: () => void;
-  onDuplicate: () => void;
-  onToggleSnapping: () => void;
-  snapping: boolean;
-  onToggleRipple: () => void;
-  onZoom: (delta: number) => void;
-  /** Absolute zoom, in PIXELS PER FRAME. For the slider; the buttons step. */
-  onZoomTo: (pxPerFrame: number) => void;
-  /** Current zoom, so the slider can show a live percentage. */
-  pxPerFrame: number;
-  onFit: () => void;
-  onFullscreen: () => void;
-  onOpenBin: () => void;
-  onRecord: () => void;
-  onNewProject: () => void;
-  onSave: () => void;
-  onExport: () => void;
-  onSnapshot: () => void;
-  onToggleLoop: () => void;
-  onOpenProject: () => void;
-  onAddMarker: () => void;
-  markerCount: number;
-  onClearMarkers: () => void;
-  /** -1 for the previous marker, +1 for the next. */
-  onMarkerStep: (dir: -1 | 1) => void;
-  /** The three frame-accurate edge edits that have no single NLE gesture.
-   *  delta is in FRAMES, so +1 moves exactly one frame at any frame rate.
-   *  These exist as toolbar buttons as well as shortcuts, because a feature
-   *  reachable only from a chord is a feature most users never find. */
-  onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
-  onFpsChange: (fps: number) => void;
-  /** The rate the timeline is counting in. Changing it rescales the zoom so the
-   *  timeline keeps the same apparent size in SECONDS. */
-  fps: number;
-  playbackRate: number;
-  onPlaybackRate: (rate: number) => void;
-}) {
+  showToolbar = true,
+}: EditorToolbarProps) {
   // Help modal state. Local to the toolbar because the toolbar OWNS the
   // trigger - lifting it would put a boolean in the editor shell for one
   // dialog.
@@ -486,11 +482,12 @@ export function EditorToolbar({
         <HelpTip />
         <AuthNav />
       </MenuBar>
-      <div
-        role="toolbar"
-        aria-label="Editing tools"
-      className="flex h-10 shrink-0 items-center bg-[#1a1a1a]"
-    >
+      {showToolbar && (
+        <div
+          role="toolbar"
+          aria-label="Editing tools"
+          className="flex h-10 shrink-0 items-center bg-[#1a1a1a]"
+        >
       {/*
         Tool groups SCROLL hain (40+ buttons), session indicator NAHI.
        
@@ -619,6 +616,7 @@ export function EditorToolbar({
           )}
         </div>
       </div>
+      )}
     </>
   );
 }

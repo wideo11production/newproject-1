@@ -12,7 +12,7 @@ function Skeleton({ className = '' }: { className?: string }) {
 
 export default function DashboardRoute() {
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       <div className="p-4 space-y-4">
         <h2 className="text-sm font-medium text-gray-400">System Health</h2>
         

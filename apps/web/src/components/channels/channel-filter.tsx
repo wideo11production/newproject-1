@@ -68,7 +68,7 @@ export default function ChannelFilter({
         category" as visible text was a heading for something that reads fine
         without one. An `aria-label` does the job without taking up the line.
       */}
-      <ul className="-mx-1 flex items-center gap-x-5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <ul className="-mx-1 flex items-center gap-x-5 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden custom-scrollbar horizontal">
         {FILTERS.map((f) => {
           const selected = value === f.value;
           return (

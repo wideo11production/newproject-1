@@ -132,7 +132,7 @@ export function FinancialLedgerView() {
             <p>No settlement history yet.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto custom-scrollbar horizontal">
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b-[#2c3235]">

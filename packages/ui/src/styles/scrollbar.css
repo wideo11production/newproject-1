@@ -1,118 +1,159 @@
 /* ============================================================================
- * Scrollbars - project-wide. 4px hairline.
+ * Scrollbars - project-wide. Hidden native + custom overlay on hover.
  * ============================================================================
  *
- * Ye file SHARED hai. Har app ise `@wideo11/ui` se import karti hai, isliye
- * ek jagah fix = sab jagah fix - teen jagah teen alag width hone se design
- * drift hoti hai.
+ * This implements "Hidden Scrollbar with Functional Scrolling":
+ * - Native scrollbar is completely hidden (width: 0, display: none)
+ * - Scrolling still works via wheel/touch/keyboard
+ * - Custom minimal overlay appears ONLY on hover over scrollable area
  *
- * ---- 4px, NOT 1px ----
- *
- * Pehle yahan 1px tha. Measured in a real browser, wo render hi nahi hua:
- *
- *     getComputedStyle(el, '::-webkit-scrollbar').width  -> "1px"
- *     el.offsetWidth - el.clientWidth                     -> 15
- *
- * Wajah: neeche `html` par `scrollbar-color` set hai (Firefox ke liye), aur
- * Chrome 121+ bhi ye padhta hai. Jab `scrollbar-color` MOJOOD ho, Chrome
- * document ki SAARI `::-webkit-scrollbar` rules ignore kar deta hai aur apna
- * 15px scrollbar draw karta hai. Yaani 1px rule likhi thi, apply hoti thi,
- * aur phir bhi discard ho jati thi.
- *
- * Isi liye standard properties BAND hain. Unke bina webkit pseudo-elements
- * sach me lagte hain, aur tab 4px sach me render hota hai.
- *
- * ---- 4px KIYA, 1px KYUN NAHI ----
- *
- * 1px bilkul invisible hota hai - especially trackpad users ke liye jinke
- * scroll gesture already screen-edge gesture hota hai. 4px wo minimum hai
- * jise aankh dhoondh paati hai, jabki content par footprint negligible hai.
- * Isi liye thumb par hover state rakha gaya hai: normal state quiet, hover
- * par thoda bright.
- *
- * ---- FIREFOX ----
- *
- * Firefox me `::-webkit-scrollbar` exist hi nahi karta. Uska native minimum
- * `thin` hai (~8px). Standard properties chala dena usse aur bhi kharab
- * karega. Isi liye sirf un selectors par `scrollbar-width: auto` set hai
- * jin par humein koi rule chahiye - poori document par nahi. Firefox apna
- * `thin` rakhta hai (jo theek hai), Chromium webkit pseudo lagata hai (jo
- * 4px hai).
- *
- * Hinglish: 4px ka scrollbar - itna patla ki content ki jagah na le, itna
- *           visible ki dhoondh sake. Standard properties BAND isliye kyunki
- *           Chrome unke hote hi `::-webkit-scrollbar` ko maar deta hai.
+ * Key technique: Chrome 121+ ignores ::-webkit-scrollbar when scrollbar-color
+ * is set on html. We avoid setting scrollbar-color on html entirely.
  * ========================================================================== */
 
-/* ---- Sirf jahan chahiye wahan standard property reset karo ----
-   `html` par NAHI - wahan set karne se Chrome 121+ har descendant ka
-   scrollbar apna 15px bana deta hai (upar wala poora case).
-   Yahan sirf wo elements jinke scrollbar hum size karna chahte hain. */
+/* ---- Hide native scrollbar everywhere (preserve scroll function) ---- */
+* {
+  scrollbar-width: none;          /* Firefox */
+  -ms-overflow-style: none;       /* IE/Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none;                  /* Chrome/Safari/Edge - hide but keep function */
+  width: 0;
+  height: 0;
+}
+
+/* ---- Custom overlay scrollbar (appears on hover) ---- */
+/* Container that wants custom scrollbar gets this class */
+.custom-scrollbar {
+  position: relative;
+}
+
+.custom-scrollbar:hover::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  bottom: 4px;
+  width: 6px;
+  background: transparent;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.custom-scrollbar:hover::after {
+  opacity: 1;
+}
+
+.custom-scrollbar:hover::before {
+  content: '';
+  position: absolute;
+  right: 5px;
+  width: 4px;
+  background: #2c3235;
+  border-radius: 2px;
+  opacity: 0;
+  transition: opacity 150ms ease, background-color 150ms ease;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.custom-scrollbar:hover::before {
+  opacity: 0.6;
+}
+
+/* Vertical scrollbar thumb position/size - calculated via JS or CSS scroll-driven animations */
+/* For now, show a fixed indicator that the area is scrollable */
+.custom-scrollbar:not(:hover)::after,
+.custom-scrollbar:not(:hover)::before {
+  opacity: 0;
+}
+
+/* Horizontal scrollbar variant */
+.custom-scrollbar.horizontal:hover::after {
+  right: auto;
+  left: 4px;
+  bottom: 4px;
+  top: auto;
+  width: auto;
+  height: 6px;
+}
+
+.custom-scrollbar.horizontal:hover::before {
+  right: auto;
+  left: 5px;
+  bottom: 5px;
+  top: auto;
+  width: auto;
+  height: 4px;
+}
+
+/* Focus visible for accessibility */
+.custom-scrollbar:focus-within::after,
+.custom-scrollbar:focus-within::before {
+  opacity: 1;
+}
+
+/* Force hide native scrollbar on specific utility classes */
 .scrollable-thin,
 .overflow-auto,
 .overflow-x-auto,
 .overflow-y-auto,
-.overflow-auto > *,
-::-webkit-scrollbar {
-  scrollbar-width: auto;
-  scrollbar-color: auto;
+.overflow-auto > * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-/* ---- WebKit (Chromium, Safari) ---- */
-::-webkit-scrollbar {
-  /* 2px.
-   *
-   * 1px is BELOW the point where a scrollbar can be grabbed with a mouse - a
-   * 1px target means hitting it - and 4px is a wall. The timeline strip's
-   * scrollbar sits directly under the lanes, so at 4px it reads as a band of
-   * UI rather than as something you drag. 2px is the smallest target that is
-   * still comfortable, and at that width it reads as a line.
-   */
-  width: 2px;
-  height: 2px;
+.scrollable-thin::-webkit-scrollbar,
+.overflow-auto::-webkit-scrollbar,
+.overflow-x-auto::-webkit-scrollbar,
+.overflow-y-auto::-webkit-scrollbar,
+.overflow-auto > *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
-::-webkit-scrollbar-track {
-  /* Track invisible. Visible track + hairline thumb = ek ajeeb patla rectangle
-     jo scrollbar jaisa dikhta hi nahi. */
+/* Firefox thin scrollbar fallback for elements that explicitly want it */
+.force-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #2c3235 transparent;
+}
+
+/* WebKit custom thin scrollbar for specific elements */
+.force-thin-scrollbar::-webkit-scrollbar {
+  display: block;
+  width: 6px;
+  height: 6px;
+}
+
+.force-thin-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 
-::-webkit-scrollbar-thumb {
-  /* Grafana ka neutral-4 token - repo ka design language. */
+.force-thin-scrollbar::-webkit-scrollbar-thumb {
   background-color: #2c3235;
   border-radius: 9999px;
-  /* Border ya padding NAHI: dono rendered width me ADD hote hain, jo
-     "4px" ko 6px bana dete aur poora rule bekaar kar dete. */
   border: none;
 }
 
-/* Hover par thoda bright - 4px itna patla hai ki bina iske thumb
-   dhoondhna mushkil hota hai. */
-::-webkit-scrollbar-thumb:hover {
+.force-thin-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: #4c5459;
 }
 
-::-webkit-scrollbar-thumb:active {
+.force-thin-scrollbar::-webkit-scrollbar-thumb:active {
   background-color: #6c7680;
 }
 
-::-webkit-scrollbar-corner {
+.force-thin-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
 
-/* ---- Firefox ---- */
-::-moz-scrollbar-thumb {
-  background-color: #2c3235;
-  border-radius: 9999px;
-  border: none;
-}
-
-::-moz-scrollbar-thumb:hover {
-  background-color: #4c5459;
-}
-
-::-moz-scrollbar-track,
-::-moz-scrollbar-corner {
-  background: transparent;
+/* Firefox force thin */
+.force-thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #2c3235 transparent;
 }

@@ -140,7 +140,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
     <TooltipProvider delayDuration={200}>
     <div className="h-full flex">
       {/* Panel Picker Sidebar (draggable from) */}
-      <div className="w-64-800 p-4 overflow-y-auto">
+      <div className="w-64-800 p-4 overflow-y-auto custom-scrollbar">
         <h3 className="text-sm font-medium text-gray-300 mb-3">Panel Types</h3>
         <div className="space-y-2">
           {panelTypes.map((pt) => {

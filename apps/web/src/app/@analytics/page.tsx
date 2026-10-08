@@ -10,7 +10,7 @@ import { useQuery } from '@tanstack/react-query';
 
 export default function AnalyticsRoute() {
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       <div className="p-4 space-y-6">
         <h2 className="text-sm font-medium text-gray-400">Live Analytics</h2>
         

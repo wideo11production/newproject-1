@@ -32,7 +32,7 @@ export default function AlertsRoute() {
   const [search, setSearch] = useState<string>('');
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto custom-scrollbar">
       <div className="p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-gray-400">Alert History</h2>

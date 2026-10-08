@@ -43,6 +43,7 @@ import {
   TrackHeaders,
   TimelineFooter,
   acceptsTrack,
+  TRACK_HEADER_W,
   type SnapOptionsProp,
   type TimelineClip,
   type TimelineTrack,
@@ -52,6 +53,7 @@ import {
 import { ModeRail, type EditorMode } from './sidebar/mode-rail';
 import { PlayerBar } from './player-bar';
 import { EditorToolbar } from './chrome/editor-toolbar';
+import { TimelineToolbar } from './chrome/timeline-toolbar';
 import { RecorderDialog } from './chrome/recorder-dialog';
 import { TimelineRuler, RULER_HEIGHT } from './timeline/timeline-ruler';
 import { TimelineRail } from './timeline/timeline-rail';
@@ -1836,6 +1838,7 @@ if (!mod) {
         }}
       />
       <EditorToolbar
+        showToolbar={false}
         canSplit={Boolean(panelClip)}
         canDelete={selectedIds.size > 0}
         canUndo={history.length > 0}
@@ -2267,37 +2270,99 @@ if (!mod) {
           Only overflows horizontally, synced to the tracks below.
           The ruler's own TimelineRuler component renders its internal playhead
           (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
-        <div className="relative shrink-0 overflow-hidden bg-[#1a1a1a]">
-          <div
+        <div className="relative flex shrink-0 flex-col overflow-hidden bg-[#1a1a1a]">
+          <TimelineToolbar
+            canSplit={Boolean(panelClip)}
+            canDelete={selectedIds.size > 0}
+            canUndo={history.length > 0}
+            canRedo={future.length > 0}
+            selectedCount={selectedIds.size}
+            linkedSelection={linkedMove}
+            ripple={settings.rippleEnabled}
+            pxPerFrame={pxPerFrame}
+            fps={fps}
+            onSplit={() => {
+              const hit = bladeRef.current?.();
+              setToast(hit ? `Split "${hit}" at frame ${playheadFrame}` : 'Nothing under the playhead to split');
+            }}
+            onDelete={() => removeSelected()}
+            onUndo={undo}
+            onRedo={redo}
+            onCopy={copySelected}
+            onPaste={pasteClipboard}
+            onDuplicate={duplicateSelected}
+            onToggleSnapping={() => patch({ snapEnabled: !settings.snapEnabled })}
+            snapping={settings.snapEnabled}
+            onToggleRipple={() => patch({ rippleEnabled: !settings.rippleEnabled })}
+            onZoom={(d) => zoomAt(d > 0 ? 1.25 : 1 / 1.25, null)}
+            onZoomTo={(px) => patch({ pxPerFrame: px })}
+            onFit={() => patch({ pxPerFrame: 3 })}
+            onFullscreen={() => {
+              const el = document.querySelector('[data-preview-pane]');
+              if (el instanceof HTMLElement) {
+                if (document.fullscreenElement) void document.exitFullscreen();
+                else void el.requestFullscreen().catch(() => {});
+              }
+            }}
+            onToggleLoop={() =>
+              patch(
+                settings.loopEnabled
+                  ? { loopEnabled: false }
+                  : { loopEnabled: true, loopStartFrame: Math.max(0, playheadFrame - Math.round(fps * 5)), loopEndFrame: durationFrames }
+              )
+            }
+            loopOn={settings.loopEnabled}
+            onFpsChange={(fps) => patch({ fps })}
+            playbackRate={settings.playbackRate}
+            onPlaybackRate={(rate) => patch({ playbackRate: rate })}
+            onEdgeEdit={edgeEdit}
+          />
+          {/*
+            RULER ROW — FIXED: does NOT scroll vertically with clips.
+            Only overflows horizontally, synced to the tracks below.
+            The ruler's own TimelineRuler component renders its internal playhead
+            (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
+          <div className="relative flex shrink-0 overflow-hidden bg-[#1a1a1a]">
+            {/*
+              A spacer the width of the track-header column, so the ruler's
+              frame 0 sits directly over the lane's frame 0. Without it the
+              ruler's scroll container spans the full strip width while the
+              lanes' starts one header-width to the right, and every tick —
+              and the ruler's own playhead — sits 30px left of the clips.
+              That offset is invisible on a long clip but puts any
+              pixel-accurate seek (a transition badge, a measurement edge)
+              a full header-width off. ---- */}
+            <div className="shrink-0" style={{ width: TRACK_HEADER_W }} aria-hidden="true" />
+<div
             ref={rulerScrollRef}
-            className="overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position"
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position custom-scrollbar horizontal"
             style={{ height: RULER_HEIGHT }}
           >
-            <div className="relative" style={{ width: laneWidth, height: RULER_HEIGHT }}>
-              <TimelineRuler
-                duration={duration}
-                currentFrame={playheadFrame}
-                pxPerFrame={pxPerFrame}
-                fps={fps}
-                laneWidth={laneWidth}
-                onSeek={seekTo}
-                onZoomAt={zoomAt}
-                loop={loop}
-                onSetLoop={(start, end) =>
-                  patch({ loopEnabled: true, loopStartFrame: Math.round(start * fps), loopEndFrame: Math.round(end * fps) })
-                }
-                markers={markers}
-                measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
-                onSetMeasure={(start, end) => patch({ measureStartFrame: start, measureEndFrame: end })}
-                gridVisible={settings.gridVisible}
-                snapEnabled={settings.snapEnabled}
-              />
+              <div className="relative" style={{ width: laneWidth, height: RULER_HEIGHT }}>
+                <TimelineRuler
+                  duration={duration}
+                  currentFrame={playheadFrame}
+                  pxPerFrame={pxPerFrame}
+                  fps={fps}
+                  laneWidth={laneWidth}
+                  onSeek={seekTo}
+                  onZoomAt={zoomAt}
+                  loop={loop}
+                  onSetLoop={(start, end) =>
+                    patch({ loopEnabled: true, loopStartFrame: Math.round(start * fps), loopEndFrame: Math.round(end * fps) })
+                  }
+                  markers={markers}
+                  measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
+                  onSetMeasure={(start, end) => patch({ measureStartFrame: start, measureEndFrame: end })}
+                  gridVisible={settings.gridVisible}
+                  snapEnabled={settings.snapEnabled}
+                />
+              </div>
             </div>
           </div>
         </div>
-
         <div className="flex min-h-0 flex-1">
-          <div ref={headerScrollRef} className="shrink-0 overflow-x-hidden overflow-y-auto">
+          <div ref={headerScrollRef} className="shrink-0 overflow-x-hidden overflow-y-auto custom-scrollbar">
             <TrackHeaders
               tracks={tracks}
               trackHeights={settings.trackHeights}
@@ -2314,7 +2379,7 @@ if (!mod) {
           </div>
           <div
             ref={laneScrollRef}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] will-change-transform"
+            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] will-change-transform custom-scrollbar"
           >
             <div className="relative" style={{ width: laneWidth }}>
               <TimelineTracks

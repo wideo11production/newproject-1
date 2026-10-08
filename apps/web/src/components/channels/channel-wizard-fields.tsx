@@ -228,7 +228,7 @@ export function ChannelWizardFields({
           This picks your upload defaults and which features appear. You can change it
           later.
         </p>
-        <div className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-md bg-[#181b1f] p-3">
+        <div className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-md bg-[#181b1f] p-3 custom-scrollbar">
           {CATEGORY_GROUPS.map((g) => (
             <div key={g.group}>
               <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">

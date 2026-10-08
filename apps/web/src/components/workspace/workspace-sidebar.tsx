@@ -504,7 +504,7 @@ export function WorkspaceSidebar({
       </aside>
 
       {/* ---- Main content area with lazy view ---- */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto custom-scrollbar">
         {renderActiveView()}
       </main>
     </>

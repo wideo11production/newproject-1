@@ -32,7 +32,7 @@
 // see `lib/engine/project-store.ts`.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Film, Music, Image as ImageIcon, Type, Upload, X, Loader2, Layers, Search } from 'lucide-react';
+import { Film, Music, Image as ImageIcon, Type, Upload, X, Loader2, Layers, Search, Eye, EyeOff } from 'lucide-react';
 import { extractThumbnail, hueFor } from '../../lib/media/thumbnail';
 import { useMediaStore, type MediaItem, type MediaKind } from '../../lib/engine/media-store';
 
@@ -88,6 +88,14 @@ export function MediaBin({
   // that normal instead of impossible.
   const [hoveringId, setHoveringId] = useState<string | null>(null);
   const previewEls = useRef(new Map<string, HTMLVideoElement>());
+  // Thumbnail tile size. Movavi's bin lets you drag a slider to make the
+  // tiles bigger or smaller; here it is three stops (S/M/L) that change the
+  // grid density, which is the same control with a discrete grip.
+  const [thumbSize, setThumbSize] = useState<'sm' | 'md' | 'lg'>('md');
+  // Hover-to-preview on/off. Some machines (and some large bins) are better
+  // off without every tile decoding on pass-over, so the whole hover path is
+  // one click away from off.
+  const [previewEnabled, setPreviewEnabled] = useState(true);
 
   /**
    * Play or stop a tile's preview.
@@ -212,7 +220,44 @@ export function MediaBin({
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      {/* Thumbnail size + hover-preview toggle. The size buttons change
+          the grid density (S=4 cols, M=3, L=2), which is the same
+          "make the tiles bigger" control Movavi exposes as a slider. */}
+      <div className="flex items-center gap-1">
+        <div className="flex gap-0.5" role="group" aria-label="Thumbnail size">
+          {(['sm', 'md', 'lg'] as const).map((size) => (
+            <button
+              key={size}
+              type="button"
+              onClick={() => setThumbSize(size)}
+              aria-pressed={thumbSize === size}
+              aria-label={`Thumbnail size ${size}`}
+              title={`Thumbnail size ${size.toUpperCase()}`}
+              className={[
+                'flex h-5 w-5 items-center justify-center rounded text-[7px] font-semibold uppercase transition-colors duration-150',
+                thumbSize === size ? 'bg-[#ff6500] text-white' : 'text-fg-secondary hover:text-fg',
+              ].join(' ')}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setPreviewEnabled((v) => !v)}
+          aria-pressed={previewEnabled}
+          aria-label={previewEnabled ? 'Disable hover preview' : 'Enable hover preview'}
+          title={previewEnabled ? 'Hover preview: on (click to disable)' : 'Hover preview: off (click to enable)'}
+          className={[
+            'ml-auto flex h-5 w-5 items-center justify-center rounded transition-colors duration-150',
+            previewEnabled ? 'text-[#ff6500]' : 'text-fg-muted hover:text-fg',
+          ].join(' ')}
+        >
+          {previewEnabled ? <Eye className="h-2.5 w-2.5" aria-hidden="true" /> : <EyeOff className="h-2.5 w-2.5" aria-hidden="true" />}
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
         {visible.length === 0 ? (
           <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-dashed-edge p-4 text-center">
             {items.length === 0 ? (
@@ -229,7 +274,7 @@ export function MediaBin({
             )}
           </div>
         ) : (
-          <ul className="grid grid-cols-2 gap-1.5">
+          <ul className={`grid gap-1.5 ${thumbSize === 'sm' ? 'grid-cols-4' : thumbSize === 'lg' ? 'grid-cols-2' : 'grid-cols-3'}`}>
             {visible.map((item) => {
               const style = KIND_STYLE[item.kind];
               const active = selectedId === item.id;
@@ -237,8 +282,12 @@ export function MediaBin({
                 <li key={item.id}>
                   <div
                     className={[
-                      'group relative overflow-hidden rounded-md  ring-1 transition-colors duration-150',
-                      active ? 'border-[#ff6500] ring-[#ff6500]/40' : `${style.ring}-edge`,
+                      'group relative overflow-hidden rounded-sm transition-all duration-150',
+                      active
+                        ? 'border-[#ff6500] ring-1 ring-[#ff6500]/40'
+                        : reading.has(item.name)
+                        ? 'border-dashed border-[#ff6500] bg-[#ff6500]/5'
+                        : 'border-dashed border-transparent hover:border-[#ff6500]/30 hover:border-solid',
                     ].join(' ')}
                   >
                     <button
@@ -263,7 +312,9 @@ export function MediaBin({
                       // `play()`. On leave it is paused and rewound, so the next
                       // hover starts from the first frame rather than from
                       // wherever the cursor last left the tile.
-                      onMouseEnter={() => void setPreviewing(item.id, true)}
+                      onMouseEnter={() => {
+                        if (previewEnabled) void setPreviewing(item.id, true);
+                      }}
                       onMouseLeave={() => void setPreviewing(item.id, false)}
                       aria-pressed={active}
                       aria-label={`Add ${item.name} to the timeline`}

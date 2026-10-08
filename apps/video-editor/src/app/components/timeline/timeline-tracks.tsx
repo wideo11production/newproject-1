@@ -117,7 +117,7 @@ export { DEFAULT_TRACKS } from '../../lib/engine/types';
  * tooltip. 30px fits the spine, the type icon and four state toggles, and
  * nothing else.
  */
-const TRACK_HEADER_W = 30;
+export const TRACK_HEADER_W = 30;
 const DEFAULT_TRACK_HEIGHT = 56;
 
 /** Minimum lane height. Below this the fader and the name cannot coexist. */
@@ -1747,7 +1747,7 @@ function ClipAction({
       }}
       onPointerDown={(e) => e.stopPropagation()}
       className={[
-        'flex h-2.5 w-2.5 items-center justify-center transition-colors duration-150',
+        'flex h-5 w-5 items-center justify-center transition-colors duration-150',
         danger ? 'text-slate-300 hover:text-[#ff6500]' : 'text-slate-300 hover:text-[#ff6500]',
       ].join(' ')}
     >
@@ -1774,7 +1774,7 @@ const TRACK_STYLE: Record<
   video: { chip: 'bg-[#ff6500]/15 text-[#ff6500]', clip: 'bg-[color:var(--ve-clip-video)]', border: 'border-[#ff6500]/30', Icon: Film, label: 'Video' },
   audio: { chip: 'bg-violet-500/15 text-violet-300', clip: 'bg-[color:var(--ve-clip-audio)]', border: 'border-violet-500/30', Icon: Music, label: 'Audio' },
   text: { chip: 'bg-amber-500/15 text-amber-300', clip: 'bg-[color:var(--ve-clip-text)]', border: 'border-amber-500/30', Icon: Type, label: 'Text' },
-  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)]', border: 'border-emerald-500/30', Icon: loadImage, label: 'Image' },
+  image: { chip: 'bg-emerald-500/15 text-emerald-300', clip: 'bg-[color:var(--ve-clip-image)]', border: 'border-emerald-500/30', Icon: ImageIcon, label: 'Image' },
   branding: { chip: 'bg-pink-500/15 text-pink-300', clip: 'bg-[color:var(--ve-clip-branding)]', border: 'border-pink-500/30', Icon: Badge, label: 'Branding' },
 };
 
@@ -1826,7 +1826,7 @@ export function TimelineFooter({
   const audioTracks = tracks.filter((t) => t.type === 'audio' && t.visible);
   const hasAudio = audioTracks.length > 0;
   return (
-    <div className="flex h-7 shrink-0 items-center justify-between bg-[#1a1a1a] px-3 font-mono text-[8px]">
+    <div className="flex h-7 shrink-0 items-center justify-between border-t border-[#2a2a2a] bg-[#1a1a1a] px-3 font-mono text-[8px]">
       <div className="flex items-center gap-3 text-fg-secondary">
         <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
         <span className="text-fg-muted/40">|</span>
