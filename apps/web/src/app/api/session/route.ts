@@ -76,6 +76,7 @@ export async function GET() {
       is_verified?: boolean;
       is_active?: boolean;
       avatar_url?: string;
+      role?: string;
     };
 
     if (profile.is_active === false) {
@@ -87,11 +88,27 @@ export async function GET() {
     // AMBER ring rather than being told they are logged out - they are not.
     const state = profile.is_verified === true ? 'ready' : 'needs_verification';
 
+    // ---- SUPERADMIN ROLE PASS-THROUGH ----
+    //
+    // `role` was previously hardcoded to 'user' here, so every signed-in user
+    // on port 3000 looked like a plain user in the account menu and the
+    // settings page - even when auth-service's JWT carried a signed
+    // `superadmin` claim and the DB `users.role` column said the same.
+    //
+    // The `/profile` endpoint already returns `user.Role` (see
+    // services/auth-service/internal/handler/handler.go:722), so the fix is
+    // to read it instead of discarding it. The frontend's identity-context
+    // also has a hardcoded email bypass as a second layer, but it cannot
+    // manufacture a role the server never sent.
+    const role = profile.role?.toLowerCase().trim() === 'superadmin'
+      ? 'superadmin'
+      : (profile.role ?? 'user');
+
     return NextResponse.json(
       {
         state,
         email: profile.email ?? '',
-        role: 'user',
+        role,
         // The one image the user uploaded, so the SAME avatar appears everywhere.
         //
         // Before this, the account menu and the editor's account menu both drew

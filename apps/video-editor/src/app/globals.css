@@ -1,4 +1,15 @@
 @import '@wideo11/ui/src/styles/scrollbar.css';
+
+/* ============================================================================
+ * BORDERLESS UI OVERRIDES — Zero Wireframe Lines
+ * ============================================================================
+ *
+ * Hinglish: Ye file saare `border-*`, `divide-*` classes ko globally override
+ * karti hai taaki koi bhi wireframe line UI me na dikhe. Panel separation flat
+ * color depth se hota hai. Accent borders (`border-[#ff6500]`) keep hain.
+ * ========================================================================== */
+@import './styles/borderless.css';
+
 /* Timeline shimmer / glow / sparkle. Imported (not copied) so the animation
    rules live in ONE place next to the reasoning for them, and so the reduced
    motion override travels with them.
@@ -208,16 +219,44 @@
  * harte hain. Isliye ye `@layer base` me nahi, bilkul bahar likha hai.
  */
 
-/* Hide native scrollbar everywhere - scrolling still works */
+/* 1px ghost scrollbar everywhere - scrolling still works, 1px footprint */
 * {
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: auto;
 }
 
 *::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
+  display: block;
+  width: 1px;
+  height: 1px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 1px thumb - invisible by default, #ff6500 on hover ONLY */
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: none;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: #ff6500;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #e55800;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* Custom overlay scrollbar for scrollable areas */
@@ -353,28 +392,43 @@
     color: #ff6500;
   }
   
-  /* Orange-red scrollbar for select dropdown option lists */
+/* Orange-red scrollbar for select dropdown option lists */
   .ve-select-dropdown select::-webkit-scrollbar {
-    width: 6px;
+    width: 6px !important;
+    height: 6px !important;
   }
-  
+   
   .ve-select-dropdown select::-webkit-scrollbar-track {
-    background: #1a1a1a;
+    background: #1a1a1a !important;
     border-radius: 3px;
   }
-  
+   
   .ve-select-dropdown select::-webkit-scrollbar-thumb {
-    background-color: #ff6500;
+    background-color: #ff6500 !important;
     border-radius: 3px;
     transition: background-color 150ms ease;
   }
-  
+   
   .ve-select-dropdown select::-webkit-scrollbar-thumb:hover {
-    background-color: #ff8533;
+    background-color: #ff8533 !important;
   }
-  
+
   /* Firefox select scrollbar */
   .ve-select-dropdown select {
-    scrollbar-width: thin;
-    scrollbar-color: #ff6500 #1a1a1a;
+    scrollbar-width: thin !important;
+    scrollbar-color: #ff6500 #1a1a1a !important;
+  }
+
+  /* Orange-red highlight on option hover (replaces native blue) */
+  .ve-select-dropdown select option {
+    background-color: #1a1a1a !important;
+    color: #9fa7b3 !important;
+  }
+
+  .ve-select-dropdown select option:checked,
+  .ve-select-dropdown select option:hover,
+  .ve-select-dropdown select option:focus {
+    background-color: #ff6500 !important;
+    color: #ffffff !important;
+    outline: none;
   }

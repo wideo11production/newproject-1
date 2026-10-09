@@ -1,5 +1,14 @@
 'use client';
 
+// ============================================================================
+// Confirmation Dialog Component
+// ============================================================================
+//
+// Hinglish: Borderless destructive action alert. Zero wireframe lines,
+// rounded-md geometry, bg-[#1a1a1a] Rich Charcoal backdrop with
+// orange-red (#ff6500) accent buttons on hover/active states.
+// 150ms CSS transitions for snappy interaction feedback.
+
 import { X, AlertTriangle } from 'lucide-react';
 
 export interface ConfirmationDialogProps {
@@ -25,24 +34,26 @@ export function ConfirmationDialog({
 }: ConfirmationDialogProps) {
   if (!open) return null;
 
+  // Borderless color palette — no wireframe borders anywhere.
+  // Accent color is always #ff6500 (orange-red) for action buttons.
   const variantStyles = {
     danger: {
-      icon: 'text-rose-400',
-      confirm: 'text-rose-400 hover:text-rose-300',
-      border: 'border-rose-500/30',
-      bg: 'bg-rose-950/20',
+      icon: 'text-[#ff6500]',
+      confirm: 'bg-[#ff6500] text-white hover:bg-[#e55800] active:bg-[#cc4700]',
+      border: 'bg-[#ff6500]/10',
+      bg: 'bg-[#ff6500]/5',
     },
     warning: {
-      icon: 'text-amber-400',
-      confirm: 'text-amber-400 hover:text-amber-300',
-      border: 'border-amber-500/30',
-      bg: 'bg-amber-950/20',
+      icon: 'text-[#ff6500]',
+      confirm: 'bg-[#ff6500] text-white hover:bg-[#e55800] active:bg-[#cc4700]',
+      border: 'bg-[#ff6500]/10',
+      bg: 'bg-[#ff6500]/5',
     },
     info: {
-      icon: 'text-sky-400',
-      confirm: 'text-sky-400 hover:text-sky-300',
-      border: 'border-sky-500/30',
-      bg: 'bg-sky-950/20',
+      icon: 'text-[#ff6500]',
+      confirm: 'bg-[#ff6500] text-white hover:bg-[#e55800] active:bg-[#cc4700]',
+      border: 'bg-[#ff6500]/10',
+      bg: 'bg-[#ff6500]/5',
     },
   };
 
@@ -53,23 +64,23 @@ export function ConfirmationDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirmation-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="flex max-w-sm flex-col overflow-hidden rounded-md-edge-strong bg-surface-raised shadow-2xl">
-        <header className="flex items-center justify-between-edge px-4 py-2.5">
-          <h2 id="confirmation-dialog-title" className="text-[10px] font-medium text-fg">
+      <div className="flex max-w-sm flex-col overflow-hidden rounded-md bg-[#1a1a1a] shadow-2xl">
+        <header className="flex items-center justify-between px-4 py-2.5">
+          <h2 id="confirmation-dialog-title" className="text-[10px] font-medium text-[#d8d9da]">
             {title}
           </h2>
           <button
             type="button"
             onClick={onCancel}
             aria-label="Close dialog"
-            className="rounded p-1 text-fg-muted hover:bg-surface-overlay hover:text-fg"
+            className="rounded p-1 text-[#9fa7b3] hover:bg-[#2a2a2a] hover:text-[#d8d9da] transition-colors duration-150"
           >
-            <X className="h-2 w-2" />
+            <X className="h-2.5 w-2.5" />
           </button>
         </header>
 
@@ -79,17 +90,17 @@ export function ConfirmationDialog({
               className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${styles.icon}`}
               aria-hidden="true"
             />
-            <p className="text-[8px] text-fg-secondary">{message}</p>
+            <p className="text-[8px] text-[#9fa7b3]">{message}</p>
           </div>
 
-          <div className={`rounded border ${styles.border} ${styles.bg} p-3`}></div>
+          <div className={`rounded ${styles.border} ${styles.bg} p-3`}></div>
         </div>
 
         <footer className="flex items-center justify-end gap-2 px-4 py-2.5">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md px-3 py-1.5 text-[8px] text-fg-muted hover:text-fg transition-colors duration-150"
+            className="rounded-md px-3 py-1.5 text-[8px] text-[#9fa7b3] hover:text-[#d8d9da] transition-colors duration-150"
           >
             {cancelLabel}
           </button>

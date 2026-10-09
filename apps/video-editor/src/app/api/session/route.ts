@@ -78,7 +78,7 @@ export async function GET() {
   // `out`, which is exactly right.
   const authHeaders = { Authorization: `Bearer ${token}` };
 
-  let profile: { email?: string; is_verified?: boolean; is_active?: boolean; avatar_url?: string } | null = null;
+  let profile: { email?: string; is_verified?: boolean; is_active?: boolean; avatar_url?: string; role?: string } | null = null;
   let setupComplete = false;
 
   try {
@@ -146,7 +146,7 @@ export async function GET() {
   }
 
   return NextResponse.json(
-    { state: 'ready', email, role: 'user', avatarUrl: profile.avatar_url ?? '' },
+    { state: 'ready', email, role: profile.role ?? 'user', avatarUrl: profile.avatar_url ?? '' },
     { headers: noStore }
   );
 }

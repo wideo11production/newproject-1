@@ -296,6 +296,16 @@ func main() {
 	superadminSvc := service.NewSuperadminService(db)
 	superadminHandler := handler.NewSuperadminHandler(superadminSvc, authService)
 
+	// Wire Redis to the superadmin handler for the rate-limit reset endpoint.
+	//
+	// Nil-safe: a deployment without Redis has no counters to reset, and the
+	// endpoint answers 503 rather than pretending the operation succeeded.
+	// Kept separate from the constructor for the same reason
+	// `SetEntitlementAdmin` is a setter: Redis may not be initialised yet at
+	// construction time, and reordering construction for one optional
+	// dependency is worse than one extra setter call.
+	superadminHandler.SetRedisClient(redisClient)
+
 	// 2 RECOVERY accounts ensure karo (agar .env me configured hain)
 	// Taaki main superadmin fail hone par bhi access mil sake
 	if err := superadminSvc.EnsureRecoveryAccounts(context.Background()); err != nil {

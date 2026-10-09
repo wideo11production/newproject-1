@@ -43,10 +43,21 @@ export default function ResetPasswordPage() {
         }),
       });
 
+      // Guard: non-JSON responses (e.g. 401 HTML from middleware, 5xx text) crash
+      // `response.json()` with "Unexpected token '<'". Read the body once and
+      // inspect the content-type before parsing.
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!contentType.includes('application/json')) {
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('This endpoint requires an active session. Please log in first.');
+        }
+        throw new Error('The server returned an unexpected response. Please try again later.');
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Request failed');
+        throw new Error(data.error || data.message || 'Request failed');
       }
 
       setStatus('success');

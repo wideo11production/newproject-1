@@ -1,15 +1,120 @@
+@import '@wideo11/ui/src/styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-html,
-body {
-  height: 100%;
+/* ============================================================================
+ * BORDERLESS COLOR-BOX DESIGN TOKENS
+ * ============================================================================
+ *
+ * Zero hard lines/borders. Separation via absolute background contrast blocking.
+ * Palette:
+ *   Main Canvas Backdrop & Live Preview Grids: Solid Deep Pitch Black (#0d0d0d)
+ *   Control Sidebars, Library Rails, and Component Blocks: Deep Matte Charcoal (#161616)
+ *   Timelines, Analytics Tables, Metrics Grids, and Lower Footers: Rich Dark Grayish-Black (#1e1e1e)
+ *   Orange-red accent (#ff6500) for hover/active states
+ *
+ * All adjacent layout segments fit perfectly flush as solid colored blocks.
+ * Medium rounded corners (rounded-md) for all interactive elements.
+ */
+
+@layer base {
+  :root {
+    /* ---- APP SURFACE / TEXT TOKENS ----
+       RGB channels for Tailwind opacity modifiers (bg-surface/60 etc.) */
+    --app-bg: 13 13 13;           /* #0d0d0d - Deep Pitch Black */
+    --app-surface: 22 22 22;      /* #161616 - Deep Matte Charcoal */
+    --app-surface-raised: 30 30 30; /* #1e1e1e - Rich Dark Grayish-Black */
+    --app-border: 42 42 42;       /* #2a2a2a - subtle divider for focus rings only */
+    --app-border-strong: 255 101 0; /* #ff6500 - Orange-red accent */
+    --app-ink: 255 255 255;
+    --app-fg-strong: 229 229 229;
+    --app-fg-muted: 148 163 184;
+    --app-fg-subtle: 107 114 128;
+
+    /* Shadcn compat (HSL) - kept for component compatibility */
+    --background: 0 0% 5%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 15 100% 50%;       /* #ff6500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 15 100% 50%;
+    --radius: 0.375rem;           /* rounded-md = 6px */
+  }
 }
 
-body {
-  background-color: #030712; /* gray-950 */
-  color: #f3f4f6;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  * {
+    /* NO border-border - borderless color-box separation */
+    @apply border-transparent;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply bg-[rgb(var(--app-bg))] text-[rgb(var(--app-ink))];
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* 1px ghost scrollbar everywhere - scrolling still works, 1px footprint */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: auto;
+}
+
+*::-webkit-scrollbar {
+  display: block;
+  width: 1px;
+  height: 1px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 1px thumb - invisible by default, #ff6500 on hover ONLY */
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: none;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: #ff6500;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #e55800;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Focus rings with orange-red accent */
+:focus-visible {
+  outline: 2px solid #ff6500;
+  outline-offset: 2px;
 }

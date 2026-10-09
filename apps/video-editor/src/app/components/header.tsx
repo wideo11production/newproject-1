@@ -1,6 +1,6 @@
 'use client';
 
-import { useSettings } from '../../lib/engine/settings';
+import { useSettings } from '../lib/engine/settings';
 import { Moon, Sun } from 'lucide-react';
 
 export function Header() {

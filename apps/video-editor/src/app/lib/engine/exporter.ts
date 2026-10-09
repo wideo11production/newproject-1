@@ -44,6 +44,8 @@ export interface ExportPreset {
   /** Video bitrate in kbps for the recorder. */
   videoKbps: number;
   audioKbps: number;
+  /** Premium AURA-plan preset — only visible when the micro-frame studio is enabled. */
+  auraOnly?: boolean;
 }
 
 /** Presets every phone and platform actually wants. Sized, not guessed. */
@@ -60,6 +62,14 @@ export const EXPORT_PRESETS: ExportPreset[] = [
   { id: 'twitter', label: 'X / Twitter', hint: '1280×720 landscape, 30fps', width: 1280, height: 720, fps: 30, videoKbps: 5000, audioKbps: 128 },
   { id: 'draft-540', label: 'Draft (fast)', hint: '960×540, encodes roughly twice as fast', width: 960, height: 540, fps: 30, videoKbps: 2500, audioKbps: 96 },
   { id: 'project', label: 'Match project', hint: 'Use the resolution and frame rate set in project settings', width: 0, height: 0, fps: 0, videoKbps: 8000, audioKbps: 128 },
+
+  // ---- AURA Micro-Frame Studio: high-framerate export options ----
+  // 120fps and 240Hz are premium AURA-plan features. They require the
+  // micro-frame studio to be enabled (AURA_MICRO_FRAME_STUDIO_ENABLED=true)
+  // and produce smooth slow-motion footage. The encoder cost is linear in
+  // frame count, so these presets are proportionally more expensive.
+  { id: 'aura-120fps', label: 'AURA 120fps', hint: '1920×1080 landscape, 120fps — 4× slow motion', width: 1920, height: 1080, fps: 120, videoKbps: 48000, audioKbps: 192, auraOnly: true },
+  { id: 'aura-240hz', label: 'AURA 240Hz', hint: '1280×720 landscape, 240fps — 8× slow motion', width: 1280, height: 720, fps: 240, videoKbps: 60000, audioKbps: 192, auraOnly: true },
 ];
 
 /** Every container this browser will actually produce, not a wish list. */
@@ -79,6 +89,14 @@ export function supportedMimeTypes(): string[] {
       return false;
     }
   });
+}
+
+/** Whether the AURA high-framerate presets are available in this build. */
+export function isAuraExportAvailable(): boolean {
+  return (
+    process.env.AURA_MICRO_FRAME_STUDIO_ENABLED === 'true' ||
+    process.env.NEXT_PUBLIC_MICRO_FRAME_STUDIO_ENABLED === 'true'
+  );
 }
 
 export function bestMimeType(): string | null {

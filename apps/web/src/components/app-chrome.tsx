@@ -32,7 +32,8 @@ import {
   UserMenu,
   Loading,
 } from '@/app/components/header';
-import { BarChart3, Activity, Bell, Settings } from 'lucide-react';
+import { BarChart3, Activity, Bell, Settings, HelpCircle, ExternalLink } from 'lucide-react';
+import Link from 'next/link';
 
 /**
  * Sirf ye routes par dashboard console chrome (sidebar + header) dikhta hai.
@@ -112,6 +113,22 @@ export function AppChrome({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center space-x-2">
+            {/* Help Dropdown */}
+            <details className="relative">
+              <summary className="list-none cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:text-ink rounded-md">
+                <HelpCircle className="h-2.5 w-2.5" />
+                Help
+              </summary>
+              <div className="absolute z-50 mt-2 right-0 min-w-48 rounded-md bg-gray-800 p-1 shadow-lg border border-gray-700">
+                <Link
+                  href="/workspace/help/micro-frame-guide"
+                  className="flex items-center gap-2 px-2 py-1.5 text-sm text-gray-300 hover:text-ink hover:bg-gray-700 rounded-md"
+                >
+                  <ExternalLink className="h-2.5 w-2.5" />
+                  AURA Micro-Frame Studio Walkthrough
+                </Link>
+              </div>
+            </details>
             <Suspense fallback={null}>
               <ThemeToggle />
             </Suspense>

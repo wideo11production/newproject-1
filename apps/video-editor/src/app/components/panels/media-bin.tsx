@@ -96,6 +96,10 @@ export function MediaBin({
   // off without every tile decoding on pass-over, so the whole hover path is
   // one click away from off.
   const [previewEnabled, setPreviewEnabled] = useState(true);
+  // ---- CLICK INTERCEPTOR FIX ----
+  // Track drag state to prevent accidental clicks when resizing panes
+  const dragStateRef = useRef({ isDragging: false, dragStartTime: 0 });
+  const clickSuppressedRef = useRef(false);
 
   /**
    * Play or stop a tile's preview.
@@ -154,6 +158,15 @@ export function MediaBin({
     return added;
   };
 
+  // Global mouseup handler to reset drag state when dragging ends anywhere
+  useEffect(() => {
+    const handleMouseUp = () => {
+      dragStateRef.current.isDragging = false;
+    };
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => window.removeEventListener('mouseup', handleMouseUp);
+  }, []);
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(
@@ -167,7 +180,12 @@ export function MediaBin({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex flex-1 items-center justify-center gap-2 rounded-md-dashed-edge-strong px-3 py-2 text-[8px] font-medium text-fg transition-colors duration-150 hover:border-[#ff6500] hover:text-[#ff6500]"
+          className={[
+            'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-[8px] font-medium transition-colors duration-150',
+            'border-dashed border-[#ff6500]/30',
+            'hover:border-[#ff6500]/60 hover:text-[#ff6500]',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]',
+          ].join(' ')}
         >
           <Upload className="h-2.5 w-2.5" aria-hidden="true" />
           Import media
@@ -187,14 +205,18 @@ export function MediaBin({
       </div>
 
       <div className="relative">
-        <Search className="h-2.5 w-2.5" aria-hidden="true" />
+        <Search className="pointer-events-none absolute left-2 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search media…"
           aria-label="Search media"
-          className="w-full rounded-md bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted focus:border-[#ff6500] focus:outline-none"
+          className={[
+            'w-full rounded-md border-dashed border-[#ff6500]/30 bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted',
+            'transition-colors duration-150',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500] focus:border-[#ff6500]',
+          ].join(' ')}
           style={{ borderRadius: '6px' }}
         />
       </div>
@@ -260,7 +282,7 @@ export function MediaBin({
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
         {visible.length === 0 ? (
-          <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-dashed-edge p-4 text-center">
+          <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-md border-dashed border-[#ff6500]/20 p-4 text-center">
             {items.length === 0 ? (
               <>
                 <Film className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
@@ -285,10 +307,10 @@ export function MediaBin({
                     className={[
                       'group relative overflow-hidden rounded-sm transition-all duration-150',
                       active
-                        ? 'border-[#ff6500] ring-1 ring-[#ff6500]/40'
+                        ? 'border-[#ff6500] ring-2 ring-[#ff6500]/50 bg-[#0d0d0d]'
                         : reading.has(item.name)
                         ? 'border-dashed border-[#ff6500] bg-[#ff6500]/5'
-                        : 'border-dashed border-transparent hover:border-[#ff6500]/30 hover:border-solid',
+                        : 'border-dashed border-[#ff6500]/30 bg-[#161616] hover:border-[#ff6500]/60 hover:border-solid hover:bg-[#0d0d0d]',
                     ].join(' ')}
                   >
                     <button
@@ -297,9 +319,28 @@ export function MediaBin({
                       onDragStart={(e) => {
                         e.dataTransfer.setData('application/x-wideo11-media', item.id);
                         e.dataTransfer.effectAllowed = 'copy';
+                        dragStateRef.current.isDragging = true;
+                        dragStateRef.current.dragStartTime = Date.now();
                         onDragStart?.(item);
                       }}
-                      onClick={() => onAdd(item)}
+                      onClick={(e) => {
+                        // CLICK INTERCEPTOR: Suppress click if a drag operation just occurred
+                        // This prevents accidental clicks when dragging pane splitters
+                        const now = Date.now();
+                        const dragDuration = now - dragStateRef.current.dragStartTime;
+                        if (dragStateRef.current.isDragging && dragDuration < 500) {
+                          clickSuppressedRef.current = true;
+                          dragStateRef.current.isDragging = false;
+                          return;
+                        }
+                        // Reset drag state after a short delay to allow normal clicks
+                        if (dragStateRef.current.isDragging) {
+                          dragStateRef.current.isDragging = false;
+                          // Small delay to ensure drag-end events are processed
+                          setTimeout(() => { clickSuppressedRef.current = false; }, 100);
+                        }
+                        onAdd(item);
+                      }}
                       // ---- HOVER TO PLAY ----
                       //
                       // Previewing an asset BEFORE committing it to the timeline

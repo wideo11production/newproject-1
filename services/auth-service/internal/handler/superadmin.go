@@ -13,6 +13,7 @@ import (
 
 	"github.com/wideo11/auth-service/internal/config"
 	"github.com/wideo11/auth-service/internal/model"
+	"github.com/wideo11/auth-service/internal/redisx"
 	"github.com/wideo11/auth-service/internal/service"
 )
 
@@ -34,14 +35,22 @@ type SuperadminHandler struct {
 	db          *gorm.DB
 	entitlements *service.EntitlementService
 	plans       config.PlansConfig
+
+	// ---- Rate-limit reset (Redis-backed) ----
+	//
+	// Nil-safe: a deployment without Redis has no rate limits to reset, and
+	// the endpoint answers 503 rather than pretending the operation succeeded.
+	// See `ResetRateLimit` below for why this belongs here rather than in the
+	// middleware package.
+	redisClient *redisx.Client
 }
 
 // SetEntitlementAdmin wires the entitlement dependencies.
 //
 // A setter rather than a constructor argument because `NewSuperadminHandler` is
 // called in one place with two arguments today, and adding three more to a
-// constructor that is only used by `main.go` trades a contained change for a wider
-// one. The established convention in this package is `SetEntitlementService`, so
+// constructor that is only used by `main.go` trades a contained change for a
+// wider one. The established convention in this package is `SetEntitlementService`, so
 // this matches it.
 func (h *SuperadminHandler) SetEntitlementAdmin(
 	db *gorm.DB,
@@ -51,6 +60,16 @@ func (h *SuperadminHandler) SetEntitlementAdmin(
 	h.db = db
 	h.entitlements = entitlements
 	h.plans = plans
+}
+
+// SetRedisClient wires the rate-limiter's Redis client for the reset endpoint.
+//
+// A setter, not a constructor argument, for the same reason as
+// `SetEntitlementAdmin`: `NewSuperadminHandler` is called before Redis is
+// initialised, and forcing the construction order to change for one optional
+// dependency is worse than one extra setter call.
+func (h *SuperadminHandler) SetRedisClient(rc *redisx.Client) {
+	h.redisClient = rc
 }
 
 // NewSuperadminHandler naya handler banata hai
@@ -166,6 +185,83 @@ func (h *SuperadminHandler) RegisterRoutes(r *gin.RouterGroup, authMW gin.Handle
 	sa.POST("/test-accounts/mark", h.MarkTestAccount)
 	sa.GET("/test-accounts", h.ListTestAccounts)
 	sa.POST("/test-accounts/purge", h.PurgeTestAccounts)
+
+	// ---- Rate-limit reset ----
+	//
+	// WHY THIS EXISTS: a legitimate user whose credentials are correct can
+	// still be locked out by a rate limiter that counted the failures of a
+	// DIFFERENT problem - a server bug, a database corruption, a misconfigured
+	// migration. Without this, the only recovery is to wait for the window to
+	// expire, which can be 15 minutes, and during that window the account is
+	// unusable and every retry makes it worse.
+	//
+	// WHY IT IS NARROW: this takes a `key` (the identity string the limiter
+	// built) rather than a pattern. A wildcard delete of `rl:*` would be a
+	// self-inflicted DoS vector - one angry operator could clear the protection
+	// for every account on the platform. The caller must know the exact key
+	// they want to clear, which is what the admin UI shows them.
+	sa.POST("/rate-limit", h.ResetRateLimit)
+}
+
+// ResetRateLimit clears one rate-limit counter.
+//
+// The body is `{ "key": "rl:login_account:advchashampalup@gmail.com" }` -
+// the exact Redis key the limiter wrote. The caller learns that key from the
+// rate-limit-exceeded response itself (the `X-RateLimit-*` headers and the
+// `limit` field in the body), so this cannot be used to enumerate or wipe
+// counters the caller has not already been told about.
+//
+// SECURITY: this is on the superadmin group (`authMW` + `RequireSuperadmin` +
+// `CheckRevoked`), so it requires a live, non-revoked superadmin session. It
+// is not a public route that a locked-out user can hit to free themselves -
+// that would defeat the rate limiter entirely. A superadmin must act.
+func (h *SuperadminHandler) ResetRateLimit(c *gin.Context) {
+	if h.redisClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "rate limiting is not configured",
+			"detail":  "Redis is not initialised; there are no counters to reset.",
+		})
+		return
+	}
+
+	var req struct {
+		Key string `json:"key" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.Key == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid request",
+			"detail": "a non-empty `key` field is required. " +
+				"Use the `limit` value from a 429 response, e.g. " +
+				"`rl:login_account:user@example.com`.",
+		})
+		return
+	}
+
+	// Reject anything that is not one of our own keys. A `rl:` prefix is the
+	// single convention this file owns; rejecting unknown prefixes stops this
+	// endpoint being a back door into other Redis data.
+	if len(req.Key) < 4 || req.Key[:3] != "rl:" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "invalid key",
+			"detail":  "key must start with `rl:` - the rate-limiter namespace.",
+		})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.redisClient.Delete(ctx, req.Key); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "reset failed",
+			"detail":  err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "rate-limit counter cleared",
+		"key":      req.Key,
+		"cleared":  true,
+	})
 }
 
 // SecurityEvents - lockouts, failed logins, device breaches

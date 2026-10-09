@@ -12,92 +12,140 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================================================
+ * BORDERLESS COLOR-BOX DESIGN TOKENS
+ * ============================================================================
+ *
+ * Zero hard lines/borders. Separation via absolute background contrast blocking.
+ * Palette:
+ *   Main Canvas Backdrop & Live Preview Grids: Solid Deep Pitch Black (#0d0d0d)
+ *   Control Sidebars, Library Rails, and Component Blocks: Deep Matte Charcoal (#161616)
+ *   Timelines, Analytics Tables, Metrics Grids, and Lower Footers: Rich Dark Grayish-Black (#1e1e1e)
+ *   Orange-red accent (#ff6500) for hover/active states
+ *
+ * All adjacent layout segments fit perfectly flush as solid colored blocks.
+ * Medium rounded corners (rounded-md) for all interactive elements.
+ */
+
 @layer base {
   :root {
     /* ---- APP SURFACE / TEXT TOKENS (light theme) ----
-       Ye variables Tailwind ke `gray` scale aur `ink` token ko drive karte
-       hain (packages/ui/src/enterprise-theme.ts). Isi wajah se poori app -
-       hardcoded `bg-gray-950` / `text-gray-400` / `border-gray-800` wale
-       bhi - light mode me sahi invert ho jaati hai.
+       RGB channels for Tailwind opacity modifiers (bg-surface/60 etc.) */
+    --app-bg: 13 13 13;           /* #0d0d0d - Deep Pitch Black */
+    --app-surface: 22 22 22;      /* #161616 - Deep Matte Charcoal */
+    --app-surface-raised: 30 30 30; /* #1e1e1e - Rich Dark Grayish-Black */
+    --app-border: 42 42 42;       /* #2a2a2a - subtle divider for focus rings only */
+    --app-border-strong: 255 101 0; /* #ff6500 - Orange-red accent */
+    --app-ink: 255 255 255;
+    --app-fg-strong: 229 229 229;
+    --app-fg-muted: 148 163 184;
+    --app-fg-subtle: 107 114 128;
 
-       IMPORTANT: values RGB CHANNELS hain (`249 250 251`), poore color
-       values nahi (`#f9fafb`). Tailwind ko `rgb(var(--app-bg) / <alpha-value>)`
-       me `<alpha-value>` substitute karna hota hai - sirf is format me
-       `bg-gray-950/60` jaise opacity variants generate hote hain. Hex ya hsl
-       likhne par wo classes chup-chaap CSS se gayab ho jaati hain. */
-    --app-bg: 255 255 255;
-    --app-surface: 249 250 251;
-    --app-surface-raised: 243 244 246;
-    --app-border: 229 231 235;
-    --app-border-strong: 209 213 219;
-    --app-ink: 17 24 39;
-    --app-fg-strong: 55 65 81;
-    --app-fg-muted: 107 114 128;
-    --app-fg-subtle: 156 163 175;
-
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    /* Shadcn compat (HSL) - kept for component compatibility */
+    --background: 0 0% 5%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 15 100% 50%;       /* #ff6500 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 15 100% 50%;
+    --radius: 0.375rem;           /* rounded-md = 6px */
   }
 
   .dark {
-    /* ---- APP SURFACE / TEXT TOKENS (dark theme) ----
-       Same RGB channel format (upar wali comment dekho) */
-    --app-bg: 3 7 18;
-    --app-surface: 17 24 39;
-    --app-surface-raised: 31 41 55;
-    --app-border: 31 41 55;
-    --app-border-strong: 55 65 81;
+    /* Dark theme - same as :root since dark is default */
+    --app-bg: 13 13 13;
+    --app-surface: 22 22 22;
+    --app-surface-raised: 30 30 30;
+    --app-border: 42 42 42;
+    --app-border-strong: 255 101 0;
     --app-ink: 255 255 255;
-    --app-fg-strong: 209 213 219;
-    --app-fg-muted: 156 163 175;
+    --app-fg-strong: 229 229 229;
+    --app-fg-muted: 148 163 184;
     --app-fg-subtle: 107 114 128;
 
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 0 0% 5%;
+    --foreground: 0 0% 90%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 90%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 15 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 12%;
+    --muted-foreground: 0 0% 58%;
+    --accent: 0 0% 12%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 15 100% 50%;
+    --radius: 0.375rem;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    /* NO border-border - borderless color-box separation */
+    @apply border-transparent;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-[rgb(var(--app-bg))] text-[rgb(var(--app-ink))];
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+/* 1px ghost scrollbar everywhere - scrolling still works, 1px footprint */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: auto;
+}
+
+*::-webkit-scrollbar {
+  display: block;
+  width: 1px;
+  height: 1px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 1px thumb - invisible by default, #ff6500 on hover ONLY */
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: none;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: #ff6500;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #e55800;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }

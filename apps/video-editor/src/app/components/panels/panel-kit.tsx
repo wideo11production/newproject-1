@@ -204,18 +204,20 @@ export function Select<T extends string>({
   ariaLabel: string;
 }) {
   return (
-    <select
-      value={value}
-      aria-label={ariaLabel}
-      onChange={(e) => onChange(e.target.value as T)}
-      className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none"
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+    <div className="ve-select-dropdown">
+      <select
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none border border-[#ff6500]/30 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500] transition-colors duration-150"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 

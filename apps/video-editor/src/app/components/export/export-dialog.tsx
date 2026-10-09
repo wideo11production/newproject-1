@@ -17,13 +17,14 @@
 // would be the lie, so the bar tracks the render clock instead.
 
 import { useMemo, useRef, useState } from 'react';
-import { X, Download, Film, Clock, Volume2, VolumeX, Loader2, Check } from 'lucide-react';
+import { X, Download, Film, Clock, Volume2, VolumeX, Loader2, Check, Sparkles } from 'lucide-react';
 import { PanelSection, Field, Select, Slider, Button, TextInput } from '../panels/panel-kit';
 import {
   EXPORT_PRESETS,
   renderToFile,
   downloadBlob,
   supportedMimeTypes,
+  isAuraExportAvailable,
   type ExportPreset,
 } from '../../lib/engine/exporter';
 import type { CompositorState } from '../../lib/engine/compositor';
@@ -62,6 +63,11 @@ export function ExportDialog({
   const abort = useRef({ aborted: false });
 
   const mimes = useMemo(() => supportedMimeTypes(), []);
+  const auraAvailable = isAuraExportAvailable();
+  const visiblePresets = useMemo(
+    () => EXPORT_PRESETS.filter((p) => !p.auraOnly || auraAvailable),
+    [auraAvailable]
+  );
   const preset = EXPORT_PRESETS.find((p) => p.id === presetId) ?? EXPORT_PRESETS[0];
   const from = whole ? 0 : startTime;
   const to = whole ? Math.max(duration, 0.5) : endTime;
@@ -134,7 +140,7 @@ export function ExportDialog({
                 <Select
                   value={presetId}
                   ariaLabel="Export preset"
-                  options={EXPORT_PRESETS.map((p) => ({ value: p.id, label: `${p.label} — ${p.hint}` }))}
+                  options={visiblePresets.map((p) => ({ value: p.id, label: `${p.label} — ${p.hint}` }))}
                   onChange={(v) => setPresetId(v)}
                 />
               </Field>
@@ -207,6 +213,29 @@ export function ExportDialog({
                 {phase} · {Math.round(progress * 100)}%
               </p>
             </div>
+          )}
+
+          {/* AURA high-framerate export section - visible only when micro-frame studio is enabled */}
+          {auraAvailable && preset.fps >= 120 && (
+            <PanelSection title="AURA High-Framerate" hint="Premium slow-motion export settings.">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 rounded bg-[#ff6500]/10 px-2 py-1.5 text-[8px]">
+                  <Sparkles className="h-2 w-2 shrink-0 text-[#ff6500]" aria-hidden="true" />
+                  <span className="text-[#ff6500]">
+                    {preset.fps}fps export — {preset.fps === 120 ? '4×' : '8×'} slow motion
+                  </span>
+                </div>
+                <p className="text-[8px] text-fg-muted">
+                  At {preset.fps}fps, one second of real time produces {preset.fps} frames. The
+                  encoder cost is linear in frame count, so expect this to take roughly
+                  {preset.fps / 30}× the standard render time.
+                </p>
+<div className="flex items-center gap-2 rounded-md bg-surface/60 px-2 py-1.5 text-[8px] text-fg-muted">
+                  <Film className="h-2 w-2 shrink-0" aria-hidden="true" />
+                  {preset.width}×{preset.height} at {preset.fps}fps · {preset.videoKbps} kbps video
+                </div>
+              </div>
+            </PanelSection>
           )}
 
           {error && <p className="rounded border-900 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}

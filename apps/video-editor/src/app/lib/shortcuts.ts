@@ -103,5 +103,7 @@ export const FEATURES: FeatureNote[] = [
   { name: 'Waveforms', how: 'Decoded once per file and cached as peaks. A file the browser cannot decode draws a flat line, not a fake squiggle.' },
   { name: 'Thumbnails', how: 'A real decoded frame at 10% of the file, time-boxed at 1.5s.' },
   { name: 'Export', how: 'MediaRecorder on the compositor’s own canvas plus the audio graph. Real-time, WebM, nothing leaves the machine.' },
+  { name: 'AURA Micro-Frame Studio', how: 'A 3-frame temporal ring with millisecond-precision scrubbing (0.0001s granularity). Frame-1, Frame-0 and Frame+1 are always visible, and the playhead cannot leave the ring.' },
+  { name: 'AURA 120fps / 240Hz export', how: 'High-framerate export presets that produce smooth slow-motion. 120fps gives 4× slow motion; 240Hz gives 8×.' },
   { name: 'Projects', how: 'Arrangement in localStorage, media bytes in IndexedDB. Autosave every 30 seconds.' },
 ];

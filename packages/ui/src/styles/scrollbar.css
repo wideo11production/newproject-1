@@ -13,14 +13,41 @@
 
 /* ---- Hide native scrollbar everywhere (preserve scroll function) ---- */
 * {
-  scrollbar-width: none;          /* Firefox */
-  -ms-overflow-style: none;       /* IE/Edge */
+  scrollbar-width: thin;          /* Firefox - 1px footprint */
+  scrollbar-color: transparent transparent;
 }
 
 *::-webkit-scrollbar {
-  display: none;                  /* Chrome/Safari/Edge - hide but keep function */
-  width: 0;
-  height: 0;
+  display: block;                 /* Chrome/Safari/Edge - keep function, 1px */
+  width: 1px;
+  height: 1px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 1px ghost thumb - invisible by default, #ff6500 on hover ONLY */
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: none;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: #ff6500;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #e55800;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ---- Custom overlay scrollbar (appears on hover) ---- */
@@ -52,8 +79,8 @@
   content: '';
   position: absolute;
   right: 5px;
-  width: 4px;
-  background: #2c3235;
+  width: 1px;
+  background: #ff6500;
   border-radius: 2px;
   opacity: 0;
   transition: opacity 150ms ease, background-color 150ms ease;

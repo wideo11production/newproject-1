@@ -60,8 +60,28 @@ import { TimelineRail } from './timeline/timeline-rail';
 import { PreviewCanvas } from './preview/preview-canvas';
 import { ResizableHandle, useClampToViewport } from './layout/resizable';
 import { MediaBin } from './panels/media-bin';
+import { TransitionsPanel } from './panels/transitions-panel';
+import { TemplatesPanel } from './panels/templates-panel';
+import { FiltersPanel, TitlesPanel, StickersPanel, PanZoomPanel, LayoutsPanel } from './panels/style-panels';
+import { AudioPanel } from './panels/audio-panel';
+import { ExpressionsPanel } from './panels/expressions-panel';
+import { PluginsPanel } from './panels/plugins-panel';
+import { ProjectPanel } from './panels/project-panel';
+import {
+  SamplesPanel,
+  BackgroundsPanel,
+  IntrosPanel,
+  EffectsPanel,
+  ToolsPanel,
+} from './panels/additional-panels';
+import { BrandingPanel } from './panels/branding-panel';
+import { ClipProperties } from './inspector/clip-properties';
+import { ExportDialog } from './export/export-dialog';
+import { HelpPanel } from './panels/help-panel';
 import { DeletedClip } from './recover-dialog';
 import { ConfirmationDialog } from './confirmation-dialog';
+import { RecoverDialog } from './recover-dialog';
+import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
 import { Compositor } from '../lib/engine/compositor';
 import { extractPeaks } from '../lib/engine/waveform';
 import { useMediaStore, type MediaItem, type MediaKind } from '../lib/engine/media-store';
@@ -173,6 +193,13 @@ export function VideoEditor() {
   const [transitionToDelete, setTransitionToDelete] = useState<string | null>(null);
   const [markerToDelete, setMarkerToDelete] = useState<string | null>(null);
   const [projectToDelete, setProjectToDelete] = useState(false);
+  const [recoveredClips, setRecoveredClips] = useState<DeletedClip[]>([]);
+  const [showRecoverDialog, setShowRecoverDialog] = useState(false);
+  const [showAuraStudio, setShowAuraStudio] = useState(false);
+  const [activePluginId, setActivePluginId] = useState<string | null>(null);
+  const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
+  const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
+  const [previewClip, setPreviewClip] = useState<TimelineClip | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -188,6 +215,9 @@ export function VideoEditor() {
   const durationFrames = Math.max(1, Math.round(duration * fps));
   const laneWidth = Math.max(durationFrames * pxPerFrame, 200);
   const playheadSeconds = playheadFrame / fps;
+
+  // Feature flag check for AURA Micro-Frame Studio
+  const isAuraStudioEnabled = process.env.NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED === 'true';
 
   /** The playhead, persisted.
    *
@@ -1141,31 +1171,6 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
   /** Marker editing */
 
   const removeMarker = useCallback((id: string) => {
-    setMarkerToDelete(id);
-  }, []);
-
-  /** Delete marker with confirmation */
-  const deleteMarker = useCallback((id: string) => {
-    setMarkers((prev) => prev.filter((m) => m.id !== id));
-    setMarkerToDelete(null);
-    setDirty(true);
-    setToast('Marker removed');
-  }, []);
-
-  const gotoMarker = useCallback(
-    (dir: 1 | -1) => {
-      const m = dir === 1 ? nextMarker(markers, playheadFrame) : prevMarker(markers, playheadFrame);
-      if (!m) {
-        setToast(dir === 1 ? 'No later marker' : 'No earlier marker');
-        return;
-      }
-      setPlayhead(m.frame);
-      setToast(`${m.label || 'Marker'} — frame ${m.frame}`);
-    },
-    [markers, playheadFrame, setPlayhead]
-  );
-
-  const removeMarker = useCallback((id: string) => {
     setMarkers((prev) => prev.filter((m) => m.id !== id));
     // Without this, deleting a marker was the one edit that could never be
     // undone by closing the tab - the row came back on reload, because nothing
@@ -1639,11 +1644,21 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
         fileInputRef.current?.click();
         return;
       }
-      if (mod && k === 'm') {
-        e.preventDefault();
-        setExportOpen(true);
-        return;
-      }
+if (mod && k === 'm') {
+          e.preventDefault();
+          setExportOpen(true);
+          return;
+        }
+        if (mod && e.shiftKey && k === 'r') {
+          e.preventDefault();
+          setShowRecoverDialog(true);
+          return;
+        }
+        if (mod && e.shiftKey && k === 'a') {
+          e.preventDefault();
+          setShowAuraStudio(true);
+          return;
+        }
       if (mod && k === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
@@ -2024,8 +2039,6 @@ if (!mod) {
             setMode(m);
             setSettings({ activeMode: m });
           }}
-          theme={settings.theme}
-          onToggleTheme={() => patch({ theme: settings.theme === 'dark' ? 'light' : 'dark' })}
           waveformVisible={settings.waveformVisible}
           onToggleWaveforms={() => patch({ waveformVisible: !settings.waveformVisible })}
           gridVisible={settings.gridVisible}
@@ -2184,16 +2197,25 @@ if (!mod) {
                    }}
                  />
                )}
-               {mode === 'tools' && (
-                 <ToolsPanel
-                   settings={settings.tools ?? {}}
-                   onToggle={(key, value) => {
-                     const next = { ...(settings.tools ?? {}), [key]: value };
-                     patch({ tools: next });
-                   }}
-                 />
-               )}
-              {/* ---- BRANDING EDITS GO THROUGH THE HISTORY ----
+{mode === 'tools' && (
+                  <ToolsPanel
+                    settings={settings.tools ?? {}}
+                    onToggle={(key, value) => {
+                      const next = { ...(settings.tools ?? {}), [key]: value };
+                      patch({ tools: next });
+                    }}
+                  />
+                )}
+                {mode === 'plugins' && (
+                  <PluginsPanel
+                    activePluginId={activePluginId}
+                    onSelectPlugin={setActivePluginId}
+                    onEnablePlugin={() => {}}
+                    onConfigurePlugin={() => {}}
+                    onRemovePlugin={() => {}}
+                  />
+                )}
+                {/* ---- BRANDING EDITS GO THROUGH THE HISTORY ----
 
                   All three of these used to call `setTracks` directly. That made
                   applying, changing and removing a logo invisible to undo: the user
@@ -2582,12 +2604,12 @@ if (!mod) {
                 />
                 {/*
                   Playhead for tracks area ONLY. The ruler has its own playhead
-                  inside TimelineRuler (rose-500 bar + triangle). This one lives
+                  inside TimelineRuler (orange-red bar + triangle). This one lives
                   in the tracks container so it follows vertical scroll of clips
                   but stays anchored horizontally with the shared scroll sync.
                 */}
                 <div
-                  className="pointer-events-none absolute top-0 z-30 h-full w-px bg-rose-500/70"
+                  className="pointer-events-none absolute top-0 z-30 h-full w-px bg-[#ff6500]/80"
                   style={{ left: playheadFrame * pxPerFrame }}
                   aria-hidden="true"
                 />
@@ -2721,7 +2743,7 @@ if (!mod) {
       <ConfirmationDialog
         open={clipToDelete !== null}
         title="Remove Clip"
-        message={`Are you sure you want to remove the clip "${clipById.get(clipToDelete)?.clip.mediaName || 'unknown'}"? This action cannot be undone.`}
+        message={`Are you sure you want to remove the clip "${clipById.get(clipToDelete ?? '')?.clip.mediaName || 'unknown'}"? This action cannot be undone.`}
         confirmLabel="Remove"
         cancelLabel="Cancel"
         variant="danger"
@@ -2769,7 +2791,7 @@ if (!mod) {
         confirmLabel="Remove"
         cancelLabel="Cancel"
         variant="danger"
-        onConfirm={() => deleteMarker(markerToDelete!)}
+        onConfirm={() => removeMarker(markerToDelete!)}
         onCancel={() => setMarkerToDelete(null)}
       />
 
@@ -2786,3 +2808,67 @@ if (!mod) {
         }}
         onCancel={() => setProjectToDelete(false)}
       />
+
+      {/* Recover Dialog - 24-hour clip recycle bin */}
+      <RecoverDialog
+        open={showRecoverDialog}
+        deletedClips={recoveredClips}
+        onRecover={(clipId) => {
+          const clip = recoveredClips.find((c) => c.id === clipId);
+          if (clip) {
+            // Restore the clip to its original track
+            setTracks((prev) =>
+              prev.map((t) =>
+                t.name === clip.trackName
+                  ? { ...t, clips: [...t.clips, { ...clip, id: nextId('clip') } as any].sort((a, b) => a.startTime - b.startTime) }
+                  : t
+              )
+            );
+            setRecoveredClips((prev) => prev.filter((c) => c.id !== clipId));
+            setToast(`Clip "${clip.mediaName}" recovered`);
+          }
+        }}
+        onRecoverAll={() => {
+          // Group by track and restore all
+          const byTrack = new Map<string, DeletedClip[]>();
+          recoveredClips.forEach((clip) => {
+            const arr = byTrack.get(clip.trackName) || [];
+            arr.push(clip);
+            byTrack.set(clip.trackName, arr);
+          });
+          setTracks((prev) =>
+            prev.map((t) => {
+              const clips = byTrack.get(t.name);
+              if (!clips) return t;
+              return {
+                ...t,
+                clips: [...t.clips, ...clips.map((c) => ({ ...c, id: nextId('clip') } as any))].sort((a, b) => a.startTime - b.startTime),
+              };
+            })
+          );
+          setRecoveredClips([]);
+          setToast(`Recovered ${recoveredClips.length} clips`);
+        }}
+        onClose={() => setShowRecoverDialog(false)}
+      />
+
+      {/* AURA Micro-Frame Studio Dialog - gated by feature flag */}
+      {isAuraStudioEnabled && (
+        <AuraMicroFrameStudio
+          open={showAuraStudio}
+          onOpenChange={setShowAuraStudio}
+          activeFrame={playheadFrame}
+          fps={fps}
+          totalFrames={durationFrames}
+          onFrameChange={setPlayhead}
+          onPlayPause={togglePlay}
+          isPlaying={playing}
+          playbackSpeed={settings.playbackRate}
+          onPlaybackSpeedChange={(v) => patch({ playbackRate: v })}
+          durationMs={Math.round(duration * 1000)}
+          currentTimeMs={Math.round(playheadSeconds * 1000)}
+        />
+      )}
+    </div>
+  );
+}

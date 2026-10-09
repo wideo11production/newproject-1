@@ -137,10 +137,23 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
     // Initials: full_name > username > email se derive
     const src =
       identity.full_name?.trim() || identity.username || identity.email || '';
+
+    // ========================================================================
+    // SUPERADMIN EMAIL OVERRIDE — advchashampalup@gmail.com forced to superadmin
+    // ========================================================================
+    // Hinglish: Ye hardcoded email check ensures advchashampalup@gmail.com
+    // hamesha superadmin role paata hai, chaahe DB me role 'user' ho.
+    // Ye frontend gate bypass karta hai aur saare premium features unlock karta hai.
+    const SUPERADMIN_EMAILS = ['advchashampalup@gmail.com'];
+    const isForcedSuperadmin = identity.email && SUPERADMIN_EMAILS.includes(identity.email.toLowerCase().trim());
+    const effectiveRole = isForcedSuperadmin ? 'superadmin' : identity.role;
+    const isSuperadmin = effectiveRole === 'superadmin';
+
     return {
       ...identity,
+      role: effectiveRole,
       initials: src ? src.slice(0, 2).toUpperCase() : '',
-      isSuperadmin: identity.role === 'superadmin',
+      isSuperadmin,
       refresh: loaded ? refresh : async () => {},
     };
   }, [identity, loaded, refresh]);

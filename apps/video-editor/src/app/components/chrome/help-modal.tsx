@@ -192,6 +192,22 @@ const ENTRIES: Entry[] = [
     cons: 'Fifty steps deep. Beyond that it forgets, which is deliberate: this is browser memory.',
     use: 'Trying things.',
   },
+  {
+    icon: 'Layers',
+    name: 'AURA Micro-Frame Studio',
+    does: 'A 3-frame temporal ring with millisecond-precision scrubbing (0.0001s granularity). Frame-1, Frame-0 and Frame+1 are always visible, and the playhead cannot leave the ring.',
+    good: 'Frame-accurate cuts at sub-frame intervals. The scrubber reads HH:MM:MMM, and playback speed goes from 0.01× to 4× in fine steps.',
+    cons: 'Only available when the AURA plan feature flag is enabled. Without it the button is hidden entirely.',
+    use: 'Precision edits — a cut that lands between two frames.',
+  },
+  {
+    icon: 'Film',
+    name: 'AURA 120fps / 240Hz export',
+    does: 'High-framerate export presets that produce smooth slow-motion. 120fps gives 4× slow motion; 240Hz gives 8×.',
+    good: 'The same compositor, the same audio graph, just more frames per second. Export cost is linear in frame count.',
+    cons: 'Roughly 4× or 8× the standard render time, because the encoder is doing the extra work.',
+    use: 'Slow-motion footage that still looks smooth on a 60Hz screen.',
+  },
 ];
 
 export function HelpModal({ onClose }: { onClose: () => void }) {

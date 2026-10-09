@@ -48,8 +48,6 @@ import {
   AudioWaveform,
   Grid3x3,
   Magnet,
-  Sun,
-  Moon,
   Badge,
   User,
   FunctionSquare,
@@ -60,6 +58,7 @@ import {
   Wand2,
   Sparkles,
   Settings,
+  Puzzle,
 } from 'lucide-react';
 
 export type EditorMode =
@@ -83,7 +82,8 @@ export type EditorMode =
   | 'backgrounds'
   | 'intros'
   | 'effects'
-  | 'tools';
+  | 'tools'
+  | 'plugins';
 
 interface ModeDef {
   id: EditorMode;
@@ -112,6 +112,7 @@ const MODES: ModeDef[] = [
   { id: 'intros', label: 'Intro Videos', Icon: Layers, status: 'ready', hint: 'Animated intro sequences you can place at the start of your timeline.' },
   { id: 'effects', label: 'Effects', Icon: Wand2, status: 'ready', hint: 'Visual effects: blur, glow, glitch, particle — applied to the selected clip.' },
   { id: 'tools', label: 'Tools', Icon: Settings, status: 'ready', hint: 'Editor configuration: proxy mode, caching, performance tuning.' },
+  { id: 'plugins', label: 'Plugins', Icon: Puzzle, status: 'ready', hint: 'Manage and configure editor plugins: effects, filters, transitions, and tools.' },
   { id: 'project', label: 'Project', Icon: FolderOpen, status: 'ready', hint: 'New, open, save, autosave, recent projects, and the resolution and frame rate everything else follows.' },
   { id: 'help', label: 'Help', Icon: HelpCircle, status: 'ready', hint: 'Every keyboard shortcut and mouse gesture, generated from the same table the editor uses.' },
   {
@@ -143,8 +144,6 @@ const MODES: ModeDef[] = [
 export function ModeRail({
   active,
   onChange,
-  theme,
-  onToggleTheme,
   waveformVisible,
   onToggleWaveforms,
   gridVisible,
@@ -153,8 +152,6 @@ export function ModeRail({
 }: {
   active: EditorMode;
   onChange: (m: EditorMode) => void;
-  theme: 'dark' | 'light';
-  onToggleTheme: () => void;
   waveformVisible: boolean;
   onToggleWaveforms: () => void;
   gridVisible: boolean;
@@ -266,18 +263,9 @@ export function ModeRail({
         >
           <Magnet className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
-        <button
+<button
           type="button"
-          onClick={onToggleTheme}
-          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-          title={`${theme === 'dark' ? 'Light' : 'Dark'} theme\nPersisted, so it survives a refresh like everything else here.`}
-           className="flex h-9 w-9 items-center justify-center rounded-md text-fg-muted transition-colors duration-150 hover:text-fg"
-        >
-          {theme === 'dark' ? <Sun className="h-2.5 w-2.5" aria-hidden="true" /> : <Moon className="h-2.5 w-2.5" aria-hidden="true" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange('project')}
+          onClick={() => onChange(active)}
           aria-pressed={active === 'project'}
           aria-label="Project settings"
           title="Project\nNew, open, save, autosave, and the resolution everything else follows."

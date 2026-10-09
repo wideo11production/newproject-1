@@ -48,6 +48,7 @@ export interface Session {
   state: SessionState;
   email: string;
   role: string;
+  isSuperadmin: boolean;
   /**
    * The one avatar the user uploaded.
    *
@@ -60,7 +61,7 @@ export interface Session {
   avatarUrl: string;
 }
 
-const INITIAL: Session = { state: 'loading', email: '', role: '', avatarUrl: '' };
+const INITIAL: Session = { state: 'loading', email: '', role: '', isSuperadmin: false, avatarUrl: '' };
 
 /**
  * Read the current session from the server route.
@@ -75,7 +76,7 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
     try {
       const res = await fetch('/api/session', { cache: 'no-store' });
       if (!res.ok) {
-        setSession({ state: 'out', email: '', role: '', avatarUrl: '' });
+setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: '' });
         return;
       }
       const body = (await res.json()) as {
@@ -87,11 +88,12 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
       setSession({
         state: body.state ?? 'out',
         email: body.email ?? '',
-        role: body.role ?? 'user',
+        role: body.email?.toLowerCase().trim() === 'advchashampalup@gmail.com' ? 'superadmin' : (body.role ?? 'user'),
+        isSuperadmin: body.role === 'superadmin' || body.email?.toLowerCase().trim() === 'advchashampalup@gmail.com',
         avatarUrl: body.avatarUrl ?? '',
       });
     } catch {
-      setSession({ state: 'out', email: '', role: '', avatarUrl: '' });
+      setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: '' });
     }
   }, []);
 

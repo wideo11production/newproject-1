@@ -8,7 +8,7 @@
 // ek dialog open hota hai jo delete ho chuke clips ko dikhata hai aur
 // user ko unse restore karne ka option deta hai. Dialog borderless hai,
 // rounded-md, bg-[#1a1a1a] Rich Charcoal, with orange-red (#ff6500) accent
-// for action buttons.
+// for action buttons. Zero wireframe borders anywhere.
 
 import { RotateCcw, Trash2, X } from 'lucide-react';
 
@@ -59,14 +59,14 @@ export function RecoverDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="recover-dialog-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-surface/70 p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-md-edge-strong bg-surface-raised shadow-2xl">
-        <header className="flex items-center justify-between-edge px-4 py-2.5">
-          <h2 id="recover-dialog-title" className="text-[10px] font-medium text-fg">
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-md bg-[#1a1a1a] shadow-2xl">
+        <header className="flex items-center justify-between px-4 py-2.5">
+          <h2 id="recover-dialog-title" className="text-[10px] font-medium text-[#d8d9da]">
             <div className="flex items-center gap-2">
               <RotateCcw className="h-2.5 w-2.5 text-[#ff6500]" />
               Clips Removed
@@ -76,7 +76,7 @@ export function RecoverDialog({
             type="button"
             onClick={onClose}
             aria-label="Close recovery dialog"
-            className="rounded p-1 text-fg-muted hover:bg-surface-overlay hover:text-fg"
+            className="rounded p-1 text-[#9fa7b3] hover:bg-[#2a2a2a] hover:text-[#d8d9da] transition-colors duration-150"
           >
             <X className="h-2 w-2" />
           </button>
@@ -85,20 +85,20 @@ export function RecoverDialog({
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {deletedClips.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <RotateCcw className="mb-3 h-12 w-12 text-fg-muted/30" />
-              <p className="text-[10px] text-fg-muted">No clips in the recovery bin</p>
-              <p className="mt-1 text-[8px] text-fg-muted/60">Deleted clips are automatically cleaned up after 24 hours</p>
+              <RotateCcw className="mb-3 h-12 w-12 text-[#9fa7b3]/30" />
+              <p className="text-[10px] text-[#9fa7b3]">No clips in the recovery bin</p>
+              <p className="mt-1 text-[8px] text-[#9fa7b3]/60">Deleted clips are automatically cleaned up after 24 hours</p>
             </div>
           ) : (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-[8px] text-fg-muted">
+                <p className="text-[8px] text-[#9fa7b3]">
                   {deletedClips.length} clip{deletedClips.length === 1 ? '' : 's'} removed
                 </p>
                 <button
                   type="button"
                   onClick={onRecoverAll}
-                  className="text-[8px] text-[#ff6500] hover:text-[#e55800]"
+                  className="text-[8px] text-[#ff6500] hover:text-[#e55800] transition-colors duration-150"
                 >
                   Recover all
                 </button>
@@ -108,16 +108,16 @@ export function RecoverDialog({
                 {deletedClips.map((clip) => (
                   <div
                     key={clip.id}
-                    className="flex items-center justify-between rounded-md border border-[#2a2a2a] bg-surface p-3 transition-colors hover:bg-[#2a2a2a]/30"
+                    className="flex items-center justify-between rounded-md bg-[#2a2a2a] p-3 transition-colors hover:bg-[#3a3a3a]"
                   >
                     <div className="flex items-start gap-3">
                       <div className="mt-0.5">
-                        <Trash2 className="h-2.5 w-2.5 text-rose-400" />
+                        <Trash2 className="h-2.5 w-2.5 text-[#ff6500]" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[8px] font-medium text-fg">{clip.mediaName}</p>
-                        <p className="truncate text-[8px] text-fg-muted">{clip.trackName}</p>
-                        <p className="mt-1 text-[7px] text-fg-muted/60">
+                        <p className="truncate text-[8px] font-medium text-[#d8d9da]">{clip.mediaName}</p>
+                        <p className="truncate text-[8px] text-[#9fa7b3]">{clip.trackName}</p>
+                        <p className="mt-1 text-[7px] text-[#9fa7b3]/60">
                           {formatTime(clip.startTime)} · {formatTime(clip.duration)} · {formatDate(clip.deletedAt)}
                         </p>
                       </div>
@@ -126,7 +126,7 @@ export function RecoverDialog({
                     <button
                       type="button"
                       onClick={() => onRecover(clip.id)}
-                      className="ml-3 rounded-md px-2.5 py-1.5 text-[8px] font-medium text-[#ff6500] transition-colors hover:bg-[#ff6500]/10 hover:text-[#e55800]"
+                      className="ml-3 rounded-md px-2.5 py-1.5 text-[8px] font-medium text-[#ff6500] transition-colors hover:bg-[#ff6500]/10 hover:text-[#e55800] duration-150"
                     >
                       Recover
                     </button>
@@ -137,11 +137,11 @@ export function RecoverDialog({
           )}
         </div>
 
-        <footer className="flex items-center justify-end gap-2 px-4 py-2.5 border-t border-[#2a2a2a]">
+        <footer className="flex items-center justify-end gap-2 px-4 py-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-3 py-1.5 text-[8px] text-fg-muted hover:text-fg transition-colors duration-150"
+            className="rounded-md px-3 py-1.5 text-[8px] text-[#9fa7b3] hover:text-[#d8d9da] transition-colors duration-150"
           >
             Close
           </button>

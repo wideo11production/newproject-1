@@ -1,0 +1,2 @@
+$response = Invoke-WebRequest -Method POST -Uri "http://localhost:8085/api/v1/auth/login" -Headers @{"Content-Type"="application/json"} -Body '{"email":"advchashampalup@gmail.com","password":"Appp Rajaghenna123*#"}'
+$response.Content

@@ -153,34 +153,44 @@ body {
   color-scheme: light;
 }
 
-/* ---------------------------------------------------------------------------
- * Scrollbars
- *
- * 4px, matching the shared scrollbar stylesheet that web/admin/analytics import.
- * Not `@import`ed here because this app's build has no reason to pull in the
- * shared file, and a duplicated `@import` of a Tailwind-ordered stylesheet is a
- * known source of ordering surprises. The values are identical and the reason is
- * recorded, so a change to one is a change to both deliberately.
- *
- * Colours come from the theme variables, so the scrollbar themes itself. A
- * hardcoded `#111827` track would be a dark stripe down a light page.
- * ------------------------------------------------------------------------- */
-::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+/* 1px ghost scrollbar everywhere - scrolling still works, 1px footprint */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  -ms-overflow-style: auto;
 }
 
-::-webkit-scrollbar-track {
-  background: rgb(var(--app-surface) / 1);
+*::-webkit-scrollbar {
+  display: block;
+  width: 1px;
+  height: 1px;
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--app-border-strong) / 1);
-  border-radius: 4px;
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--app-fg-subtle) / 1);
+/* 1px thumb - invisible by default, #ff6500 on hover ONLY */
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 9999px;
+  border: none;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+  background-color: #ff6500;
+  width: 1px;
+  height: 1px;
+}
+
+*:hover::-webkit-scrollbar-thumb:hover {
+  background-color: #e55800;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ---------------------------------------------------------------------------

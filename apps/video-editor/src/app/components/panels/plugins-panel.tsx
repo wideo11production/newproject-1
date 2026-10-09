@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 // ============================================================================
 // Plugins Panel — borderless, rounded-md
 // ============================================================================
@@ -174,11 +176,11 @@ export function PluginsPanel({
       <PanelSection title="Plugin Library" hint="Manage installed plugins and add new ones.">
         <div className="space-y-2">
           <div className="flex gap-2">
-            <Button variant="outline" className="flex-1">
+            <Button variant="outline" className="flex-1" onClick={() => {}}>
               <Download className="h-2.5 w-2.5" />
               Install from marketplace
             </Button>
-            <Button variant="outline" className="flex-1">
+            <Button variant="outline" className="flex-1" onClick={() => {}}>
               <Upload className="h-2.5 w-2.5" />
               Upload plugin
             </Button>
