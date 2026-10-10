@@ -117,7 +117,7 @@ export { DEFAULT_TRACKS } from '../../lib/engine/types';
  * tooltip. 30px fits the spine, the type icon and four state toggles, and
  * nothing else.
  */
-export const TRACK_HEADER_W = 30;
+export const TRACK_HEADER_W = 60;
 const DEFAULT_TRACK_HEIGHT = 56;
 
 /** Minimum lane height. Below this the fader and the name cannot coexist. */
@@ -293,35 +293,37 @@ export function TrackHeaders({
             {/* The type icon IS the lane's name. */}
             <Icon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
 
-            <div className="flex items-center gap-0.5">
+            <div className="flex flex-col items-center gap-0.5 py-0.5">
               {track.type === 'audio' && (
-                <>
-                <IconToggle
-                  label={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
-                  active={track.muted}
-                  onClick={() => onToggleTrack(track.id, 'muted')}
-                  icon={track.muted ? VolumeX : Volume2}
-                />
-                <IconToggle
-                  label={track.solo ? `Unsolo ${track.name}` : `Solo ${track.name}`}
-                  active={track.solo}
-                  onClick={() => onToggleTrack(track.id, 'solo')}
-                  icon={Headphones}
-                />
-</>
+                <div className="flex items-center gap-0.5">
+                  <IconToggle
+                    label={track.muted ? `Unmute ${track.name}` : `Mute ${track.name}`}
+                    active={track.muted}
+                    onClick={() => onToggleTrack(track.id, 'muted')}
+                    icon={track.muted ? VolumeX : Volume2}
+                  />
+                  <IconToggle
+                    label={track.solo ? `Unsolo ${track.name}` : `Solo ${track.name}`}
+                    active={track.solo}
+                    onClick={() => onToggleTrack(track.id, 'solo')}
+                    icon={Headphones}
+                  />
+                </div>
               )}
-              <IconToggle
-                label={track.visible ? `Hide ${track.name}` : `Show ${track.name}`}
-                active={!track.visible}
-                onClick={() => onToggleTrack(track.id, 'visible')}
-                icon={track.visible ? Eye : EyeOff}
-              />
-              <IconToggle
-                label={track.locked ? `Unlock ${track.name}` : `Lock ${track.name}`}
-                active={track.locked}
-                onClick={() => onToggleTrack(track.id, 'locked')}
-                icon={track.locked ? Lock : Unlock}
-              />
+              <div className="flex items-center gap-0.5">
+                <IconToggle
+                  label={track.visible ? `Hide ${track.name}` : `Show ${track.name}`}
+                  active={!track.visible}
+                  onClick={() => onToggleTrack(track.id, 'visible')}
+                  icon={track.visible ? Eye : EyeOff}
+                />
+                <IconToggle
+                  label={track.locked ? `Unlock ${track.name}` : `Lock ${track.name}`}
+                  active={track.locked}
+                  onClick={() => onToggleTrack(track.id, 'locked')}
+                  icon={track.locked ? Lock : Unlock}
+                />
+              </div>
             </div>
 
             {/* Remove, on hover. It is destructive and rare, so it does not get
@@ -446,11 +448,11 @@ function IconToggle({
       aria-label={label}
       aria-pressed={active}
       title={label}
-      className={`flex h-2.5 w-2.5 items-center justify-center text-fg-muted transition-colors duration-150 hover:will-change-transform ${
+      className={`flex h-2 w-2 items-center justify-center border-none bg-transparent p-0 text-fg-muted transition-colors duration-150 hover:will-change-transform ${
         active ? 'text-[#ff6500]' : 'hover:text-fg'
       }`}
     >
-      <Ico className="h-2.5 w-2.5" aria-hidden="true" />
+      <Ico className="h-2 w-2" aria-hidden="true" />
     </button>
   );
 }

@@ -562,7 +562,7 @@ export function EditorToolbar({
               value={String(fps)}
               onChange={(e) => onFpsChange(Number(e.target.value))}
               aria-label="Timeline frame rate"
-              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#ff6500]/30 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#9fa7b3]/25 hover:border-[#ff6500]/40 hover:text-[#ff6500] focus:border-[#ff6500]/60 focus:text-[#ff6500]"
             >
               {SUPPORTED_FPS.map((f) => (
                 <option key={f} value={f}>
@@ -582,7 +582,7 @@ export function EditorToolbar({
               value={String(playbackRate)}
               onChange={(e) => onPlaybackRate(Number(e.target.value))}
               aria-label="Playback speed"
-              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#ff6500]/30 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500]"
+              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#9fa7b3]/25 hover:border-[#ff6500]/40 hover:text-[#ff6500] focus:border-[#ff6500]/60 focus:text-[#ff6500]"
             >
               {PLAYBACK_RATES.map((r) => (
                 <option key={r} value={r}>

@@ -100,14 +100,14 @@ export function TimelineRail({
       >
         {bands.map((v, i) => {
           const lit = v > 0.02;
-          const colour = v > 0.89 ? '#f87171' : v > 0.62 ? '#fbbf24' : '#34d399';
+          const color = v > 0.89 ? '#f87171' : v > 0.62 ? '#fbbf24' : '#34d399';
           return (
             <span
               key={i}
               className="w-1.5 transition-[height,background-color] duration-75"
               style={{
                 height: `${Math.max(1, Math.round(v * 100))}%`,
-                background: lit ? colour : 'transparent',
+                background: lit ? color : 'transparent',
                 opacity: lit ? 1 : 0.3,
               }}
             />
@@ -115,14 +115,14 @@ export function TimelineRail({
         })}
 
         {/* Left / right speaker channels — blink the moment audio plays. */}
-        <span className="absolute -left-1.5 top-1 flex items-center gap-0.5">
+        <span className="absolute left-0.5 top-1 flex items-center gap-0.5">
           <Speaker
             className={`h-2.5 w-2.5 ${playing && bands[7] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
             aria-hidden="true"
           />
           <span className="text-[6px] text-fg-muted/40">L</span>
         </span>
-        <span className="absolute -right-1.5 top-1 flex items-center gap-0.5">
+        <span className="absolute right-0.5 top-1 flex items-center gap-0.5">
           <Volume2
             className={`h-2.5 w-2.5 ${playing && bands[10] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
             aria-hidden="true"

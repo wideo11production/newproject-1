@@ -1,2 +1,9 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts that RUN INSIDE containers must stay LF. Ye repo Windows par
+# develop hota hai; ek baar `#!/bin/sh\r` chala gaya tha aur kernel ne
+# interpreter dhoond hi nahi paya -> minio-init exit 255 me crash ho gaya.
+# `eol=lf` checkout par bhi LF force karta hai, isliye core.autocrlf=true
+# ab is class ke bug ko wapas nahi laa sakta.
+*.sh text eol=lf

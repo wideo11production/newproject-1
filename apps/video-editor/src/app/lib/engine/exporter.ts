@@ -92,6 +92,13 @@ export function supportedMimeTypes(): string[] {
 }
 
 /** Whether the AURA high-framerate presets are available in this build. */
+declare const process: {
+  env: {
+    AURA_MICRO_FRAME_STUDIO_ENABLED?: string;
+    NEXT_PUBLIC_MICRO_FRAME_STUDIO_ENABLED?: string;
+  };
+};
+
 export function isAuraExportAvailable(): boolean {
   return (
     process.env.AURA_MICRO_FRAME_STUDIO_ENABLED === 'true' ||

@@ -2455,7 +2455,7 @@ if (!mod) {
               That offset is invisible on a long clip but puts any
               pixel-accurate seek (a transition badge, a measurement edge)
               a full header-width off. ---- */}
-            <div className="shrink-0" style={{ width: TRACK_HEADER_W }} aria-hidden="true" />
+            <div className="shrink-0" style={{ width: 60 }} aria-hidden="true" />
 <div
             ref={rulerScrollRef}
             className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position custom-scrollbar horizontal"

@@ -37,6 +37,41 @@ log() { echo "[minio-init] $*"; }
 die() { echo "[minio-init] FATAL: $*" >&2; exit 1; }
 
 # ============================================================================
+# 0. HEALTH GATE — server "live" hone ka INTZAAR pehle, commands BAAD me
+# ============================================================================
+# Ye wahi race thi jisme container 134ms me exit 255 ho gaya tha: CRLF
+# shebang (`#!/bin/sh\r`) ki wajah se script exec hi nahi ho pa rahi thi.
+# Wo fix alag se kiya gaya (LF normalization). Ye gate defense-in-depth hai:
+#
+# Hinglish line-by-line:
+#   `until curl -sf ...; do sleep 1; done`
+#     until  = jab tak condition sach na ho, loop chalao
+#     curl   = TCP handshake + HTTP request dono confirm karta hai
+#     -s     = silent (progress meter nahi)
+#     -f     = HTTP error (4xx/5xx) par non-zero exit — sirf 200 OK par
+#              loop toot-ta hai, isliye "200 mila" hi asli confirmation hai
+#     --connect-timeout 2 = sirf TCP connect ko max 2s do
+#     --max-time 3       = poora probe max 3s. Ye zaroori hai: agar MinIO
+#              TCP haath de de par HTTP par jawab hi na de, to curl bina
+#              is flag ke ANTAK me hang ho sakta hai — attempt counter
+#              aage badhega hi nahi aur 60s ka cap kaam nahi karega.
+#     sleep 1 = har second me dobara poochho (server ko haath nahi lagate)
+#   `${MINIO_ENDPOINT%/}` = endpoint ke aakhir ki trailing slash hata do,
+#     warna `http://minio:9000//minio/health/live` ban jayega
+#   attempt cap (60) = infinite hang se bachao — 60s ke baad `die` saaf
+#     reason ke saath exit 1 karta hai, taaki failure chhupi hui na rahe
+log "waiting for ${MINIO_ENDPOINT%/}/minio/health/live ..."
+health_attempt=0
+until curl -sf --connect-timeout 2 --max-time 3 "${MINIO_ENDPOINT%/}/minio/health/live" >/dev/null 2>&1; do
+    health_attempt=$((health_attempt + 1))
+    if [ "$health_attempt" -ge 60 ]; then
+        die "MinIO health/live did not return 200 within 60s (${MINIO_ENDPOINT})"
+    fi
+    sleep 1
+done
+log "health/live OK — MinIO ab commands accept karega, provisioning shuru"
+
+# ============================================================================
 # 1. Wait for MinIO to actually accept requests
 # ============================================================================
 log "waiting for ${MINIO_ENDPOINT} ..."

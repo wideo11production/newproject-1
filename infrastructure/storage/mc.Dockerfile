@@ -11,7 +11,10 @@ RUN CGO_ENABLED=0 GOOS=linux go install -ldflags "-s -w" \
     "github.com/minio/mc@${MC_VERSION}"
 
 FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
+# curl isliye hai kyunki init script provisioning se PEHLE MinIO ke
+# /minio/health/live endpoint ko poll karta hai (health-gate, step 0).
+# Alpine me curl default nahi aata - bina iske gate chup-chaap fail hoti.
+RUN apk add --no-cache ca-certificates curl
 COPY --from=builder /go/bin/mc /usr/local/bin/mc
 
 # Provisioning logic + IAM policies travel WITH the image, so the init

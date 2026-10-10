@@ -3,10 +3,11 @@ package database
 import (
 	"fmt"
 
+	"newproject/services/cdn-service/src/model"
+
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"newproject/services/cdn-service/src/model"
 )
 
 func NewPostgresDB(dsn string) (*gorm.DB, error) {

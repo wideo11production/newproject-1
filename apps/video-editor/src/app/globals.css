@@ -375,7 +375,6 @@
     background-image: none;
   }
   
-  /* Custom dropdown arrow - orange-red on hover */
   .ve-select-dropdown::after {
     content: '▼';
     position: absolute;
@@ -389,6 +388,10 @@
   }
   
   .ve-select-dropdown:hover::after {
+    color: #ff6500;
+  }
+  
+  .ve-select-dropdown:has(select:focus-visible)::after {
     color: #ff6500;
   }
   
@@ -427,8 +430,15 @@
 
   .ve-select-dropdown select option:checked,
   .ve-select-dropdown select option:hover,
-  .ve-select-dropdown select option:focus {
+  .ve-select-dropdown select option:focus,
+  .ve-select-dropdown select option:active {
     background-color: #ff6500 !important;
     color: #ffffff !important;
     outline: none;
+  }
+
+  /* Ensure active selection stays orange-red when opened */
+  .ve-select-dropdown select:focus option:checked {
+    background-color: #ff6500 !important;
+    color: #ffffff !important;
   }

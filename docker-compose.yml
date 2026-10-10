@@ -297,13 +297,25 @@ services:
     command: server /data --console-address ":9001"
     restart: unless-stopped
     healthcheck:
-      # MinIO ka live endpoint check karte hain. NOTE: pehle yahan "mc ready local"
-      # tha, lekin ye image sirf minio server binary rakhti hai (mc nahi) -
-      # isliye healthcheck fail ho raha tha: "/bin/sh: mc: not found".
-      # Dockerfile me curl install hai, isliye ussi se check karte hain.
+      # Hinglish line-by-line is healthcheck ka architecture:
+      #   test     = container ke ANDAR se `curl -f .../minio/health/live`
+      #              chalta hai. `-f` matlab HTTP error par non-zero exit,
+      #              aur `|| exit 1` pakka karta hai ki health = SIRF 200 OK.
+      #              (Live endpoint = server process zinda hai aur jawab de
+      #              raha hai — /minio/health/cluster nahi, wo cluster state
+      #              dekhta hai jo single-node par confusing hota hai.)
+      #   interval = har 3s me check — gate jaldi khule, CI me wait kam
+      #   timeout  = ek check ko max 3s — hang hone par fail maano
+      #   retries  = 5 lagataar fail hone par hi unhealthy mark hoga
+      #   start_period = 20s — naye `minio_data` volume par cold start is
+      #              grace window me "failing" count nahi hoti (jaldi-jaldi
+      #              unhealthy mark hone se bachne ke liye, hi robustness).
+      # NOTE (history): pehle yahan "mc ready local" tha, lekin minio image
+      # me mc binary nahi hai (sirf minio server) — isliye "/bin/sh: mc:
+      # not found" se healthcheck hamesha fail hota tha. Ab curl se hota hai.
       test: ["CMD-SHELL", "curl -f http://localhost:9000/minio/health/live || exit 1"]
-      interval: 15s
-      timeout: 10s
+      interval: 3s
+      timeout: 3s
       retries: 5
       start_period: 20s
 
@@ -320,6 +332,11 @@ services:
       dockerfile: mc.Dockerfile
     container_name: wideo11-minio-init
     depends_on:
+      # Hinglish: Daim gating sequence — minio-init TAB TAK start nahi hoga
+      # jab tak `minio` ka healthcheck pass na ho (`condition:
+      # service_healthy`). Ye compose-level lock hai; andar script me
+      # ek aur health/live loop hai (defense-in-depth) — do layer, ek hi
+      # maqsad: provisioning commands kabhi half-boot server par na jayen.
       minio:
         condition: service_healthy
     environment:
