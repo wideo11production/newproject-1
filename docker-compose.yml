@@ -8,7 +8,12 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: wideo11
     ports:
-      - "5432:5432"
+      # INTERNAL-ONLY: loopback par bind. Hinglish: DB/Redis/NATS/exporter/
+      # infra/Monitoring/Go services LAN se bahar accessible nahi hone chahiye.
+      # Sirf 3000/3002/3003/3004/3005/3007 app surfaces public rehte hain.
+      # 127.0.0.1 binding = sirf yehi machine; containers aapas me docker
+      # network par baat karte hain, host port se nahi — isliye kuch tootta nahi.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Alag-alag service databases pehli baar create ho jaati hain
@@ -34,7 +39,7 @@ services:
     image: redis:7-alpine
     container_name: wideo11-redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     # ---- Restart policy ----
@@ -57,8 +62,8 @@ services:
     image: nats:2.10-alpine
     container_name: wideo11-nats
     ports:
-      - "4222:4222"
-      - "8222:8222"
+      - "127.0.0.1:4222:4222"
+      - "127.0.0.1:8222:8222"
     # ---- Config file, not CLI flags ----
     #
     # Ye pehle `command: ["-js", "-m", "8222"]` tha - JetStream ON tha, par koi
@@ -96,7 +101,7 @@ services:
     image: prom/prometheus:v2.48.0
     container_name: wideo11-prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       # Alert rules. Ye mount PEHLE MISSING tha jabki prometheus.yml me
@@ -131,7 +136,7 @@ services:
     image: prom/alertmanager:v0.27.0
     container_name: wideo11-alertmanager
     ports:
-      - "9093:9093"
+      - "127.0.0.1:9093:9093"
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager_data:/alertmanager
@@ -160,7 +165,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-dashboard-service
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       PORT: 8080
       DB_HOST: postgres
@@ -244,7 +249,7 @@ services:
     container_name: wideo11-mail
     hostname: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
     ports:
-      - "2525:25"
+      - "127.0.0.1:2525:25"
     environment:
       POSTFIX_HOSTNAME: ${POSTFIX_HOSTNAME:-mail.wideo11.local}
       POSTFIX_DOMAIN: ${POSTFIX_DOMAIN:-wideo11.local}
@@ -276,8 +281,8 @@ services:
         MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-wideo11-storage-secret}
     container_name: wideo11-minio
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web console
+      - "127.0.0.1:9000:9000"   # S3 API
+      - "127.0.0.1:9001:9001"   # Web console
     environment:
       # Runtime credentials (bhi SSOT se)
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-wideo11admin}
@@ -390,7 +395,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-analytics-service
     ports:
-      - "8091:8091"
+      - "127.0.0.1:8091:8091"
     environment:
       SERVER_PORT: "8091"
       SERVER_MODE: release
@@ -440,7 +445,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-auth-service
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
     environment:
       # auth-service viper use karta hai - keys ko DATABASE_HOST / JWT_SECRET_KEY
       # format me padhta hai (dot ko underscore me convert karta hai).
@@ -641,7 +646,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-transcoding
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     environment:
       TRANSCODING_SERVICE_PORT: 8083
       # MinIO connection (self-hosted, SSOT se)
@@ -711,7 +716,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-currency-service
     ports:
-      - "8086:8086"
+      - "127.0.0.1:8086:8086"
     environment:
       # Sab values .env se (SSOT) - code me kuch hardcoded nahi
       CURRENCY_SERVICE_PORT: 8086
@@ -803,7 +808,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-minio-exporter
     ports:
-      - "9100:9100"
+      - "127.0.0.1:9100:9100"
     environment:
       MINIO_EXPORTER_PORT: 9100
       MINIO_ENDPOINT: minio:9000
@@ -910,7 +915,7 @@ services:
         # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-superadmin
     ports:
-      - "3008:3008"
+      - "127.0.0.1:3008:3008"
     environment:
       # ---- Click ledger: analytics-service ----
       #
@@ -965,7 +970,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-webhook-receiver
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       PORT: 8081
       DB_HOST: postgres
@@ -1042,7 +1047,7 @@ services:
         # badal kar chup-chaap toota URL mil jayega.
     container_name: wideo11-monitor
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     environment:
       # ---- Click ledger: analytics-service ----
       #
@@ -1384,6 +1389,9 @@ services:
         NEXT_PUBLIC_MINIO_PUBLIC_HOST: ${NEXT_PUBLIC_MINIO_PUBLIC_HOST:-http://localhost:9000}
         NEXT_PUBLIC_MINIO_VIDEO_BUCKET: ${NEXT_PUBLIC_MINIO_VIDEO_BUCKET:-video}
         NEXT_PUBLIC_VIDEO_EDITOR_URL: ${NEXT_PUBLIC_VIDEO_EDITOR_URL:-http://localhost:3002}
+        # AURA Micro-Frame Studio client gate — .env se aata hai (default false).
+        # Hinglish: superadmin + verified token + ye flag = teeno ki zaroorat hai.
+        NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED: ${AURA_MICRO_FRAME_STUDIO_ENABLED:-false}
         # `NEXT_PUBLIC_*` `next build` me INLINE hota hai, isliye
         # runtime `environment:` se nahi, yahan se jaana padta hai.
         # Inme koi compose-internal hostname nahi: browser unhe
@@ -1406,6 +1414,15 @@ services:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: 0.0.0.0
+      # ---- AURA runtime gate (SERVER-side) ----
+      # Hinglish: server routes `AURA_MICRO_FRAME_STUDIO_ENABLED` runtime par
+      # padhte hain (3s duration cap). NEXT_PUBLIC_ wala client inline
+      # alag cheez hai — dono chahiye: build arg + ye runtime entry.
+      AURA_MICRO_FRAME_STUDIO_ENABLED: ${AURA_MICRO_FRAME_STUDIO_ENABLED:-false}
+      # ---- Anti-fraud VPN gate ----
+      # Hinglish: true = DEV (VPN allowed, multi-country pricing test ke liye),
+      # false = PRODUCTION (VPN/proxy refuse, 403). Detection: lib/vpn-gate.ts.
+      ALLOW_VPN: ${ALLOW_VPN:-true}
       # Server-side: compose network ke andar service names resolve hote hain.
       # Ye container me hai, isliye `auth-service` theek hai aur `localhost`
       # NAHI - localhost container KHUD hota hai, doosre service ko nahi.
@@ -1531,10 +1548,20 @@ services:
         NEXT_PUBLIC_LOGIN_URL: ${NEXT_PUBLIC_LOGIN_URL:-http://localhost:3000/auth/login}
         NEXT_PUBLIC_REGISTER_URL: ${NEXT_PUBLIC_REGISTER_URL:-http://localhost:3000/auth/register}
         NEXT_PUBLIC_DASHBOARD_URL: ${NEXT_PUBLIC_DASHBOARD_URL:-http://localhost:3000/dashboard}
+        # AURA gate — web dialog ke identical rules (env + email + superadmin).
+        # Hinglish: flag sirf availability batata hai; authorization component
+        # ke andar superadmin check se hoti hai.
+        NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED: ${AURA_MICRO_FRAME_STUDIO_ENABLED:-false}
     container_name: wideo11-video-editor
     ports:
       - "3002:3002"
     environment:
+      # ---- AURA runtime gate (SERVER-side) ----
+      # Hinglish: exporter.ts/export route server par `AURA_MICRO_FRAME_STUDIO_ENABLED`
+      # padhta hai (duration 3s cap ke liye). Ye NEXT_PUBLIC_ wala build-time
+      # inline alag cheez hai — runtime ke liye ye environment: entry chahiye,
+      # warna 3s cap server par chup-chaap apply hi nahi hota.
+      AURA_MICRO_FRAME_STUDIO_ENABLED: ${AURA_MICRO_FRAME_STUDIO_ENABLED:-false}
       # ---- Click ledger: analytics-service ----
       #
       # SERVER-side vars. Never `NEXT_PUBLIC_*`: that prefix inlines the value
@@ -1607,7 +1634,7 @@ services:
       dockerfile: Dockerfile
     container_name: wideo11-billing-service
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     environment:
       # billing-service viper use karta hai, jo keys ko DATABASE_HOST / DATABASE_DBNAME
       # format me padhta hai (dot ko underscore me convert karta hai). Isliye yahan

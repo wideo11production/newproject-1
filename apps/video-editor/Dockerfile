@@ -160,6 +160,12 @@ ENV NEXT_PUBLIC_LOGIN_URL=$NEXT_PUBLIC_LOGIN_URL
 ENV NEXT_PUBLIC_REGISTER_URL=$NEXT_PUBLIC_REGISTER_URL
 ENV NEXT_PUBLIC_VERIFY_URL=$NEXT_PUBLIC_VERIFY_URL
 ENV NEXT_PUBLIC_SECURITY_SETUP_URL=$NEXT_PUBLIC_SECURITY_SETUP_URL
+# AURA Micro-Frame Studio gate — web dialog ke identical flag. Hinglish: iske
+# bina editor build me flag `undefined` inline hota hai aur studio chup-chaap
+# disabled rehta hai. Gate andar bhi superadmin+email check karta hai, to flag
+# sirf "feature available hai ki nahi" batata hai, authorization nahi.
+ARG NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED=false
+ENV NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED=$NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED
 
 RUN node /app/node_modules/next/dist/bin/next build
 

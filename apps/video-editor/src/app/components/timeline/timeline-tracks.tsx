@@ -65,6 +65,7 @@ import {
   useState,
   type PointerEvent as ReactPointerEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Film,
   Image as ImageIcon,
@@ -94,6 +95,10 @@ import { MIN_CLIP_FRAMES } from '../../lib/engine/edits';
 import { useFilmstrip, THUMB_WIDTH } from '../../lib/engine/filmstrip';
 import { MARKER_COLOURS, type Marker } from '../../lib/engine/markers';
 import { collectSnapTargets, findSnap, thresholdFrames, type SnapTarget } from '../../lib/engine/snap';
+// Hinglish: stereoLevels = master bus ke ASLI L/R RMS levels (audio-graph ka
+// ChannelSplitter tap). Footer VU meter inhi real values par chalta hai —
+// koi fake animation nahi.
+import { stereoLevels } from '../../lib/engine/audio-graph';
 import { RULER_HEIGHT } from './timeline-ruler';
 import { TimelineContextMenu, type ContextAction } from './context-menu';
 
@@ -109,13 +114,13 @@ export { DEFAULT_TRACKS } from '../../lib/engine/types';
  * that reads as part of the timeline rather than as a panel bolted to its left.
  */
 /**
- * Track header column width: ICON-ONLY.
+ * Track header column width: ICON-ONLY, 60px.
  *
- * It was 178px, which is wider than the media bin - so the lanes read as
+ * It was 178px, which was wider than the media bin - so the lanes read as
  * belonging to a second panel rather than to the timeline. Movavi's is a narrow
- * strip: the lane's colour and an 8px icon identify it, and the name is a
- * tooltip. 30px fits the spine, the type icon and four state toggles, and
- * nothing else.
+ * strip: the lane's colour spine and an 8px icon identify it, and the name is a
+ * tooltip. 60px fits the spine, the type icon and four 8px borderless state
+ * toggles (mute/solo, show/lock), and nothing else.
  */
 export const TRACK_HEADER_W = 60;
 const DEFAULT_TRACK_HEIGHT = 56;
@@ -144,6 +149,101 @@ export function acceptsTrack(clipType: TrackType, trackType: TrackType): boolean
 // ---------------------------------------------------------------------------
 
 /**
+ * The add-track menu — ab RULER ROW ke 60px slot me FIXED rehta hai.
+ *
+ * Hinglish: Pehle ye button track-header column ke andar sabse upar tha.
+ * Header column vertically scroll hota hai (lanes ke saath sync), to clips
+ * scroll karne par "+" icon upar chhup jata tha ("gum na ho" wali problem).
+ * Ab button RULER ROW ke left slot me render hota hai — ruler ke exactly
+ * parallel, JAYKE HAMESHA visible. Header ke andar uska RULER_HEIGHT wala
+ * column bhi hataya (uski wajah se header ke track rows 40px neeche the —
+ * ab lanes ke saath perfectly align hote hain).
+ *
+ * Button 10px (h-2.5 w-2.5) — 8px se +2px (user spec). Menu body-portal +
+ * fixed position me — 60px overflow-hidden column me kabhi clip nahi hoti.
+ */
+export function TrackAddMenu({ onAddTrack }: { onAddTrack: (type: TrackType) => void }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = () => setMenuOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          // Menu button ke right me khulti hai (lanes ki taraf), sabke upar.
+          if (!menuOpen) {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMenuAnchor({ left: r.right, top: r.bottom });
+          }
+          setMenuOpen((o) => !o);
+        }}
+        aria-label="Add a track"
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        title={`Add a track\nA second video lane is how picture-in-picture works.`}
+        className={`flex h-2.5 w-2.5 items-center justify-center transition-colors duration-150 ${
+          menuOpen ? 'text-[#ff6500]' : 'text-fg-muted hover:text-[#ff6500]'
+        }`}
+      >
+        <Plus className="h-2.5 w-2.5" aria-hidden="true" />
+      </button>
+      {/* Portalled fixed menu — ruler row se trigger hoti hai, kisi bhi
+          scroll/overflow se clip nahi hoti. */}
+      {menuOpen && menuAnchor &&
+        createPortal(
+          <div
+            role="menu"
+            aria-label="Add a track"
+            onPointerDown={(e) => e.stopPropagation()}
+            className="fixed z-[9999] w-40 rounded-md bg-[#1a1a1a] py-1 shadow-none"
+            style={{ left: menuAnchor.left, top: menuAnchor.top }}
+          >
+            {(['video', 'audio', 'text', 'image'] as TrackType[]).map((t) => {
+              const { Icon: TIcon, label } = TRACK_STYLE[t];
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    onAddTrack(t);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[8px] text-fg transition-colors duration-150 hover:bg-[#ff6500] hover:text-white focus:bg-[#ff6500] focus:text-white focus:outline-none"
+                >
+                  <TIcon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[t] }} aria-hidden="true" />
+                  {t === 'text' ? 'Text / title track' : `${label} track`}
+                </button>
+              );
+            })}
+          </div>,
+          document.body
+        )}
+    </>
+  );
+}
+
+/**
  * The track header column: a SIBLING of the scrolling lanes, never a prefix
  * of the ruler's scroll strip. Keeping it out of the strip is what lets the
  * ruler and the lanes share one time origin.
@@ -159,7 +259,6 @@ export function TrackHeaders({
   onToggleTrack,
   onPatchClip,
   onTrackVolume,
-  onAddTrack,
   onRemoveTrack,
   pxPerFrame,
   onZoom,
@@ -178,80 +277,12 @@ export function TrackHeaders({
   onZoom: (next: number) => void;
   onFit: () => void;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const close = () => setMenuOpen(false);
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [menuOpen]);
-
   return (
     <div
       data-track-header=""
       style={{ width: TRACK_HEADER_W }}
       className="shrink-0 overflow-hidden bg-[#1a1a1a]"
     >
-      {/*
-        Only the add-track button lives here.
-
-        The zoom control used to sit in this column, which was fine when the
-        column was 178px and wrong the moment it became 30px: a slider, a
-        percentage and three buttons do not fit in 30 pixels, so it rendered
-        clipped and unreadable. Zoom is a TIMELINE control and it already lives
-        in the toolbar with Zoom In, Zoom Out and Fit - a second copy here was
-        always going to be a second thing to keep in sync.
-      */}
-      {/*
-        EXACTLY the ruler's height, exported from the ruler itself.
-
-        These two numbers are the same number. When they drifted - ruler at 40,
-        this row at 32 - MEASURED, every lane sat 8px above its own header row,
-        so clicking a lane's controls landed on the neighbour below it. One
-        constant, imported from the component that owns the other half.
-      */}
-      <div
-        style={{ height: RULER_HEIGHT }}
-        className="flex items-center justify-center bg-[#1a1a1a]"
-      >
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen((o) => !o);
-          }}
-          aria-label="Add a track"
-          title={`Add a track\nA second video lane is how picture-in-picture works.`}
-          className="flex h-2.5 w-2.5 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500]"
-        >
-          <Plus className="h-2.5 w-2.5" aria-hidden="true" />
-        </button>
-        {menuOpen && (
-          <div
-            onPointerDown={(e) => e.stopPropagation()}
-            className="absolute left-7 top-6 z-40 w-40 bg-[#1a1a1a] py-1"
-          >
-            {(['video', 'audio', 'text', 'image'] as TrackType[]).map((t) => {
-              const { Icon: TIcon, label } = TRACK_STYLE[t];
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    onAddTrack(t);
-                    setMenuOpen(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[8px] text-fg hover:bg-[#ff6500] hover:text-white"
-                >
-                  <TIcon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[t] }} aria-hidden="true" />
-                  {t === 'text' ? 'Text / title track' : `${label} track`}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {tracks.map((track) => {
         const { Icon } = TRACK_STYLE[track.type];
         const height = trackHeights[track.id] ?? DEFAULT_TRACK_HEIGHT;
@@ -290,8 +321,8 @@ export function TrackHeaders({
               aria-hidden="true"
             />
 
-            {/* The type icon IS the lane's name. */}
-            <Icon className="h-2.5 w-2.5" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
+            {/* The type icon IS the lane's name. 8px glyph, borderless. */}
+            <Icon className="h-2 w-2" style={{ color: TRACK_TINT[track.type] }} aria-label={`${track.name}, ${TRACK_STYLE[track.type].label}`} />
 
             <div className="flex flex-col items-center gap-0.5 py-0.5">
               {track.type === 'audio' && (
@@ -345,10 +376,16 @@ export function TrackHeaders({
                 computed, and then nothing happened. A control that looks live and
                 is not is worse than no control: the user drags it, sees no change
                 in the preview, and concludes the logo is broken rather than the
-                slider being unwired. */}
+                slider being unwired.
+
+                Hinglish: ye branding lane ka logo light/dark (opacity) control
+                hai. User spec: 1px bar + volume-bar jaisa chota 7px circle.
+                Purana native range fat thumb + 80px width tha jo 60px icon-only
+                header column me clip ho raha tha — ab `ve-opacity-fader`
+                (1px rail, 7px circle, #ff6500 accent) column me fit ho gaya.
+                Text label hataya (aria-label + title accessible name dete hain). */}
             {track.type === 'branding' && track.clips[0] && (
-              <div className="absolute right-0.5 top-0.5 flex items-center gap-1 bg-[#1a1a1a] px-1 py-0.5">
-                <span className="text-[8px] text-fg-muted">Opacity</span>
+              <div className="absolute right-0.5 top-0.5 flex w-[52px] items-center bg-[#1a1a1a] px-0.5 py-1">
                 <input
                   type="range"
                   min="0"
@@ -359,8 +396,9 @@ export function TrackHeaders({
                     if (!clip || !onPatchClip) return;
                     onPatchClip(clip.id, { opacity: parseInt(e.target.value, 10) / 100 });
                   }}
-                  className="h-1.5 w-20 accent-[#ff6500]"
+                  className="ve-opacity-fader h-1 w-full"
                   aria-label="Branding opacity"
+                  title="Branding opacity — logo light/dark"
                 />
               </div>
             )}
@@ -1433,7 +1471,7 @@ export function TimelineTracks({
                         danger
                         onClick={() => onRemoveClip(clip.id)}
                       >
-                        <Trash2 className="h-2.5 w-2.5" />
+                <Trash2 className="h-2 w-2" />
                       </ClipAction>
                     </div>
                   )}
@@ -1805,6 +1843,7 @@ export function TimelineFooter({
   snapEnabled,
   measure,
   playbackRate,
+  auraToggle,
 }: {
   currentFrame: number;
   duration: number;
@@ -1823,6 +1862,15 @@ export function TimelineFooter({
   /** The ruler measurement, in frames. -1 when nothing is measured. */
   measure: { start: number; end: number };
   playbackRate: number;
+  /**
+   * AURA Micro-Frame footer toggle (footer ke CENTER me render hota hai).
+   *
+   * Hinglish: `visible` sirf superadmin session + env flag ke saath true hota
+   * hai (RBAC gate) — warna footer me kuch nahi dikhta. `open` batata hai
+   * panel khula hai ya nahi: khula ho to pulse BAND (steady green), band ho
+   * to 1.6s ka calm green pulse. Ek click = timeline 50/50 split toggle.
+   */
+  auraToggle?: { visible: boolean; open: boolean; onToggle: () => void };
 }) {
   const total = tracks.reduce((n, t) => n + t.clips.length, 0);
   const totalFrames = Math.max(1, Math.round(duration * fps));
@@ -1830,14 +1878,13 @@ export function TimelineFooter({
   const audioTracks = tracks.filter((t) => t.type === 'audio' && t.visible);
   const hasAudio = audioTracks.length > 0;
   return (
-    <div className="timeline-footer flex h-7 shrink-0 items-center justify-between border-t border-[#2a2a2a] bg-[#1a1a1a] px-3 font-mono text-[8px]">
+    <div className="timeline-footer relative flex h-7 shrink-0 items-center justify-between border-t border-[#2a2a2a] bg-[#1e1e1e] px-3 font-mono text-[8px]">
       <div className="flex items-center gap-3 text-fg-secondary">
         <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
         <span className="text-fg-muted/40">|</span>
         <span title="Frame number, and the frame rate it is counted in">
           FRAME {currentFrame}/{totalFrames} @ {fps}fps
-        </span>
-        {measureLen > 0 && (
+        </span>        {measureLen > 0 && (
           <>
             <span className="text-fg-muted/40">|</span>
             <span className="text-[#ff6500]" title="The selection measured on the ruler">
@@ -1856,6 +1903,23 @@ export function TimelineFooter({
           {snapEnabled ? 'SNAP' : 'NO SNAP'}
         </span>
       </div>
+
+      {/* ---- CENTER: AURA indicator (DEAD CENTER) + VU meter (exactly 10px right) ----
+          Hinglish: footer root `relative`. Indicator `absolute left-1/2
+          -translate-x-1/2` se BILKUL dead-center me. VU meter indicator ke
+          RIGHT EDGE se exactly 10px par — ye JS se measure hota hai
+          (AuraFooterCenter): button ka ResizeObserver + window resize par
+          rect leke VU ko `right + 10` par absolute set karta hai. Static
+          `ml-2.5` se overlap hota tha kyunki button center se ±125px faila
+          hota hai. Sirf superadmin session + env flag par dikhta hai. */}
+      {auraToggle?.visible && (
+        <AuraFooterCenter
+          open={auraToggle.open}
+          onToggle={auraToggle.onToggle}
+          fpsSuffix={fps >= 120 ? `${fps}fps` : ''}
+        />
+      )}
+
       <div className="flex items-center gap-3 text-fg-muted">
         {hasAudio && (
           <AudioEqualizer tracks={audioTracks} />
@@ -1886,6 +1950,164 @@ export function TimelineFooter({
     </div>
   );
 };
+
+/**
+ * FOOTER CENTER — dead-center AURA indicator + VU meter exactly 10px right.
+ *
+ * Hinglish: Indicator `absolute left-1/2 -translate-x-1/2` se footer ke
+ * BILKUL center me baithta hai (text ki chaudai se koi farq nahi padta).
+ * VU meter indicator ke RIGHT EDGE se exactly +10px par — ye JS measure
+ * karta hai: button ka ResizeObserver (text width change hone par) aur
+ * window resize par rect leke `right + 10` set kar deta hai. Static offset
+ * se overlap hota tha, kyunki button center se dono taraf faila hota hai.
+ */
+function AuraFooterCenter({
+  open,
+  onToggle,
+  fpsSuffix,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  fpsSuffix: string;
+}) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [vuLeft, setVuLeft] = useState<number | null>(null);
+
+  useEffect(() => {
+    const measure = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r && r.width > 0) setVuLeft(Math.round(r.right + 10)); // exactly 10px
+    };
+    measure();
+    const ro = btnRef.current ? new ResizeObserver(measure) : null;
+    if (btnRef.current && ro) ro.observe(btnRef.current);
+    window.addEventListener('resize', measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [fpsSuffix]);
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={onToggle}
+        aria-label="Toggle AURA Micro-Frame studio"
+        aria-pressed={open}
+        title={
+          open
+            ? 'AURA Micro-Frame open — minimize to full-width timeline'
+            : 'AURA Micro-Frame — open as right-side 50/50 panel'
+        }
+        className={`absolute left-1/2 flex h-4 -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-md border-0 bg-transparent px-2 font-mono text-[8px] font-semibold uppercase tracking-wider ring-0 transition-colors duration-150 ${
+          open ? 'text-[#22c55e]' : 'text-[#22c55e] hover:text-[#4ade80]'
+        } ${open ? '' : 'aura-footer-pulse'}`}
+      >
+        {/* Pulsing neon-green indicator dot */}
+        <span
+          className={`h-[3px] w-[3px] shrink-0 rounded-full bg-[#22c55e] ${
+            open ? '' : 'aura-footer-pulse'
+          }`}
+          aria-hidden="true"
+        />
+        AURA MICRO-FRAME TRANSCODING ACTIVE
+        {fpsSuffix && (
+          <span className="font-normal normal-case tracking-normal text-fg-muted/60">{fpsSuffix}</span>
+        )}
+      </button>
+      {/* VU meter — indicator ke right edge se EXACTLY 10px par */}
+      {vuLeft !== null && (
+        <div className="absolute flex items-center" style={{ left: vuLeft }}>
+          <FooterVuMeter />
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * FOOTER VU METER — horizontal micro-LED equalizer (L + R).
+ *
+ * Hinglish: ye footer me AURA indicator ke exactly 10px (gap-2.5) dayen taraf
+ * lagta hai. Do patli rows (L upar, R neeche), har row me 10 micro LEDs
+ * (2x2px squares, 1px gaps). Levels audio-graph ke `stereoLevels()` se aate
+ * hain — master bus ke ChannelSplitter ke ASLI L/R RMS values. Koi fake
+ * animation nahi: jo baj raha hai wahi dikhta hai.
+ *
+ * COLOR ZONES (user spec):
+ *   LED 0-5  : green  #22c55e (low-mid)
+ *   LED 6-7  : yellow #f59e0b (warning limit)
+ *   LED 8-9  : #ff6500       (peak maximum dB)
+ * Peak LED par blink: jab level peak zone me hai, woh LED pulse karta hai
+ * (1s ease-in-out) — "micro tiny blinking lights".
+ *
+ * BORDERLESS: koi border/frame/divider nahi, sirf lit/unlit color blocks.
+ */
+function FooterVuMeter() {
+  const [levels, setLevels] = useState({ l: 0, r: 0 });
+
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setLevels(stereoLevels());
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // RMS (0..1) -> 0..10 lit LEDs. RMS typically 0.05-0.5, isliye 4x gain.
+  const litCount = (rms: number) => {
+    if (rms <= 0.0005) return 0;
+    return Math.max(1, Math.min(10, Math.round(rms * 24)));
+  };
+  const lLit = litCount(levels.l);
+  const rLit = litCount(levels.r);
+
+  // Ek LED ka class: lit -> zone ka color (+ peak par blink), unlit -> flat.
+  const ledClass = (index: number, lit: number) => {
+    if (index >= lit) return 'bg-[#2a2a2a]';
+    const peak = index >= 8;
+    const color = peak ? '#ff6500' : index >= 6 ? '#f59e0b' : '#22c55e';
+    // Peak zone ki LED blink karti hai (VU ka classic peak indicator).
+    const blink = peak ? ' animate-[pulse-soft_1s_ease-in-out_infinite]' : '';
+    return `${blink}`;
+  };
+
+  const row = (lit: number, label: string, side: 'l' | 'r') => (
+    <div className="flex items-center gap-[3px]" aria-label={`${label} audio level`}>
+      <span className="w-[5px] text-center font-mono text-[5px] leading-none text-fg-muted/50">{label}</span>
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+        <span
+          key={i}
+          title={`${side === 'l' ? 'Left' : 'Right'} channel LED ${i + 1}`}
+          className={`h-[2px] w-[2px] shrink-0 rounded-full transition-colors duration-75 ${ledClass(i, lit)}`}
+          style={
+            i < lit
+              ? {
+                  // Lit LED ka color inline (zone-wise). Unlit par flat grey.
+                  background: i >= 8 ? '#ff6500' : i >= 6 ? '#f59e0b' : '#22c55e',
+                }
+              : undefined
+          }
+        />
+      ))}
+    </div>
+  );
+
+  return (
+    <div
+      className="flex flex-col gap-[2px] rounded-md border-0 bg-transparent p-0"
+      aria-label="Audio VU meter (L/R)"
+      title="Master output level — L/R (green / yellow / #ff6500 peak)"
+    >
+      {row(lLit, 'L', 'l')}
+      {row(rLit, 'R', 'r')}
+    </div>
+  );
+}
 
 /**
  * Audio Multi-Color Monitor — vertical LED equalizer strip on the far right

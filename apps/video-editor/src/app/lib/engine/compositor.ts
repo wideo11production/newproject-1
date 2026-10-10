@@ -40,10 +40,14 @@ import {
   clipEnd,
   sourceTimeAt,
   DEFAULT_TEXT_STYLE,
+  DEFAULT_TEXT_ANIMATION,
   DEFAULT_TRANSFORM,
+  fontFamilyFor,
   type ClipFilter,
   type ClipTransform,
   type ProjectSettings,
+  type TextAnimation,
+  type TextAnimationKind,
   type TextClipStyle,
   type TimelineClip,
   type TimelineTrack,
@@ -158,18 +162,85 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return out;
 }
 
+/**
+ * Evaluate a text animation for a given time.
+ * Returns an object with opacity, transform (scale, rotation, translateX, translateY).
+ */
+function evalTextAnimation(
+  anim: TextAnimation,
+  time: number,
+  clipDuration: number,
+  charIndex: number,
+  totalChars: number
+): { opacity: number; scale: number; rotation: number; translateX: number; translateY: number } {
+  if (anim.kind === 'none') {
+    return { opacity: 1, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+  }
+  const delaySec = anim.delay * clipDuration;
+  const durSec = anim.duration * clipDuration;
+  const t = time - delaySec;
+  if (t < 0) {
+    return { opacity: 0, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+  }
+  if (t > durSec && !anim.loop) {
+    return { opacity: 1, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+  }
+  const p = Math.min(1, t / durSec);
+  const eased = 1 - Math.pow(1 - p, 3);
+  const charDelay = totalChars > 1 ? (charIndex / totalChars) * durSec * 0.5 : 0;
+  const charT = Math.max(0, t - charDelay);
+  const charP = durSec > 0 ? Math.min(1, charT / (durSec * 0.5)) : 1;
+
+  switch (anim.kind) {
+    case 'fade':
+      return { opacity: eased, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+    case 'typewriter':
+      return { opacity: charP, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+    case 'slide-up':
+      return { opacity: eased, scale: 1, rotation: 0, translateX: 0, translateY: (1 - eased) * 30 };
+    case 'slide-down':
+      return { opacity: eased, scale: 1, rotation: 0, translateX: 0, translateY: -(1 - eased) * 30 };
+    case 'slide-left':
+      return { opacity: eased, scale: 1, rotation: 0, translateX: (1 - eased) * 30, translateY: 0 };
+    case 'slide-right':
+      return { opacity: eased, scale: 1, rotation: 0, translateX: -(1 - eased) * 30, translateY: 0 };
+    case 'scale-in':
+      return { opacity: eased, scale: 0.3 + 0.7 * eased, rotation: 0, translateX: 0, translateY: 0 };
+    case 'bounce': {
+      const bounce = Math.sin(p * Math.PI * 4) * (1 - p);
+      return { opacity: 1, scale: 1 + bounce * 0.2, rotation: 0, translateX: 0, translateY: 0 };
+    }
+    case 'rotate-in': {
+      const rot = (1 - eased) * 360;
+      return { opacity: eased, scale: eased, rotation: rot, translateX: 0, translateY: 0 };
+    }
+    case 'wave': {
+      const wave = Math.sin((time * 2 + charIndex * 0.5) * Math.PI) * 10 * (1 - p);
+      return { opacity: 1, scale: 1, rotation: 0, translateX: 0, translateY: wave };
+    }
+    case 'fade-up': {
+      return { opacity: eased, scale: 1, rotation: 0, translateX: 0, translateY: (1 - eased) * 20 };
+    }
+    default:
+      return { opacity: 1, scale: 1, rotation: 0, translateX: 0, translateY: 0 };
+  }
+}
+
 function drawText(
   ctx: CanvasRenderingContext2D,
   style: TextClipStyle,
   x: number,
   y: number,
   w: number,
-  h: number
+  h: number,
+  time: number = 0,
+  clipDuration: number = 1
 ) {
   const text = style.uppercase ? style.content.toUpperCase() : style.content;
   const size = Math.max(8, style.size * h);
+  const fontFamily = fontFamilyFor(style.fontFamily);
   ctx.save();
-  ctx.font = `${style.italic ? 'italic ' : ''}${style.weight} ${size}px ${style.fontFamily}`;
+  ctx.font = `${style.italic ? 'italic ' : ''}${style.weight} ${size}px ${fontFamily}`;
   ctx.textBaseline = 'top';
   ctx.textAlign = style.align;
   const letterSpacing = `${(style.letterSpacing * size).toFixed(2)}px`;
@@ -185,18 +256,69 @@ function drawText(
     const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
     const padX = size * 0.35;
     const bx = style.align === 'left' ? tx - padX : style.align === 'right' ? tx - widest - padX : tx - widest / 2 - padX;
+    const padY = size * 0.2;
+    if (style.glowWidth > 0) {
+      ctx.shadowColor = style.glowColor;
+      ctx.shadowBlur = style.glowWidth;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
     ctx.fillStyle = style.background;
-    ctx.fillRect(bx, ty - padX, widest + padX * 2, blockHeight + padX * 2);
+    ctx.fillRect(bx, ty - padY, widest + padX * 2, blockHeight + padY * 2);
+    ctx.shadowBlur = 0;
   }
+
+  const totalChars = text.length;
+  let charIndex = 0;
 
   lines.forEach((line, i) => {
     const y0 = ty + i * lineHeight;
-    if (style.shadow) {
-      ctx.fillStyle = 'rgba(0,0,0,0.55)';
-      ctx.fillText(line, tx + size * 0.04, y0 + size * 0.05, w * 0.92);
+    if (style.outlineWidth > 0) {
+      ctx.strokeStyle = style.outlineColor;
+      ctx.lineWidth = style.outlineWidth;
     }
-    ctx.fillStyle = style.color;
-    ctx.fillText(line, tx, y0, w * 0.92);
+
+    if (style.animation && style.animation.kind !== 'none') {
+      const anim = evalTextAnimation(style.animation, time, clipDuration, charIndex, totalChars);
+      ctx.save();
+      ctx.globalAlpha = anim.opacity;
+      if (anim.rotation !== 0) {
+        ctx.translate(tx, y0 + lineHeight / 2);
+        ctx.rotate((anim.rotation * Math.PI) / 180);
+        ctx.translate(-tx, -(y0 + lineHeight / 2));
+      }
+      if (anim.scale !== 1) {
+        ctx.translate(tx, y0 + lineHeight / 2);
+        ctx.scale(anim.scale, anim.scale);
+        ctx.translate(-tx, -(y0 + lineHeight / 2));
+      }
+      if (style.shadow) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillText(
+          line,
+          tx + size * 0.04 + anim.translateX,
+          y0 + size * 0.05 + anim.translateY,
+          w * 0.92
+        );
+      }
+      ctx.fillStyle = style.color;
+      ctx.fillText(line, tx + anim.translateX, y0 + anim.translateY, w * 0.92);
+      if (style.outlineWidth > 0) {
+        ctx.strokeText(line, tx + anim.translateX, y0 + anim.translateY, w * 0.92);
+      }
+      ctx.restore();
+    } else {
+      if (style.shadow) {
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        ctx.fillText(line, tx + size * 0.04, y0 + size * 0.05, w * 0.92);
+      }
+      ctx.fillStyle = style.color;
+      ctx.fillText(line, tx, y0, w * 0.92);
+      if (style.outlineWidth > 0) {
+        ctx.strokeText(line, tx, y0, w * 0.92);
+      }
+    }
+    charIndex += line.length + 1;
   });
   ctx.restore();
 }
@@ -362,7 +484,7 @@ export class Compositor {
       if (track.type !== 'text' || !track.visible) continue;
       const clip = clipAt(track, t);
       if (!clip) continue;
-      this.paintText(clip, ctx, W, H);
+      this.paintText(clip, ctx, W, H, t);
     }
 
     // Branding last: logo on top of everything.
@@ -431,7 +553,7 @@ export class Compositor {
     };
 
     if (clip.type === 'text') {
-      this.paintText(flat, ctx, W, H);
+      this.paintText(flat, ctx, W, H, 0);
       return;
     }
     const source = state.sources.get(clip.mediaId);
@@ -701,7 +823,7 @@ export class Compositor {
       target.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
       target.scale(pan.z, pan.z);
       target.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
-      drawText(target, { ...DEFAULT_TEXT_STYLE, ...clip.text }, rect.x, rect.y, rect.w, rect.h);
+      drawText(target, { ...DEFAULT_TEXT_STYLE, ...clip.text }, rect.x, rect.y, rect.w, rect.h, t, clip.duration);
       target.restore();
       return;
     }
@@ -802,7 +924,10 @@ export class Compositor {
     ctx.restore();
   }
 
-  private paintText(clip: TimelineClip, ctx: CanvasRenderingContext2D, W: number, H: number) {
+  // Hinglish: `t` = frame ka time (seconds). Text animations (typewriter /
+  // fade-in) iske against compute hote hain — pehle parameter missing tha
+  // (body me `t` use ho raha tha, compile error).
+  private paintText(clip: TimelineClip, ctx: CanvasRenderingContext2D, W: number, H: number, t: number) {
     const rect = destinationRect(clip.transform, W, H);
     const pan = kenBurns(clip.transform, clip, 0);
     ctx.save();
@@ -810,7 +935,7 @@ export class Compositor {
     ctx.translate(rect.x + rect.w / 2, rect.y + rect.h / 2);
     ctx.scale(pan.z, pan.z);
     ctx.translate(-(rect.x + rect.w / 2), -(rect.y + rect.h / 2));
-    drawText(ctx, { ...DEFAULT_TEXT_STYLE, ...clip.text }, rect.x, rect.y, rect.w, rect.h);
+    drawText(ctx, { ...DEFAULT_TEXT_STYLE, ...clip.text }, rect.x, rect.y, rect.w, rect.h, t, clip.duration);
     ctx.restore();
   }
 

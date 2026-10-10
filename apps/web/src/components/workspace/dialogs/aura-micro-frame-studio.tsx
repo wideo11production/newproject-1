@@ -36,12 +36,31 @@ import {
 } from '@wideo11/ui/dialog';
 import { Button } from '@wideo11/ui/button';
 import { Slider } from '@wideo11/ui/slider';
-import { Play, Pause, SkipBack, SkipForward, Scissors, Layers, Type, Settings, X } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Scissors, Layers, Type, Settings, X, ZoomIn, ZoomOut, Wand2 } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+// Hinglish: Ek edit op = kis frame me, kaunse bounds (normalized 0..1) me,
+// kis prompt se pixel swap hua. Provenance isi me rehti hai — edit history
+// hamesha timestamp ke saath record hoti hai (attribution preserve).
+export interface AuraFrameEdit {
+  frame: number;
+  bounds: { x: number; y: number; w: number; h: number };
+  prompt: string;
+  createdAt: number;
+}
+
+// Hinglish: Zero-Duplication Core Registry sync payload. Ye NAYA storage
+// nahi banata — sirf EXISTING timeline storage hook ko call karta hai
+// (onTimelineSync prop). Koi temp container, koi duplicate file nahi.
+export interface AuraTimelineSyncPayload {
+  frames: number[];
+  edits: AuraFrameEdit[];
+  source: 'aura-micro-frame-studio';
+}
 
 export interface AuraMicroFrameStudioProps {
   open?: boolean;
@@ -56,6 +75,13 @@ export interface AuraMicroFrameStudioProps {
   onPlaybackSpeedChange: (speed: number) => void;
   durationMs: number;
   currentTimeMs: number;
+  // ---- Superadmin + env security gate (Phase 2 security guard) ----
+  // Hinglish: Ye teeno milke hi component ko render karne ki permission
+  // dete hain. Koi bhi missing = component poora null return karta hai.
+  userEmail?: string;
+  isSuperadmin?: boolean;
+  // ---- Zero-Duplication sync hook (existing timeline storage) ----
+  onTimelineSync?: (payload: AuraTimelineSyncPayload) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,11 +123,55 @@ function msToTimestamp(ms: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingMs).padStart(3, '0')}`;
 }
 
+/**
+ * Microseconds to `HH:MM:SS.mmmuuu` — 1 microsecond granularity wala display.
+ * Example: `00:00:01.001500` = 1 second + 1.5 milliseconds + 500 microseconds.
+ * Hinglish: Player 1μs se shuru hota hai, isliye ms se chhota unit chahiye.
+ */
+function usToTimestamp(totalUs: number): string {
+  const us = Math.max(0, Math.round(totalUs));
+  const hours = Math.floor(us / 3_600_000_000);
+  const minutes = Math.floor((us % 3_600_000_000) / 60_000_000);
+  const seconds = Math.floor((us % 60_000_000) / 1_000_000);
+  const millis = Math.floor((us % 1_000_000) / 1000);
+  const micros = us % 1000;
+  const p2 = (n: number) => String(n).padStart(2, '0');
+  const p3 = (n: number) => String(n).padStart(3, '0');
+  return `${p2(hours)}:${p2(minutes)}:${p2(seconds)}.${p3(millis)}${p3(micros)}`;
+}
+
 // ---------------------------------------------------------------------------
-// Playback Speed Options (0.01x granularity)
+// Constants
 // ---------------------------------------------------------------------------
 
-const PLAYBACK_SPEEDS = [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 4.0];
+// Hinglish: Superadmin gate ka email — strictly sirf ye account (verified
+// superadmin token state ke saath) hi AURA studio access kar sakta hai.
+const AURA_SUPERADMIN_EMAIL = 'advchashampalup@gmail.com';
+
+// Hinglish: Player range spec — 1 microsecond se shuru, maximum 3 seconds.
+// MAX_DURATION_MS = 3000 (3s). User spec: "3 seconds tak hi player hoga".
+const MAX_DURATION_MS = 3000;
+
+// Hinglish: 3 seconds = 120fps * 3 = 360 frames maximum (user spec).
+// Kisi bhi fps par total frames fps*3 se zyada nahi ho sakte.
+const MAX_SECONDS = 3;
+
+// Hinglish: Sub-pixel brush tabhi khulega jab zoom >= 4x ho (max zoom 6x).
+const BRUSH_ZOOM_THRESHOLD = 4;
+const MAX_ZOOM_LEVEL = 6;
+
+// ---------------------------------------------------------------------------
+// Playback Speed Options — micro-step se 4x (editor twin ke identical set).
+// Hinglish: 0.0001x/0.001x/0.01x micro-steps micro-frame analysis ke liye.
+// `formatSpeed` raw number use karta hai kyunki toFixed(2) 0.0001 ko "0.00x"
+// bana deta hai — micro-step ka poora point hi dikhana hai.
+// ---------------------------------------------------------------------------
+
+const PLAYBACK_SPEEDS = [0.0001, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 4.0];
+
+function formatSpeed(rate: number): string {
+  return `${rate}x`;
+}
 
 // ---------------------------------------------------------------------------
 // Main Dialog Component
@@ -120,26 +190,142 @@ export function AuraMicroFrameStudio({
   onPlaybackSpeedChange,
   durationMs = 3333,
   currentTimeMs = 0,
+  userEmail,
+  isSuperadmin,
+  onTimelineSync,
 }: AuraMicroFrameStudioProps) {
+  // -------------------------------------------------------------------------
+  // SUPERADMIN + ENV SECURITY GATE
+  // Hinglish: Component poora null return karta hai jab tak:
+  //   1. `NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED=true` env flag na ho
+  //   2. session ka email `advchashampalup@gmail.com` na ho
+  //   3. verified superadmin token state (`isSuperadmin`) na ho
+  // Koi bhi condition fail = DOM me cheez render hi nahi hoti (trigger bhi nahi).
+  // -------------------------------------------------------------------------
+  const isSuperAdminEnvEnabled =
+    process.env.NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED === 'true';
+  const normalizedEmail = (userEmail ?? '').toLowerCase().trim();
+  const isAuthorized =
+    isSuperAdminEnvEnabled &&
+    isSuperadmin === true &&
+    normalizedEmail === AURA_SUPERADMIN_EMAIL;
+
   const [threeFrameBuffer, setThreeFrameBuffer] = useState<number[]>([]);
   const playerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
+  // Duration + frame caps (user spec: 1μs start, max 3 seconds = 360 frames
+  // at 120fps). Hinglish: durationMs 3000 se zyada clamp, frames fps*3 clamp.
+  // -------------------------------------------------------------------------
+  const effectiveDurationMs = Math.min(durationMs, MAX_DURATION_MS);
+  const maxFramesForDuration = Math.round(fps * MAX_SECONDS);
+  const effectiveTotalFrames = Math.min(totalFrames, maxFramesForDuration);
+
+  // -------------------------------------------------------------------------
+  // Microscopic Pixel Selection Brush + Zoom Lock
+  // Hinglish: Brush tabhi active jab zoomLevel >= 4 (max 6). Mouse path ko
+  // NORMALIZED (0..1) coords me track karte hain — resize/zoom par bounds
+  // shift nahi hongi (zero data drift). Path ref me rehta hai (render drift
+  // nahi), bounds sirf mouse-up par derive hote hain.
+  // -------------------------------------------------------------------------
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const isBrushActive = zoomLevel >= BRUSH_ZOOM_THRESHOLD;
+  const [brushBounds, setBrushBounds] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [isPainting, setIsPainting] = useState(false);
+  const brushPathRef = useRef<Array<{ x: number; y: number }>>([]);
+
+  // Inpainting prompt (natural language) — object replacement ke liye.
+  const [promptText, setPromptText] = useState('');
+
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+  const handleBrushDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isBrushActive) return;
+    // Hinglish: pointer capture ZAROORI hai — warna tile ke bahar drag/release
+    // par onPointerUp fire hi nahi hota aur isPainting stuck ho jata hai
+    // (stale path se agli selection corrupt hoti hai). Capture ke baad saare
+    // pointer events isi element tak aate hain, chahe cursor kahan ho.
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const rect = e.currentTarget.getBoundingClientRect();
+    brushPathRef.current = [
+      { x: clamp01((e.clientX - rect.left) / rect.width), y: clamp01((e.clientY - rect.top) / rect.height) },
+    ];
+    setIsPainting(true);
+  }, [isBrushActive]);
+
+  const handleBrushMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isBrushActive || !isPainting) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    brushPathRef.current.push({
+      x: clamp01((e.clientX - rect.left) / rect.width),
+      y: clamp01((e.clientY - rect.top) / rect.height),
+    });
+  }, [isBrushActive, isPainting]);
+
+  const handleBrushUp = useCallback(() => {
+    if (!isPainting) return;
+    setIsPainting(false);
+    const path = brushPathRef.current;
+    if (path.length === 0) return;
+    // Bounds sirf path se derive — ek hi source of truth, koi drift nahi.
+    const xs = path.map((p) => p.x);
+    const ys = path.map((p) => p.y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    if (maxX - minX < 0.001 || maxY - minY < 0.001) return; // accidental dot = ignore
+    setBrushBounds({ x: minX, y: minY, w: maxX - minX, h: maxY - minY });
+  }, [isPainting]);
+
+  // -------------------------------------------------------------------------
   // 3-Frame Strict Buffer Ring
   // Hard-clamp: koi bhi scroll/drag boundary check se bahar nahi nikalega.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
-    const frames = getThreeFrameBuffer(activeFrame, totalFrames);
+    const frames = getThreeFrameBuffer(activeFrame, effectiveTotalFrames);
     setThreeFrameBuffer(frames);
-  }, [activeFrame, totalFrames]);
+  }, [activeFrame, effectiveTotalFrames]);
 
-  // ---------------------------------------------------------------------------
-  // Continuous Player Loop (millisecond-precision rendering)
+  // -------------------------------------------------------------------------
+  // Localized Inpainting Hook (zero-cost processing node event receiver)
+  // Hinglish: Natural-language prompt accept hota hai, bounds current 3-frame
+  // buffer ke andar HARD-CLAMP hote hain, aur edit op EXISTING timeline
+  // storage hook (onTimelineSync) par jata hai. Koi anti-forensic blending
+  // nahi — har edit op provenance metadata ke saath record hota hai taaki
+  // attribution preserve rahe.
+  // -------------------------------------------------------------------------
+  const executeObjectReplacement = useCallback(() => {
+    if (!brushBounds || !promptText.trim()) return;
+    // Hard clamp: edit sirf 3-frame buffer ke andar frame par lag sakta hai
+    const clampedFrame = Math.max(
+      threeFrameBuffer[0],
+      Math.min(threeFrameBuffer[2], activeFrame),
+    );
+    const edit: AuraFrameEdit = {
+      frame: clampedFrame,
+      bounds: brushBounds,
+      prompt: promptText.trim(),
+      createdAt: Date.now(),
+    };
+    // Zero-Duplication: naya storage nahi — existing timeline hook ko call
+    onTimelineSync?.({
+      frames: threeFrameBuffer,
+      edits: [edit],
+      source: 'aura-micro-frame-studio',
+    });
+    setPromptText('');
+    setBrushBounds(null);
+    brushPathRef.current = [];
+  }, [brushBounds, promptText, threeFrameBuffer, activeFrame, onTimelineSync]);
+
+  // -------------------------------------------------------------------------
+  // Continuous Player Loop (microsecond-precision rendering)
   // 150ms transition se synced animation frames render karta hai.
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
   useEffect(() => {
     if (!open) return;
@@ -154,7 +340,7 @@ export function AuraMicroFrameStudio({
         // Playback speed applied to frame advancement
         if (isPlaying && onFrameChange) {
           const frameDelta = Math.max(1, Math.floor((playbackSpeed * elapsed) / (1000 / fps)));
-          const newFrame = Math.min(totalFrames - 1, Math.max(0, activeFrame + frameDelta));
+          const newFrame = Math.min(effectiveTotalFrames - 1, Math.max(0, activeFrame + frameDelta));
           if (newFrame !== activeFrame) {
             onFrameChange(newFrame);
           }
@@ -171,22 +357,26 @@ export function AuraMicroFrameStudio({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [open, isPlaying, activeFrame, fps, totalFrames, playbackSpeed, onFrameChange]);
+  }, [open, isPlaying, activeFrame, fps, effectiveTotalFrames, playbackSpeed, onFrameChange]);
 
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
   // Boundary Lock — prevent scrolling/dragging outside 3-frame ring
-  // ---------------------------------------------------------------------------
+  // -------------------------------------------------------------------------
 
   const handleFrameClick = useCallback((frame: number) => {
     // Boundary check: sirf 3-frame buffer ke andar click allow
-    if (frame >= 0 && frame < totalFrames && onFrameChange) {
+    if (frame >= 0 && frame < effectiveTotalFrames && onFrameChange) {
       // Agar click buffer ke bahar hai to clamp karo
       const clamped = Math.max(threeFrameBuffer[0], Math.min(frame, threeFrameBuffer[2]));
       onFrameChange(clamped);
     }
-  }, [threeFrameBuffer, totalFrames, onFrameChange]);
+  }, [threeFrameBuffer, effectiveTotalFrames, onFrameChange]);
 
-  if (handleFrameClick === null) return null;
+  // -------------------------------------------------------------------------
+  // AUTHORIZATION GATE — render yahan tak pahunchti hi nahi agar unauthorized.
+  // (Saare hooks upar declare ho chuke hain, isliye early-return safe hai.)
+  // -------------------------------------------------------------------------
+  if (!isAuthorized) return null;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -198,41 +388,48 @@ export function AuraMicroFrameStudio({
         <Button
           variant="ghost"
           size="sm"
-          className="group flex items-center gap-1.5 text-xs text-[#9fa7b3] hover:bg-[#ff6500]/10 hover:text-[#ff6500]"
+          className="group flex items-center gap-1.5 rounded-md bg-transparent text-xs text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
         >
           <Layers className="h-2.5 w-2.5 transition-transform duration-150 group-hover:scale-110" />
           AURA Micro-Frame
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="fixed left-[50%] top-[50%] z-[9999] grid w-[90vw] max-w-6xl translate-x-[-50%] translate-y-[-50%] gap-0-[#2c3235] bg-[#111217] p-0 shadow-none outline-none">
+      {/* Port 3000 design rules: grayish-black slate (#1e1e1e), ZERO wireframe
+          borders/outlines (border-0 outline-none shadow-none), rounded-md
+          container. Hinglish: koi outer line nahi, flat color depth se
+          separation, medium rounded corners. */}
+      <DialogContent className="fixed left-[50%] top-[50%] z-[9999] grid w-[90vw] max-w-6xl translate-x-[-50%] translate-y-[-50%] gap-2 rounded-md border-0 bg-[#1e1e1e] p-0 shadow-none outline-none ring-0">
         {/* ---- Dialog Header (hyper-flat, orange-red accent) ---- */}
-        <DialogHeader className="flex items-center justify-between-[#2c3235] px-4 py-3">
+        <DialogHeader className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <Layers className="h-2.5 w-2.5 text-[#ff6500]" />
             <DialogTitle className="text-sm font-semibold text-[#d8d9da]">
               AURA Micro-Frame Studio
             </DialogTitle>
+            <span className="rounded-md bg-[#ff6500]/10 px-2 py-0.5 text-[10px] font-medium text-[#ff6500]">
+              SUPERADMIN GATED
+            </span>
           </div>
           <DialogClose asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 p-0 text-[#9fa7b3] hover:bg-[#ff6500]/10 hover:text-[#ff6500]"
+              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
             >
               <X className="h-2.5 w-2.5" />
             </Button>
           </DialogClose>
         </DialogHeader>
 
-        {/* ---- Millisecond-Precision Scrubber + Player ---- */}
-        <div className="relative flex items-center gap-3 px-4 py-4">
-          {/* Playback Controls — 16px icons, orange-red on active */}
+        {/* ---- Millisecond/Microsecond-Precision Scrubber + Player ---- */}
+        <div className="relative flex items-center gap-3 px-4 py-3">
+          {/* Playback Controls — 16px (h-4 w-4) micro icons, orange-red on active */}
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
               onClick={() => {
                 let newSpeed = playbackSpeed * 0.5;
                 if (newSpeed < 0.01) newSpeed = 0.01;
@@ -248,10 +445,10 @@ export function AuraMicroFrameStudio({
               variant="ghost"
               size="sm"
               className={cn(
-                'h-7 w-7 rounded-md-none bg-transparent p-0 shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0',
+                'h-7 w-7 rounded-md bg-transparent p-0 shadow-none transition-all duration-150 hover:bg-transparent focus:ring-0 focus:ring-offset-0',
                 isPlaying
-                  ? 'text-[#ff6500]'
-                  : 'text-[#9fa7b3]',
+                  ? 'bg-[#ff6500]/10 text-[#ff6500]'
+                  : 'text-[#9fa7b3] hover:text-[#ff6500]',
               )}
               onClick={onPlayPause}
               aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -267,7 +464,7 @@ export function AuraMicroFrameStudio({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
               onClick={() => {
                 let newSpeed = playbackSpeed * 2;
                 if (newSpeed > 4.0) newSpeed = 0.01;
@@ -285,30 +482,30 @@ export function AuraMicroFrameStudio({
             <select
               value={playbackSpeed}
               onChange={(e) => onPlaybackSpeedChange?.(parseFloat(e.target.value))}
-              className="w-20 rounded-md bg-[#0d0f11] px-1.5 py-0.5 text-xs text-[#d8d9da] outline-none transition-colors duration-150 focus:border-[#ff6500] focus:bg-[#181b1f] hover:border-[#ff6500] hover:text-[#ff6500]"
+              className="w-20 rounded-md border-0 bg-[#0d0f11] px-1.5 py-0.5 text-xs text-[#d8d9da] outline-none transition-all duration-150 hover:text-[#ff6500] focus:text-[#ff6500]"
               aria-label="Playback speed"
             >
               {PLAYBACK_SPEEDS.map((speed) => (
                 <option key={speed} value={speed}>
-                  {speed.toFixed(2)}x
+                  {formatSpeed(speed)}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Continuous Rendering Player Loop */}
+          {/* Continuous Rendering Player Loop — step 0.001ms = 1 microsecond */}
           <div
             ref={playerRef}
             className="relative flex-1"
           >
             <Slider
-              value={[currentTimeMs]}
-              max={durationMs}
+              value={[Math.min(currentTimeMs, effectiveDurationMs)]}
+              max={effectiveDurationMs}
               min={0}
-              step={1}
+              step={0.001}
               onValueChange={(vals) => {
                 const newMs = vals[0];
-                const newFrame = Math.round((newMs / durationMs) * (totalFrames - 1));
+                const newFrame = Math.round((newMs / effectiveDurationMs) * (effectiveTotalFrames - 1));
                 const clamped = Math.max(threeFrameBuffer[0], Math.min(newFrame, threeFrameBuffer[2]));
                 onFrameChange?.(clamped);
               }}
@@ -317,16 +514,51 @@ export function AuraMicroFrameStudio({
             />
           </div>
 
-          {/* Timestamp Display — millisecond precision `00:01:001` */}
+          {/* Timestamp Display — microsecond precision `HH:MM:SS.mmmuuu` */}
           <div className="flex-shrink-0 font-mono text-xs text-[#d8d9da]">
-            <span className="text-[#ff6500]">{msToTimestamp(currentTimeMs)}</span>
+            <span className="text-[#ff6500]">{usToTimestamp(currentTimeMs * 1000)}</span>
             <span className="mx-1 text-[#5a5f66]">/</span>
-            <span className="text-[#9fa7b3]">{msToTimestamp(durationMs)}</span>
+            <span className="text-[#9fa7b3]">{usToTimestamp(effectiveDurationMs * 1000)}</span>
           </div>
         </div>
 
         {/* ---- 3-Frame Buffer Ring Visualization ---- */}
-        <div className="relative flex items-center justify-center gap-2-[#2c3235] px-4 py-4">
+        <div className="relative flex items-center justify-center gap-2 px-4 py-3">
+          {/* Zoom lock controls — brush sirf >= 4x par unlock */}
+          <div className="absolute right-4 top-2 flex items-center gap-1">
+            <span className="mr-1 font-mono text-[10px] text-[#5a5f66]">{zoomLevel}x</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
+              onClick={() => setZoomLevel((z) => Math.max(1, z - 1))}
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              <ZoomOut className="h-2.5 w-2.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
+              onClick={() => setZoomLevel((z) => Math.min(MAX_ZOOM_LEVEL, z + 1))}
+              aria-label="Zoom in"
+              title="Zoom in (4x par sub-pixel brush unlock)"
+            >
+              <ZoomIn className="h-2.5 w-2.5" />
+            </Button>
+            <span
+              className={cn(
+                'ml-1 rounded-md px-1.5 py-0.5 text-[10px] transition-all duration-150',
+                isBrushActive
+                  ? 'bg-[#ff6500]/10 text-[#ff6500]'
+                  : 'bg-[#0d0f11] text-[#5a5f66]',
+              )}
+            >
+              {isBrushActive ? 'BRUSH UNLOCKED' : 'LOCKED <4x'}
+            </span>
+          </div>
+
           {threeFrameBuffer.map((frame, idx) => {
             const isActive = frame === activeFrame;
             const isPrev = idx === 0;
@@ -338,10 +570,10 @@ export function AuraMicroFrameStudio({
                 key={frame}
                 onClick={() => handleFrameClick(frame)}
                 className={cn(
-                  'relative flex h-16 w-24 cursor-pointer items-center justify-center rounded transition-all duration-150',
+                  'relative flex h-16 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border-0 transition-all duration-150',
                   isActive
-                    ? 'border-[#ff6500] ring-1 ring-[#ff6500]/30'
-                    : 'border-[#2c3235] hover:border-[#ff6500]/50 hover:text-[#ff6500]',
+                    ? 'ring-1 ring-[#ff6500]'
+                    : 'ring-1 ring-[#2c3235] hover:ring-[#ff6500]/50 hover:text-[#ff6500]',
                   'bg-[#0d0f11]',
                 )}
                 aria-label={`Frame ${frame} ${label}`}
@@ -349,18 +581,42 @@ export function AuraMicroFrameStudio({
               >
                 <div
                   className={cn(
-                    'absolute inset-0 rounded',
+                    'absolute inset-0',
                     isActive
                       ? 'bg-[#ff6500]/5'
                       : 'bg-[#1f2227]/80 group-hover:bg-[#ff6500]/5',
                   )}
                 />
+                {/* Microscopic pixel selection brush surface — sirf active tile
+                    par, aur sirf zoom >= 4x par. Normalized coords = drift-free. */}
+                {isActive && isBrushActive && (
+                  <div
+                    className={cn(
+                      'absolute inset-0 cursor-crosshair touch-none',
+                      isPainting ? 'bg-[#ff6500]/5' : 'bg-transparent',
+                    )}
+                    onPointerDown={handleBrushDown}
+                    onPointerMove={handleBrushMove}
+                    onPointerUp={handleBrushUp}
+                    onPointerCancel={handleBrushUp}
+                    onLostPointerCapture={handleBrushUp}
+                    aria-label="Sub-pixel selection brush area"
+                    title="Drag to isolate pixel matrix bounds"
+                  />
+                )}
                 <span className="relative z-10 font-mono text-[10px] text-[#9fa7b3]">
                   {label}
                 </span>
-                <span className="relative z-10 mt-1 text-[8px] uppercase tracking-widener text-[#5a5f66]">
+                <span className="relative z-10 mt-1 text-[8px] uppercase tracking-wider text-[#5a5f66]">
                   {isPrev ? 'PREV' : isActive ? 'ACTIVE' : isNext ? 'NEXT' : 'BUF'}
                 </span>
+                {/* Selection bounds readout — normalized + percentage dono */}
+                {isActive && brushBounds && (
+                  <span className="relative z-10 mt-0.5 font-mono text-[8px] text-[#ff6500]">
+                    SEL {Math.round(brushBounds.x * 100)}%,{Math.round(brushBounds.y * 100)}% ·{' '}
+                    {Math.round(brushBounds.w * 100)}x{Math.round(brushBounds.h * 100)}%
+                  </span>
+                )}
                 {/* Frame number — hyper-flat, orange-red on active */}
                 <span
                   className={cn(
@@ -375,12 +631,46 @@ export function AuraMicroFrameStudio({
           })}
         </div>
 
-        {/* ---- Core Integration Toolbar — 16px icons, orange-red active ---- */}
-        <div className="flex items-center justify-end gap-1-[#2c3235] px-4 py-2">
+        {/* ---- Localized Inpainting Panel (zero-cost processing node hook) ----
+            Hinglish: Natural-language prompt + selected bounds bhejte hain
+            3-frame buffer me hard-clamped pixel swap ke liye. Edit op existing
+            timeline storage hook (onTimelineSync) par jata hai. Har edit ka
+            provenance record rehta hai — koi anti-forensic blending nahi hai. */}
+        <div className="mx-4 mb-2 flex items-center gap-2 rounded-md bg-[#0d0f11] p-2">
+          <Wand2 className="h-2.5 w-2.5 shrink-0 text-[#9fa7b3] transition-colors duration-150" />
+          <input
+            type="text"
+            value={promptText}
+            onChange={(e) => setPromptText(e.target.value)}
+            placeholder={isBrushActive ? 'Describe replacement (e.g., "remove background sign")…' : 'Zoom 4x+ to unlock pixel brush…'}
+            disabled={!isBrushActive}
+            className="h-6 flex-1 rounded-md border-0 bg-transparent px-2 text-xs text-[#d8d9da] outline-none transition-all duration-150 placeholder:text-[#5a5f66] focus:bg-[#181b1f] disabled:cursor-not-allowed disabled:opacity-50"
+            aria-label="Inpainting prompt"
+          />
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className={cn(
+              'h-6 shrink-0 rounded-md px-2 text-[11px] shadow-none transition-all duration-150 focus:ring-0 focus:ring-offset-0',
+              isBrushActive && brushBounds && promptText.trim()
+                ? 'bg-[#ff6500] text-white hover:bg-[#ff6500]'
+                : 'bg-transparent text-[#5a5f66] hover:bg-transparent',
+            )}
+            disabled={!isBrushActive || !brushBounds || !promptText.trim()}
+            onClick={executeObjectReplacement}
+            aria-label="Apply localized inpainting"
+            title="Apply (hard-clamped within 3-frame buffer)"
+          >
+            Apply
+          </Button>
+        </div>
+
+        {/* ---- Core Integration Toolbar — 16px micro icons, orange-red active ---- */}
+        <div className="flex items-center justify-end gap-1 px-4 py-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
             aria-label="Slice clip (saves to WideoCut Pro core)"
             title="Slice clip — saves to core hooks"
           >
@@ -389,7 +679,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
             aria-label="Overlay adjustments (saves to core storage)"
             title="Overlay adjustments — saves to core storage"
           >
@@ -398,7 +688,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
             aria-label="Text expressions (saves to core variables)"
             title="Text expressions — saves to core variables DB"
           >
@@ -407,7 +697,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-7 rounded-md-none bg-transparent p-0 text-[#9fa7b3] shadow-none hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
             aria-label="Settings"
             title="Settings"
           >
@@ -420,5 +710,5 @@ export function AuraMicroFrameStudio({
 }
 
 // Re-export utility functions for testing
-export { getThreeFrameBuffer, msToTimestamp, frameToTimestamp };
+export { getThreeFrameBuffer, msToTimestamp, frameToTimestamp, usToTimestamp };
 

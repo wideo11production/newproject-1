@@ -33,144 +33,139 @@
 // as a decoration. The lanes are already tall; the rail uses that height instead
 // of taking any of it away.
 
-import { useEffect, useState } from 'react';
-import { ZoomIn, ZoomOut, Minus, AudioWaveform, Speaker, Volume2 } from 'lucide-react';
-import { levelBands } from '../../lib/engine/audio-graph';
-import { clampPxPerFrame, zoomPercent } from '../../lib/engine/frames';
+import { useEffect, useRef, useState } from 'react';
+import { AudioWaveform, Speaker, Volume2 } from 'lucide-react';
+import { stereoLevels } from '../../lib/engine/audio-graph';
+
+/** Rail width: EXACTLY 25px (user spec — narrow professional meter strip). */
+const RAIL_W = 25;
+
+/**
+ * dB scale marks, top to bottom. `dB -> fraction of meter height`, with
+ * -60dBFS as the floor. The numbers printed beside the bars are the same ones
+ * every gain stage uses, so a peak at -6 reads instantly.
+ */
+const DB_TICKS: Array<{ db: number; label: string }> = [
+  { db: 0, label: '0' },
+  { db: -6, label: '-6' },
+  { db: -18, label: '-18' },
+  { db: -42, label: '-42' },
+];
+
+/** RMS (0..1) -> dBFS. -70 floor keeps silence off the scale. */
+function toDb(rms: number): number {
+  if (rms <= 0.0005) return -70;
+  return Math.max(-70, 20 * Math.log10(rms));
+}
+
+/** dBFS -> 0..1 meter height (floor -60dB). */
+function dbToFill(db: number): number {
+  return Math.max(0, Math.min(1, (db + 60) / 60));
+}
 
 export function TimelineRail({
   playing,
-  pxPerFrame,
-  onZoomTo,
-  onFit,
 }: {
   playing: boolean;
-  /** Pixels per frame - the same unit the ruler is drawn in. */
-  pxPerFrame: number;
-  onZoomTo: (pxPerFrame: number) => void;
-  onFit: () => void;
 }) {
-  const [bands, setBands] = useState<number[]>(() => new Array(14).fill(0));
+  // Twin bars: per-channel RMS from the master bus, plus a peak-hold marker
+  // per channel that decays at 12dB/s - the pro-meter convention.
+  const [levels, setLevels] = useState({ l: 0, r: 0 });
+  const peaksRef = useRef({ l: 0, r: 0 });
 
   useEffect(() => {
-    if (!playing) {
-      // Settle to rest rather than freezing mid-bar: a frozen meter would still
-      // be claiming a level the moment the audio stopped.
-      let raf = 0;
-      const settle = () => {
-        setBands((b) => {
-          const next = b.map((v) => v * 0.82);
-          return next.some((v) => v > 0.01) ? next : new Array(14).fill(0);
-        });
-        raf = requestAnimationFrame(settle);
-      };
-      raf = requestAnimationFrame(settle);
-      return () => cancelAnimationFrame(raf);
-    }
     let raf = 0;
-    const tick = () => {
-      setBands(levelBands(14));
+    let last = performance.now();
+    const tick = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      const { l, r } = stereoLevels();
+      setLevels({ l, r });
+      const peaks = peaksRef.current;
+      // Peak-hold: rise instantly, fall slowly (12dB per second).
+      for (const key of ['l', 'r'] as const) {
+        if (levels[key] > peaks[key]) peaks[key] = levels[key];
+        else peaks[key] = Math.max(levels[key], peaks[key] * Math.pow(10, -12 * dt / 20));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing]);
+  }, []);
 
-  const btn =
-    'flex h-6 w-6 items-center justify-center text-fg-muted transition-colors duration-150 hover:text-[#ff6500] disabled:opacity-40 rounded-md';
+  const ldB = toDb(levels.l);
+  const rdB = toDb(levels.r);
+  const lFill = dbToFill(ldB);
+  const rFill = dbToFill(rdB);
+  const lPeak = dbToFill(toDb(peaksRef.current.l));
+  const rPeak = dbToFill(toDb(peaksRef.current.r));
+  const active = playing && (levels.l > 0 || levels.r > 0);
+
+  // One bar: gradient track (green -> amber -> orange-red -> red bottom-up),
+  // a dark mask covering the unlit part, and a peak-hold hairline.
+  const bar = (fill: number, peak: number, label: string, live: boolean, Icon: typeof Speaker) => (
+    <div className="relative h-full w-[8px] shrink-0 overflow-hidden rounded-md bg-[#0d0f11]">
+      {/* Lit portion: the bar up to `fill`, gradient green -> amber -> orange-red -> red. */}
+      <div
+        className="absolute inset-x-0 bottom-0"
+        style={{
+          height: `${fill * 100}%`,
+          background: 'linear-gradient(to top, #22c55e 0%, #22c55e 42%, #fbbf24 62%, #ff6500 84%, #ef4444 100%)',
+        }}
+        aria-hidden="true"
+      />
+      {/* Dark mask from `fill` up: the unlit remainder of the track. */}
+      {fill < 1 && (
+        <div
+          className="absolute inset-x-0 top-0 bg-[#0d0f11]/85"
+          style={{ height: `${(1 - fill) * 100}%` }}
+          aria-hidden="true"
+        />
+      )}
+      {/* Peak-hold hairline, 1px, white so it reads on any colour. */}
+      {peak > 0.01 && (
+        <div
+          className="absolute inset-x-0 h-px bg-white/90"
+          style={{ bottom: `${peak * 100}%` }}
+          aria-hidden="true"
+        />
+      )}
+      <span className="absolute bottom-0 left-0 right-0 text-center text-[6px] leading-none text-fg-muted/70">
+        {label}
+      </span>
+      <Icon
+        className={`absolute left-1/2 top-0.5 h-2 w-2 -translate-x-1/2 ${live ? 'text-[#ff6500]' : 'text-fg-muted/40'}`}
+        aria-hidden="true"
+      />
+    </div>
+  );
 
   return (
     <div
-      className="flex w-7 shrink-0 flex-col items-center gap-1 bg-[#1a1a1a]"
-      title="Output level and timeline zoom"
+      style={{ width: RAIL_W }}
+      className="flex shrink-0 flex-col items-center gap-1 bg-[#1a1a1a]"
+      title="Output level (L/R)"
     >
       <div className="flex h-7 items-center justify-center">
         <AudioWaveform className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
       </div>
 
-      {/* The meter: 14 bars growing UPWARD, the full height of the lanes.
-          Green under -12dB, amber to -3, red above - a gain-stage convention. */}
-      <div
-        role="meter"
-        aria-label="Output level"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(Math.max(0, ...bands) * 100)}
-        className="relative flex min-h-0 flex-1 flex-col-reverse items-center gap-px px-1 py-2"
-      >
-        {bands.map((v, i) => {
-          const lit = v > 0.02;
-          const color = v > 0.89 ? '#f87171' : v > 0.62 ? '#fbbf24' : '#34d399';
-          return (
+      {/* The meter: EXACTLY 25px strip, twin L/R bars full height, dB scale. */}
+      <div className="relative flex min-h-0 flex-1 items-stretch gap-0.5 px-0.5 py-2">
+        {/* dB scale numbers, right of the bars (gain-stage convention). */}
+        <div className="relative w-[14px] shrink-0">
+          {DB_TICKS.map((t) => (
             <span
-              key={i}
-              className="w-1.5 transition-[height,background-color] duration-75"
-              style={{
-                height: `${Math.max(1, Math.round(v * 100))}%`,
-                background: lit ? color : 'transparent',
-                opacity: lit ? 1 : 0.3,
-              }}
-            />
-          );
-        })}
-
-        {/* Left / right speaker channels — blink the moment audio plays. */}
-        <span className="absolute left-0.5 top-1 flex items-center gap-0.5">
-          <Speaker
-            className={`h-2.5 w-2.5 ${playing && bands[7] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
-            aria-hidden="true"
-          />
-          <span className="text-[6px] text-fg-muted/40">L</span>
-        </span>
-        <span className="absolute right-0.5 top-1 flex items-center gap-0.5">
-          <Volume2
-            className={`h-2.5 w-2.5 ${playing && bands[10] > 0.02 ? 'text-[#34d399]' : 'text-fg-muted'}`}
-            aria-hidden="true"
-          />
-          <span className="text-[6px] text-fg-muted/40">R</span>
-        </span>
-      </div>
-
-      {/* Ruler zoom. Back where it started, because a control that is not next
-          to the thing it changes is a control people stop finding. */}
-      <div className="flex flex-col items-center gap-0.5 py-1">
-        <button
-          type="button"
-          onClick={() => onZoomTo(clampPxPerFrame(pxPerFrame * 1.4))}
-          aria-label="Zoom the timeline in"
-          title="Zoom in — until a single frame is plainly visible ( + )"
-          className={btn}
-        >
-          <ZoomIn className="h-2.5 w-2.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={() => onZoomTo(clampPxPerFrame(pxPerFrame / 1.4))}
-          aria-label="Zoom the timeline out"
-          title="Zoom out — see more of the timeline ( - )"
-          className={btn}
-        >
-          <ZoomOut className="h-2.5 w-2.5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          onClick={onFit}
-          aria-label="Reset the timeline zoom"
-          title={`Reset to 100% — ${zoomPercent(pxPerFrame)}% now ( 0 )`}
-          className={btn}
-        >
-          <Minus className="h-2.5 w-2.5" aria-hidden="true" />
-        </button>
-        {/* The live scale. It was on the ruler, then in the toolbar, and is here
-            now with the buttons it describes - a number that moves when the
-            control above it is used, rather than a copy somewhere else. */}
-        <span
-          className="font-mono text-[8px] text-fg-muted"
-          aria-label="Timeline zoom scale"
-          title={`${pxPerFrame.toFixed(2)} pixels per frame`}
-        >
-          {pxPerFrame.toFixed(2)}
-        </span>
+              key={t.db}
+              className="absolute right-0 font-mono text-[6px] leading-none text-fg-muted/60"
+              style={{ bottom: `calc(${dbToFill(t.db) * 100}% - 3px)` }}
+            >
+              {t.label}
+            </span>
+          ))}
+        </div>
+        {bar(lFill, lPeak, 'L', active && levels.l > 0, Speaker)}
+        {bar(rFill, rPeak, 'R', active && levels.r > 0, Volume2)}
       </div>
     </div>
   );

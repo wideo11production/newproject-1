@@ -27,11 +27,44 @@
 // length would not be interchangeable on the timeline. So the project declares
 // one rate, and the timecode tells the truth about it.
 
-/** Every rate the editor offers. Anything not listed is not supported. */
-export const SUPPORTED_FPS = [24, 25, 30, 50, 60] as const;
+/**
+ * Every rate the editor offers. Anything not listed is not supported.
+ *
+ * Hinglish: 120 aur 240 ISI list me hain (user decision) — AURA Micro-Frame
+ * Studio ka high-frame-rate use case (120fps * 3s = 360 frames, 240fps *
+ * 3s = 720 frames) bina alag AURA-only setting ke chalta hai. Fps project
+ * setting hai: ruler, timecode, zoom, export aur AURA ring sab isi ek value
+ * se chalte hain — isliye yahan badalna = sab jagah badalna.
+ *
+ * NOTE: high rates ka export cost 4x-8x frames hai. Micro-frame clips (3s
+ * max) ke liye theek hai; poore lambe projects ko 240fps par export karna
+ * slow hoga — wahi purani sachchai, naya number.
+ */
+export const SUPPORTED_FPS = [24, 25, 30, 50, 60, 120, 240] as const;
 export type Fps = (typeof SUPPORTED_FPS)[number];
 
 export const DEFAULT_FPS: Fps = 30;
+
+/**
+ * Playback speed dropdown ka shared list (user: "speed ke options bhi add
+ * kardo" + micro-steps). Hinglish: 0.0001x se 4x tak — 0.0001x/0.001x/0.01x
+ * micro-steps micro-frame analysis ke liye (frame-by-frame dekhna), baaki
+ * standard editing speeds. Yahi ek list teeno toolbars + AURA studio use
+ * karte hain, taaki consistency rahe.
+ */
+export const PLAYBACK_SPEEDS = [
+  0.0001, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 4,
+] as const;
+
+/**
+ * Speed ko display string me badalna. `toFixed(2)` 0.0001 ko "0.00x" bana
+ * deta hai (galat!), isliye raw number + 'x': 0.0001x, 0.001x, 0.01x, 1x,
+ * 1.25x. Hinglish: chhote numbers ko poora dikhao — micro-step ka poora
+ * point hi hai.
+ */
+export function formatSpeed(rate: number): string {
+  return `${rate}x`;
+}
 
 export function isFps(n: number): n is Fps {
   return (SUPPORTED_FPS as readonly number[]).includes(n);

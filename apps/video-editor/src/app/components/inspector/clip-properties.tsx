@@ -13,13 +13,15 @@
 // clip, or by pressing Enter.
 
 import { X, RotateCcw, Gauge, Volume2, Sparkles, Move, Type as TypeIcon, Link2 } from 'lucide-react';
-import { PanelSection, Field, Slider, Select, NumberInput, ColorInput, Toggle, Button, TextInput } from '../panels/panel-kit';
+import { PanelSection, Field, Slider, Select, NumberInput, ColorInput, Toggle, Button, TextInput, FontSelect, AnimationSelect } from '../panels/panel-kit';
 import {
   DEFAULT_TRANSFORM,
   DEFAULT_TEXT_STYLE,
+  DEFAULT_TEXT_ANIMATION,
   NEUTRAL_FILTER,
   type ClipFilter,
   type ClipTransform,
+  type TextAnimationKind,
   type TextClipStyle,
   type TimelineClip,
 } from '../../lib/engine/types';
@@ -298,11 +300,20 @@ export function ClipProperties({
                   <Field label="Words">
                     <TextInput value={text.content} ariaLabel="Title text" onChange={(v) => setText({ content: v })} />
                   </Field>
+                  <Field label="Font family">
+                    <FontSelect value={text.fontFamily} ariaLabel="Font family" onChange={(v) => setText({ fontFamily: v })} />
+                  </Field>
                   <Field label="Size" hint={`${(text.size * 100).toFixed(1)}%`}>
                     <Slider min={0.02} max={0.3} step={0.005} value={text.size} ariaLabel="Text size" onChange={(n) => setText({ size: n })} />
                   </Field>
+                  <Field label="Weight" hint={String(text.weight)}>
+                    <Slider min={100} max={900} step={100} value={text.weight} ariaLabel="Font weight" onChange={(n) => setText({ weight: n })} />
+                  </Field>
                   <Field label="Colour">
                     <ColorInput value={text.color} ariaLabel="Text colour" onChange={(v) => setText({ color: v })} />
+                  </Field>
+                  <Field label="Background">
+                    <ColorInput value={text.background === 'transparent' ? '#000000' : text.background} ariaLabel="Background colour" onChange={(v) => setText({ background: v })} />
                   </Field>
                   <Field label="Alignment">
                     <Select
@@ -316,9 +327,42 @@ export function ClipProperties({
                       onChange={(v) => setText({ align: v })}
                     />
                   </Field>
+                  <Field label="Letter spacing" hint={text.letterSpacing.toFixed(3)}>
+                    <Slider min={-0.05} max={0.5} step={0.005} value={text.letterSpacing} ariaLabel="Letter spacing" onChange={(n) => setText({ letterSpacing: n })} />
+                  </Field>
+                  <Field label="Line height" hint={text.lineHeight.toFixed(2)}>
+                    <Slider min={0.8} max={3} step={0.05} value={text.lineHeight} ariaLabel="Line height" onChange={(n) => setText({ lineHeight: n })} />
+                  </Field>
                   <div className="grid grid-cols-2 gap-2">
+                    <Toggle checked={text.italic} onChange={(v) => setText({ italic: v })} label="Italic" />
+                    <Toggle checked={text.uppercase} onChange={(v) => setText({ uppercase: v })} label="Uppercase" />
                     <Toggle checked={text.shadow} onChange={(v) => setText({ shadow: v })} label="Drop shadow" />
-                    <Toggle checked={text.weight >= 700} onChange={(v) => setText({ weight: v ? 800 : 500 })} label="Bold" />
+                  </div>
+                  <div className="border-t border-[#2a2a2a] pt-2 mt-2 space-y-2">
+                    <Field label="Outline width" hint={`${text.outlineWidth}px`}>
+                      <Slider min={0} max={8} step={0.5} value={text.outlineWidth} ariaLabel="Outline width" onChange={(n) => setText({ outlineWidth: n })} />
+                    </Field>
+                    <Field label="Outline colour">
+                      <ColorInput value={text.outlineColor} ariaLabel="Outline colour" onChange={(v) => setText({ outlineColor: v })} />
+                    </Field>
+                    <Field label="Glow width" hint={`${text.glowWidth}px`}>
+                      <Slider min={0} max={32} step={1} value={text.glowWidth} ariaLabel="Glow width" onChange={(n) => setText({ glowWidth: n })} />
+                    </Field>
+                    <Field label="Glow colour">
+                      <ColorInput value={text.glowColor} ariaLabel="Glow colour" onChange={(v) => setText({ glowColor: v })} />
+                    </Field>
+                  </div>
+                  <div className="border-t border-[#2a2a2a] pt-2 mt-2 space-y-2">
+                    <Field label="Animation">
+                      <AnimationSelect value={text.animation.kind} ariaLabel="Text animation" onChange={(v: TextAnimationKind) => setText({ animation: { ...text.animation, kind: v } })} />
+                    </Field>
+                    <Field label="Duration" hint={`${(text.animation.duration * 100).toFixed(0)}%`}>
+                      <Slider min={0.1} max={1} step={0.05} value={text.animation.duration} ariaLabel="Animation duration" onChange={(n) => setText({ animation: { ...text.animation, duration: n } })} />
+                    </Field>
+                    <Field label="Delay" hint={`${(text.animation.delay * 100).toFixed(0)}%`}>
+                      <Slider min={0} max={1} step={0.05} value={text.animation.delay} ariaLabel="Animation delay" onChange={(n) => setText({ animation: { ...text.animation, delay: n } })} />
+                    </Field>
+                    <Toggle checked={text.animation.loop} onChange={(v) => setText({ animation: { ...text.animation, loop: v } })} label="Loop animation" />
                   </div>
                 </div>
               </PanelSection>

@@ -220,6 +220,41 @@
   }
 }
 
+/* ------------------------------------------------------ aura footer pulse --- */
+
+/*
+ * AURA Micro-Frame footer toggle — CALM pulse, hard blink nahi.
+ *
+ * Hinglish: user ne "animated green blinking" manga tha. Ek sacchi me tez
+ * blink (0/1 opacity) 2 second me aankh ko tang kar deti hai aur editing ke
+ * dauraan dhyan bhangte rehta hai — isliye ye 1.6s ka SMOOTH pulse hai:
+ * opacity 1 -> 0.45 -> 1. Green (#22c55e) "premium feature live" signal hai,
+ * aur jab panel OPEN ho jata hai pulse BAND ho jata hai (state shaant ho
+ * jati hai — wahi pattern jo timeline ke active icons follow karte hain:
+ * hover/selected par ek hi steady accent).
+ *
+ * `prefers-reduced-motion` par pulse off — sirf steady green text.
+ */
+@keyframes aura-footer-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.aura-footer-pulse {
+  animation: aura-footer-pulse 1600ms ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aura-footer-pulse {
+    animation: none;
+  }
+}
+
 /* ---------------------------------------------------------------- fader --- */
 
 /*
@@ -269,5 +304,50 @@
 }
 
 .ve-fader:focus {
+  outline: none;
+}
+
+/*
+ * The branding opacity fader — the logo light/dark control in the branding
+ * lane's header.
+ *
+ * User spec: "bar width 1px, aur circle volume bar jaisa chota". So: a 1px
+ * rail (thinner than the volume fader's 2px), the SAME 7px circle, and the
+ * orange-red accent because this control drives a visual property. The old
+ * markup was a native range with default styling — a fat thumb on a thick
+ * track, plus a text label, in a 60px ICON-ONLY header column, so it rendered
+ * clipped and oversized. Now it is rail-thin and column-fit.
+ */
+.ve-opacity-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ve-opacity-fader::-webkit-slider-runnable-track {
+  height: 1px;
+  border-radius: 9999px;
+  background: rgb(var(--ve-text-muted) / 0.35);
+}
+
+.ve-opacity-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px; /* centres the 7px circle on the 1px rail */
+  border-radius: 9999px;
+  background: rgb(var(--ve-text-secondary));
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.ve-opacity-fader:hover::-webkit-slider-thumb,
+.ve-opacity-fader:focus-visible::-webkit-slider-thumb {
+  background: #ff6500;
+  transform: scale(1.15);
+}
+
+.ve-opacity-fader:focus {
   outline: none;
 }

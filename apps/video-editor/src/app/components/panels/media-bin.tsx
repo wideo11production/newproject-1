@@ -176,21 +176,27 @@ export function MediaBin({
 
   return (
     <div className="flex min-h-0 flex-col gap-2.5">
-      <div className="flex gap-1.5">
+<div className="flex gap-1.5">
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
             className={[
-              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-[8px] font-medium text-fg transition-colors duration-150',
-              reading.size > 0 ? 'border-solid border-[#ff6500] bg-[#ff6500]/10 text-[#ff6500]' : 'border-dashed border-[#9fa7b3]/25',
-              'hover:border-[#ff6500]/40 hover:text-[#ff6500]',
-              'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40',
-              'active:border-[#ff6500] active:text-[#ff6500]',
+              'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-[8px] font-medium transition-colors duration-150 ease-in-out',
+              // Hinglish: Import box default = DULL dotted border-2 dashed #2d2d2d bg-#161616 text-#555555
+              // Active (media reading) = solid border-2 #ff6500 bg-#1a1a1a text-white
+              // Hover = brighter orange-red transition
+              // No outline/focus-ring traces ever.
+              reading.size > 0
+                ? 'border-2 border-solid border-[#ff6500] bg-[#1a1a1a] text-white'
+                : 'border-2 border-dashed border-[#2d2d2d] bg-[#161616] text-[#555555]',
+              reading.size > 0 ? 'hover:border-[#e55800] hover:bg-[#ff6500]/10' : 'hover:border-[#ff6500]/60 hover:text-[#ff6500]/80 hover:bg-[#1a1a1a]',
+              'focus:outline-none focus-visible:ring-0 focus:ring-0 focus:ring-offset-0',
+              'active:border-[#ff6500] active:text-white active:bg-[#1a1a1a]',
             ].join(' ')}
           >
-          <Upload className="h-2.5 w-2.5" aria-hidden="true" />
-          Import media
-        </button>
+            <Upload className="h-2.5 w-2.5" aria-hidden="true" />
+            Import media
+          </button>
         <input
           ref={inputRef}
           type="file"
@@ -205,7 +211,7 @@ export function MediaBin({
         />
       </div>
 
-      <div className="relative">
+<div className="relative">
         <Search className="pointer-events-none absolute left-2 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
         <input
           type="search"
@@ -214,9 +220,14 @@ export function MediaBin({
           placeholder="Search media…"
           aria-label="Search media"
           className={[
-            'w-full rounded-md border-dashed border-[#9fa7b3]/20 bg-surface py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted',
+            // Hinglish: Search box = BORDERLESS flat dull color-box primitive.
+            // Pure solid background #1a1a1a, custom medium rounding (rounded-md = 6px).
+            // Zero borders, zero outlines, zero focus rings - ever.
+            // Interaction signal only via placeholder/text color shift.
+            'w-full rounded-md border-0 bg-[#1a1a1a] py-1.5 pl-7 pr-2 text-[8px] text-fg placeholder:text-fg-muted',
             'transition-colors duration-150',
-            'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40 focus:border-[#ff6500]/60',
+            'focus:outline-none focus-visible:ring-0 focus:ring-0 focus:ring-offset-0',
+            'hover:placeholder:text-fg-secondary',
           ].join(' ')}
           style={{ borderRadius: '6px' }}
         />
@@ -283,7 +294,7 @@ export function MediaBin({
 
       <div className="min-h-0 flex-1 overflow-y-auto pr-1 custom-scrollbar">
         {visible.length === 0 ? (
-          <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-md border-dashed border-[#9fa7b3]/15 p-4 text-center">
+            <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 rounded-md bg-[#1a1a1a] p-4 text-center">
             {items.length === 0 ? (
               <>
                 <Film className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
@@ -310,8 +321,8 @@ export function MediaBin({
                         active
                           ? 'border-[#ff6500]/60 ring-2 ring-[#ff6500]/40 bg-[#0d0d0d]'
                           : reading.has(item.name)
-                          ? 'border-dashed border-[#ff6500]/40 bg-[#ff6500]/5'
-                          : 'border-dashed border-[#9fa7b3]/20 bg-[#161616] hover:border-[#ff6500]/40 hover:bg-[#0d0d0d]',
+                            ? 'border border-solid border-[#ff6500]/40 bg-[#ff6500]/5'
+                            : 'border border-solid border-[#9fa7b3]/20 bg-[#161616] hover:border-[#ff6500]/40 hover:bg-[#0d0d0d]',
                     ].join(' ')}
                   >
                     <button

@@ -61,6 +61,7 @@
 import { createGate, GATE_MATCHER } from '@wideo11/ui/gate';
 import { authRateLimitMiddleware } from '@/lib/rate-limiter';
 import { getSecuritySetupState } from '@/lib/security-gate-state';
+import { vpnGate } from '@/lib/vpn-gate';
 
 /**
  * PUBLIC PAGES - bina login ke render hone wale pages.
@@ -235,7 +236,29 @@ const gate = createGate({
   },
 });
 
-export default gate;
+/**
+ * ---- VPN / PROXY GATE (anti-fraud) ----
+ *
+ * Wrapped AROUND the gate rather than bolted inside it: the gate is shared
+ * library code for eight apps, and only web is the product surface a fraudster
+ * buys a subscription on. Dev bypasses the check entirely (`ALLOW_VPN=true`),
+ * production refuses with a 403 JSON (`ALLOW_VPN=false`) - see
+ * `lib/vpn-gate.ts` for the honest scope of the detection.
+ *
+ * NOTE: `gate` itself is NOT exported any more - every request goes through
+ * the fraud check first. The gate's behaviour is unchanged behind it.
+ */
+const gateWithFraudCheck: typeof gate = async (request) => {
+  const blocked = await vpnGate(request);
+  // The cast is the one honest join: the fraud gate speaks `Response`, the
+  // auth gate speaks `NextResponse`, and Next's middleware contract accepts
+  // both at runtime. NextResponse.json on the fraud side keeps it a plain
+  // JSON 403 rather than anything a browser would try to render.
+  if (blocked) return blocked as Awaited<ReturnType<typeof gate>>;
+  return gate(request);
+};
+
+export default gateWithFraudCheck;
 
 /**
  * ---- The matcher: A LITERAL, ON PURPOSE ----

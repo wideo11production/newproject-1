@@ -139,6 +139,10 @@ ARG NEXT_PUBLIC_MINIO_VIDEO_BUCKET=video
 ENV NEXT_PUBLIC_MINIO_VIDEO_BUCKET=$NEXT_PUBLIC_MINIO_VIDEO_BUCKET
 ARG NEXT_PUBLIC_VIDEO_EDITOR_URL=http://localhost:3002
 ENV NEXT_PUBLIC_VIDEO_EDITOR_URL=$NEXT_PUBLIC_VIDEO_EDITOR_URL
+# AURA Micro-Frame Studio client flag (superadmin-gated dialog ke liye zaroori —
+# Next.js isko build ke waqt inline karta hai, isliye ARG/ENV dono chahiye)
+ARG NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED=false
+ENV NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED=$NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED
 RUN node /app/node_modules/next/dist/bin/next build
 
 # ------------------------------------------------------------

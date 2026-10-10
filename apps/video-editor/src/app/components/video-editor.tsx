@@ -41,6 +41,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   TimelineTracks,
   TrackHeaders,
+  TrackAddMenu,
   TimelineFooter,
   acceptsTrack,
   TRACK_HEADER_W,
@@ -53,6 +54,7 @@ import {
 import { ModeRail, type EditorMode } from './sidebar/mode-rail';
 import { PlayerBar } from './player-bar';
 import { EditorToolbar } from './chrome/editor-toolbar';
+import { useSession } from '../lib/session';
 import { TimelineToolbar } from './chrome/timeline-toolbar';
 import { RecorderDialog } from './chrome/recorder-dialog';
 import { TimelineRuler, RULER_HEIGHT } from './timeline/timeline-ruler';
@@ -153,6 +155,9 @@ function clipUnderPlayhead(tracks: TimelineTrack[], time: number): TimelineClip 
 
 export function VideoEditor() {
   const media = useMediaStore();
+  // AURA gate ke liye session identity (editor twin me wahi superadmin+env
+  // guard lagta hai jo web dialog me hai — review finding #2 ka fix).
+  const { session } = useSession();
 
   // ---- Persistent workspace ----
   // One hook for all of it. `settings.fps` is the timeline's rate: a 2 second
@@ -2420,6 +2425,7 @@ if (!mod) {
             onZoom={(d) => zoomAt(d > 0 ? 1.25 : 1 / 1.25, null)}
             onZoomTo={(px) => patch({ pxPerFrame: px })}
             onFit={() => patch({ pxPerFrame: 3 })}
+            onRecord={() => setRecording(true)}
             onFullscreen={() => {
               const el = document.querySelector('[data-preview-pane]');
               if (el instanceof HTMLElement) {
@@ -2447,15 +2453,23 @@ if (!mod) {
             (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
           <div className="relative flex shrink-0 overflow-hidden bg-[#1a1a1a]">
             {/*
-              A spacer the width of the track-header column, so the ruler's
-              frame 0 sits directly over the lane's frame 0. Without it the
-              ruler's scroll container spans the full strip width while the
-              lanes' starts one header-width to the right, and every tick —
-              and the ruler's own playhead — sits 30px left of the clips.
-              That offset is invisible on a long clip but puts any
-              pixel-accurate seek (a transition badge, a measurement edge)
-              a full header-width off. ---- */}
-            <div className="shrink-0" style={{ width: 60 }} aria-hidden="true" />
+              A slot the width of the track-header column, parallel to the
+              ruler — and the ADD-TRACK button lives here, FIXED.
+
+              Hinglish: pehle yahan sirf khaali spacer tha aur "+" icon header
+              column ke andar tha. Header column lanes ke saath vertically
+              scroll hota hai, to clips scroll karne se "+" gum ho jata tha.
+              Ab button yahan ruler ke exactly parallel hai — kabhi scroll
+              nahi hota. Header ke andar uska RULER_HEIGHT column hatane se
+              header ke track rows bhi lanes se perfectly align ho gaye
+              (pehle 40px neeche the).
+            */}
+            <div
+              style={{ width: TRACK_HEADER_W, height: RULER_HEIGHT }}
+              className="flex shrink-0 items-center justify-center bg-[#1a1a1a]"
+            >
+              <TrackAddMenu onAddTrack={addTrack} />
+            </div>
 <div
             ref={rulerScrollRef}
             className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden scroll-smooth will-change-scroll-position custom-scrollbar horizontal"
@@ -2484,6 +2498,19 @@ if (!mod) {
             </div>
           </div>
         </div>
+        {/*
+          ======================================================================
+          TIMELINE ROW — ADAPTIVE LAYOUT (isAuraOpen ? 50/50 split : 100% lanes)
+          ======================================================================
+          Hinglish:
+            * AURA band (isAuraOpen === false): lane-scroll `flex-1` = lanes
+              100% full container width le lete hain. AURA panel slot
+              conditionally NAHI render hota — cleanly unmount + collapse.
+            * AURA open (superadmin gate pass): andar ek flex row:
+              [ lanes w-1/2 ][ 1px separator ][ AURA panel w-1/2 ]
+              — symmetric 50/50 division, separator flat minimalist 1px line
+              (hover par #ff6500). Koi overlay nahi — sab flex children.
+        */}
         <div className="flex min-h-0 flex-1">
           <div ref={headerScrollRef} className="shrink-0 overflow-x-hidden overflow-y-auto custom-scrollbar">
             <TrackHeaders
@@ -2500,10 +2527,19 @@ if (!mod) {
               onFit={() => patch({ pxPerFrame: 3 })}
             />
           </div>
-          <div
-            ref={laneScrollRef}
-            className="min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] will-change-transform custom-scrollbar"
-          >
+          <div className="flex min-w-0 flex-1">
+            {/* ---- LEFT: standard multi-track rails ----
+                Design token: grayish-black slate (#1e1e1e) backdrop.
+                AURA closed -> flex-1 (100%); AURA open -> w-1/2. */}
+            <div
+              ref={laneScrollRef}
+              data-lane-scroll=""
+              className={
+                showAuraStudio
+                  ? 'min-w-0 w-1/2 overflow-x-auto overflow-y-auto bg-[#1e1e1e] will-change-transform custom-scrollbar'
+                  : 'min-w-0 flex-1 overflow-x-auto overflow-y-auto bg-[#1e1e1e] will-change-transform custom-scrollbar'
+              }
+            >
             <div className="relative" style={{ width: laneWidth }}>
               <TimelineTracks
                 tracks={tracks}
@@ -2616,6 +2652,43 @@ if (!mod) {
               </div>
             </div>
 
+            {/* ---- 1px FLAT SPLIT SEPARATOR (sirf AURA open par) ----
+                Hinglish: minimalist 1px line — hover par #ff6500 accent.
+                Ye `divide`/`border` class NAHI hai (wo borderless.css me 0
+                hoti), balki ek plain bg-colored div hai — isliie dikhti hai. */}
+            {showAuraStudio && (
+              <div
+                className="w-px shrink-0 bg-[#2a2a2a] transition-colors duration-150 hover:bg-[#ff6500]"
+                aria-hidden="true"
+              />
+            )}
+
+            {/* ---- RIGHT: AURA Micro-Frame Studio (inline 50/50 slot) ----
+                Hinglish: AURA band ho to ye slot render hi nahi hota (unmount)
+                aur lanes flex-1 se poori width le lete hain. Open par w-1/2.
+                Panel apne andar superadmin+env gate check karta hai. */}
+            {showAuraStudio && isAuraStudioEnabled && (
+              <div className="w-1/2 shrink-0 overflow-hidden p-1">
+                <AuraMicroFrameStudio
+                  open={showAuraStudio}
+                  onOpenChange={setShowAuraStudio}
+                  activeFrame={playheadFrame}
+                  fps={fps}
+                  totalFrames={durationFrames}
+                  onFrameChange={setPlayhead}
+                  onPlayPause={togglePlay}
+                  isPlaying={playing}
+                  playbackSpeed={settings.playbackRate}
+                  onPlaybackSpeedChange={(v) => patch({ playbackRate: v })}
+                  durationMs={Math.round(duration * 1000)}
+                  currentTimeMs={Math.round(playheadSeconds * 1000)}
+                  userEmail={session.email}
+                  isSuperadmin={session.isSuperadmin}
+                />
+              </div>
+            )}
+          </div>
+
             {/*
               The right rail: the voice meter at the full height of the lanes, and
               the ruler's zoom.
@@ -2627,9 +2700,6 @@ if (!mod) {
             */}
             <TimelineRail
               playing={playing}
-              pxPerFrame={pxPerFrame}
-              onZoomTo={(px) => patch({ pxPerFrame: px })}
-              onFit={() => patch({ pxPerFrame: 3 })}
             />
           </div>
           <TimelineFooter
@@ -2646,6 +2716,14 @@ if (!mod) {
             snapEnabled={settings.snapEnabled}
             measure={{ start: settings.measureStartFrame, end: settings.measureEndFrame }}
             playbackRate={settings.playbackRate}
+            /* Hinglish: AURA footer-center toggle. `visible` = superadmin
+               session + env flag dono (RBAC gate) — warna footer me kuch
+               nahi dikhta. Click = timeline 50/50 panel toggle. */
+            auraToggle={{
+              visible: isAuraStudioEnabled && session.isSuperadmin && session.email.toLowerCase().trim() === 'advchashampalup@gmail.com',
+              open: showAuraStudio,
+              onToggle: () => setShowAuraStudio((o) => !o),
+            }}
           />
         </div>
 
@@ -2852,23 +2930,6 @@ if (!mod) {
         onClose={() => setShowRecoverDialog(false)}
       />
 
-      {/* AURA Micro-Frame Studio Dialog - gated by feature flag */}
-      {isAuraStudioEnabled && (
-        <AuraMicroFrameStudio
-          open={showAuraStudio}
-          onOpenChange={setShowAuraStudio}
-          activeFrame={playheadFrame}
-          fps={fps}
-          totalFrames={durationFrames}
-          onFrameChange={setPlayhead}
-          onPlayPause={togglePlay}
-          isPlaying={playing}
-          playbackSpeed={settings.playbackRate}
-          onPlaybackSpeedChange={(v) => patch({ playbackRate: v })}
-          durationMs={Math.round(duration * 1000)}
-          currentTimeMs={Math.round(playheadSeconds * 1000)}
-        />
-      )}
     </div>
   );
 }

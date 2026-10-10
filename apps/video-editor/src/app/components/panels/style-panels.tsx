@@ -24,12 +24,15 @@
 
 import { useMemo } from 'react';
 import { Type, Smile, Move, LayoutGrid, Palette, Sticker as StickerIcon } from 'lucide-react';
-import { PanelSection, Tile, TileGrid, Field, TextInput, Slider, EmptyState, Select, ColorInput, Toggle, Button } from './panel-kit';
+import { PanelSection, Tile, TileGrid, Field, TextInput, Slider, EmptyState, Select, ColorInput, Toggle, Button, FontSelect, AnimationSelect } from './panel-kit';
 import { stockColourFilters, stockPanZoom, stockPip, stockTitles } from '../../lib/engine/resources.generated';
 import {
   DEFAULT_TEXT_STYLE,
+  DEFAULT_TEXT_ANIMATION,
   type ClipFilter,
   type ClipTransform,
+  type TextAnimation,
+  type TextAnimationKind,
   type TextClipStyle,
   type TimelineClip,
 } from '../../lib/engine/types';
@@ -216,58 +219,115 @@ export function TitlesPanel({ clip, applyText, addText }: PanelClip) {
       </PanelSection>
 
       {clip ? (
-        <PanelSection title="Selected title">
-          <div className="space-y-2">
-            <Field label="Text">
-              <TextInput value={text.content} ariaLabel="Title text" onChange={(v) => applyText({ content: v })} />
-            </Field>
-            <Field label="Size" hint={`${(text.size * 100).toFixed(1)}% of frame height`}>
-              <Slider min={0.02} max={0.3} step={0.005} value={text.size} ariaLabel="Title size" onChange={(n) => applyText({ size: n })} />
-            </Field>
-            <Field label="Colour">
-              <ColorInput value={text.color} ariaLabel="Title colour" onChange={(v) => applyText({ color: v })} />
-            </Field>
-            <Field label="Background">
-              <Select
-                value={text.background === 'transparent' ? 'transparent' : 'plate'}
-                ariaLabel="Title background"
-                options={[
-                  { value: 'transparent', label: 'None' },
-                  { value: 'plate', label: 'Solid plate' },
-                ]}
-                onChange={(v) =>
-                  applyText({ background: v === 'transparent' ? 'transparent' : 'rgba(0,0,0,0.65)' })
-                }
-              />
-            </Field>
-            <Field label="Alignment">
-              <Select
-                value={text.align}
-                ariaLabel="Title alignment"
-                options={[
-                  { value: 'left', label: 'Left' },
-                  { value: 'center', label: 'Centre' },
-                  { value: 'right', label: 'Right' },
-                ]}
-                onChange={(v) => applyText({ align: v })}
-              />
-            </Field>
-            <Field label="Weight" hint={String(text.weight)}>
-              <Slider min={300} max={900} step={100} value={text.weight} ariaLabel="Title weight" onChange={(n) => applyText({ weight: n })} />
-            </Field>
-            <Field label="Letter spacing" hint={text.letterSpacing.toFixed(3)}>
-              <Slider min={-0.05} max={0.3} step={0.005} value={text.letterSpacing} ariaLabel="Letter spacing" onChange={(n) => applyText({ letterSpacing: n })} />
-            </Field>
-            <Field label="Line height" hint={text.lineHeight.toFixed(2)}>
-              <Slider min={0.9} max={2} step={0.05} value={text.lineHeight} ariaLabel="Line height" onChange={(n) => applyText({ lineHeight: n })} />
-            </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Toggle checked={text.shadow} onChange={(v) => applyText({ shadow: v })} label="Drop shadow" />
-              <Toggle checked={text.italic} onChange={(v) => applyText({ italic: v })} label="Italic" />
-              <Toggle checked={text.uppercase} onChange={(v) => applyText({ uppercase: v })} label="Uppercase" />
+        <>
+          <PanelSection title="Font">
+            <div className="space-y-2">
+              <Field label="Text">
+                <TextInput value={text.content} ariaLabel="Title text" onChange={(v) => applyText({ content: v })} />
+              </Field>
+              <Field label="Font family">
+                <FontSelect value={text.fontFamily} ariaLabel="Font family" onChange={(v) => applyText({ fontFamily: v })} />
+              </Field>
+              <Field label="Size" hint={`${(text.size * 100).toFixed(1)}% of frame height`}>
+                <Slider min={0.02} max={0.3} step={0.005} value={text.size} ariaLabel="Title size" onChange={(n) => applyText({ size: n })} />
+              </Field>
+              <Field label="Weight" hint={String(text.weight)}>
+                <Slider min={100} max={900} step={100} value={text.weight} ariaLabel="Font weight" onChange={(n) => applyText({ weight: n })} />
+              </Field>
+              <Field label="Colour">
+                <ColorInput value={text.color} ariaLabel="Title colour" onChange={(v) => applyText({ color: v })} />
+              </Field>
+              <div className="grid grid-cols-2 gap-2">
+                <Toggle checked={text.italic} onChange={(v) => applyText({ italic: v })} label="Italic" />
+                <Toggle checked={text.uppercase} onChange={(v) => applyText({ uppercase: v })} label="Uppercase" />
+              </div>
             </div>
-          </div>
-        </PanelSection>
+          </PanelSection>
+
+          <PanelSection title="Background & Alignment">
+            <div className="space-y-2">
+              <Field label="Background">
+                <ColorInput value={text.background === 'transparent' ? '#000000' : text.background} ariaLabel="Background colour" onChange={(v) => applyText({ background: v })} />
+              </Field>
+              <Field label="Background opacity" hint={`${Math.round((text.background === 'transparent' ? 0 : 0.65) * 100)}%`}>
+                <Slider min={0} max={1} step={0.05} value={text.background === 'transparent' ? 0 : 0.65} ariaLabel="Background opacity" onChange={(n) => applyText({ background: n === 0 ? 'transparent' : `rgba(0,0,0,${n})` })} />
+              </Field>
+              <Field label="Alignment">
+                <Select
+                  value={text.align}
+                  ariaLabel="Title alignment"
+                  options={[
+                    { value: 'left', label: 'Left' },
+                    { value: 'center', label: 'Centre' },
+                    { value: 'right', label: 'Right' },
+                  ]}
+                  onChange={(v) => applyText({ align: v })}
+                />
+              </Field>
+              <Field label="Letter spacing" hint={text.letterSpacing.toFixed(3)}>
+                <Slider min={-0.05} max={0.5} step={0.005} value={text.letterSpacing} ariaLabel="Letter spacing" onChange={(n) => applyText({ letterSpacing: n })} />
+              </Field>
+              <Field label="Line height" hint={text.lineHeight.toFixed(2)}>
+                <Slider min={0.8} max={3} step={0.05} value={text.lineHeight} ariaLabel="Line height" onChange={(n) => applyText({ lineHeight: n })} />
+              </Field>
+            </div>
+          </PanelSection>
+
+          <PanelSection title="Outline & Glow">
+            <div className="space-y-2">
+              <Field label="Outline width" hint={`${text.outlineWidth}px`}>
+                <Slider min={0} max={8} step={0.5} value={text.outlineWidth} ariaLabel="Outline width" onChange={(n) => applyText({ outlineWidth: n })} />
+              </Field>
+              <Field label="Outline colour">
+                <ColorInput value={text.outlineColor} ariaLabel="Outline colour" onChange={(v) => applyText({ outlineColor: v })} />
+              </Field>
+              <Field label="Glow width" hint={`${text.glowWidth}px`}>
+                <Slider min={0} max={32} step={1} value={text.glowWidth} ariaLabel="Glow width" onChange={(n) => applyText({ glowWidth: n })} />
+              </Field>
+              <Field label="Glow colour">
+                <ColorInput value={text.glowColor} ariaLabel="Glow colour" onChange={(v) => applyText({ glowColor: v })} />
+              </Field>
+              <Toggle checked={text.shadow} onChange={(v) => applyText({ shadow: v })} label="Drop shadow" hint="Classic drop shadow behind text" />
+            </div>
+          </PanelSection>
+
+          <PanelSection title="Animation">
+            <div className="space-y-2">
+              <Field label="Animation">
+                <AnimationSelect value={text.animation.kind} ariaLabel="Text animation" onChange={(v) => applyText({ animation: { ...text.animation, kind: v } })} />
+              </Field>
+              <Field label="Duration" hint={`${(text.animation.duration * 100).toFixed(0)}% of clip`}>
+                <Slider min={0.1} max={1} step={0.05} value={text.animation.duration} ariaLabel="Animation duration" onChange={(n) => applyText({ animation: { ...text.animation, duration: n } })} />
+              </Field>
+              <Field label="Delay" hint={`${(text.animation.delay * 100).toFixed(0)}% of clip`}>
+                <Slider min={0} max={1} step={0.05} value={text.animation.delay} ariaLabel="Animation delay" onChange={(n) => applyText({ animation: { ...text.animation, delay: n } })} />
+              </Field>
+              <Toggle checked={text.animation.loop} onChange={(v) => applyText({ animation: { ...text.animation, loop: v } })} label="Loop" hint="Repeat animation" />
+            </div>
+          </PanelSection>
+
+          <PanelSection title="Presets">
+            <TileGrid cols={2}>
+              {[
+                { id: 'plain', label: 'Plain', hint: 'Clean white text', style: { fontFamily: 'system', weight: 500, color: '#ffffff', size: 0.08, outlineWidth: 0, glowWidth: 0, animation: DEFAULT_TEXT_ANIMATION } },
+                { id: 'cinematic', label: 'Cinematic', hint: 'Large serif with fade', style: { fontFamily: 'playfair', weight: 600, color: '#ffffff', size: 0.12, letterSpacing: 0.02, animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'fade' as TextAnimationKind, duration: 0.5 } } },
+                { id: 'neon', label: 'Neon', hint: 'Glowing outline effect', style: { fontFamily: 'montserrat', weight: 800, color: '#ffffff', size: 0.09, outlineWidth: 2, outlineColor: '#f97316', glowWidth: 12, glowColor: '#f97316', animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'fade-up' as TextAnimationKind, duration: 0.6 } } },
+                { id: 'typewriter', label: 'Typewriter', hint: 'Character reveal', style: { fontFamily: 'mono', weight: 500, color: '#a3e635', size: 0.07, animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'typewriter' as TextAnimationKind, duration: 0.8 } } },
+                { id: 'bounce', label: 'Bounce', hint: 'Playful entrance', style: { fontFamily: 'poppins', weight: 700, color: '#fde047', size: 0.09, animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'bounce' as TextAnimationKind, duration: 0.7 } } },
+                { id: 'rotate', label: 'Rotate In', hint: 'Spin entrance', style: { fontFamily: 'bebas', weight: 800, color: '#22d3ee', size: 0.1, animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'rotate-in' as TextAnimationKind, duration: 0.8 } } },
+                { id: 'wave', label: 'Wave', hint: 'Per-char wave motion', style: { fontFamily: 'raleway', weight: 600, color: '#f472b6', size: 0.08, animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'wave' as TextAnimationKind, duration: 1, loop: true } } },
+                { id: 'lower-third', label: 'Lower Third', hint: 'Broadcast style', style: { fontFamily: 'inter', weight: 500, color: '#ffffff', size: 0.05, align: 'left' as const, background: 'rgba(0,0,0,0.72)', animation: { ...DEFAULT_TEXT_ANIMATION, kind: 'slide-up' as TextAnimationKind, duration: 0.4 } } },
+              ].map((s) => (
+                <Tile
+                  key={s.id}
+                  label={s.label}
+                  hint={s.hint}
+                  onClick={() => applyText({ ...s.style, content: s.label })}
+                />
+              ))}
+            </TileGrid>
+          </PanelSection>
+        </>
       ) : (
         <NoSelection what="title options" />
       )}

@@ -1,4 +1,10 @@
-@import '@wideo11/ui/src/styles/scrollbar.css';
+/* Hinglish: shared scrollbar stylesheet. NOTE: package ki EXPORTS map sirf
+   `@wideo11/ui/styles/*` allow karti hai — `/src/styles/*` path webpack
+   "not exported from package" error deta tha aur currency-app ka
+   production build toota hua tha (isliye last image 3 October ki purani
+   thi). Baaki apps apne postcss.config.mjs ke postcss-import se resolve
+   karte hain; yahan exported subpath seedha kaam karta hai. */
+@import '@wideo11/ui/styles/scrollbar.css';
 
 @tailwind base;
 @tailwind components;

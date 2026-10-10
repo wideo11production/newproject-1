@@ -89,6 +89,9 @@ let sharedContext: AudioContext | null = null;
 let masterGain: GainNode | null = null;
 let analyser: AnalyserNode | null = null;
 let streamDestination: MediaStreamAudioDestinationNode | null = null;
+/** Per-channel taps off the master bus, for the twin-bar level meter. */
+let stereoAnalyserL: AnalyserNode | null = null;
+let stereoAnalyserR: AnalyserNode | null = null;
 
 function ensureBus(ctx: AudioContext): void {
   if (masterGain) return;
@@ -108,6 +111,23 @@ function ensureBus(ctx: AudioContext): void {
     masterGain.connect(streamDestination);
   } catch {
     streamDestination = null;
+  }
+  try {
+    // Hinglish: Ek ChannelSplitter master bus par — L/R alag-alag TAP hote
+    // hain taaki meter ke twin bars ASLI left/right levels dikhayein, ek hi
+    // mono number ko copy karke nahi. (Jo channel missing ho - mono source -
+    // wahan doosra channel ka hi value use hota hai.)
+    const splitter = ctx.createChannelSplitter(2);
+    masterGain.connect(splitter);
+    stereoAnalyserL = ctx.createAnalyser();
+    stereoAnalyserR = ctx.createAnalyser();
+    stereoAnalyserL.fftSize = 1024;
+    stereoAnalyserR.fftSize = 1024;
+    splitter.connect(stereoAnalyserL, 0);
+    splitter.connect(stereoAnalyserR, 1);
+  } catch {
+    stereoAnalyserL = null;
+    stereoAnalyserR = null;
   }
 }
 
@@ -132,6 +152,36 @@ export function levelBands(count = 12): number[] {
 export function masterLevel(): number {
   const bands = levelBands(16);
   return bands.reduce((m, v) => Math.max(m, v), 0);
+}
+
+/**
+ * RMS 0..1 per channel off the master bus — the twin-bar meter's source.
+ *
+ * Hinglish: stereoAnalyserL/R master bus ke ChannelSplitter par baithe hain,
+ * isliye ye ASLI left/right levels hain. Agar bus mono tha (splitter ne doosre
+ * channel par kuch nahi bheja), to jo channel silent ho wahan doosre ka value
+ * mirror hota hai — meter kabhi "ek taraf goonga" nahi dikhata bina wajah ke.
+ */
+export function stereoLevels(): { l: number; r: number } {
+  const rms = (a: AnalyserNode | null): number => {
+    if (!a) return -1;
+    const buf = new Float32Array(a.fftSize);
+    a.getFloatTimeDomainData(buf);
+    let sum = 0;
+    for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+    return Math.sqrt(sum / buf.length);
+  };
+  const l = rms(stereoAnalyserL);
+  const r = rms(stereoAnalyserR);
+  if (l < 0 && r < 0) {
+    // No splitter (older context, or creation failed): fall back to the mono
+    // master tap so the meter still shows the real output.
+    const m = masterLevel();
+    return { l: m, r: m };
+  }
+  if (l < 0) return { l: r < 0 ? 0 : r, r: r < 0 ? 0 : r };
+  if (r < 0) return { l, r: l };
+  return { l, r };
 }
 
 /** Set the master level. This is the volume fader, and it is the SAME node the

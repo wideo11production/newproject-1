@@ -22,6 +22,7 @@ import { HelpCircle, Clock, Play, Pause, Scissors, Layers, Type, Settings, Mouse
 import { Button } from '@wideo11/ui/button';
 import { cn } from '@wideo11/ui/lib/utils';
 import { AuraMicroFrameStudio } from '@/components/workspace/dialogs/aura-micro-frame-studio';
+import { useSessionIdentity } from '@/lib/identity-context';
 import { useState } from 'react';
 
 // ---------------------------------------------------------------------------
@@ -134,6 +135,10 @@ const FAQ_ENTRIES = [
 
 export function MicroFrameGuide() {
   const [showDialog, setShowDialog] = useState(false);
+  // Hinglish: Superadmin gate ke liye session identity — dialog andar hi
+  // env flag + email + superadmin token check karta hai; yahan hum sirf
+  // current session ka email aur superadmin state paas karte hain.
+  const identity = useSessionIdentity();
 
   return (
     <div className={`h-full min-h-screen ${SECTION_BG} ${TEXT_PRIMARY} p-6`}>
@@ -328,14 +333,23 @@ export function MicroFrameGuide() {
         onOpenChange={setShowDialog}
         activeFrame={1}
         fps={30}
-        totalFrames={5}
+        totalFrames={90}
         onFrameChange={() => {}}
         onPlayPause={() => {}}
         isPlaying={false}
         playbackSpeed={1.0}
         onPlaybackSpeedChange={() => {}}
-        durationMs={3333}
-        currentTimeMs={1000}
+        durationMs={3000}
+        currentTimeMs={0}
+        userEmail={identity.email}
+        isSuperadmin={identity.isSuperadmin}
+        onTimelineSync={(payload) => {
+          // Zero-Duplication: edit ops existing timeline storage hook par
+          // jate hain — yahan future me project-store ka direct sync judega.
+          if (process.env.NODE_ENV !== 'production') {
+            console.info('[aura-micro-frame] timeline sync payload', payload);
+          }
+        }}
       />
     </div>
   );

@@ -94,8 +94,81 @@ export const DEFAULT_TRANSFORM: ClipTransform = {
   panY: 0,
 };
 
+/**
+ * A curated font catalogue. Each entry is a CSS `font-family` string the
+ * compositor writes straight into `ctx.font`, so what you pick is what you
+ * get — there is no fallback guessing at render time.
+ *
+ * The list is the same one the Titles panel offers, so adding a font here is
+ * adding it everywhere: the panel, the inspector and the export.
+ */
+export const TEXT_FONTS: Array<{ id: string; label: string; family: string }> = [
+  { id: 'system', label: 'System UI', family: 'system-ui, Segoe UI, Roboto, sans-serif' },
+  { id: 'inter', label: 'Inter', family: '"Inter", system-ui, sans-serif' },
+  { id: 'montserrat', label: 'Montserrat', family: '"Montserrat", system-ui, sans-serif' },
+  { id: 'raleway', label: 'Raleway', family: '"Raleway", system-ui, sans-serif' },
+  { id: 'poppins', label: 'Poppins', family: '"Poppins", system-ui, sans-serif' },
+  { id: 'roboto', label: 'Roboto', family: '"Roboto", system-ui, sans-serif' },
+  { id: 'open-sans', label: 'Open Sans', family: '"Open Sans", system-ui, sans-serif' },
+  { id: 'lato', label: 'Lato', family: '"Lato", system-ui, sans-serif' },
+  { id: 'oswald', label: 'Oswald', family: '"Oswald", system-ui, sans-serif' },
+  { id: 'bebas', label: 'Bebas Neue', family: '"Bebas Neue", system-ui, sans-serif' },
+  { id: 'playfair', label: 'Playfair', family: '"Playfair Display", Georgia, serif' },
+  { id: 'merriweather', label: 'Merriweather', family: '"Merriweather", Georgia, serif' },
+  { id: 'mono', label: 'Mono', family: '"JetBrains Mono", "SF Mono", Menlo, monospace' },
+];
+
+/** Resolve a stored font id (or an arbitrary family string) to a CSS family. */
+export function fontFamilyFor(id: string): string {
+  return TEXT_FONTS.find((f) => f.id === id)?.family ?? id;
+}
+
+/** Resolve a stored font id to its catalogue entry, or null for a custom string. */
+export function fontEntryFor(id: string) {
+  return TEXT_FONTS.find((f) => f.id === id) ?? null;
+}
+
+/**
+ * Word-level animation presets.
+ *
+ * Each one is a CSS-like transform envelope the compositor evaluates per
+ * frame, so the same animation reads identically in preview and export. The
+ * `kind` is the single dispatch key; the remaining fields are parameters.
+ */
+export type TextAnimationKind =
+  | 'none'
+  | 'fade'
+  | 'typewriter'
+  | 'slide-up'
+  | 'slide-down'
+  | 'slide-left'
+  | 'slide-right'
+  | 'scale-in'
+  | 'bounce'
+  | 'rotate-in'
+  | 'wave'
+  | 'fade-up';
+
+export interface TextAnimation {
+  kind: TextAnimationKind;
+  /** 0..1. Duration of the entrance, as a fraction of the clip. */
+  duration: number;
+  /** 0..1. Delay before the entrance starts, as a fraction of the clip. */
+  delay: number;
+  /** True once the entrance has finished; the clip then holds its final state. */
+  loop: boolean;
+}
+
+export const DEFAULT_TEXT_ANIMATION: TextAnimation = {
+  kind: 'none',
+  duration: 0.3,
+  delay: 0,
+  loop: false,
+};
+
 export interface TextClipStyle {
   content: string;
+  /** Id into `TEXT_FONTS`, or a raw CSS family string for custom fonts. */
   fontFamily: string;
   /** Font size as a fraction of canvas height, so it survives resolution changes. */
   size: number;
@@ -108,11 +181,21 @@ export interface TextClipStyle {
   uppercase: boolean;
   letterSpacing: number; // em
   lineHeight: number;
+  /** Outline drawn around every glyph, in px. 0 = off. */
+  outlineWidth: number;
+  /** Outline colour. */
+  outlineColor: string;
+  /** Outer glow: blur radius in px. 0 = off. */
+  glowWidth: number;
+  /** Outer glow colour. */
+  glowColor: string;
+  /** Word-level entrance animation. */
+  animation: TextAnimation;
 }
 
 export const DEFAULT_TEXT_STYLE: TextClipStyle = {
   content: 'Text',
-  fontFamily: 'system-ui, Segoe UI, Roboto, sans-serif',
+  fontFamily: 'system',
   size: 0.08,
   color: '#ffffff',
   background: 'transparent',
@@ -123,6 +206,11 @@ export const DEFAULT_TEXT_STYLE: TextClipStyle = {
   uppercase: false,
   letterSpacing: 0,
   lineHeight: 1.2,
+  outlineWidth: 0,
+  outlineColor: '#000000',
+  glowWidth: 0,
+  glowColor: '#ff6500',
+  animation: DEFAULT_TEXT_ANIMATION,
 };
 
 export interface TimelineClip {

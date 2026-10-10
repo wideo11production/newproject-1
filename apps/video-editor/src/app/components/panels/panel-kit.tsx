@@ -27,6 +27,7 @@
 // should.
 
 import type { ReactNode } from 'react';
+import { TEXT_FONTS, type TextAnimationKind, DEFAULT_TEXT_ANIMATION } from '../../lib/engine/types';
 
 export function PanelSection({
   title,
@@ -310,6 +311,80 @@ export function EmptyState({ title, body }: { title: string; body: string }) {
     <div className="bg-[#1a1a1a] p-3 text-center">
       <p className="text-[8px] font-medium text-fg-secondary">{title}</p>
       <p className="mt-1 text-[8px] leading-snug text-fg-muted">{body}</p>
+    </div>
+  );
+}
+
+/** Font family selector using the curated TEXT_FONTS catalogue. */
+export function FontSelect({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  const entry = TEXT_FONTS.find((f) => f.id === value);
+  const displayFont = entry?.family ?? value;
+  return (
+    <div className="ve-select-dropdown">
+      <select
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none border border-[#ff6500]/30 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500] transition-colors duration-150"
+        style={{ fontFamily: displayFont }}
+      >
+        {TEXT_FONTS.map((f) => (
+          <option key={f.id} value={f.id} style={{ fontFamily: f.family }}>
+            {f.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+const ANIMATION_KINDS: Array<{ value: TextAnimationKind; label: string; hint: string }> = [
+  { value: 'none', label: 'None', hint: 'No animation' },
+  { value: 'fade', label: 'Fade in', hint: 'Smooth opacity fade' },
+  { value: 'typewriter', label: 'Typewriter', hint: 'Character by character reveal' },
+  { value: 'slide-up', label: 'Slide up', hint: 'Slide up from bottom' },
+  { value: 'slide-down', label: 'Slide down', hint: 'Slide down from top' },
+  { value: 'slide-left', label: 'Slide left', hint: 'Slide left from right' },
+  { value: 'slide-right', label: 'Slide right', hint: 'Slide right from left' },
+  { value: 'scale-in', label: 'Scale in', hint: 'Zoom from small to normal' },
+  { value: 'bounce', label: 'Bounce', hint: 'Elastic bounce entrance' },
+  { value: 'rotate-in', label: 'Rotate in', hint: 'Rotate and scale in' },
+  { value: 'wave', label: 'Wave', hint: 'Per-character wave motion' },
+  { value: 'fade-up', label: 'Fade up', hint: 'Fade in while sliding up' },
+];
+
+/** Animation kind selector for text entrance effects. */
+export function AnimationSelect({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: TextAnimationKind;
+  onChange: (v: TextAnimationKind) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="ve-select-dropdown">
+      <select
+        value={value}
+        aria-label={ariaLabel}
+        onChange={(e) => onChange(e.target.value as TextAnimationKind)}
+        className="w-full bg-[#1a1a1a] px-2 py-1 text-[8px] text-fg focus:ring-1 focus:ring-inset focus:ring-[#ff6500]/60 focus:outline-none border border-[#ff6500]/30 hover:border-[#ff6500] hover:text-[#ff6500] focus:border-[#ff6500] focus:text-[#ff6500] transition-colors duration-150"
+      >
+        {ANIMATION_KINDS.map((a) => (
+          <option key={a.value} value={a.value}>
+            {a.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }

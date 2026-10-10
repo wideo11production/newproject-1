@@ -23,9 +23,17 @@ import {
   ChevronLeft,
   ChevronRight,
   ScanLine,
+  Video,
 } from 'lucide-react';
 import { ToolbarGroup } from './menu-bar';
-import { SUPPORTED_FPS, clampPxPerFrame } from '../../lib/engine/frames';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@wideo11/ui/select';
+import { SUPPORTED_FPS, clampPxPerFrame, PLAYBACK_SPEEDS, formatSpeed } from '../../lib/engine/frames';
 
 interface TimelineToolbarProps {
   canSplit: boolean;
@@ -57,9 +65,14 @@ interface TimelineToolbarProps {
   playbackRate: number;
   onPlaybackRate: (rate: number) => void;
   onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
+  /** Recorder kholta hai (RecorderDialog). Hinglish: timeline toolbar me
+   *  recording icon — same 10px glyph + muted->#ff6500 hover pattern. */
+  onRecord?: () => void;
 }
 
-const PLAYBACK_RATES = [0.25, 0.5, 1, 1.5, 2, 4];
+// Hinglish: Playback speeds — shared list (frames.ts): 0.0001x micro-step se
+// 4x tak. AURA studio ke identical set — consistency.
+const PLAYBACK_RATES = PLAYBACK_SPEEDS;
 
 export function TimelineToolbar({
   canSplit,
@@ -91,6 +104,7 @@ export function TimelineToolbar({
   playbackRate,
   onPlaybackRate,
   onEdgeEdit,
+  onRecord,
 }: TimelineToolbarProps) {
   const zoomPct = Math.round((pxPerFrame / 3) * 100);
 
@@ -105,6 +119,13 @@ export function TimelineToolbar({
     active?: boolean;
   }>> = [
     [
+      {
+        id: 'record',
+        label: 'Record screen or camera',
+        hint: 'Open the recorder — takes land in the media bin',
+        Icon: Video,
+        onClick: () => onRecord?.(),
+      },
       {
         id: 'split',
         label: 'Split at playhead',
@@ -334,32 +355,53 @@ export function TimelineToolbar({
         </span>
       </ToolbarGroup>
       <ToolbarGroup title="Playback speed">
-        <select
-          value={playbackRate}
-          onChange={(e) => onPlaybackRate(Number(e.target.value))}
-          aria-label="Playback speed"
-          className="rounded bg-surface px-1.5 py-0.5 text-[7px] text-fg border-transparent focus:border-[#ff6500] focus:outline-none"
-        >
-          {PLAYBACK_RATES.map((r) => (
-            <option key={r} value={r}>
-              {r}×
-            </option>
-          ))}
-        </select>
+        {/*
+          Radix Select replaced the native <select>. WHY: native dropdown
+          popups on Windows/Chrome are drawn by the OS, so CSS
+          `::-webkit-scrollbar` never applies to them - the list's scrollbar
+          and highlight stayed default BLUE no matter what globals.css said.
+          Radix renders its own DOM, so the orange-red theme reaches the list.
+        */}
+        <Select value={String(playbackRate)} onValueChange={(v) => onPlaybackRate(Number(v))}>
+          <SelectTrigger
+            aria-label="Playback speed"
+            className="h-6 w-16 rounded-md border-0 bg-surface px-1 text-[7px] text-fg outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
+            {PLAYBACK_RATES.map((r) => (
+              <SelectItem
+                key={r}
+                value={String(r)}
+                className="rounded-md text-[7px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
+              >
+                {formatSpeed(r)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </ToolbarGroup>
       <ToolbarGroup title="Frame rate">
-        <select
-          value={fps}
-          onChange={(e) => onFpsChange(Number(e.target.value))}
-          aria-label="Timeline frame rate"
-          className="rounded bg-surface px-1.5 py-0.5 text-[7px] text-fg border-transparent focus:border-[#ff6500] focus:outline-none"
-        >
-          {SUPPORTED_FPS.map((f) => (
-            <option key={f} value={f}>
-              {f} fps
-            </option>
-          ))}
-        </select>
+        <Select value={String(fps)} onValueChange={(v) => onFpsChange(Number(v))}>
+          <SelectTrigger
+            aria-label="Timeline frame rate"
+            className="h-6 w-16 rounded-md border-0 bg-surface px-1 text-[7px] text-fg outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
+            {SUPPORTED_FPS.map((f) => (
+              <SelectItem
+                key={f}
+                value={String(f)}
+                className="rounded-md text-[7px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
+              >
+                {f} fps
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </ToolbarGroup>
     </div>
   );

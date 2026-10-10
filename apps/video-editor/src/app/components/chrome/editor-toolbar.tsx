@@ -84,11 +84,20 @@ import {
 import { MenuBar, ToolbarGroup, type Menu } from './menu-bar';
 import { AuthNav } from './auth-nav';
 import { HelpTip, useToolbarHelp } from './help-tip';
-import { SUPPORTED_FPS, clampPxPerFrame } from '../../lib/engine/frames';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@wideo11/ui/select';
+import { SUPPORTED_FPS, clampPxPerFrame, PLAYBACK_SPEEDS, formatSpeed } from '../../lib/engine/frames';
 
 /** The speeds offered. Real time first, because that is the only one most
  *  projects are cut at, and a list that starts at 0.5 implies otherwise. */
-const PLAYBACK_RATES = [0.25, 0.5, 1, 1.5, 2, 4];
+// Hinglish: Playback speeds — shared list (frames.ts): 0.0001x micro-step se
+// 4x tak. AURA studio ke identical set — consistency.
+const PLAYBACK_RATES = PLAYBACK_SPEEDS;
 
 interface ToolButton {
   id: string;
@@ -557,40 +566,62 @@ export function EditorToolbar({
             title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
           >
             <Gauge className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
-            <div className="ve-select-dropdown">
-            <select
-              value={String(fps)}
-              onChange={(e) => onFpsChange(Number(e.target.value))}
-              aria-label="Timeline frame rate"
-              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#9fa7b3]/25 hover:border-[#ff6500]/40 hover:text-[#ff6500] focus:border-[#ff6500]/60 focus:text-[#ff6500]"
-            >
-              {SUPPORTED_FPS.map((f) => (
-                <option key={f} value={f}>
-                  {f} fps
-                </option>
-              ))}
-            </select>
-            </div>
+            {/*
+              Radix Select replaced the native <select>. WHY: native dropdown
+              popups on Windows/Chrome are drawn by the OS, so CSS
+              `::-webkit-scrollbar` never applies to them - the list's scrollbar
+              and highlight stayed default BLUE no matter what globals.css said.
+              Radix renders its own DOM, so the orange-red theme (and the 2px
+              ghost scrollbar) actually reaches the open list.
+            */}
+            <Select value={String(fps)} onValueChange={(v) => onFpsChange(Number(v))}>
+              <SelectTrigger
+                aria-label="Timeline frame rate"
+                className="h-6 w-[68px] rounded-md border-0 bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
+              >
+                {SUPPORTED_FPS.map((f) => (
+                  <SelectItem
+                    key={f}
+                    value={String(f)}
+                    className="rounded-md text-[8px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
+                  >
+                    {f} fps
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label
             className="flex items-center gap-1 px-1"
             title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
           >
             <Timer className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
-            <div className="ve-select-dropdown">
-            <select
-              value={String(playbackRate)}
-              onChange={(e) => onPlaybackRate(Number(e.target.value))}
-              aria-label="Playback speed"
-              className="h-6 w-16 cursor-pointer bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 border border-[#9fa7b3]/25 hover:border-[#ff6500]/40 hover:text-[#ff6500] focus:border-[#ff6500]/60 focus:text-[#ff6500]"
-            >
-              {PLAYBACK_RATES.map((r) => (
-                <option key={r} value={r}>
-                  {r}x
-                </option>
-              ))}
-            </select>
-            </div>
+            <Select value={String(playbackRate)} onValueChange={(v) => onPlaybackRate(Number(v))}>
+              <SelectTrigger
+                aria-label="Playback speed"
+                className="h-6 w-[68px] rounded-md border-0 bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
+              >
+                {PLAYBACK_RATES.map((r) => (
+                  <SelectItem
+                    key={r}
+                    value={String(r)}
+                    className="rounded-md text-[8px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
+                  >
+                    {formatSpeed(r)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </ToolbarGroup>
 

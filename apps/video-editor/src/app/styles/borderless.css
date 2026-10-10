@@ -29,6 +29,26 @@
   border-top-color: #2a2a2a !important;
 }
 
+/* ---- EXEMPTION: deliberate DOTTED affordances (border-dashed wale boxes) ----
+ * Import-media drop target aur empty state dotted AFFORDANCE hain - wireframe
+ * separator nahi. Zero-wireframe rule inhe solid + 0-width bana rahi thi
+ * (dashed line invisible ho rahi thi). Ye exemption dashed style aur 1px width
+ * dono preserve karti hai; color element ke apne border-* class se aata hai,
+ * isliye dull/bright dono control rehte hain. */
+[class*="border-dashed"] {
+  border-style: dashed !important;
+  border-width: 1px !important;
+}
+
+/* ---- EXEMPTION: deliberate SIMPLE lines (border-solid wale boxes) ----
+ * Search box aur gallery thumbnails solid hairline pe chalti hain (user:
+ * "dots hata ke simple line karo"). Wahi universal rule inhe bhi 0-width bana
+ * deta hai, isliye yahan bhi 1px solid preserve hota hai. */
+[class*="border-solid"] {
+  border-style: solid !important;
+  border-width: 1px !important;
+}
+
 /* ---- Explicitly re-enable accent borders for interactive highlights ---- */
 /* Attribute selectors match Tailwind's arbitrary-value utility classes */
 [class*="border-[#ff6500]"] {
