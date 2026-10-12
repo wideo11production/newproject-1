@@ -582,7 +582,26 @@ func (s *AuthService) ListPublicChannelMedia(
 		// READY only. An `initiated` asset has had nothing sent, a `scanning` one
 		// may not even be a video, and a `failed` one certainly is not playable.
 		// Listing them would put a grey tile on a creator's public page.
-		Where("status = ?", model.MediaStatusReady)
+		Where("status = ?", model.MediaStatusReady).
+		// ---- AND APPROVED ONLY ----
+		//
+		// `ready` is a TECHNICAL verdict: the file decodes and the renditions
+		// exist. It was never meant to mean "this may be shown", and after
+		// migration 030 it explicitly does not - `moderation_status` does.
+		//
+		// This line is the difference between a moderation pipeline that screens
+		// uploads and one that only records a verdict nobody enforces. Without it,
+		// a video the AI rejected still appears on the creator's public channel
+		// page, because `ready` is true and nothing here asked the second
+		// question.
+		//
+		// The rule is `model.MediaAsset.IsVisiblePublic()` - `status = ready AND
+		// moderation_status = approved`. It is spelled out as two Where clauses
+		// rather than called here because GORM cannot filter on a Go method, and a
+		// loop that discarded non-visible rows AFTER fetching them would still
+		// have read them from the database and, worse, would have counted them in
+		// `total` - so a page of 24 would paginate 24 visible items out of 240.
+		Where("moderation_status = ?", model.ModerationApproved)
 
 	if kind != "" {
 		q = q.Where("kind = ?", kind)
@@ -712,3 +731,114 @@ func (s *AuthService) ChannelHandleExists(
 
 // compile-time: time import is used by the UpdatedAt comparisons above.
 var _ = time.Now
+
+// PublicMediaItem is one published media asset for public discovery.
+//
+// Same shape as PublicChannelMedia but without channel_id (since it's mixed).
+type PublicMediaItem struct {
+	ID             uuid.UUID `json:"id"`
+	Kind           string    `json:"kind"`
+	Filename       string    `json:"filename"`
+	DurationS      int       `json:"duration_seconds"`
+	Width          int       `json:"width"`
+	Height         int       `json:"height"`
+	Bytes          int64     `json:"bytes"`
+	PosterURL      *string   `json:"poster_url,omitempty"`
+	HLSPublicURL   *string   `json:"hls_url,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	ChannelHandle  string    `json:"channel_handle"`
+	ChannelName    string    `json:"channel_name"`
+}
+
+// ListPublicMedia returns public media for discovery (related videos, browse).
+//
+// Only returns assets that are:
+//   - status = 'ready'
+//   - moderation_status = 'approved'
+//   - channel is_public = true AND is_active = true
+//
+// kind filters to "video", "reel", "audio"; empty means all.
+// excludeID skips a specific asset (for "related videos" excluding current).
+func (s *AuthService) ListPublicMedia(
+	ctx context.Context,
+	kind string,
+	limit, offset int,
+	excludeID string,
+) ([]PublicMediaItem, int64, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	switch kind {
+	case "", model.MediaKindVideo, model.MediaKindReel, model.MediaKindAudio:
+	default:
+		return nil, 0, fmt.Errorf("unknown media kind %q", kind)
+	}
+
+	q := s.db.WithContext(ctx).Model(&model.MediaAsset{}).
+		Joins("JOIN channels ON channels.id = media_assets.channel_id").
+		Where("media_assets.status = ?", model.MediaStatusReady).
+		Where("media_assets.moderation_status = ?", model.ModerationApproved).
+		Where("channels.is_public = ?", true).
+		Where("channels.is_active = ?", true)
+
+	if kind != "" {
+		q = q.Where("media_assets.kind = ?", kind)
+	}
+
+	if excludeID != "" {
+		if exUUID, err := uuid.Parse(excludeID); err == nil {
+			q = q.Where("media_assets.id != ?", exUUID)
+		}
+	}
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Use a struct to capture the joined fields
+	type mediaWithChannel struct {
+		model.MediaAsset
+		ChannelHandle string
+		ChannelName   string
+	}
+	var assets []mediaWithChannel
+	err := q.Select("media_assets.id, media_assets.kind, media_assets.filename, media_assets.duration_seconds, media_assets.width, media_assets.height, media_assets.bytes, media_assets.poster_public_url, media_assets.hls_public_url, media_assets.created_at, channels.handle as channel_handle, channels.display_name as channel_name").
+		Order("media_assets.created_at DESC").
+		Limit(limit).Offset(offset).
+		Find(&assets).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	out := make([]PublicMediaItem, 0, len(assets))
+	for _, a := range assets {
+		var hlsPtr *string
+		if a.HLSPublicURL != "" {
+			hlsPtr = &a.HLSPublicURL
+		}
+		out = append(out, PublicMediaItem{
+			ID:            a.ID,
+			Kind:          a.Kind,
+			Filename:      a.Filename,
+			DurationS:     a.DurationS,
+			Width:         a.Width,
+			Height:        a.Height,
+			Bytes:         a.Bytes,
+			PosterURL:     a.PosterPublicURL,
+			HLSPublicURL:  hlsPtr,
+			CreatedAt:     a.CreatedAt,
+			ChannelHandle: a.ChannelHandle,
+			ChannelName:   a.ChannelName,
+		})
+	}
+
+	return out, total, nil
+}

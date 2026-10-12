@@ -358,6 +358,16 @@ func main() {
 	}
 	log.Printf("[ENTITLEMENTS] seeded %d plan(s): %v", len(cfg.Plans.Plans), cfg.Plans.Codes())
 
+	// ---- AuthService gets the SAME entitlement instance ----
+	//
+	// `CreateChannel` needs the user's `max_channels` limit, and the only place
+	// that is authoritatively resolved is here. Passing the same instance (not a
+	// second `NewEntitlementService`) keeps `cfg.Plans` a single snapshot: a plan
+	// added to `.env` between two constructions would be visible to one and not
+	// the other, which makes the channel limit answer differently depending on
+	// which code path asked.
+	authService.SetEntitlementService(entitlementSvc)
+
 	// =========================================================================
 	// SERVICE ACCESS + RBAC (migration 017)
 	// =========================================================================
@@ -399,6 +409,14 @@ func main() {
 	authHandler.SetRBAC(rbac, serviceAccess)
 
 	authHandler.SetMediaService(service.NewMediaService(db, entitlementSvc))
+	// The object store is attached AFTER it is built, in the storage block below.
+	// It is only needed for the playback path, and the media service works without
+	// it for every other route.
+
+	// The comment thread under an asset. Its own service because a comment is a
+	// viewer's interaction, not part of the asset's pipeline - and the link ban it
+	// enforces needs to live in exactly one place.
+	authHandler.SetCommentService(service.NewCommentService(db))
 	// ---- Transcoding handoff ----
 	//
 	// Optional. A missing client does NOT fail an upload - FinalizeMedia
@@ -698,6 +716,18 @@ func main() {
 	// so there is no field to get wrong. See `internal/handler/my_entitlements.go`.
 	protected.GET("/me/entitlements", authHandler.GetMyEntitlements)
 
+	// ---- SELF-SERVICE PLANS ----
+	//
+	// The user-facing counterpart to the superadmin grant route. A user who
+	// wants to earn money picks their own plan here instead of waiting for a
+	// human with access to `/admin/entitlements`.
+	//
+	// Both take nothing from the URL: the GET is a catalogue read, and the POST
+	// identifies the buyer from the token. See plan_self_service.go for why
+	// lifetime plans are absent and why the source recorded is `subscription`.
+	protected.GET("/me/plans", authHandler.SelectablePlans)
+	protected.POST("/me/plan", authHandler.SubscribePlan)
+
 			// ---- SECURITY ROLLOVER (Block 2.5 / 2.6) ----
 			// Old credential verify karke naya set karta hai, aur saare
 			// DUSRE sessions + refresh tokens + expired verification tokens
@@ -896,16 +926,65 @@ func main() {
 			protectedMedia := protected.Group("/media")
 			{
 				protectedMedia.GET("/:id/export-pack", authHandler.ReelExportPack)
-				// Media mutations. The quota lives at initiate, so a user who is over
-				// allowance never receives a URL and never pays the upload time.
-				protectedMedia.POST("/initiate", authHandler.InitMedia)
-				protectedMedia.POST("/:id/finalize", authHandler.FinalizeMedia)
+			// Media mutations. The quota lives at initiate, so a user who is over
+			// allowance never receives a URL and never pays the upload time.
+			protectedMedia.POST("/initiate", authHandler.InitMedia)
+		// What the caller may still upload, per kind. Read up front so the
+		// upload page can show "12 of 25 left" and a trial can be routed to
+		// plans BEFORE a file is picked instead of after.
+		protectedMedia.GET("/quota", authHandler.MediaQuota)
+			protectedMedia.POST("/:id/finalize", authHandler.FinalizeMedia)
+			// ---- RETRY and DELETE: the recovery path for a failed upload ----
+			//
+			// A `failed` asset used to be a one-way door. The transcoder wrote the
+			// row, `MarkTranscodeResult` refused any asset not mid-pipeline, and
+			// nothing in the product could move it back - so a 4K file that outran
+			// the transcoder's memory was permanently dead, and the creator's only
+			// route was re-uploading every byte.
+			//
+			// These two routes close that. `POST /:id/retry` re-queues the
+			// transcode against the SAME stored object; `DELETE /:id` drops the row
+			// and its bytes. Both are owner-scoped and both are locked to `failed`
+			// in the service, so neither can be aimed at an in-flight upload.
+			protectedMedia.POST("/:id/retry", authHandler.RetryMedia)
+			protectedMedia.DELETE("/:id", authHandler.DeleteMedia)
 				protectedMedia.GET("", authHandler.ListMedia)
 				protectedMedia.GET("/:id", authHandler.GetMedia)
 				// Poll for "is it ready yet" without downloading the whole asset.
 				// Owner-scoped, because `failure_reason` and `object_key` are not
 				// things to hand a stranger.
 				protectedMedia.GET("/:id/status", authHandler.MediaStatus)
+			// Signed playback URL for one object inside the asset. The `video`
+			// bucket is private, so a plain URL is denied for EVERYONE including
+			// the uploader - this is what makes a finished upload viewable.
+			protectedMedia.GET("/:id/signed-url", authHandler.SignedStreamURL)
+
+			// Byte streaming for the OWNER. Same assets, a different authority:
+			// `/public/media/:id/stream` asks "may a stranger see this", this asks
+			// "is this yours" - and an owner may watch their own draft that the
+			// public route refuses.
+			protectedMedia.GET("/:id/stream", authHandler.OwnerStream)
+
+			// The owner releasing an asset to the video page. A separate step from
+			// the moderation verdict on purpose: the scan answers "is it safe", this
+			// answers "did the owner confirm and choose to publish" - and the record
+			// of that confirmation is the only proof the responsibility was accepted.
+			// See `PublishMedia` for why it cannot override a screening verdict.
+			protectedMedia.POST("/:id/publish", authHandler.PublishMedia)
+
+			// ---- Comments on a clip ----
+			//
+			// Under `/media/:id/...` because a comment is about a CLIP and not a
+			// free-floating entity: the asset id in the path is what scopes the query,
+			// and it is what the link ban is enforced against.
+			protectedMedia.GET("/:id/comments", authHandler.MediaComments)
+			protectedMedia.POST("/:id/comments", authHandler.CommentCreate)
+
+			// The like and the edit/delete are on the COMMENT id rather than the
+			// asset, because they act on a comment and not on a clip.
+			protectedMedia.POST("/comments/:cid/like", authHandler.CommentLike)
+			protectedMedia.PATCH("/comments/:cid", authHandler.CommentEdit)
+			protectedMedia.DELETE("/comments/:cid", authHandler.CommentDelete)
 
 				// ---- The transcode callback ----
 				//
@@ -961,6 +1040,28 @@ func main() {
 			publicGroup.GET("/:handle/media", authHandler.GetPublicChannelMedia)
 		}
 
+		// Public media discovery (related videos, browse) - no auth required.
+		publicMediaGroup := r.Group("/api/v1/public/media")
+		{
+			publicMediaGroup.GET("", authHandler.GetPublicMedia)
+			// Signs a short-lived playback URL for one object inside a publicly
+			// visible asset. The gate (ready + approved + public channel) lives in
+			// the service; every refusal answers one 404.
+			publicMediaGroup.GET("/:id/stream", authHandler.GetPublicMediaStream)
+
+		// The comment thread under a clip. PUBLIC, for the same reason the clip is:
+		// a stranger can watch it, and the comments are part of the page they are
+		// looking at. An anonymous viewer gets `viewer_has_liked: false` everywhere
+		// rather than an error, which is the honest answer to "which of these did I
+		// like" when there is no "I".
+		//
+		// The LIST is here and the WRITE paths are under `/auth/media/...`, because
+		// posting needs a session while reading does not. Two routes for the same
+		// resource is not duplication: they carry different authority, and merging
+		// them would mean one of the two got the wrong check.
+		publicMediaGroup.GET("/:id/comments", authHandler.MediaComments)
+		}
+
 		// =====================================================================
 		// SERVICE ACCESS + RBAC (migration 017)
 		// =====================================================================
@@ -999,6 +1100,31 @@ func main() {
 		adminRBAC.GET("/registry", authHandler.GetPrivilegeRegistry)
 		adminRBAC.POST("/services/grant", authHandler.GrantService)
 		adminRBAC.POST("/services/revoke", authHandler.RevokeService)
+
+		// =================================================================
+		// CONTENT MODERATION REVIEW (migration 030)
+		// =================================================================
+		//
+		// The screener is a heuristic engine with a declared borderline band, so
+		// some uploads need a human. Before this existed, `ModerationWorklist` and
+		// `ResolveModeration` had no route on top of them: every flagged video sat
+		// at `flagged` forever, invisible to everyone including its creator, with
+		// nothing saying why - which is a worse state than refusing it, because a
+		// refusal at least tells the creator something.
+		//
+		// Reading is gated on `audit.view`; DECIDING is gated on
+		// `moderation.review`. Two permissions, not one, because "who looked" and
+		// "who approved" must be different sets of people for an audit of this
+		// queue to mean anything.
+		//
+		// `RequirePermission` fails closed when RBAC is unwired, which is the
+		// right direction for a route that can publish refused content.
+		protected.GET("/moderation/queue",
+			authHandler.RequirePermission(service.PermAuditView), authHandler.ModerationQueue)
+		protected.GET("/moderation/:id/audits",
+			authHandler.RequirePermission(service.PermAuditView), authHandler.ModerationAudits)
+		protected.POST("/moderation/:id/resolve",
+			authHandler.RequirePermission(service.PermModerationReview), authHandler.ResolveModeration)
 	}
 
 	// Security routes - PIN, questions, biometric, audit
@@ -1130,6 +1256,18 @@ func main() {
 		log.Printf("[WARN] Avatar upload unavailable. Set STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY in .env")
 	} else {
 		authHandler.SetStorageService(storageSvc)
+		// Playback needs the object store on the MEDIA service, not just the
+		// handler: a presigned URL cannot be fetched by a server (its Host is in
+		// the signature), so the bytes are opened directly instead of being
+		// handed out as a URL. See `StorageService.OpenPublicVideoObject`.
+		//
+		// Attached here, after storage exists, because the media service is built
+		// earlier and every non-playback route works without it.
+		if mediaSvc := authHandler.MediaService(); mediaSvc != nil {
+			mediaSvc.WithStorage(storageSvc)
+			log.Printf("[OK] Media playback streaming enabled (bucket %s)",
+				cfg.Storage.GetVideoBucket())
+		}
 		log.Printf("[OK] Storage ready: MinIO %s (bucket %s)",
 			cfg.Storage.GetEndpoint(), cfg.Storage.GetAvatarBucket())
 	}

@@ -160,6 +160,73 @@ func TestCreatorRoutesRequireAPermission(t *testing.T) {
 	}
 }
 
+// moderationRoutes are the content-review routes and the permission each needs.
+//
+// Two permissions rather than one, and the difference is the point:
+//
+//	audit.view          - reading the queue. Somebody triaging an incident needs it.
+//	moderation.review   - deciding the outcome. That is the power to publish
+//	                      something the screener refused, so it is stronger.
+//
+// "Who looked" and "who approved" being different sets of people is what makes an
+// audit of this queue worth reading.
+var moderationRoutes = []struct {
+	name       string
+	route      string
+	permission string
+}{
+	{"read the review queue", `protected.GET("/moderation/queue"`, "PermAuditView"},
+	{"read an asset's audit trail", `protected.GET("/moderation/:id/audits"`, "PermAuditView"},
+	{"resolve held-back content", `protected.POST("/moderation/:id/resolve"`, "PermModerationReview"},
+}
+
+// TestModerationRoutesRequirePermission pins the review surface's gates.
+//
+// These routes can publish content a heuristic engine refused. Without a
+// permission on the `resolve` route, any signed-in account could release a video
+// the screener held - and the entire moderation pipeline would be advisory.
+func TestModerationRoutesRequirePermission(t *testing.T) {
+	_, clean := readMain(t)
+
+	for _, r := range moderationRoutes {
+		t.Run(r.name, func(t *testing.T) {
+			block := routeBlock(t, clean, r.route)
+			if !strings.Contains(block, "RequirePermission") {
+				t.Errorf("%s carries NO capability check.\n"+
+					"  Expected RequirePermission(service.%s). Without it any valid\n"+
+					"  session can do this - including resolving content the screener\n"+
+					"  refused.", r.route, r.permission)
+				return
+			}
+			if !strings.Contains(block, r.permission) {
+				t.Errorf("%s is checked for the WRONG capability.\n"+
+					"  Expected service.%s.", r.route, r.permission)
+			}
+		})
+	}
+}
+
+// TestResolveIsStrongerThanRead is the asymmetry that makes the split worth having.
+//
+// `audit.view` and `moderation.review` are gated on DIFFERENT capabilities, and it
+// must stay that way. Collapsing them onto one permission would mean either a
+// reader can approve, or an approver cannot see what they are approving.
+func TestResolveIsStrongerThanRead(t *testing.T) {
+	_, clean := readMain(t)
+
+	readBlock := routeBlock(t, clean, `protected.GET("/moderation/queue"`)
+	resolveBlock := routeBlock(t, clean, `protected.POST("/moderation/:id/resolve"`)
+
+	if strings.Contains(readBlock, "PermModerationReview") {
+		t.Error("reading the queue now requires moderation.review.\n" +
+			"  Reading must stay a weaker permission than deciding.")
+	}
+	if strings.Contains(resolveBlock, "PermAuditView") && !strings.Contains(resolveBlock, "PermModerationReview") {
+		t.Error("resolving content requires only audit.view.\n" +
+			"  Deciding must be the stronger permission.")
+	}
+}
+
 // TestReadingAChannelNeedsNoPermission guards against over-correcting.
 //
 // Listing and reading channels are not creator capabilities - every viewer needs

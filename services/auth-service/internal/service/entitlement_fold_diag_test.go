@@ -66,6 +66,22 @@ import (
 	"github.com/wideo11/auth-service/internal/config"
 )
 
+// TestStarterGrantsAreNotUnlimited pins that `starter` still grants a BOUNDED
+// capability somewhere, so the diagnostic story above stays meaningful.
+//
+// WHAT CHANGED, AND WHY THIS TEST DID NOT GET DELETED
+//
+// This used to assert `starter.media_assets == 25`. Uploading is now free and
+// UNLIMITED for every plan - that is the product decision - so that assertion
+// cannot stand. But the bug this file documents is still live and still cheap to
+// reintroduce, so the guard moves rather than goes:
+//
+//   media_assets / reel_assets   Unlimited  - by design, for EVERY plan
+//   save_projects                2          - bounded, so a stray -1 is visible
+//
+// The assertion that matters is the last one: a plan that grants EVERY capability
+// as unlimited is never legitimate, and `TestNoPlanAccidentallyGrantsUnlimitedForEverything`
+// covers it broadly. This one just names the specific number.
 func TestStarterGrantsAreNotUnlimited(t *testing.T) {
 	plans := config.LoadPlans()
 
@@ -74,14 +90,25 @@ func TestStarterGrantsAreNotUnlimited(t *testing.T) {
 		t.Fatal("the catalogue has no `starter` plan")
 	}
 
-	if got := starter.Grants[config.CapMediaAssets]; got != 25 {
-		t.Errorf("starter grants media_assets = %d, want 25.\n"+
-			"  If this is -1 then every limit check folds to unlimited and no quota in\n"+
-			"  the product is enforced.", got)
+	// Uploading is free and uncapped - the product decision, made on every plan
+	// rather than only the expensive ones.
+	if got := starter.Grants[config.CapMediaAssets]; got != config.Unlimited {
+		t.Errorf("starter grants media_assets = %d, want Unlimited(%d).\n"+
+			"  Uploading is meant to be free for every plan; a cap here would reintroduce\n"+
+			"  the refusal that made a trial unusable.", got, config.Unlimited)
 	}
-	if got := starter.Grants[config.CapReelAssets]; got != 10 {
-		t.Errorf("starter grants reel_assets = %d, want 10", got)
+	if got := starter.Grants[config.CapReelAssets]; got != config.Unlimited {
+		t.Errorf("starter grants reel_assets = %d, want Unlimited(%d)", got, config.Unlimited)
 	}
+
+	// And at least one capability is still BOUNDED, which is what keeps the
+	// "everything is unlimited" failure mode detectable.
+	if got := starter.Grants[config.CapSaveProjects]; got == config.Unlimited {
+		t.Errorf("starter grants save_projects = %d (Unlimited).\n"+
+			"  A plan with no bounded capability at all cannot be told from one whose\n"+
+			"  quota enforcement is silently broken.", got)
+	}
+
 	if got := starter.Grants[config.CapLifetimeDevices]; got != config.Unlimited {
 		t.Errorf("starter grants lifetime_devices = %d, want Unlimited(%d)",
 			got, config.Unlimited)

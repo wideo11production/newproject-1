@@ -13,6 +13,7 @@ package service
 //     weakens, BOTH paths weaken at once.
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -41,6 +42,70 @@ var testUser = uuid.MustParse("11111111-2222-3333-4444-555555555555")
 // The returned key MUST be bare (`{userID}/{rand}.ext`) because every caller
 // passes it to MinIO alongside the bucket as a separate argument. If the key
 // retains the bucket name, the delete silently targets a non-existent object.
+// ============================================================================
+// SIGNED MEDIA URLS - path traversal
+// ============================================================================
+//
+// SYSTEM-PLAN R6 keeps the `video` bucket private, so a signed URL is the only
+// way to play anything. That makes this the function standing between an
+// attacker and everyone else's media, and the rules are easy to get subtly
+// wrong - which is exactly what happened.
+//
+// The original check was written against `filepath.Clean(...)`. Clean
+// COLLAPSES `../../../etc/passwd` into `/etc/passwd`, which no longer contains
+// "..", so a `strings.Contains(clean, "..")` guard waves the most hostile input
+// straight through while still rejecting the mild two-dot case. The e2e probe
+// caught it; these cases make sure it cannot come back.
+
+func TestSignedMediaURLRejectsPathEscape(t *testing.T) {
+	// uploadPublicClient is deliberately nil: every case below is refused BEFORE
+	// the credential is reached, so no MinIO client is needed to test it.
+	s := &StorageService{cfg: &config.StorageConfig{VideoBucket: "video"}}
+
+	refused := []string{
+		"",           // nothing asked for
+		".",          // the prefix itself
+		"   ",        // whitespace
+		"..",         // one level up
+		"../etc/passwd",
+		"../../../etc/passwd", // the case Clean used to hide
+		"1080p/../../poster.jpg",
+		"a/../../b",
+		"/etc/passwd",      // absolute - discards the prefix
+		"/",                // filesystem root
+		"poster.jpg/..",    // trailing traversal
+		"poster.jpg/../..", // double trailing traversal
+	}
+	for _, path := range refused {
+		_, _, err := s.SignedObjectURL(context.Background(), testUser, path)
+		if err == nil {
+			t.Errorf("path %q was ACCEPTED - a caller could name an object outside its own asset", path)
+		}
+	}
+
+	// And the legitimate paths must NOT be refused by an over-eager rule. A
+	// rule that rejects everything passes the test above and breaks the product.
+	allowed := []string{
+		"poster.jpg",
+		"filmstrip.jpg",
+		"peaks.json",
+		"1080p/playlist.m3u8",
+		"1080p/seg_00000.ts",
+		"a/b/c/d.json",
+	}
+	for _, path := range allowed {
+		_, _, err := s.SignedObjectURL(context.Background(), testUser, path)
+		if err == nil {
+			continue
+		}
+		// The only acceptable error here is the missing-credential one, which
+		// means the path passed validation.
+		if !strings.Contains(err.Error(), "not configured") {
+			t.Errorf("path %q was refused as invalid: %v - legitimate artefact", path, err)
+		}
+	}
+}
+
 func TestObjectKeyFromURLStripsBucketPrefix(t *testing.T) {
 	s := storageWith("localhost:9000", false)
 

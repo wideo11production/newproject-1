@@ -40,7 +40,7 @@ func TestMediaCannotBeFiledUnderAnotherUsersChannel(t *testing.T) {
 	// explained by it being invisible.
 	ch := forceOwnedChannel(t, db, owner, "impersonation_probe_ch")
 
-	_, err := svc.Initiate(ctx, stranger, model.MediaKindVideo, "mine.mp4", "video/mp4", "stranger/1.mp4", 1000, 30, &ch.ID)
+	_, err := svc.Initiate(ctx, stranger, model.MediaKindVideo, "mine.mp4", "video/mp4", "stranger/1.mp4", 1000, 30, &ch.ID, "", UploadContext{})
 	if err == nil {
 		t.Fatal("a stranger filed media under someone else's channel.\n" +
 			"The channel's public video count would then include it, so the count is\n" +
@@ -70,7 +70,7 @@ func TestMediaCanBeFiledUnderYourOwnChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Initiate(ctx, owner, model.MediaKindVideo, "mine.mp4", "video/mp4", "owner/1.mp4", 1000, 30, &ch.ID)
+	got, err := svc.Initiate(ctx, owner, model.MediaKindVideo, "mine.mp4", "video/mp4", "owner/1.mp4", 1000, 30, &ch.ID, "", UploadContext{})
 	if err != nil {
 		t.Fatalf("the owner could not file media under their own channel: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestMediaCannotBeFiledUnderADeletedChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.Initiate(ctx, owner, model.MediaKindVideo, "x.mp4", "video/mp4", "k", 1000, 30, &ch.ID); err == nil {
+	if _, err := svc.Initiate(ctx, owner, model.MediaKindVideo, "x.mp4", "video/mp4", "k", 1000, 30, &ch.ID, "", UploadContext{}); err == nil {
 		t.Fatal("media was filed under a DELETED channel.\n" +
 			"The row still exists after a soft delete, so an existence check alone is not\n" +
 			"enough - it has to exclude deleted ones, or a removed channel keeps\n" +
@@ -117,7 +117,7 @@ func TestMediaWithNoChannelIsAllowed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Initiate(ctx, user, model.MediaKindVideo, "x.mp4", "video/mp4", "k", 1000, 30, nil)
+	got, err := svc.Initiate(ctx, user, model.MediaKindVideo, "x.mp4", "video/mp4", "k", 1000, 30, nil, "", UploadContext{})
 	if err != nil {
 		t.Fatalf("media with no channel was refused: %v\n"+
 			"This is the common case - a creator uploads before they have a channel, and a\n"+
@@ -209,3 +209,4 @@ func forceOwnedChannel(t *testing.T, db *gorm.DB, owner uuid.UUID, handle string
 	})
 	return ch
 }
+

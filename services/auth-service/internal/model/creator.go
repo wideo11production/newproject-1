@@ -137,8 +137,16 @@ type Channel struct {
 	SetupStep2At *time.Time `gorm:"column:setup_step2_at;index" json:"setup_step2_at,omitempty"`
 
 	// ---- State ----
-	IsPublic bool `gorm:"default:true" json:"is_public"`
-	IsActive bool `gorm:"default:true" json:"is_active"`
+	IsPublic   bool `gorm:"default:true" json:"is_public"`
+	IsActive   bool `gorm:"default:true" json:"is_active"`
+	// ---- T&C Acceptance ----
+	//
+	// Mandatory for every channel creation (free or paid). Stores when and
+	// which version the creator accepted. This is the legal proof that the
+	// creator agreed to the ads/earning policy.
+	TCAccepted       bool       `gorm:"not null;default:false" json:"tc_accepted"`
+	TCAcceptedAt     *time.Time `gorm:"column:tc_accepted_at" json:"tc_accepted_at,omitempty"`
+	TCAcceptedVersion string    `gorm:"size:32;column:tc_accepted_version" json:"tc_accepted_version,omitempty"`
 	// ---- Timestamps ----
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -313,6 +321,13 @@ type CreateChannelRequest struct {
 	// brand-new channel is not born with an empty banner - an empty banner slot
 	// is the first thing that makes a channel look abandoned.
 	CoverURL *string `json:"cover_url,omitempty"`
+
+	// ---- T&C Acceptance (MANDATORY) ----
+	//
+	// Creator MUST accept T&C before creating ANY channel (free or paid).
+	// This is the legal proof of agreement to ads/earning policy.
+	TCAccepted       bool   `json:"tc_accepted" binding:"required"`
+	TCAcceptedVersion string `json:"tc_accepted_version" binding:"required"`
 }
 
 // Validation errors for the fields a channel cannot exist without.
@@ -328,6 +343,12 @@ var (
 	ErrMadeForKidsRequired   = errCreator("made_for_kids is required - it is a legal classification, separate from the content rating")
 	ErrContactEmailInvalid   = errCreator("contact_email must be a valid email address")
 	ErrCountryInvalid        = errCreator("country must be a two-letter ISO code, e.g. IN")
+	// ErrChannelLimitExceeded - user has reached max channels allowed by their plan
+	ErrChannelLimitExceeded = errCreator("you have reached the maximum number of channels allowed by your plan. Upgrade your plan to create more channels.")
+	// ErrTCAcceptanceRequired - creator must accept the Terms & Conditions before creating any channel
+	ErrTCAcceptanceRequired = errCreator("terms and conditions acceptance is required - please accept the T&C to create a channel")
+	// ErrTCNotAccepted - creator did not accept the T&C checkbox
+	ErrTCNotAccepted = errCreator("you must accept the Terms & Conditions to create a channel")
 )
 
 // UpdateChannelRequest - channel edit ke liye.

@@ -89,6 +89,17 @@ const PUBLIC_PAGES = [
   // session, and a creator's CHANNELS are meant to be found.
   '/channels',
 
+  // The video page. It reads the PUBLIC media list (`/api/public/media`), which
+  // answers the same 404 for a private or unscreened clip as for a missing one -
+  // so a stranger browsing it sees exactly what a signed-in creator sees and
+  // nothing more.
+  //
+  // It used to sit behind the auth gate, which meant the platform's one catalogue
+  // page redirected to login for everyone who had not signed up yet: the page
+  // whose job is to be found could only be reached by people who had already
+  // found it.
+  '/videos',
+
   // The docs explain the product to people deciding whether to sign up, which is
   // the one moment they definitely are not signed in yet.
   '/pricing',

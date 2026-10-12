@@ -99,6 +99,20 @@ const (
 	PermAuditView   = "audit.view"
 	// The dangerous class, tracked separately so it can be reviewed on its own.
 	PermRoleAdmin = "role.admin"
+
+	// ---- Content moderation (migration 030) ----
+	//
+	// Separate from `audit.view` and from `media.delete`, and deliberately so:
+	//
+	// `audit.view` reads the RECORD of what happened. This is the DECISION about
+	// what happens next - it can release or refuse content a creator uploaded.
+	// A support engineer who may read logs is not necessarily someone who should
+	// be able to publish a video the AI refused.
+	//
+	// `media.delete` removes bytes. That is a different power, and a reviewer who
+	// can already approve should not silently gain the ability to destroy, nor
+	// should a cleaner gain the ability to approve.
+	PermModerationReview = "moderation.review"
 )
 
 // allPermissions is the closed vocabulary, with what each one MEANS.
@@ -130,6 +144,10 @@ var allPermissions = map[string]struct {
 	PermMetricsView: {"Read platform metrics", "platform", false},
 	PermAuditView:   {"Read the audit trail", "platform", false},
 	PermRoleAdmin:   {"Create and edit roles and their permissions", "platform", true},
+
+	// Content moderation. Not delegating: the power to publish refused content
+	// should not be something one reviewer can hand to another without an admin.
+	PermModerationReview: {"Review and approve held-back content", "moderation", false},
 }
 
 // PermissionNames lists the closed vocabulary, sorted for stable output.
@@ -180,6 +198,10 @@ var systemRoles = []struct {
 		Permissions: []string{
 			PermUserView, PermMetricsView, PermAuditView, PermServiceGrant,
 			PermRoleAppoint, PermChannelEdit, PermChannelDelete, PermMediaDelete,
+			// Content moderation is the job: resolving what the automated screener
+			// could not decide. Given to `ops` rather than `support` because
+			// `support` is read-only by design, and approving content is a write.
+			PermModerationReview,
 		},
 	},
 }
@@ -232,6 +254,44 @@ func (r *RBAC) Seed(ctx context.Context) error {
 				return err
 			}
 		}
+	}
+
+	// ---- VERIFY THE CATALOGUE IS ACTUALLY THERE ----
+	//
+	// This is the fix for a failure that was INVISIBLE AND TOTAL.
+	//
+	// `Seed` logged "permission catalogue seeded" and returned nil while the
+	// `permissions` and `role_permissions` tables were both EMPTY. Nothing failed
+	// - no error, no crash - and the consequence was that `Can()` answered `false`
+	// for every permission in the product. A creator holding the `creator` role
+	// with `channel.create` in it got "You do not have the 'channel.create'
+	// capability", because the JOIN that resolves the permission had nothing to
+	// join to.
+	//
+	// The symptom looked exactly like a permissions bug, and the diagnosis took a
+	// long time because every layer above the seed was correct: the role was
+	// appointed, the constant existed, the middleware was wired, the query was
+	// right. The only thing wrong was the one write nobody verified.
+	//
+	// A seed that cannot report its own success is not a seed. Counting the rows
+	// it was supposed to write turns "logged success, wrote nothing" into a fatal
+	// error at boot, which is the only place it CAN be fixed.
+	var permCount, rolePermCount int64
+	if err := r.db.WithContext(ctx).Model(&model.Permission{}).Count(&permCount).Error; err != nil {
+		return fmt.Errorf("could not verify the permission catalogue: %w", err)
+	}
+	if err := r.db.WithContext(ctx).Model(&model.RolePermission{}).Count(&rolePermCount).Error; err != nil {
+		return fmt.Errorf("could not verify the role permission grants: %w", err)
+	}
+	if permCount == 0 {
+		return fmt.Errorf("permission catalogue is EMPTY after seeding - every permission " +
+			"check would answer no. Refusing to start: an unavailable authorization " +
+			"layer must read as a failure, not as a closed door nobody can diagnose")
+	}
+	if rolePermCount == 0 {
+		return fmt.Errorf("no role carries any permission after seeding (%d permissions " +
+			"exist) - every role would be empty and every privileged action refused. " +
+			"Refusing to start", permCount)
 	}
 	return nil
 }

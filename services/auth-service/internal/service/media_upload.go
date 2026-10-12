@@ -39,25 +39,42 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/minio/minio-go/v7"
 )
 
-// Media upload limits. The `.env` values from SYSTEM-PLAN.md §10 feed the
-// accessors in `media_limits.go`; these are the fallbacks used when they are unset.
+// Media upload limits.
+//
+// THE SIZE LIMITS ARE GONE, AND THEY WERE NEVER REAL.
+//
+// `DefaultMaxMediaBytes` used to be 8 GB and `DefaultMaxReelBytes` 512 MB.
+// Neither was referenced anywhere - not by `validateMediaUpload`, not by the
+// handler, not by a single call site in the tree. They were a limit printed in
+// the upload UI ("up to 8 GB") and a pair of constants nobody read.
+//
+// That is not a belt-and-braces arrangement, it is a lie in the UI: a creator
+// was told their file had a ceiling while nothing was checking. So the numbers
+// are removed rather than kept as honest documentation, because a documented
+// ceiling that is not enforced is worse than no ceiling - it stops a creator
+// from trying something that would have worked.
+//
+// Uploading is now free and unlimited for every plan, which is the product
+// decision, and the check that MATTERS is the format allowlist below. That one is
+// real and is enforced at initiate; the actual bytes are re-checked by DECODING
+// at the `scanning` stage, because a declared content type is a claim and this
+// function only validates the claim.
+//
+// WHAT REPLACED THE SIZE CHECK
+//
+// Nothing. There is no byte ceiling to enforce. What each KIND still has is a
+// DURATION rule (a reel is short, long-form is not) and a format rule, and those
+// are the two things that are actually validated below.
 const (
-	// DefaultMaxMediaBytes - 8 GB. Matches `UPLOAD_MAX_BYTES`.
-	DefaultMaxMediaBytes int64 = 8 * 1024 * 1024 * 1024
-
-	// DefaultMaxReelBytes - 512 MB for reels. Reels are short and vertical, so
-	// this is already generous - and deliberately far below the long-form cap, so
-	// the short-clip path cannot be used to push 8 GB through a route that
-	// promises short vertical videos.
-	DefaultMaxReelBytes int64 = 512 * 1024 * 1024
-
 	// DefaultMaxReelSeconds - 90s.
 	//
 	// 90 is the ceiling Instagram, TikTok and YouTube Shorts all accept without a
@@ -153,9 +170,21 @@ func allowedMediaExtList() []string {
 //
 // Why presigned rather than chunked through us: an 8 GB body through a Go
 // handler holds a request open for minutes and blocks a worker for the whole
-// transfer. With a presigned URL the bytes never touch this process, so a dropped
-// connection is the browser's problem to retry against the same key rather than
-// ours to resume.
+// transfer. With a presigned URL the bytes never touch this process, so a
+// dropped connection is the browser's problem to retry against the same key
+// rather than ours to resume.
+//
+// ---- THE CREDENTIAL, AND WHY THIS IS NOT THE AVATAR ONE ----
+//
+// The URL is signed with the write-only `video`-scoped account, NOT the
+// avatars account. The avatars account is deliberately scoped to `avatars` and
+// `covers` (so a leak there cannot reach anyone's source media), which means a
+// URL it signs for `video/...` is rejected by MinIO with `AccessDenied`.
+//
+// That was the actual bug: every video upload failed, and no unit test caught
+// it because they all used a mocked MinIO client. A missing credential is
+// therefore REFUSED here with the variable named, rather than falling back to
+// an account that would produce a URL that cannot work.
 //
 // `ensureBucket=false`, like the cover ticket: the video bucket is created by
 // `minio-init`, and the scoped service account has no `s3:CreateBucket`. `true`
@@ -171,8 +200,15 @@ func (s *StorageService) CreateMediaUploadTicket(
 		return nil, err
 	}
 
-	if err := s.EnsureBucket(ctx); err != nil {
-		return nil, err
+	// Fail loudly and specifically. The failure mode of a silent fallback is
+	// worse than no upload at all: a URL that uploads fine locally and is
+	// denied in production, with nothing in the logs to say why.
+	if s.uploadPublicClient == nil || s.uploadClient == nil {
+		return nil, fmt.Errorf(
+			"media uploads are not configured: MINIO_UPLOAD_ACCESS_KEY / " +
+				"MINIO_UPLOAD_SECRET_KEY are missing. They belong to the write-only " +
+				"minio account scoped to the video bucket - see " +
+				"infrastructure/storage/policies/auth-video-uploads.json")
 	}
 
 	objectKey, err := buildObjectKey(userID, ext)
@@ -183,7 +219,7 @@ func (s *StorageService) CreateMediaUploadTicket(
 	bucket := s.cfg.GetVideoBucket()
 	ttl := time.Duration(s.cfg.GetPresignTTL()) * time.Minute
 
-	uploadURL, err := s.presignedPutURL(ctx, bucket, objectKey, ttl)
+	uploadURL, err := s.presignedVideoPut(ctx, bucket, objectKey, ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -196,4 +232,187 @@ func (s *StorageService) CreateMediaUploadTicket(
 		ExpiresInSeconds: int(ttl.Seconds()),
 		ContentType:      normalized,
 	}, nil
+}
+
+// presignedVideoPut signs a PUT for the `video` bucket with the media account,
+// against the browser-facing host.
+//
+// Kept as its own function because it is the single place the upload
+// credentials are used. If a second upload path is ever added, it comes here -
+// and if it does not, the compiler keeps this one honest.
+func (s *StorageService) presignedVideoPut(
+	ctx context.Context, bucket, objectKey string, ttl time.Duration,
+) (string, error) {
+	presigned, err := s.uploadPublicClient.PresignedPutObject(ctx, bucket, objectKey, ttl)
+	if err != nil {
+		return "", err
+	}
+	return presigned.String(), nil
+}
+
+// SignedObjectURL mints a short-lived presigned GET for one artefact of an
+// asset, so a browser can actually WATCH what was uploaded.
+//
+// ---- THE PREFIX IS THE ASSET ID, NOT THE SOURCE OBJECT KEY ----
+//
+// Two different prefixes exist in this bucket and they are not the same thing:
+//
+//	<userID>/<random>.mp4      the SOURCE object, uploaded by the browser
+//	<assetID>/1080p/...        the RENDITIONS and packaging, written by the
+//	                           transcoder
+//
+// Signing from the object key looked right and was wrong: it produced
+// `.../<random>.mp4/poster.jpg`, which is `NoSuchKey`, while the poster actually
+// lives at `<assetID>/poster.jpg`. Everything the transcoder writes - every
+// rendition, the poster, the filmstrip, the peaks - is keyed by the asset id,
+// which is also what makes it stable across a re-upload that reuses output.
+//
+// ---- WHY THIS EXISTS ----
+//
+// The `video` bucket is PRIVATE by design (SYSTEM-PLAN R6: video is paid and
+// tiered, so it is never an open URL). That is correct, and it is also why the
+// `hls_public_url` and `poster_public_url` fields are misleading: a plain
+// `http://minio/video/...` URL returns `AccessDenied` for everyone, so a
+// finished upload was unviewable.
+//
+// A signed URL is the answer. The signed request is presented to MinIO AS the
+// signing account, so this has to be the media account and not the avatars one -
+// which is why the policy carries `s3:GetObject`.
+//
+// ---- OWNERSHIP IS CHECKED BY THE CALLER, NOT HERE ----
+//
+// MinIO has no idea who owns an object; the media rows are in Postgres. The
+// handler verifies ownership before calling this. Without that check anyone with
+// an asset id could sign a URL to anyone else's video, and the private bucket
+// would buy nothing.
+//
+// `rel` is a path RELATIVE to the asset's prefix - `1080p/playlist.m3u8`,
+// `poster.jpg`. Not an absolute object key: a caller must not be able to name a
+// path outside its own asset.
+func (s *StorageService) SignedObjectURL(
+	ctx context.Context,
+	assetID uuid.UUID,
+	rel string,
+) (string, int, error) {
+	// ---- Validate the path FIRST ----
+	//
+	// Before the credential check, deliberately: a malformed path is the caller's
+	// fault and costs nothing to reject, whereas reaching the config check first
+	// would report a missing credential for a request that was invalid anyway.
+	// It also makes the traversal rules unit-testable without a MinIO client.
+	trimmed := strings.TrimSpace(rel)
+	if trimmed == "" {
+		return "", 0, fmt.Errorf("no object requested")
+	}
+	if filepath.IsAbs(trimmed) || strings.HasPrefix(trimmed, "/") {
+		return "", 0, fmt.Errorf("object path may not escape the asset prefix")
+	}
+	for _, seg := range strings.Split(trimmed, "/") {
+		if seg == ".." {
+			return "", 0, fmt.Errorf("object path may not escape the asset prefix")
+		}
+	}
+	clean := filepath.Clean(trimmed)
+	if clean == "." {
+		return "", 0, fmt.Errorf("no object requested")
+	}
+
+	if s.uploadPublicClient == nil {
+		return "", 0, fmt.Errorf(
+			"media playback is not configured: MINIO_UPLOAD_ACCESS_KEY / " +
+				"MINIO_UPLOAD_SECRET_KEY are missing")
+	}
+
+	// The asset id, which is the transcoder's key prefix for everything this
+	// asset produced. See the note above. `clean` is already traversal-free and
+	// has no leading slash, so this cannot become an absolute key.
+	full := assetID.String() + "/" + clean
+
+	bucket := s.cfg.GetVideoBucket()
+	ttl := time.Duration(s.cfg.GetPresignTTL()) * time.Minute
+
+	url, err := s.uploadPublicClient.PresignedGetObject(ctx, bucket, full, ttl, nil)
+	if err != nil {
+		return "", 0, err
+	}
+	return url.String(), int(ttl.Seconds()), nil
+}
+
+// DeleteAssetObjects removes every object an asset produced.
+//
+// An asset is not ONE object. It is two prefix families, and both have to go:
+//
+//	object_key          - the SOURCE, at `{userID}/{random}.ext`
+//	{assetID}/...       - the RENDITIONS: `1080p/`, `720p/`, `480p/`, `reel/`,
+//	                      `audio/`, plus `poster.jpg`, `filmstrip.jpg`,
+//	                      `peaks.json`
+//
+// The two prefixes are different (one is namespaced by user, the other by asset)
+// because the source is minted by the UPLOAD path and the renditions by the
+// TRANSCODER. Deleting only the source would leave every rendition orphaned in
+// the bucket, still billed, still nobody's - which is the whole reason this
+// takes both keys rather than deriving one from the other.
+//
+// PREFIX deletion is why the caller must pass keys it already owns and already
+// verified: the delete is unbounded except by what the caller asked for.
+// `DeleteMedia` passes values read back off the row it just deleted, so the
+// scope is exactly this asset.
+//
+// Best-effort by contract: the caller logs a failure and still reports success.
+// An unreferenced blob is a storage leak, while a row that survives a failed
+// byte-cleanup is a video the creator sees and cannot remove again.
+func (s *StorageService) DeleteAssetObjects(ctx context.Context, objectKey, assetID string) error {
+	if strings.TrimSpace(objectKey) == "" && strings.TrimSpace(assetID) == "" {
+		return fmt.Errorf("no object key to delete")
+	}
+	// Traversal guard. A prefix delete has no natural bound, so an escaping key
+	// must be refused rather than expanded into a wider delete.
+	for _, k := range []string{objectKey, assetID} {
+		if strings.Contains(k, "..") {
+			return fmt.Errorf("invalid object key")
+		}
+	}
+
+	bucket := s.cfg.GetVideoBucket()
+
+	// Both prefixes, deduplicated: a source and a rendition tree that happen to
+	// share a prefix would otherwise be listed and deleted twice.
+	prefixes := make([]string, 0, 2)
+	seen := make(map[string]bool, 2)
+	add := func(p string) {
+		p = strings.TrimSuffix(p, "/")
+		if p == "" || seen[p] {
+			return
+		}
+		seen[p] = true
+		prefixes = append(prefixes, p+"/")
+	}
+	add(objectKey)
+	add(assetID)
+
+	var failed []string
+	for _, prefix := range prefixes {
+		// ListCh, not ListObjects: the prefix can hold hundreds of segments from
+		// a long video, and buffering them all before deleting any of them means
+		// holding the whole list in memory for a job the caller has already
+		// declared non-blocking.
+		objects := s.client.ListObjects(ctx, bucket,
+			minio.ListObjectsOptions{Prefix: prefix, Recursive: true})
+
+		for obj := range objects {
+			if obj.Err != nil {
+				log.Printf("[STORAGE] list error under %s: %v", prefix, obj.Err)
+				failed = append(failed, prefix)
+				continue
+			}
+			if err := s.client.RemoveObject(ctx, bucket, obj.Key, minio.RemoveObjectOptions{}); err != nil {
+				log.Printf("[STORAGE] delete failed for %s/%s: %v", bucket, obj.Key, err)
+				failed = append(failed, prefix)
+			}
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("some objects under %v could not be deleted", failed)
+	}
+	return nil
 }

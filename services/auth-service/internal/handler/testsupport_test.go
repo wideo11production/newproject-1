@@ -74,13 +74,34 @@ func readHandlerSource(t *testing.T, name string) string {
 	return stripComments(string(b))
 }
 
-// readMain reads the sibling `main.go` in `cmd/auth-service`, with comments
-// stripped. Used by the wiring tests, which assert things about the route table.
+// readMainFile reads `main.go` from `cmd/auth-service`, with comments stripped.
+// Used by the wiring tests, which assert things about the route table.
+//
+// The path is `../../cmd/auth-service/main.go` and NOT `../../main.go`.
+//
+// The comment above this function said "the sibling `main.go` in
+// `cmd/auth-service`" from the day it was written, and the path never matched
+// that sentence: from `internal/handler/`, `../../main.go` resolves to
+// `services/auth-service/main.go`, which does not exist. So every wiring test
+// that called this failed at `t.Fatalf("cannot read main.go")` - a failure that
+// looks like a missing file rather than a broken assertion, and that was left
+// standing long enough to be reported as "two pre-existing failures".
+//
+// A reader would do well to note which direction this bug fails. These tests
+// assert the internal grant route is REGISTERED and GUARDED. A helper that cannot
+// read the file cannot assert anything, so the failure is loud and the route stays
+// correct. Had the path silently pointed at some OTHER main.go - a second
+// service's, say - the assertions would have run, failed, and looked like the
+// wiring was broken. Failing to read beats reading the wrong file.
+//
+// `stripComments` still applies: the assertions match call shapes, and prose
+// ABOUT a route is not a route.
 func readMainFile(t *testing.T) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("..", "..", "main.go"))
+	b, err := os.ReadFile(filepath.Join("..", "..", "cmd", "auth-service", "main.go"))
 	if err != nil {
-		t.Fatalf("cannot read main.go: %v", err)
+		t.Fatalf("cannot read cmd/auth-service/main.go: %v\n"+
+			"  Expected it at internal/handler/../../cmd/auth-service/main.go", err)
 	}
 	return stripComments(string(b))
 }

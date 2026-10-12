@@ -97,6 +97,18 @@ func (s *AuthService) CreateChannel(
 	displayName := strings.TrimSpace(req.DisplayName)
 	description := strings.TrimSpace(req.Description)
 
+	// ---- T&C Acceptance: MANDATORY for ALL channels (free or paid) ----
+	//
+	// This is a legal gate, not a UX nicety. The creator must explicitly accept
+	// the Terms & Conditions before any channel can exist. Without this, a
+	// creator could later claim they never agreed to the ads/earning policy.
+	if !req.TCAccepted {
+		return nil, model.ErrTCNotAccepted
+	}
+	if strings.TrimSpace(req.TCAcceptedVersion) == "" {
+		return nil, model.ErrTCAcceptanceRequired
+	}
+
 	// ---- Validate handle ----
 	if !handlePattern.MatchString(handle) {
 		return nil, model.ErrHandleInvalid
@@ -168,6 +180,27 @@ func (s *AuthService) CreateChannel(
 		Where("handle = ?", handle).
 		Count(&retired).Error; err == nil && retired > 0 {
 		return nil, model.ErrHandleRetired
+	}
+
+	// ---- Channel limit check ----
+	//
+	// Check if user has reached their plan's max_channels limit.
+	// This includes ALL channels (trial + paid). The limit comes from
+	// the user's entitlements (max_channels capability).
+	if s.entitlements != nil {
+		limit, granted, err := s.entitlements.Limit(ctx, userID, config.CapMaxChannels)
+		if err == nil && granted && limit >= 0 { // limit >= 0 means not unlimited
+			var currentCount int64
+			if err := s.db.WithContext(ctx).
+				Model(&model.Channel{}).
+				Where("user_id = ?", userID).
+				Count(&currentCount).Error; err == nil {
+				if currentCount >= limit {
+					return nil, model.ErrChannelLimitExceeded
+				}
+			}
+		}
+		// If entitlements not available or error, allow creation (fail open for safety)
 	}
 
 	// ---- Channel type: REQUIRED ----
@@ -271,20 +304,23 @@ func (s *AuthService) CreateChannel(
 		IsPublic:    isPublic,
 		IsActive:    true,
 
-		ChannelType:     &channelType,
-		MatureContent:   &mature,
-		MadeForKids:     &madeForKids,
-		ContactEmail:    contactEmail,
-		Country:         country,
-		PrimaryLanguage: language,
-		Keywords:        keywords,
+		ChannelType:         &channelType,
+		MatureContent:       &mature,
+		MadeForKids:         &madeForKids,
+		ContactEmail:        contactEmail,
+		Country:             country,
+		PrimaryLanguage:     language,
+		Keywords:            keywords,
 		// The COLUMN is a plain string, and every existing channel already stores
 		// "" there when it has no cover. A missing cover therefore stays "" rather
 		// than NULL, which is the shape the rest of the code and the update route
 		// already assume. The distinction that mattered - "no cover supplied" vs
 		// "cover supplied as empty" - is made earlier, on the REQUEST pointer,
 		// not here.
-		CoverURL: derefOrEmpty(coverURL),
+		CoverURL:           derefOrEmpty(coverURL),
+		TCAccepted:         req.TCAccepted,
+		TCAcceptedAt:       func() *time.Time { t := time.Now(); return &t }(),
+		TCAcceptedVersion:  req.TCAcceptedVersion,
 	}
 
 	if err := s.db.WithContext(ctx).Create(channel).Error; err != nil {

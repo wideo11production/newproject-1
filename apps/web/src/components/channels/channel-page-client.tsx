@@ -2,320 +2,400 @@
 
 // A channel's page: its banner, identity, and its published videos and reels.
 //
-// A Client Component because it has tabs and fetches per tab. The route file
-// stays a server component, so the shell renders on the server.
+// A Client Component because it has tabs and fetches per tab.
+//
+// =============================================================================
+// LAYOUT
+// =============================================================================
+//
+//   UPPER   - cover banner, avatar, subscriber counts, actions. Full width.
+//   TABS    - Videos / Shorts / Reels / Audio / Live / Playlists.
+//   LOWER   - split workspace. Nothing playing: the gallery spans 100%.
+//             Something playing: 50/50, gallery left / player right.
+//
+// The split is below the header on purpose: the banner and the channel identity
+// are what the viewer came for.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertCircle, Play } from 'lucide-react';
-import { channelTypeLabel } from '@/lib/channel-types';
-import { brandHsl } from '@/lib/channel-brand';
+import { AlertCircle, Bell, MoreHorizontal, Share2, UserPlus, Users, Loader2 } from 'lucide-react';
+import {
+  StudioSidebar,
+  matchesCategory,
+  type MediaCategory,
+} from '@/components/studio/StudioSidebar';
+import {
+  ChannelHeaderCard,
+  formatSubscribers,
+  formatJoined,
+} from '@/components/studio/ChannelHeaderCard';
+import { StudioMediaCard } from '@/components/studio/StudioMediaCard';
+import { MediaLibraryPane } from '@/components/studio/MediaLibraryPane';
+import { ActivePlayerPane } from '@/components/studio/ActivePlayerPane';
+import {
+  InlinePlayerProvider,
+  useInlinePlayer,
+  type InlinePlayerAsset,
+} from '@/components/InlinePlayerProvider';
+import { hlsStreamUrl, posterStreamUrl, previewStreamUrl, relativeObjectPath } from '@/lib/playback';
+
+
+
+type Media = {
+  id: string;
+  kind: 'video' | 'reel' | 'audio';
+  filename: string;
+  duration_seconds: number;
+  width: number;
+  height: number;
+  poster_url?: string | null;
+  // The stored rendition URL. It points at the private `video` bucket, so it is a
+  // PATH rather than something playable - `lib/playback` turns it into the proxy
+  // URL that is.
+  hls_url?: string | null;
+  created_at?: string;
+};
 
 type Channel = {
   id: string;
   handle: string;
   display_name: string;
   description: string;
-  image_url: string;
-  cover_url: string;
-  channel_type?: string | null;
-
-  // ---- Step 2 branding (migration 022) ----
-  //
-  // PUBLIC by design, and returned by `PublicChannelResponse` deliberately: a
-  // tagline, a logo and a colour are the creator's own content, and they are the
-  // entire point of a channel page.
-  //
-  // `brand_hue` is a NUMBER and not a colour string, so this component cannot
-  // build arbitrary CSS from it - it indexes a palette. See `channel-brand.ts`.
-  logo_url?: string;
-  tagline?: string;
+  image_url: string | null;
+  cover_url: string | null;
+  subscriber_count: number;
+  channel_type: string | null;
+  // Step 2 branding (migration 022). Public by design: a logo and a colour are
+  // the creator's own content, and they are the entire point of a channel page.
+  logo_url?: string | null;
   brand_hue?: number | null;
+  // When the channel was created, for the header's "Joined" cell. Absent on rows
+  // that predate the field, and the header says "Unknown" rather than guessing.
+  created_at?: string;
 };
 
-type Media = {
-  id: string;
-  kind: 'video' | 'reel';
-  filename: string;
-  duration_seconds: number;
-  width: number;
-  height: number;
-  poster_url?: string | null;
-};
-
-// `CATEGORY_LABELS` used to live here, as a FOURTH copy of the closed set.
+// ---------------------------------------------------------------------------
+// RESOLVING A ROW INTO SOMETHING A BROWSER CAN PLAY
+// ---------------------------------------------------------------------------
 //
-// It is replaced by `channelTypeLabel` from `@/lib/channel-types`, and the reason
-// is concrete rather than tidy: this copy contained
+// The stored URLs are bucket paths and every one of them 403s. Each field is
+// resolved independently, because they resolve independently: a poster may exist
+// for an asset whose playlist has not been written yet.
 //
-//     other: 'Other'
-//
-// which is NOT in `model.ValidChannelType`, not in migration 018's CHECK
-// constraint, and not in the wizard's picker. So it was a label for a category
-// that cannot exist, invented by a file that never checked.
-//
-// That is exactly the failure that happens when a closed set is copied N times:
-// each copy is individually reasonable, and the set quietly diverges. The list now
-// has one file, and `tools/check-channel-lists.mjs` compares it against the
-// Go map and the SQL constraint.
-
-/** 95 -> "1:35", 3725 -> "1:02:05" */
-function duration(s: number): string {
-  if (!s || s < 0) return '0:00';
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const sec = Math.floor(s % 60);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+// Built as one function so a card, the preview and the player all agree on what
+// URL they are using - three separate resolutions is how a thumbnail ends up
+// previewing a different video than the one that plays.
+function resolveMediaUrls(m: Media) {
+  const hlsRel = relativeObjectPath(m.hls_url, m.id);
+  return {
+    poster: posterStreamUrl(m.poster_url, m.id),
+    preview: previewStreamUrl(m.hls_url, m.id),
+    play: hlsStreamUrl(m.hls_url, m.id),
+    // `null` when the row carries no rendition path at all, which is the honest
+    // "not playable" signal rather than a guess at a height.
+    hasHls: hlsRel !== null,
+  };
 }
 
-type Tab = { key: '' | 'video' | 'reel'; label: string };
+/** Build the playlist asset the player drawer consumes. */
+function toPlayerAsset(m: Media, handle: string): InlinePlayerAsset {
+  const urls = resolveMediaUrls(m);
+  return {
+    id: m.id,
+    filename: m.filename,
+    kind: m.kind,
+    duration_seconds: m.duration_seconds,
+    width: m.width,
+    height: m.height,
+    hls_url: urls.play,
+    poster_url: urls.poster,
+    subtitle: `@${handle}`,
+    watch_href: `/watch/${m.id}`,
+  };
+}
 
 export default function ChannelPageClient({ handle }: { handle: string }) {
+  const [tab, setTab] = useState<'video' | 'reel' | 'audio'>('video');
+  const [category, setCategory] = useState<MediaCategory>('all');
   const [channel, setChannel] = useState<Channel | null>(null);
-  // TWO errors, not one, and the split matters.
-  //
-  // The first version shared a single `loadError` and let the MEDIA fetch write
-  // to it. So a failure to list videos replaced the whole page with an error box
-  // and the channel's name, banner and description all disappeared - because a
-  // list request 404'd. The channel is the page; the media is a panel on it, and
-  // a broken panel must not take the page with it.
-  const [channelError, setChannelError] = useState<string | null>(null);
-  const [mediaError, setMediaError] = useState<string | null>(null);
-  const [media, setMedia] = useState<Media[] | null>(null);
-  const [tab, setTab] = useState<'' | 'video' | 'reel'>('');
+  const [media, setMedia] = useState<Media[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [is_subscribed, setIsSubscribed] = useState(false);
 
-  // ---- the channel itself ----
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`/api/public/channels/${encodeURIComponent(handle)}`, {
-          cache: 'no-store',
-        });
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          // The same message for "no such channel" and "private channel",
-          // because the service already answers both with one status, and
-          // distinguishing them here would undo that.
-          setChannelError(data?.message ?? 'Channel not found.');
-          return;
-        }
-        setChannel(data.channel ?? null);
-      } catch {
-        if (!cancelled) setChannelError('Network error. Could not load this channel.');
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [handle]);
 
-  // ---- the media, refetched per tab ----
   useEffect(() => {
-    let cancelled = false;
-    setMedia(null);
-    setMediaError(null);
+    let alive = true;
+
     (async () => {
+      setLoading(true);
+      setError(null);
+
       try {
-        const kind = tab ? `?kind=${tab}` : '';
-        const res = await fetch(
-          `/api/public/channels/${encodeURIComponent(handle)}/media${kind}`,
+        const chanRes = await fetch(
+          `/api/public/channels/${encodeURIComponent(handle)}`,
           { cache: 'no-store' }
         );
-        const data = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          setMediaError(data?.message ?? 'Could not load this channel\'s videos.');
+
+        if (!chanRes.ok || !alive) {
+          if (alive) setError('That channel could not be found.');
+          setLoading(false);
           return;
         }
-        setMedia(Array.isArray(data.media) ? data.media : []);
+
+        const chan = (await chanRes.json()) as { channel?: Channel } | Channel;
+        const ch =
+          (chan as { channel?: Channel }).channel ?? (chan as Channel | null);
+        if (alive) setChannel(ch ?? null);
+
+        // Only the tabs the service can answer ask for media. Asking for the
+        // other ones anyway would 400, and a 400 is not an "empty tab", it is a
+        // bug.
+        if (tab === 'video' || tab === 'reel' || tab === 'audio') {
+          const mediaRes = await fetch(
+            `/api/public/channels/${encodeURIComponent(handle)}/media?kind=${tab}&limit=48`,
+            { cache: 'no-store' }
+          );
+          if (mediaRes.ok && alive) {
+            const body = (await mediaRes.json()) as { media?: Media[] };
+            setMedia(body.media ?? []);
+          } else if (alive) {
+            setMedia([]);
+          }
+        } else {
+          if (alive) setMedia([]);
+        }
       } catch {
-        if (!cancelled) setMediaError('Network error.');
+        if (alive) setError('Could not reach the channel service.');
+      } finally {
+        if (alive) setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      alive = false;
+    };
   }, [handle, tab]);
 
-  if (channelError) {
+  if (error) {
     return (
-      <div className="flex items-start gap-2 rounded-md border-800/60 bg-red-950/30 p-4 text-sm text-red-300">
-        <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-        <span>{channelError}</span>
-        <Link href="/channels" className="ml-2 underline underline-offset-2">
-          Browse all channels
-        </Link>
+      <div className="min-h-screen bg-[#0d0f11] p-6">
+        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-[#16181d] p-6 text-center">
+          <AlertCircle className="mx-auto mb-3 h-7 w-7 text-red-400" aria-hidden="true" />
+          <p className="text-sm font-medium text-white">{error}</p>
+          <Link
+            href="/channels"
+            className="mt-4 inline-block rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#e05500]"
+          >
+            Browse channels
+          </Link>
+        </div>
       </div>
     );
   }
 
-  if (!channel) {
+
+  // Only clips with a playlist can be played, and only they are worth showing in
+  // the library - a card that cannot play is a card that lies.
+  const playable = useMemo(() => media.filter((m) => resolveMediaUrls(m).hasHls), [media]);
+
+  const categoryCounts = useMemo(() => {
+    const out: Partial<Record<MediaCategory, number>> = { all: playable.length };
+    for (const c of ['video', 'reel-long', 'reel-short', 'horizontal', 'vertical', 'audio'] as MediaCategory[]) {
+      out[c] = playable.filter((m) => matchesCategory(m, c)).length;
+    }
+    return out;
+  }, [playable]);
+
+  const shown = useMemo(
+    () => playable.filter((m) => matchesCategory(m, category)),
+    [playable, category]
+  );
+
+
+  if (error) {
     return (
-      <div className="space-y-4">
-        <div className="h-40 w-full animate-pulse rounded-md bg-gray-900/60" />
-        <div className="h-6 w-48 animate-pulse rounded-md bg-gray-900/60" />
+      <div className="min-h-screen bg-[#0d0f11] p-6">
+        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-[#16181d] p-6 text-center">
+          <AlertCircle className="mx-auto mb-3 h-7 w-7 text-red-400" aria-hidden="true" />
+          <p className="text-sm font-medium text-white">{error}</p>
+          <Link
+            href="/channels"
+            className="mt-4 inline-block rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#e05500]"
+          >
+            Browse channels
+          </Link>
+        </div>
       </div>
     );
   }
-
-  const tabs: Tab[] = [
-    { key: '', label: 'Home' },
-    { key: 'video', label: 'Videos' },
-    { key: 'reel', label: 'Shorts' },
-  ];
-
-  // The resolved colour, once, so every use on this page agrees.
-  const brand = brandHsl(channel.brand_hue);
-  // Logo first, legacy avatar second. `image_url` predates step 2 and is still
-  // what most channels have, so falling back to it means adding a logo is an
-  // upgrade rather than a requirement.
-  const avatar = channel.logo_url || channel.image_url;
 
   return (
-    <div>
-      {/* ---- banner ----
-          The brand colour is painted UNDERNEATH the cover, so a channel with a
-          dark or empty banner still reads as having an identity rather than as a
-          grey gap. That is the reason the colour is here and not only on the
-          avatar ring. */}
-      <div
-        className="h-32 w-full overflow-hidden rounded-md sm:h-40"
-        style={{ backgroundColor: `hsl(${brand})` }}
-      >
-        {channel.cover_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={channel.cover_url}
-            alt=""
-            data-track="channel-cover"
-            className="h-full w-full object-cover"
+    <div className="flex min-h-screen bg-[#0d0f11] text-white">
+      {/* ============ SIDEBAR: media categories ============ */}
+      <StudioSidebar active={category} onSelect={setCategory} counts={categoryCounts} />
+
+      <div className="min-w-0 flex-1">
+        <main className="space-y-4 p-4 sm:p-5">
+          {/* ============ UPPER: channel header card ============ */}
+          <ChannelHeaderCard
+            displayName={channel?.display_name ?? handle}
+            handle={handle}
+            creator={channel?.display_name}
+            subscribers={formatSubscribers(channel?.subscriber_count ?? 0)}
+            joined={formatJoined(channel?.created_at)}
+            coverUrl={channel?.cover_url}
+            avatarUrl={channel?.logo_url || channel?.image_url}
+            brandHue={channel?.brand_hue}
+            channelType={channel?.channel_type}
+            actions={
+              <>
+                <button
+                  onClick={() => setIsSubscribed((v) => !v)}
+                  aria-pressed={is_subscribed}
+                  className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                    is_subscribed
+                      ? 'bg-[#0d0f11] text-[#8b949e] hover:bg-[#1f2227] hover:text-white'
+                      : 'bg-[#ff6500] text-white hover:bg-[#e05500]'
+                  }`}
+                >
+                  {is_subscribed ? (
+                    <>
+                      <Users className="h-3.5 w-3.5" aria-hidden="true" />
+                      Subscribed
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                      Subscribe
+                    </>
+                  )}
+                </button>
+                <button
+                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  aria-label="Notifications"
+                  title="Notifications"
+                >
+                  <Bell className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  aria-label="Share channel"
+                  title="Share"
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  aria-label="More"
+                  title="More"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </button>
+              </>
+            }
           />
-        ) : null}
-      </div>
 
-      <div className="mt-4 flex items-start gap-4">
-        {avatar ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatar}
-            alt=""
-            data-track="channel-avatar"
-            className="h-16 w-16 shrink-0 rounded-full object-cover"
-            style={{ borderColor: `hsl(${brand})` }}
-          />
-        ) : (
-          <div
-            className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xl font-semibold text-white"
-            style={{ backgroundColor: `hsl(${brand})`, borderColor: `hsl(${brand})` }}
-          >
-            {channel.display_name.charAt(0).toUpperCase()}
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold text-ink">
-            {channel.display_name}
-          </h1>
-          {/* Tagline OR handle, never both stacked.
-
-              A tagline is a tagline: one line that says what the channel is. Putting
-              "@handle" underneath it as well makes the tagline a subtitle of a
-              subtitle, and the tagline is the part a visitor came for. */}
-          <p className="text-sm text-gray-400">
-            {channel.tagline ? channel.tagline : `@${channel.handle}`}
-          </p>
-          {channel.channel_type ? (
-            <span className="mt-1 inline-block rounded border-700 px-1.5 py-0.5 text-[10px] text-gray-400">
-              {channelTypeLabel(channel.channel_type) ?? channel.channel_type}
-            </span>
-          ) : null}
-          {channel.description ? (
-            <p className="mt-2 max-w-2xl text-sm text-gray-400">
+          {channel?.description ? (
+            <p className="max-w-3xl whitespace-pre-wrap px-1 text-xs leading-relaxed text-[#8b949e]">
               {channel.description}
             </p>
           ) : null}
-        </div>
-      </div>
 
-      {/* ---- tabs ---- */}
-      <div role="tablist" aria-label="Channel content" className="mt-6 flex gap-1-800">
-        {tabs.map((t) => {
-          const active = tab === t.key;
-          return (
-            <button
-              key={t.key || 'home'}
-              role="tab"
-              type="button"
-              aria-selected={active}
-              onClick={() => setTab(t.key)}
-              className={`border-b-2 px-4 py-2 text-sm transition-colors ${
-                active
-                  ? 'border-blue-500 text-ink'
-                  : 'border-transparent text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ---- the grid ---- */}
-      <div className="mt-5">
-        {mediaError ? (
-          // Shown HERE, inside the panel, so the channel's own identity stays on
-          // screen. A list that failed to load is not a broken page.
-          <div className="flex items-start gap-2 rounded-md border-800/60 bg-amber-950/20 p-4 text-sm text-amber-200">
-            <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
-            <span>{mediaError}</span>
-          </div>
-        ) : media === null ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="h-40 animate-pulse rounded-md bg-gray-900/60" />
-            ))}
-          </div>
-        ) : media.length === 0 ? (
-          <div className="rounded-md-dashed-800 p-10 text-center">
-            <Play className="mx-auto h-6 w-6 text-gray-500" aria-hidden="true" />
-            <p className="mt-3 text-sm text-ink">
-              {tab === 'reel' ? 'No shorts yet' : tab === 'video' ? 'No videos yet' : 'Nothing published yet'}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              Uploads appear here once they finish processing.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {media.map((m) => (
-              <div key={m.id} className="group">
-                <div className="relative overflow-hidden rounded-md bg-gray-900/60">
-                  {m.poster_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={m.poster_url}
-                      alt=""
-                      className="aspect-video w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex aspect-video w-full items-center justify-center">
-                      <Play className="h-6 w-6 text-gray-600" aria-hidden="true" />
-                    </div>
-                  )}
-                  {m.duration_seconds > 0 ? (
-                    <span className="absolute bottom-1 right-1 rounded bg-black/80 px-1 text-[10px] text-white">
-                      {duration(m.duration_seconds)}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-1.5 line-clamp-2 text-xs text-gray-300">{m.filename}</p>
-                <p className="text-[10px] uppercase tracking-wide text-gray-500">
-                  {m.kind === 'reel' ? 'Short' : 'Video'}
-                </p>
-              </div>
-            ))}
-          </div>
-        )}
+          {/* ============ LOWER: the split workspace ============ */}
+          {/* The provider wraps ChannelSplit rather than living inside it: a hook
+              is called during its own component's render, so the provider has to
+              be an ANCESTOR of the caller, not something the caller returns. */}
+          <InlinePlayerProvider playlist={shown.map((m) => toPlayerAsset(m, handle))}>
+            <ChannelSplit
+              shown={shown}
+              loading={loading}
+              handle={handle}
+              meta={{
+                creator: channel?.display_name,
+                channel: handle,
+                creatorAvatar: channel?.logo_url || channel?.image_url,
+              }}
+            />
+          </InlinePlayerProvider>
+        </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * The channel's split workspace.
+ *
+ * A separate component because it READS the player context, and a component that
+ * reads it has to live INSIDE the provider. Calling the hook at the top of
+ * `ChannelPageClient` would put it outside one, which throws during the build's
+ * static generation - and throws at runtime in any deployment where the route
+ * does not happen to wrap it first.
+ *
+ * That is the right split on its own terms too: the header and the actions above
+ * do not care what is playing, and only this part does.
+ */
+function ChannelSplit({
+  shown,
+  loading,
+  handle,
+  meta,
+}: {
+  shown: Media[];
+  loading: boolean;
+  handle: string;
+  meta: { creator?: string; channel?: string; creatorAvatar?: string | null };
+}) {
+  const { current, close, navigate, index, total } = useInlinePlayer();
+
+
+  return (
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-5">
+        {/* Media Library - 2 of 5 */}
+        <div className="min-w-0 xl:col-span-2">
+          <MediaLibraryPane
+            count={shown.length}
+            loading={loading}
+            searchPlaceholder="Search media"
+            emptyMessage="No media in this category yet."
+          >
+            {shown.map((m) => {
+              const urls = resolveMediaUrls(m);
+              return (
+                <StudioMediaCard
+                  key={m.id}
+                  id={m.id}
+                  kind={m.kind}
+                  filename={m.filename}
+                  durationSeconds={m.duration_seconds}
+                  width={m.width}
+                  height={m.height}
+                  posterUrl={urls.poster}
+                  previewUrl={urls.preview}
+                  playUrl={urls.play}
+                  watchHref={`/watch/${m.id}`}
+                  sortKey={m.created_at ?? ''}
+                  matchKey={m.filename}
+                />
+              );
+            })}
+          </MediaLibraryPane>
+        </div>
+
+        {/* Active Player - 3 of 5 */}
+        {current ? (
+          <div className="min-w-0 xl:col-span-3 xl:sticky xl:top-5 xl:self-start">
+            <ActivePlayerPane
+              asset={current}
+              meta={meta}
+              onClose={close}
+              onNavigate={navigate}
+              hasPrev={index > 0}
+              hasNext={index >= 0 && index < total - 1}
+            />
+          </div>
+        ) : null}
+      </div>
   );
 }

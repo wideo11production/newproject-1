@@ -65,6 +65,16 @@ type AuthHandler struct {
 	// subscriber number. Nil is tolerated - reads fall back to the database.
 	media *service.MediaService
 
+	// comments owns the comment thread under an asset. Its own service rather than
+	// a method chain off `media`, because a comment is about a viewer's interaction
+	// and not about the asset's pipeline - and folding the two would put an
+	// authorisation check and a transcode state machine in the same file.
+	//
+	// Nil is tolerated: the comment routes answer 503 rather than panicking, so a
+	// deployment without a comment store fails loudly on the ONE thing that needs it
+	// instead of on every media request.
+	comments *service.CommentService
+
 	// transcode hands a stored asset to the transcoding service. May be nil, in
 	// which case an upload is recorded and the transcode is not queued - never a
 	// failed request.
@@ -102,6 +112,21 @@ func (h *AuthHandler) SetSubscriptionService(svc *service.ChannelSubscriptionSer
 // SetMediaService wires the media pipeline (migration 015's media_assets).
 func (h *AuthHandler) SetMediaService(m *service.MediaService) {
 	h.media = m
+}
+
+// SetCommentService wires the comment thread under an asset.
+func (h *AuthHandler) SetCommentService(c *service.CommentService) {
+	h.comments = c
+}
+
+// MediaService returns the wired media pipeline, or nil if none was set.
+//
+// Exists so the bootstrap can attach the object store to the media service after
+// storage is built, without reaching into the handler's fields. Returning nil
+// rather than panicking: a deployment with no media configured is legitimate, and
+// the caller checks.
+func (h *AuthHandler) MediaService() *service.MediaService {
+	return h.media
 }
 
 // SetEntitlementService wires the plan ledger.

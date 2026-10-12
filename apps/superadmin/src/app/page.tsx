@@ -14,11 +14,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Activity,
+  AlertCircle,
+  BarChart3,
   MousePointerClick,
   ShieldAlert,
   Users,
   Trash2,
   RefreshCw,
+  Eye,
   Loader2,
   CheckCircle2,
   Lock,
@@ -61,6 +64,7 @@ const PANEL_SECTIONS = [
   { id: 'activity', label: 'User Activity' },
   { id: 'ledger', label: 'User Ledger' },
   { id: 'earnings', label: 'Ad Earnings' },
+  { id: 'admin-analytics', label: 'Admin Analytics' },
 ] as const;
 
 /** Where the dragged panel order is stored. One key, one browser, one operator. */
@@ -873,6 +877,24 @@ export default function SuperadminDashboard() {
             Security, click ledger and user intelligence
           </span>
 
+          {/* ---- Content review link ----
+              The moderation queue lives on its own route, and this is how an
+              operator reaches it. A dashboard where a capability exists but has no
+              navigation to it is the same failure as an endpoint with no route:
+              the feature is complete and unreachable.
+              
+              Placed in the top bar rather than a panel, because it is a
+              destination and not a panel - the panels on this page are one
+              dashboard's widgets, and this is a separate workflow with its own
+              page, its own queue and its own permission. */}
+          <a
+            href="/moderation"
+            className="ml-1 flex items-center gap-1.5 rounded-md border-800 bg-gray-900/60 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
+          >
+            <Eye className="h-2.5 w-2.5" />
+            <span className="hidden sm:inline">Content review</span>
+          </a>
+
           <div className="ml-auto flex items-center gap-2">
             {lastRefresh ? (
               <span className="hidden text-xs text-gray-600 md:inline">
@@ -1627,6 +1649,20 @@ export default function SuperadminDashboard() {
               </table>
             </div>
           )}
+        )}
+          )}
+        </Panel>
+
+        {/* ---- Admin Analytics ----
+            Dynamic system metrics: Prometheus metrics, resource usage, API latency,
+            error rates, and system health. Refreshes every 10s. */}
+        <Panel
+          id="admin-analytics"
+          title="Admin Analytics"
+          subtitle="System metrics, resource usage & API health"
+          icon={<BarChart3 className="h-2.5 w-2.5" />}
+        >
+          <AdminAnalyticsPanel />
         </Panel>
 
         </PanelGrid>
@@ -1745,33 +1781,321 @@ function AttributionBadge({ value }: { value: string }) {
         className="rounded-full bg-red-900/60 px-2 py-0.5 text-[10px] font-semibold text-red-300"
         title="A session cookie was presented and its signature FAILED. A browser cannot produce this - the cookie is httpOnly. Treat as a hand-built request."
       >
-        FORGED
-      </span>
-    );
-  }
-  return (
-    <span
-      className="rounded-full bg-gray-800 px-2 py-0.5 text-[10px] text-gray-400"
-      title="No session cookie on this request. Normal for a signed-out visitor, and not evidence of anything by itself."
-    >
-      anon
-    </span>
-  );
+        }
 }
 
-function eventIcon(type: string) {
-  switch (type) {
-    case 'LOCKOUT_TRIGGERED':
-      return <Lock className="h-2.5 w-2.5" />;
-    case 'PIN_FAILED':
-      return <Fingerprint className="h-2.5 w-2.5" />;
-    case 'DEVICE_LIMIT_EXCEEDED':
-      return <Users className="h-2.5 w-2.5" />;
-    case 'CONFIG_TAMPER':
-      return <ShieldAlert className="h-2.5 w-2.5" />;
-    case 'LOGIN_FAILED':
-      return <LogIn className="h-2.5 w-2.5" />;
-    default:
-      return <Clock className="h-2.5 w-2.5" />;
+/**
+ * ADMIN ANALYTICS PANEL - Dynamic system metrics from Prometheus.
+ *
+ * Shows real-time system metrics: CPU, memory, disk, API latency, error rates,
+ * and request throughput. Refreshes every 10 seconds.
+ */
+function AdminAnalyticsPanel() {
+  const [metrics, setMetrics] = useState<{
+    cpu: { usage: number; cores: number } | null;
+    memory: { used: number; total: number; usage: number } | null;
+    disk: { used: number; total: number; usage: number } | null;
+    api: { latency_p50: number; latency_p95: number; latency_p99: number; error_rate: number; rps: number } | null;
+    loading: boolean;
+    error: string | null;
+    lastUpdate: number | null;
+  }>({
+    cpu: null,
+    memory: null,
+    disk: null,
+    api: null,
+    loading: true,
+    error: null,
+    lastUpdate: null,
+  });
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      // Fetch from the admin metrics relay (Prometheus)
+      const [
+        cpuRes,
+        memRes,
+        diskRes,
+        apiRes,
+      ] = await Promise.all([
+        fetch('/api/admin/metrics?query=avg(rate(cpu_usage_seconds_total[1m]))', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=(1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})) * 100', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total[5m])', { cache: 'no-store' }),
+      ]);
+
+      const [cpuData, memData, diskData, apiData] = await Promise.all([
+        cpuRes.ok ? cpuRes.json() : null,
+        memRes.ok ? memRes.json() : null,
+        diskRes.ok ? diskRes.json() : null,
+        apiRes.ok ? apiRes.json() : null,
+      ]);
+
+      // Parse Prometheus response format: { data: { result: [{ value: [timestamp, value] }] } }
+      const parseValue = (data: any) => {
+        try {
+          return data?.data?.result?.[0]?.value?.[1] ?? null;
+        } catch {
+          return null;
+        }
+      };
+
+      // Fetch additional API metrics
+      const [apiLatencyRes, apiErrorRes, apiRpsRes] = await Promise.all([
+        fetch('/api/admin/metrics?query=histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total[1m])', { cache: 'no-store' }),
+      ]);
+
+      const [latencyData, errorData, rpsData] = await Promise.all([
+        apiLatencyRes.ok ? apiLatencyRes.json() : null,
+        apiErrorRes.ok ? apiErrorRes.json() : null,
+        apiRpsRes.ok ? apiRpsRes.json() : null,
+      ]);
+
+      setMetrics({
+        cpu: cpuData ? { usage: parseFloat(parseValue(cpuData)) || 0, cores: 0 } : null,
+        memory: memData ? { usage: parseFloat(parseValue(memData)) || 0, used: 0, total: 0 } : null,
+        disk: diskData ? { usage: parseFloat(parseValue(diskData)) || 0, used: 0, total: 0 } : null,
+        api: {
+          latency_p50: 0,
+          latency_p95: parseFloat(parseValue(latencyData)) || 0,
+          latency_p99: 0,
+          error_rate: parseFloat(parseValue(errorData)) || 0,
+          rps: parseFloat(parseValue(rpsData)) || 0,
+        },
+        loading: false,
+        error: null,
+        lastUpdate: Date.now(),
+      });
+    } catch (err) {
+      console.error('Admin analytics fetch error:', err);
+      setMetrics(prev => ({ ...prev, loading: false, error: 'Failed to fetch metrics' }));
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
+
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  const MetricCard = ({ label, value, unit = '', color = 'text-blue-400', trend }: { label: string; value: string | number; unit?: string; color?: string; trend?: number }) => (
+    <div className="rounded-md border-800 bg-gray-900/60 p-4">
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <div className="flex items-end gap-1">
+        <span className={`font-mono text-2xl font-bold ${color}`}>{value}</span>
+        {unit && <span className="text-xs text-gray-500 mb-1">{unit}</span>}
+        {trend !== undefined && (
+          <span className={`text-xs font-semibold ${trend >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}%
+          )}
+        /**
+ * ADMIN ANALYTICS PANEL - Dynamic system metrics from Prometheus.
+ *
+ * Shows real-time system metrics: CPU, memory, disk, API latency, error rates,
+ * and request throughput. Refreshes every 10 seconds.
+ */
+function AdminAnalyticsPanel() {
+  const [metrics, setMetrics] = useState<{
+    cpu: { usage: number; cores: number } | null;
+    memory: { used: number; total: number; usage: number } | null;
+    disk: { used: number; total: number; usage: number } | null;
+    api: { latency_p50: number; latency_p95: number; latency_p99: number; error_rate: number; rps: number } | null;
+    loading: boolean;
+    error: string | null;
+    lastUpdate: number | null;
+  }>({
+    cpu: null,
+    memory: null,
+    disk: null,
+    api: null,
+    loading: true,
+    error: null,
+    lastUpdate: null,
+  });
+
+  const fetchMetrics = useCallback(async () => {
+    try {
+      // Fetch from the admin metrics relay (Prometheus)
+      const [
+        cpuRes,
+        memRes,
+        diskRes,
+        apiRes,
+      ] = await Promise.all([
+        fetch('/api/admin/metrics?query=avg(rate(cpu_usage_seconds_total[1m]))', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=(1 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total[5m])', { cache: 'no-store' }),
+      ]);
+
+      const [cpuData, memData, diskData, apiData] = await Promise.all([
+        cpuRes.ok ? cpuRes.json() : null,
+        memRes.ok ? memRes.json() : null,
+        diskRes.ok ? diskRes.json() : null,
+        apiRes.ok ? apiRes.json() : null,
+      ]);
+
+      // Parse Prometheus response format: { data: { result: [{ value: [timestamp, value] }] } }
+      const parseValue = (data: any) => {
+        try {
+          return data?.data?.result?.[0]?.value?.[1] ?? null;
+        } catch {
+          return null;
+        }
+      };
+
+      // Fetch additional API metrics
+      const [apiLatencyRes, apiErrorRes, apiRpsRes] = await Promise.all([
+        fetch('/api/admin/metrics?query=histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])', { cache: 'no-store' }),
+        fetch('/api/admin/metrics?query=rate(http_requests_total[1m])', { cache: 'no-store' }),
+      ]);
+
+      const [latencyData, errorData, rpsData] = await Promise.all([
+        apiLatencyRes.ok ? apiLatencyRes.json() : null,
+        apiErrorRes.ok ? apiErrorRes.json() : null,
+        apiRpsRes.ok ? apiRpsRes.json() : null,
+      ]);
+
+      setMetrics({
+        cpu: cpuData ? { usage: parseFloat(parseValue(cpuData)) || 0, cores: 0 } : null,
+        memory: memData ? { usage: parseFloat(parseValue(memData)) || 0, used: 0, total: 0 } : null,
+        disk: diskData ? { usage: parseFloat(parseValue(diskData)) || 0, used: 0, total: 0 } : null,
+        api: {
+          latency_p50: 0,
+          latency_p95: parseFloat(parseValue(latencyData)) || 0,
+          latency_p99: 0,
+          error_rate: parseFloat(parseValue(errorData)) || 0,
+          rps: parseFloat(parseValue(rpsData)) || 0,
+        },
+        loading: false,
+        error: null,
+        lastUpdate: Date.now(),
+      });
+    } catch (err) {
+      console.error('Admin analytics fetch error:', err);
+      setMetrics(prev => ({ ...prev, loading: false, error: 'Failed to fetch metrics' }));
+    }
+  }, []);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchMetrics();
+    const interval = setInterval(fetchMetrics, 10000); // Refresh every 10s
+    return () => clearInterval(interval);
+  }, [fetchMetrics]);
+
+  // Helper: render a metric value safely
+  const getCpuUsage = () => metrics.cpu ? metrics.cpu.usage.toFixed(1) : '--';
+  const getMemUsage = () => metrics.memory ? metrics.memory.usage.toFixed(1) : '--';
+  const getDiskUsage = () => metrics.disk ? metrics.disk.usage.toFixed(1) : '--';
+  const getApiLatency = () => metrics.api ? metrics.api.latency_p95.toFixed(0) : '--';
+  const getErrorRate = () => metrics.api ? (metrics.api.error_rate * 100).toFixed(2) : '--';
+  const getRps = () => metrics.api ? metrics.api.rps.toFixed(1) : '--';
+
+  if (metrics.loading) {
+    return (
+      <div className="flex items-center justify-center h-48">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+        <span className="ml-2 text-sm text-gray-400">Loading system metrics...</span>
+      </div>
+    );
   }
+
+  if (metrics.error) {
+    return (
+      <div className="rounded-md border-red-800/50 bg-red-950/30 p-4 text-center">
+        <AlertCircle className="mx-auto h-6 w-6 text-red-400 mb-2" />
+        <p className="text-sm text-red-300">Failed to load metrics</p>
+        <p className="text-xs text-gray-500 mt-1">{metrics.error}</p>
+        <button
+          onClick={fetchMetrics}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-md border-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-800"
+        >
+          <RefreshCw className="h-2.5 w-2.5" />
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* System Resources */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <MetricCard
+          label="CPU Usage"
+          value={getCpuUsage()}
+          unit="%"
+          color="text-blue-400"
+        />
+        <MetricCard
+          label="Memory Usage"
+          value={getMemUsage()}
+          unit="%"
+          color="text-purple-400"
+        />
+        <MetricCard
+          label="Disk Usage"
+          value={getDiskUsage()}
+          unit="%"
+          color="text-amber-400"
+        />
+      </div>
+
+      {/* API Metrics */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <MetricCard
+          label="API Latency (p95)"
+          value={getApiLatency()}
+          unit="ms"
+          color="text-green-400"
+        />
+        <MetricCard
+          label="Error Rate"
+          value={metrics.api ? (metrics.api.error_rate * 100).toFixed(2) : '--'}
+          unit="%"
+          color="text-red-400"
+        />
+        <MetricCard
+          label="Requests/sec"
+          value={metrics.api ? metrics.api.rps.toFixed(1) : '--'}
+          unit="rps"
+          color="text-blue-400"
+        />
+        <MetricCard
+          label="API Latency (p99)"
+          value={'--'}
+          unit="ms"
+          color="text-purple-400"
+        />
+      </div>
+
+      {/* Last updated */}
+      <div className="flex items-center justify-between text-xs text-gray-500">
+        <span>Auto-refresh: 10s</span>
+        {metrics.lastUpdate && (
+          <span>Last updated: {new Date(metrics.lastUpdate).toLocaleTimeString()}</span>
+        )}
+        <button
+          onClick={fetchMetrics}
+          className="flex items-center gap-1.5 rounded-md border-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          <RefreshCw className="h-2.5 w-2.5" />
+          Refresh Now
+        </button>
+      </div>
+    </div>
+  );
 }

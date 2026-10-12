@@ -558,6 +558,9 @@ var knownCapabilities = []string{
 	config.CapAdsCampaigns,
 	config.CapSeats,
 	config.CapLifetimeDevices,
+	config.CapMaxChannels,
+	config.CapMinBalance,
+	config.CapMonetization,
 }
 
 var _ = strconv.Itoa

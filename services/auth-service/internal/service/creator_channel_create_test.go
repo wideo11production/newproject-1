@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"gorm.io/gorm"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/wideo11/auth-service/internal/model"
 )
@@ -42,6 +45,12 @@ func validCreate() *model.CreateChannelRequest {
 		ChannelType:   model.ChannelTypeEducation,
 		MatureContent: model.MatureNo,
 		MadeForKids:   &kids,
+		// The T&C gate runs BEFORE every other validation, so a request without
+		// these never reaches the case under test. Carried in the shared fixture
+		// for the same reason the type and rating are: they are precondition, not
+		// subject.
+		TCAccepted:        true,
+		TCAcceptedVersion: "test-v1",
 	}
 }
 
@@ -215,4 +224,102 @@ func TestValidTypesMatchTheDatabaseCheck(t *testing.T) {
 		}
 	}
 	_ = time.Now
+}
+
+// =============================================================================
+// T&C ACCEPTANCE IS A HARD GATE
+// =============================================================================
+//
+// Every channel, free or paid, requires the creator's explicit acceptance of
+// the ads/earning policy. This is the legal record that they were told, and
+// without it the creator could later claim they never agreed - which is the
+// entire reason migration 029 exists.
+
+// A request that does not accept the T&C is refused, whatever else is valid.
+func TestCreateChannelRequiresTCAcceptance(t *testing.T) {
+	db := entTestDB(t)
+	svc := &AuthService{db: db}
+	ctx := context.Background()
+	user := probeEntUser(t, db)
+
+	cases := []struct {
+		name   string
+		mutate func(*model.CreateChannelRequest)
+	}{
+		{"not accepted at all", func(r *model.CreateChannelRequest) {
+			r.TCAccepted = false
+		}},
+		{"accepted but no version", func(r *model.CreateChannelRequest) {
+			r.TCAccepted = true
+			r.TCAcceptedVersion = ""
+		}},
+		{"accepted but blank version", func(r *model.CreateChannelRequest) {
+			r.TCAccepted = true
+			r.TCAcceptedVersion = "   "
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req := validCreate()
+			req.Handle = "probe_tc_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:8]
+			tc.mutate(req)
+
+			_, err := svc.CreateChannel(ctx, user, req)
+			if !errors.Is(err, model.ErrTCNotAccepted) && !errors.Is(err, model.ErrTCAcceptanceRequired) {
+				t.Fatalf("got %v, want a T&C error", err)
+			}
+		})
+	}
+}
+
+// The T&C gate runs BEFORE every other validation.
+//
+// This ordering is the point: a request that fails both the handle rule AND
+// the T&C must be told about the T&C, not the handle. Otherwise a creator
+// fixes their handle, resubmits, and discovers the T&C they were never shown -
+// two round trips for something the dialog should have handled in one.
+func TestTCCheckedBeforeOtherValidation(t *testing.T) {
+	db := entTestDB(t)
+	svc := &AuthService{db: db}
+	ctx := context.Background()
+	user := probeEntUser(t, db)
+
+	req := validCreate()
+	req.Handle = "NOT A VALID HANDLE"
+	req.TCAccepted = false
+
+	_, err := svc.CreateChannel(ctx, user, req)
+	if !errors.Is(err, model.ErrTCNotAccepted) {
+		t.Fatalf("got %v, want the T&C error to take precedence over the handle error", err)
+	}
+}
+
+// An accepted T&C is stored, so the agreement is answerable later.
+//
+// Without the stored version, "which text did they agree to" is unanswerable
+// the moment the terms are reworded.
+func TestTCAcceptanceIsRecorded(t *testing.T) {
+	db := entTestDB(t)
+	svc := &AuthService{db: db}
+	ctx := context.Background()
+	user := probeEntUser(t, db)
+
+	req := validCreate()
+	req.Handle = "probe_tc_stored"
+	req.TCAcceptedVersion = "2026-10-v1"
+
+	ch, err := svc.CreateChannel(ctx, user, req)
+	if err != nil {
+		t.Fatalf("create channel: %v", err)
+	}
+	if !ch.TCAccepted {
+		t.Error("tc_accepted stored as false - the acceptance was not recorded")
+	}
+	if ch.TCAcceptedAt == nil {
+		t.Error("tc_accepted_at is nil - there is no record of WHEN they agreed")
+	}
+	if ch.TCAcceptedVersion != "2026-10-v1" {
+		t.Errorf("tc_accepted_version = %q, want 2026-10-v1", ch.TCAcceptedVersion)
+	}
 }

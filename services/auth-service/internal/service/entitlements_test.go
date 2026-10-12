@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -99,9 +100,18 @@ func TestNoEntitlementGrantsNothing(t *testing.T) {
 	}
 }
 
-// TestTrialPersistsNothing is the rule from SYSTEM-PLAN.md §7.2: a trial saves
-// NOTHING, and the refusal is server-side.
-func TestTrialPersistsNothing(t *testing.T) {
+// TestTrialUploadsButDoesNotEarn is the commercial rule the product now runs on.
+//
+// This test used to be called `TestTrialPersistsNothing` and asserted the exact
+// opposite: a trial could not store media AT ALL. That made the trial useless as
+// a trial - nobody could see the product work, so the first thing every new user
+// hit was a refusal.
+//
+// The rule now is the one the product is sold on: uploading is FREE and
+// UNLIMITED for everyone, including a trial. What a paid plan buys is the
+// right to EARN. So a trial unlimited-uploads and zero-monetizes, and the
+// thing worth pinning is that the two are granted independently.
+func TestTrialUploadsButDoesNotEarn(t *testing.T) {
 	db := entTestDB(t)
 	svc := entSvc(t, db)
 	ctx := context.Background()
@@ -112,21 +122,39 @@ func TestTrialPersistsNothing(t *testing.T) {
 		t.Fatalf("grant trial: %v", err)
 	}
 
-	// Media and reels: nothing may be STORED.
+	// Media and reels: UNLIMITED on a trial. This is the change - a trial must be
+	// able to upload, or there is nothing to convert.
 	//
-	// A trial grants these with a limit of 0, and a 0 grant is reported as
-	// ErrQuotaDenied rather than ErrQuotaExceeded - "not in your plan" rather
-	// than "you have hit your limit". There is no world in which someone can do
-	// zero of a thing, and telling a trial user to "upgrade, you have used it
-	// all up" is a message about a limit that does not exist.
+	// The value is read, not just the bool, because `Unlimited` is spelled by the
+	// limit being -1 and NOT by `granted`. Reading the bool as "unlimited" is the
+	// mistake the effective-limits handler already made once.
 	for _, cap := range []string{config.CapMediaAssets, config.CapReelAssets} {
-		if _, _, err := svc.Limit(ctx, user, cap); !errors.Is(err, ErrQuotaDenied) {
-			t.Errorf("%s on a trial: got %v, want ErrQuotaDenied - a 0 grant is the same\n"+
-				"answer as no grant, and must not read as 'you hit a limit'", cap, err)
+		limit, granted, err := svc.Limit(ctx, user, cap)
+		if err != nil {
+			t.Errorf("%s on a trial: got %v, want no error", cap, err)
 		}
-		if err := svc.CheckUsage(ctx, user, cap, 0, 1); !errors.Is(err, ErrQuotaDenied) {
-			t.Errorf("%s: the first item was allowed on a trial (err=%v)", cap, err)
+		if !granted {
+			t.Errorf("%s on a trial: not granted - a trial must be able to upload", cap)
 		}
+		if limit != config.Unlimited {
+			t.Errorf("%s on a trial: limit = %d, want config.Unlimited (-1)", cap, limit)
+		}
+		// And the upload itself is allowed.
+		if err := svc.CheckUsage(ctx, user, cap, 5, 3); err != nil {
+			t.Errorf("%s: trial usage was refused (err=%v) - uploading is free on a trial", cap, err)
+		}
+	}
+
+	// Monetization: explicitly ZERO on a trial. This is what the plan gate buys.
+	//
+	// The 0 grant is reported as ErrQuotaDenied rather than ErrQuotaExceeded -
+	// "not in your plan" rather than "you have hit your limit". There is no world
+	// in which someone can do zero of a thing, and telling a trial user to
+	// "upgrade, you have used it all up" is a message about a limit that does not
+	// exist.
+	if _, _, err := svc.Limit(ctx, user, config.CapMonetization); !errors.Is(err, ErrQuotaDenied) {
+		t.Errorf("monetization on a trial: got %v, want ErrQuotaDenied - a trial\n"+
+			"uploads freely and earns nothing", err)
 	}
 
 	// Ads: explicitly zero on a trial, and the SAME answer - which is the point.
@@ -136,9 +164,10 @@ func TestTrialPersistsNothing(t *testing.T) {
 		t.Errorf("ads on a trial: got %v, want ErrQuotaDenied", err)
 	}
 
-	// Concurrent transcodes: zero too, so the upload pipeline is closed.
-	if err := svc.CheckUsage(ctx, user, config.CapConcurrentTranscodes, 0, 1); !errors.Is(err, ErrQuotaDenied) {
-		t.Errorf("a trial was allowed to transcode (err=%v)", err)
+	// Concurrent transcodes: a trial must be able to transcode what it uploaded,
+	// or an unlimited upload allowance is a lie. One at a time.
+	if err := svc.CheckUsage(ctx, user, config.CapConcurrentTranscodes, 0, 1); err != nil {
+		t.Errorf("a trial could not transcode its own upload (err=%v)", err)
 	}
 }
 
@@ -148,6 +177,11 @@ func TestTrialPersistsNothing(t *testing.T) {
 // The trial case above proves "0 means not included". This proves the other
 // half: a capability they DO have, used up, says so - and does not tell a paying
 // customer to buy a plan they already own.
+//
+// `save_projects` is the capability under test, NOT `media_assets`. Uploading is
+// free and uncapped for every plan now, so the media capabilities are all
+// Unlimited and there is no "used up" state left to contrast against. `pro`
+// grants 25 projects, which is finite, so it still has a ceiling to reach.
 func TestUsedUpIsDifferentFromNotIncluded(t *testing.T) {
 	db := entTestDB(t)
 	svc := entSvc(t, db)
@@ -159,19 +193,24 @@ func TestUsedUpIsDifferentFromNotIncluded(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Pro has 250 media assets.
-	limit, granted, err := svc.Limit(ctx, user, config.CapMediaAssets)
+	// Pro grants 25 save_projects.
+	limit, granted, err := svc.Limit(ctx, user, config.CapSaveProjects)
 	if err != nil || !granted {
 		t.Fatalf("limit: %v granted=%v", err, granted)
 	}
+	if limit == config.Unlimited {
+		t.Fatal("this test needs a FINITE capability on pro, and save_projects is Unlimited.\n" +
+			"Pick a different one rather than deleting the contrast - 'used up' and\n" +
+			"'not included' are still two different answers.")
+	}
 
 	// Under the cap: fine.
-	if err := svc.CheckUsage(ctx, user, config.CapMediaAssets, limit-1, 1); err != nil {
+	if err := svc.CheckUsage(ctx, user, config.CapSaveProjects, limit-1, 1); err != nil {
 		t.Errorf("using the last slot was refused: %v", err)
 	}
 
 	// Over it: "limit exceeded", NOT "not in your plan".
-	err = svc.CheckUsage(ctx, user, config.CapMediaAssets, limit, 1)
+	err = svc.CheckUsage(ctx, user, config.CapSaveProjects, limit, 1)
 	if !errors.Is(err, ErrQuotaExceeded) {
 		t.Fatalf("over the cap: got %v, want ErrQuotaExceeded", err)
 	}
@@ -343,6 +382,55 @@ func TestSeedUpsertsAndPrunes(t *testing.T) {
 	db := entTestDB(t)
 	ctx := context.Background()
 
+	// ---- SNAPSHOT THE REAL CATALOGUE FIRST ----
+	//
+	// `Seed` prunes GLOBALLY: a grant not in the catalogue handed to it is
+	// deleted, because that is the feature (a capability removed from .env must
+	// disappear rather than linger). But this test runs against whatever database
+	// `TEST_DATABASE_DSN` points at, and when that is the shared development
+	// database the "catalogue" being pruned is the one the whole system is
+	// serving traffic from.
+	//
+	// That is not hypothetical. Running this suite against the dev database
+	// deleted all 56 live plan grants, after which every quota check resolved to
+	// 0, so NO UPLOAD SUCCEEDED FOR ANYONE - the fail-closed path the codebase's
+	// own comments describe, arrived at through a test. Nothing reported it: the
+	// service stayed healthy, and the only visible symptom was uploads being
+	// refused with a misleading message about a quota nobody had used.
+	//
+	// So the real catalogue is captured here and put back in the cleanup. The
+	// PROPERTY under test - a removed capability disappears - is unchanged; only
+	// the blast radius is bounded.
+	var lifeline []model.EntitlementGrant
+	if err := db.WithContext(ctx).Find(&lifeline).Error; err != nil {
+		t.Fatalf("snapshot existing grants: %v", err)
+	}
+	t.Cleanup(func() {
+		// Restore in one statement, not row by row: a half-restored catalogue is
+		// worse than an empty one, because some plans work and some do not and
+		// nothing says why.
+		if len(lifeline) == 0 {
+			return
+		}
+		// The placeholder string is BUILT, not written out. One `?` per column,
+		// repeated once per row - GORM does not expand a single `?` across a
+		// variadic slice, so `VALUES (?, ?, ?)` with 56 arguments fails as
+		// "mismatched param and argument count", which is a confusing way to
+		// learn that the shape was wrong.
+		ph := make([]string, 0, len(lifeline))
+		for range lifeline {
+			ph = append(ph, "(?, ?, ?)")
+		}
+		if err := db.WithContext(context.Background()).Exec(
+			"INSERT INTO entitlement_grants (plan_code, capability, limit_value) VALUES "+
+				strings.Join(ph, ", ")+
+				" ON CONFLICT (plan_code, capability) DO UPDATE SET limit_value = EXCLUDED.limit_value",
+			rowsToArgs(lifeline)...,
+		).Error; err != nil {
+			t.Fatalf("RESTORE THE PLAN CATALOGUE MANUALLY - uploads are failing closed without it: %v", err)
+		}
+	})
+
 	// A catalogue with one capability...
 	limited := config.PlansConfig{Plans: []config.PlanConfig{{
 		Code: "probeplan", Name: "probe", PriceMinor: 0, Currency: "USD", Cycle: "monthly",
@@ -375,6 +463,20 @@ func TestSeedUpsertsAndPrunes(t *testing.T) {
 			"A retired capability keeps granting to everyone who still holds that plan,\n"+
 			"and nothing ever looks wrong.", n)
 	}
+}
+
+// rowsToArgs flattens grants into a variadic argument list for a multi-row
+// VALUES insert: `(?, ?, ?), (?, ?, ?), ...`.
+//
+// GORM does not do a batch insert with ON CONFLICT and a variadic slice, so the
+// SQL is written out. Three placeholders per row is what makes the generated
+// `($1,$2,$3),($4,$5,$6)` shape valid.
+func rowsToArgs(rows []model.EntitlementGrant) []any {
+	args := make([]any, 0, len(rows)*3)
+	for _, r := range rows {
+		args = append(args, r.PlanCode, r.Capability, r.LimitValue)
+	}
+	return args
 }
 
 // TestEveryConfiguredPlanIsStrictlyOrdered is a cheap guard against a plan typo.

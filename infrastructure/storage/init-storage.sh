@@ -375,6 +375,125 @@ verify_denied_transcode "read the IAM admin API" \
 # so it can only be removed once every check has run.
 rm -f /tmp/probe.png /tmp/roundtrip.png
 
+# ============================================================================
+# 4c. The MEDIA UPLOAD service account
+# ============================================================================
+#
+# A THIRD account, and it exists because of a bug this script cannot see from
+# the inside: `POST /media/initiate` mints presigned PUT URLs to the `video`
+# bucket using `MINIO_AUTH_ACCESS_KEY` - which is scoped to `avatars` and
+# `covers` and has NO rights on `video`. Every video upload failed with
+# `AccessDenied`, and no code path looked wrong.
+#
+# It cannot reuse either existing account, and the reasons are recorded in the
+# compose file rather than guessed:
+#
+#   - auth-avatars  : scoped to `avatars` + `covers`. Granting it `video` would
+#                     put every user's source media behind the service that
+#                     mints profile-image URLs.
+#   - transcode     : has READ on `video`. auth-service only ever needs to let a
+#                     browser WRITE, so handing it read is unnecessary scope.
+#
+# So: its own account, write-only on `video/*`, provably nothing else. A leaked
+# upload key writes bytes into one bucket and cannot read, delete, or see
+# anything else.
+UPLOAD_POLICY_NAME="${MINIO_UPLOAD_POLICY_NAME:-wideo11-auth-video-uploads}"
+UPLOAD_POLICY_FILE="${MINIO_UPLOAD_POLICY_FILE:-/policies/auth-video-uploads.json}"
+
+if [ -z "${MINIO_UPLOAD_ACCESS_KEY:-}" ] || [ -z "${MINIO_UPLOAD_SECRET_KEY:-}" ]; then
+    die "MINIO_UPLOAD_ACCESS_KEY / MINIO_UPLOAD_SECRET_KEY are required.
+      auth-service mints presigned PUT URLs to the \${MINIO_VIDEO_BUCKET} bucket for
+      browser-uploads, and the auth-avatars account has no rights there - which is
+      why every video upload used to fail with AccessDenied.
+      Generate a secret with: openssl rand -base64 32 | tr -d '/+='"
+fi
+
+if [ ! -f "$UPLOAD_POLICY_FILE" ]; then
+    die "policy file not found: ${UPLOAD_POLICY_FILE}"
+fi
+
+if mc admin policy create local "$UPLOAD_POLICY_NAME" "$UPLOAD_POLICY_FILE" >/dev/null 2>&1; then
+    log "policy applied: ${UPLOAD_POLICY_NAME}"
+else
+    die "could not create policy ${UPLOAD_POLICY_NAME} from ${UPLOAD_POLICY_FILE}"
+fi
+
+# Unconditional on purpose: it is what makes a rotation in .env actually reach
+# MinIO. Probing first and skipping would silently break credential rotation.
+if out="$(mc admin user add local "$MINIO_UPLOAD_ACCESS_KEY" "$MINIO_UPLOAD_SECRET_KEY" 2>&1)"; then
+    log "upload IAM user ready: ${MINIO_UPLOAD_ACCESS_KEY}"
+else
+    die "could not create/refresh upload IAM user: ${out}"
+fi
+
+if mc admin user info local "$MINIO_UPLOAD_ACCESS_KEY" 2>/dev/null | grep -q "$UPLOAD_POLICY_NAME"; then
+    log "policy already attached (idempotent): ${UPLOAD_POLICY_NAME}"
+elif mc admin policy attach local "$UPLOAD_POLICY_NAME" --user "$MINIO_UPLOAD_ACCESS_KEY" >/dev/null 2>&1; then
+    log "policy attached to ${MINIO_UPLOAD_ACCESS_KEY}"
+else
+    die "could not attach ${UPLOAD_POLICY_NAME} to ${MINIO_UPLOAD_ACCESS_KEY}"
+fi
+
+# ----------------------------------------------------------------------------
+# 5c. Prove the upload account can WRITE, READ BACK, and nothing more
+# ----------------------------------------------------------------------------
+#
+# The positive assertions matter as much as the denials here. The failure mode
+# this guards against is the one that just happened: the account authenticated
+# fine, every bucket enumeration succeeded, and the presigned PUT was rejected
+# only when a user actually uploaded. A login proves nothing.
+if ! out="$(mc alias set uploader "$MINIO_ENDPOINT" "$MINIO_UPLOAD_ACCESS_KEY" "$MINIO_UPLOAD_SECRET_KEY" 2>&1)"; then
+    die "could not authenticate the upload account against ${MINIO_ENDPOINT}: ${out}"
+fi
+log "upload account authenticates OK"
+
+# A real byte-for-byte round trip through the account's OWN credentials, on the
+# bucket it works in. `mc cp` does not exercise a presigned PUT, but it proves
+# PutObject and GetObject are both granted to this account on this key - which
+# is exactly what `PresignedPutObject` and `PresignedGetObject` sign.
+PROBE_KEY="${MINIO_VIDEO_BUCKET}/provisioning-check/probe.bin"
+if printf 'upload-account-provisioning-check' > /tmp/upload-probe.bin \
+    && mc cp /tmp/upload-probe.bin "uploader/${PROBE_KEY}" >/dev/null 2>&1 \
+    && mc cp "uploader/${PROBE_KEY}" /tmp/upload-probe-read.bin >/dev/null 2>&1 \
+    && cmp -s /tmp/upload-probe.bin /tmp/upload-probe-read.bin; then
+    log "allowed (as expected): put+get round trip in ${MINIO_VIDEO_BUCKET}"
+else
+    die "the upload account cannot complete a put+get round trip in ${MINIO_VIDEO_BUCKET} - presigned uploads OR playback will fail, which is the exact bug this account was created to fix"
+fi
+rm -f /tmp/upload-probe.bin /tmp/upload-probe-read.bin
+mc rm "uploader/${PROBE_KEY}" >/dev/null 2>&1 || true
+
+verify_denied_upload() {
+    desc="$1"
+    shift
+    if "$@" >/dev/null 2>&1; then
+        die "SECURITY: the upload account CAN $desc. Its policy is too broad - it is scoped to \$MINIO_VIDEO_BUCKET objects for a reason"
+    fi
+    log "denied as expected: $desc"
+}
+
+# No bucket listing. The bucket being readable object-by-object is what makes
+# playback possible, and NOT being listable is what stops this account from
+# enumerating every user's filenames. That line is the whole difference between
+# "can read one object it was asked about" and "can see everything in here".
+verify_denied_upload "list the video bucket" \
+    mc ls "uploader/${MINIO_VIDEO_BUCKET}"
+verify_denied_upload "create a new bucket" \
+    mc mb "uploader/should-never-exist"
+verify_denied_upload "delete the video bucket" \
+    mc rb "uploader/${MINIO_VIDEO_BUCKET}"
+verify_denied_upload "read the avatars bucket" \
+    mc ls "uploader/${MINIO_AVATAR_BUCKET}"
+verify_denied_upload "read the covers bucket" \
+    mc ls "uploader/${MINIO_COVER_BUCKET}"
+verify_denied_upload "read the thumbnails bucket" \
+    mc ls "uploader/${MINIO_THUMBNAIL_BUCKET}"
+verify_denied_upload "read the IAM admin API" \
+    mc admin user info local "$MINIO_ROOT_USER"
+
+# Clean up if a denial check ever fails after creating something.
+mc rb --force "uploader/should-never-exist" >/dev/null 2>&1 || true
+
 # Clean up if the "create a new bucket" check somehow succeeded before dying.
 mc rb --force "scoped/should-never-exist" >/dev/null 2>&1 || true
 
@@ -385,6 +504,7 @@ log "------------------------------------------------------------"
 log "buckets:      ${MINIO_VIDEO_BUCKET} (private), ${MINIO_THUMBNAIL_BUCKET} (private)"
 log "              ${MINIO_AVATAR_BUCKET} (public-read), ${MINIO_COVER_BUCKET} (public-read)"
 log "scoped user:  ${MINIO_AUTH_ACCESS_KEY}  policy=${AUTH_POLICY_NAME}"
+log "upload user:  ${MINIO_UPLOAD_ACCESS_KEY}  policy=${UPLOAD_POLICY_NAME}"
 log "root creds:   provisioning only — do not hand these to a service"
 log "------------------------------------------------------------"
 log "storage provisioned successfully"

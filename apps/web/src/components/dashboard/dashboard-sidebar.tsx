@@ -32,6 +32,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
+  Upload,
   Youtube,
   Monitor,
   Settings,
@@ -57,6 +58,20 @@ export const DASHBOARD_TABS: SidebarTab[] = [
     label: 'Overview',
     href: '/dashboard',
     icon: <LayoutDashboard className="h-2.5 w-2.5" />,
+  },
+  {
+    id: 'upload',
+    label: 'Upload',
+    // The upload page (`/dashboard/upload`) is where media actually enters the
+    // system. It existed with NO link to it for a while, which meant the whole
+    // upload engine was reachable only by typing the URL - and a feature nobody
+    // can navigate to is a feature nobody uses.
+    //
+    // Placed second, right after Overview: overview answers "what have I got",
+    // and the very next thing a creator does is add something. Putting it below
+    // Devices and Settings buried the primary action behind the secondary ones.
+    href: '/dashboard/upload',
+    icon: <Upload className="h-2.5 w-2.5" />,
   },
   {
     id: 'channels',

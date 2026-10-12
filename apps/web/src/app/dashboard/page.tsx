@@ -33,6 +33,7 @@ import {
   EMPTY_WIZARD,
   type ChannelWizardExtras,
 } from '@/components/channels/channel-wizard-fields';
+import { ChannelTermsDialog, TC_VERSION } from '@/components/channels/channel-terms-dialog';
 import Link from 'next/link';
 import { TrialCountdown } from '../../components/dashboard/trial-countdown';
 
@@ -58,6 +59,7 @@ import {
   Download,
   Settings,
   Compass,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
@@ -234,6 +236,28 @@ export default function CreatorDashboard() {
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelErr, setChannelErr] = useState('');
 
+  // ---- T&C gate state ----
+  //
+  // Two pieces, and they are not the same question:
+  //
+  //   tcDialogOpen - is the dialog on screen right now
+  //   tcAccepted   - has the creator accepted the terms THIS session
+  //
+  // `tcAccepted` is per-session (not persisted to storage) ON PURPOSE: a
+  // second channel is a second consent, and a stored "already accepted" flag
+  // would make the third channel a click with no reading. The backend stores
+  // the acceptance per channel row, which is the durable record.
+  const [tcDialogOpen, setTcDialogOpen] = useState(false);
+  const [tcAccepted, setTcAccepted] = useState(false);
+
+  // The plan's channel ceiling, or null when it could not be resolved.
+  //
+  // null on failure DELIBERATELY: an unknown limit must not read as zero, or a
+  // transient `/api/auth/my-plan` error would lock a creator out of creating a
+  // channel they are entitled to. The server is the authority and still
+  // enforces the cap; this is the early notice.
+  const [channelLimit, setChannelLimit] = useState<number | null>(null);
+
   // ======================================================================
   // Data loading
   // ======================================================================
@@ -256,6 +280,32 @@ export default function CreatorDashboard() {
     if (s.status === 'fulfilled' && s.value?.sessions) {
       setDevices(s.value.sessions as DeviceSession[]);
     }
+  }, []);
+
+  // The plan's `max_channels`, fetched separately and awaited separately.
+  //
+  // NOT part of `loadAll`'s `allSettled`: a plan failure must not delay or
+  // block the three panels above, and a channel-limit read that is slow is
+  // one the creator can do without. `-1` is the server's "unlimited", so it
+  // maps to null rather than to a number the comparison would misread.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/my-plan', { cache: 'no-store' });
+        if (!res.ok) return;
+        const body = (await res.json()) as { limits?: Record<string, number | 'unlimited'> };
+        const raw = body.limits?.max_channels;
+        if (!alive) return;
+        if (raw === 'unlimited') setChannelLimit(null);
+        else if (typeof raw === 'number' && raw >= 0) setChannelLimit(raw);
+      } catch {
+        /* stays null - the create button remains enabled and the server still enforces */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -331,14 +381,23 @@ export default function CreatorDashboard() {
   // ======================================================================
   // Create channel
   // ======================================================================
-  async function createChannel(e: React.FormEvent) {
+  //
+  // TWO STEPS: validate, then T&C, then submit.
+  //
+  // The T&C dialog sits between the button press and the API call because it
+  // is a LEGAL gate, not a form field. Every channel — free or paid — requires
+  // the creator's explicit acceptance, and the backend enforces it with
+  // `ErrTCNotAccepted` (see `internal/service/creator.go`). Opening it after
+  // the cheap validations pass means nobody reads the terms only to be told
+  // their handle is malformed.
+  function createChannel(e: React.FormEvent) {
     e.preventDefault();
     setChannelErr('');
     // Client-side format check (UX). Backend bhi SAME rule validate karta hai
     // (aur DB constraint bhi) - teen jagah ek jaisa rule.
-if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
-    setChannelErr('Handle must be 3-30 characters: a-z, 0-9, _ . or -');
-    return;
+    if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
+      setChannelErr('Handle must be 3-30 characters: a-z, 0-9, _ . or -');
+      return;
     }
 
     // ---- The two COMPLIANCE questions must be answered before submit ----
@@ -386,6 +445,21 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
       return;
     }
 
+    // ---- T&C gate ----
+    //
+    // Ab form valid hai, toh ab T&C dikhao. Agar already accept nahi hua hai
+    // (dialog se aaya hai) toh dialog kholo; dialog se accept hone ke baad
+    // `submitChannelWithTerms` directly chalta hai.
+    if (!tcAccepted) {
+      setTcDialogOpen(true);
+      return;
+    }
+
+    void submitChannelWithTerms();
+  }
+
+  /** The API call, separated so the T&C dialog can call it on accept. */
+  async function submitChannelWithTerms() {
     setChannelBusy(true);
     try {
       const res = await fetch('/api/channels', {
@@ -410,6 +484,14 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
           // versus "leave whatever is there" - and the create path has no
           // previous value to leave.
           ...(wizard.coverUrl ? { cover_url: wizard.coverUrl } : {}),
+          // ---- MANDATORY T&C acceptance ----
+          //
+          // The backend refuses a channel without these two (`ErrTCNotAccepted`),
+          // so they are not optional. The version travels with the acceptance so
+          // the stored record says WHICH text was agreed to, which is what makes
+          // the acceptance auditable after the terms change.
+          tc_accepted: true,
+          tc_accepted_version: TC_VERSION,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -640,6 +722,42 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
         <TrialCountdown />
 
         {/* ==================================================================
+            UPLOAD ENTRY POINT
+            ==================================================================
+            The upload page is in the sidebar, and the sidebar is easy to miss
+            for somebody whose whole reason for being here is to post a video.
+
+            This is the ONE action that turns an empty account into a working
+            one, so it gets a button rather than a nav item. It was missing
+            entirely for a while, which meant the upload engine - presigned
+            PUTs, the ffmpeg ladder, the dedup - was reachable only by typing
+            the URL straight into the address bar.
+
+            Kept to a single row so it does not push the actual content out of
+            view. */}
+        <section className="flex flex-col gap-3 rounded-md bg-[#181b1f] p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <Upload className="h-2.5 w-2.5 text-[#5794f2]" />
+              Upload media
+            </h2>
+            <p className="mt-1 text-xs text-[#9fa7b3]">
+              Videos, reels and audio. Encoded into every quality, ready to
+              publish when it finishes.
+            </p>
+          </div>
+          <Link href="/dashboard/upload" className="shrink-0">
+            <Button
+              size="sm"
+              className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+            >
+              <Upload className="mr-1.5 h-2.5 w-2.5" />
+              Upload
+            </Button>
+          </Link>
+        </section>
+
+        {/* ==================================================================
             PANEL 1: PROFILE  (avatar + change image)
             ================================================================== */}
         <section className="rounded-md bg-[#181b1f] p-5">
@@ -740,20 +858,36 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
               <Youtube className="h-2.5 w-2.5 text-[#f2495c]" />
               My channels
               <span className="rounded-full bg-[#1f2227] px-2 py-0.5 text-[11px] font-normal text-[#9fa7b3]">
-                {channels.length}
+                {channelLimit === null ? channels.length : `${channels.length} / ${channelLimit}`}
               </span>
             </h2>
             {!showChannelForm ? (
               <Button
                 onClick={() => setShowChannelForm(true)}
                 size="sm"
-                className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                disabled={channelLimit !== null && channels.length >= channelLimit}
+                className="h-9 bg-[#5794f2] text-white hover:bg-[#5794f2]/85 disabled:opacity-40"
               >
                 <Plus className="mr-1.5 h-2.5 w-2.5" />
                 Create channel
               </Button>
             ) : null}
           </div>
+
+          {/* ---- Plan channel limit notice ----
+              Shown only when the creator is AT the limit, because a limit that
+              is merely far away is noise. The message names the plan so the fix
+              (upgrade) is discoverable rather than a dead end. */}
+          {channelLimit !== null && channels.length >= channelLimit ? (
+            <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-950/20 p-2.5 text-[11px] text-amber-200">
+              Aapke plan mein maximum {channelLimit} channel ban sakte hain. Zyada
+              channels ke liye{' '}
+              <Link href="/dashboard/plans" className="underline hover:no-underline">
+                plan upgrade
+              </Link>{' '}
+              karein.
+            </p>
+          ) : null}
 
           {/* ---- Create form (collapsible) ---- */}
           {showChannelForm ? (
@@ -765,8 +899,7 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
                   onClick={() => {
                     setShowChannelForm(false);
                     setChannelErr('');
-                  }}
-                  className="text-[#9fa7b3] transition-colors hover:text-[#d8d9da]"
+                  }}                  className="text-[#9fa7b3] transition-colors hover:text-[#d8d9da]"
                   aria-label="Close"
                 >
                   <X className="h-2.5 w-2.5" />
@@ -841,6 +974,22 @@ if (!/^[a-z0-9._-]{3,30}$/.test(handle.trim().toLowerCase())) {
               </Button>
             </form>
           ) : null}
+
+          {/* ---- T&C dialog ----
+              Rendered outside the form so it is not clipped by it and can cover
+              the whole viewport. Cancel returns to the form with nothing
+              submitted; accept marks the consent for THIS create and submits
+              immediately — the creator should not have to press the button
+              twice for one channel. */}
+          <ChannelTermsDialog
+            open={tcDialogOpen}
+            onCancel={() => setTcDialogOpen(false)}
+            onAccept={() => {
+              setTcAccepted(true);
+              setTcDialogOpen(false);
+              void submitChannelWithTerms();
+            }}
+          />
 
           {/* ---- Channel list ---- */}
           <div className="mt-4">

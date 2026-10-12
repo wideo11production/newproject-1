@@ -8,16 +8,37 @@ export const metadata = {
 /**
  * A public channel page, the way youtube.com/@handle works.
  *
- * A SERVER component for the shell, with one client child for the part that has
- * tabs and fetches.
+ * =============================================================================
+ * STRUCTURE
+ * =============================================================================
  *
- * The handle is in the path, so the page is PUBLIC - the middleware lists
- * `/channel` as public, and both endpoints it reads are the public ones, which
- * answer the same 404 for a private channel as for a missing one.
+ *   1. Sidebar       - media categories (All Media / Videos / Long Reels / ...)
+ *   2. Upper header  - cover banner, avatar, Creator / Channel / Subscribers /
+ *                      Joined, and the subscriber actions.
+ *   3. Lower split   - nothing playing: the gallery spans 100%.
+ *                      something playing: 2/5 gallery | 3/5 active player.
  *
- * `params` is typed as a union because Next 14 hands over a plain object and
- * Next 15 a Promise. Handling both means this page does not break on the day the
- * upgrade lands, rather than being fixed in a hurry after.
+ * The split is deliberately BELOW the header rather than swallowing it: the banner
+ * and the channel identity are what the viewer came for, and a layout that pushed
+ * them aside to show a video would answer a different question than the one they
+ * asked.
+ *
+ * =============================================================================
+ * NO PROVIDER HERE
+ * =============================================================================
+ *
+ * The player's context provider lives in `ChannelSplit`, below the tabs. It used
+ * to wrap this whole page as well, which meant TWO providers - the one by the
+ * tabs and the one the client owned - and a card would call `play` on the inner
+ * one while the page read `current` from the outer one. The player then never
+ * appeared. One provider, read by exactly the components that need it.
+ *
+ * =============================================================================
+ * WHY THIS IS A SERVER COMPONENT
+ * =============================================================================
+ *
+ * The shell renders on the server, and only the part with tabs and fetches is a
+ * client component. That keeps the header out of the client bundle entirely.
  */
 export default async function ChannelPage({
   params,
@@ -30,9 +51,5 @@ export default async function ChannelPage({
   // `youtube.com/@handle` is the shape people try first.
   const clean = decodeURIComponent(handle).replace(/^@/, '');
 
-  return (
-    <div className="space-y-6">
-      <ChannelPageClient handle={clean} />
-    </div>
-  );
+  return <ChannelPageClient handle={clean} />;
 }

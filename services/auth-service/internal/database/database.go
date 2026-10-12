@@ -126,8 +126,22 @@ func MigratedModels() []interface{} {
 		//
 		// It is a plain GORM model rather than a SQL-only table: no CHECK, no
 		// partial index, no trigger. Migration 020 adds the parts GORM cannot.
-		&model.MediaAsset{},
-	}
+	&model.MediaAsset{},
+
+	// ---- comments ----
+	//
+	// Plain GORM models rather than SQL-only: the constraints they carry are a
+	// composite UNIQUE on (comment_id, user_id) for the like table, which GORM
+	// expresses fine in a tag, and ordinary single-column indexes. Nothing here
+	// needs a CHECK, a partial index or a trigger, which is the whole test for
+	// whether a table belongs in `SQLOnlyTables` instead.
+	//
+	// The depth cap (one level of replies) and the link ban are POLICY, not schema,
+	// and they belong in the service where they can be reasoned about - see
+	// `service.ValidateCommentBody`.
+	&model.Comment{},
+	&model.CommentLike{},
+}
 }
 
 // RetiredTables lists tables whose Go model is gone and which must NOT be
@@ -161,6 +175,21 @@ var SQLOnlyTables = map[string]string{
 	"channels":           "005_creator_dashboard.sql",
 	"user_settings":      "007_user_settings_and_telemetry_geo.sql",
 	"user_registrations": "008_user_registrations.sql",
+
+	// Migration 030: the content-moderation audit trail.
+	//
+	// SQL-only for the same reason the entitlement tables are: it carries a CHECK
+	// on the verdict vocabulary and PARTIAL indexes on the verdict column
+	// (`WHERE verdict IN ('rejected','flagged')`), which narrow the index to the
+	// small, hot subset of rows a review queue reads. A GORM index would cover
+	// every verdict and never be used by that query.
+	//
+	// The table is the answer to a law-enforcement request, so it is NOT swept by
+	// the PII retention worker - it keeps ip_address, device fingerprint and user
+	// agent for years where `sessions` purges them in days. The schema-level
+	// reason to keep it here rather than in AutoMigrate is that the constraint
+	// list is policy, and policy belongs in a migration that diff cleanly.
+	"media_moderation_audits": "030_media_moderation.sql",
 
 	// The next five were MISSING from this map while having a Go model and a
 	// migration that creates them. Nothing was broken on the live database -

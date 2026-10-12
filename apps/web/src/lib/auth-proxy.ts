@@ -91,3 +91,57 @@ export async function forwardAuth(
     );
   }
 }
+
+/**
+ * Forward an authenticated request and return the RAW upstream response.
+ *
+ * A second helper rather than an option on `forwardAuth`, because the two have
+ * incompatible return types: `forwardAuth` parses JSON so callers can read
+ * `payload.message`, and a video segment is not JSON. Making one function do
+ * both would mean a caller discovering at runtime whether it got a parsed object
+ * or a stream - which is exactly the kind of branch that gets written wrong.
+ *
+ * Use this for anything that streams bytes. The session handling is identical,
+ * so the 401-on-no-session rule is the same.
+ *
+ * @param extraHeaders - headers to merge (Range, for a partial request)
+ */
+export async function forwardAuthRaw(
+  req: NextRequest,
+  apiPath: string,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' = 'GET',
+  extraHeaders?: HeadersInit
+): Promise<Response> {
+  const token = readSessionToken(req);
+  if (!token) {
+    return Response.json(
+      { error: 'unauthorized', message: 'No active session. Please log in.' },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const upstream = await fetch(`${AUTH_SERVICE_URL}/api/v1/auth${apiPath}`, {
+      method,
+      // The caller's headers come LAST so Range wins over anything set here.
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(extraHeaders ?? {}),
+      },
+      cache: 'no-store',
+    });
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: upstream.headers,
+    });
+  } catch {
+    return Response.json(
+      {
+        error: 'service_unavailable',
+        message:
+          'Could not reach the authentication service. Please try again shortly.',
+      },
+      { status: 503 }
+    );
+  }
+}

@@ -46,6 +46,111 @@ func svcAccess(t *testing.T) (*ServiceAccess, *RBAC) {
 	return users, rbac
 }
 
+// TestSeedActuallyPopulatesTheCatalogue is the regression test for the bug that
+// produced "You do not have the 'channel.create' capability."
+//
+// WHAT HAPPENED
+// =============
+//
+// `Seed()` ran, logged "permission catalogue seeded", and returned nil - while
+// the `permissions` and `role_permissions` tables were both EMPTY. Nothing
+// failed. Every permission check then answered `false`, so a creator holding the
+// `creator` role could not create a channel, could not upload media, and nothing
+// in the logs said why.
+//
+// Every layer above the seed was correct and tested: the role was appointed, the
+// constant existed, the middleware was wired, the resolution query was right. The
+// single unwritten write was the whole bug, and it was invisible precisely because
+// the seed reported success.
+//
+// So this test asserts the WRITE, not just the absence of an error. A seed that
+// returns nil with an empty catalogue is a broken seed, and this is the test that
+// says so.
+func TestSeedActuallyPopulatesTheCatalogue(t *testing.T) {
+	db := entTestDB(t)
+	users := NewServiceAccess(db)
+	rbac := NewRBAC(db, users)
+	t.Cleanup(func() {
+		db.Exec(`DELETE FROM role_permissions`)
+		db.Exec(`DELETE FROM roles`)
+		db.Exec(`DELETE FROM permissions`)
+	})
+
+	// Start from a genuinely empty catalogue, which is the state the bug lived in.
+	// Seeding twice (idempotent) is not the point - the point is that the SECOND
+	// run must populate what the first left empty.
+	if err := rbac.Seed(context.Background()); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	var permCount, rolePermCount int64
+	if err := db.Model(&model.Permission{}).Count(&permCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Model(&model.RolePermission{}).Count(&rolePermCount).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	// The vocabulary in Go, which is the number the seed is supposed to write.
+	if want := int64(len(PermissionNames())); permCount != want {
+		t.Errorf("permissions table has %d rows, want %d (every name in the closed "+
+			"vocabulary).\nAn empty catalogue makes Can() answer false for EVERY "+
+			"permission in the product, which reads as a permissions bug rather "+
+			"than a boot that skipped a write.", permCount, want)
+	}
+	if rolePermCount == 0 {
+		t.Error("no role carries any permission - every role is empty, so every " +
+			"privileged action is refused even for an appointed creator")
+	}
+
+	// And the pairing that actually bit: the `creator` role must resolve
+	// `channel.create`, because that is the exact check that failed.
+	roleID, _ := roleByName(t, rbac, "creator")
+	var has int64
+	if err := db.Model(&model.RolePermission{}).
+		Where("role_id = ? AND permission = ?", roleID, PermChannelCreate).
+		Count(&has).Error; err != nil {
+		t.Fatal(err)
+	}
+	if has == 0 {
+		t.Error("the creator role does not grant channel.create - a creator " +
+			"appointed to it cannot create a channel")
+	}
+}
+
+// TestSeedIsIdempotent pins the other half: a second Seed must not duplicate or
+// wipe, because it runs on every boot and a boot loop must not accumulate rows.
+func TestSeedIsIdempotent(t *testing.T) {
+	db := entTestDB(t)
+	users := NewServiceAccess(db)
+	rbac := NewRBAC(db, users)
+	t.Cleanup(func() {
+		db.Exec(`DELETE FROM role_permissions`)
+		db.Exec(`DELETE FROM roles`)
+		db.Exec(`DELETE FROM permissions`)
+	})
+
+	ctx := context.Background()
+	for i := 0; i < 3; i++ {
+		if err := rbac.Seed(ctx); err != nil {
+			t.Fatalf("seed run %d: %v", i+1, err)
+		}
+	}
+
+	var permCount, rolePermCount int64
+	db.Model(&model.Permission{}).Count(&permCount)
+	db.Model(&model.RolePermission{}).Count(&rolePermCount)
+	if want := int64(len(PermissionNames())); permCount != want {
+		t.Errorf("after three seeds, permissions = %d, want %d - seeding is not "+
+			"idempotent and every boot would add rows", permCount, want)
+	}
+	// Four system roles with their defined permissions; the exact number is less
+	// important than it not growing per boot.
+	if rolePermCount == 0 {
+		t.Error("role_permissions is empty after three seeds")
+	}
+}
+
 func roleByName(t *testing.T, rbac *RBAC, name string) (roleID uuid.UUID, rank int) {
 	t.Helper()
 

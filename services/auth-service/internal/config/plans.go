@@ -66,10 +66,38 @@ const (
 	// CapSeats - team members.
 	CapSeats = "seats"
 
-	// CapLifetimeDevices - devices for a LIFETIME plan. NULL/unlimited for a
-	// subscription, because a subscriber stopping payment stops the plan anyway;
-	// the device cap exists precisely to make a one-off purchase still finite.
+// CapLifetimeDevices - devices for a LIFETIME plan. NULL/unlimited for a
+// subscription, because a subscriber stopping payment stops the plan anyway;
+// the device cap exists precisely to make a one-off purchase still finite.
 	CapLifetimeDevices = "lifetime_devices"
+
+	// CapMaxChannels - maximum number of channels a user may create.
+	//
+	// 3 for every plan, by product rule: a user may hold at most three channels
+	// at once, and one account may run at most three. The cap is a PLATFORM rule,
+	// not an upsell ladder, so it does not widen with price - a studio subscriber
+	// gets the same three channels as a starter does, and the difference between
+	// the plans is resolution, concurrency and monetization instead.
+	CapMaxChannels = "max_channels"
+
+	// CapMinBalance - the balance a user must MAINTAIN for this plan to keep operating.
+	//
+	// Minimum units of the plan's currency, stored the same way as `PriceMinor`.
+	// Not a fee and not charged: it is a floor the account must hold. 0 means
+	// "no floor", which is what the free trial grants.
+	//
+	// Distinct from the ₹2,000 maintenance buffer, which is a WITHDRAWAL floor on
+	// earnings. This one gates the PLAN itself: an account that falls below it
+	// stops earning until it is topped up.
+	CapMinBalance = "min_balance"
+
+	// CapMonetization - whether the plan can earn from ad revenue at all.
+	//
+	// The whole commercial shape of the product, in one capability: uploading is
+	// free and unlimited for everyone, and what a paid plan BUYS is the right to
+	// earn. A trial grants 0, so a trial can upload but cannot earn - which is
+	// the honest version of "try it free, pay when you want the money".
+	CapMonetization = "monetization"
 )
 
 // Unlimited is the sentinel for "no cap".
@@ -244,45 +272,56 @@ func LoadPlans() PlansConfig {
 
 	specs := []spec{
 		{
-			// TRIAL: 3 days, NOTHING persisted.
+			// TRIAL: free to USE, free to EARN nothing.
 			//
-			// Zero on every persistence capability, deliberately. A trial that
-			// saved a project would need a second concept ("expired projects"),
-			// and the zero is enforced SERVER-side - the save is refused, not the
-			// button disabled.
+			// This is the commercial shape of the product and it is worth stating
+			// plainly, because it inverts what this plan used to say:
 			//
-			// `save_projects = 2` is the IN-SESSION allowance from §7.2: two
-			// projects can be made while looking at them, and neither is kept.
-			// The refusal of a SAVE is what enforces "nothing persisted".
+			//   media_assets / reel_assets  UNLIMITED  - a trial uploads everything
+			//   monetization                0          - a trial earns nothing
+			//
+			// The previous values were 0 for both, which meant a trial could not
+			// upload at all - so nobody could ever see the product working, and the
+			// first thing a new user hit was a refusal. Uploading is now free and
+			// uncapped for everyone; what a paid plan BUYS is the right to earn.
+			// `save_projects` keeps its in-session allowance of 2 from §7.2, and
+			// `min_balance` is 0 because a trial has no floor to hold.
+			//
+			// `export_height` stays 720 and is watermarked: the trial can render, it
+			// just renders at trial quality.
 			code: "trial", priceMinor: 0, currency: "USD", cycle: "trial", trialDays: 3,
 			defs: map[string]int64{
-				CapSaveProjects: 2, CapMediaAssets: 0, CapReelAssets: 0,
-				CapConcurrentTranscodes: 0, CapExportHeight: 720,
+				CapSaveProjects: 2, CapMediaAssets: U, CapReelAssets: U,
+				CapConcurrentTranscodes: 1, CapExportHeight: 720,
 				CapAdsCampaigns: 0, CapSeats: 1, CapLifetimeDevices: U,
+				CapMaxChannels: 3, CapMinBalance: 0, CapMonetization: 0,
 			},
 		},
 		{
 			code: "starter", priceMinor: 1200, currency: "USD", cycle: "monthly",
 			defs: map[string]int64{
-				CapSaveProjects: 2, CapMediaAssets: 25, CapReelAssets: 10,
+				CapSaveProjects: 2, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 1, CapExportHeight: 1080,
 				CapAdsCampaigns: 0, CapSeats: 1, CapLifetimeDevices: U,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 		{
 			code: "pro", priceMinor: 2900, currency: "USD", cycle: "monthly",
 			defs: map[string]int64{
-				CapSaveProjects: 25, CapMediaAssets: 250, CapReelAssets: 100,
+				CapSaveProjects: 25, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 2, CapExportHeight: 2160,
 				CapAdsCampaigns: 3, CapSeats: 1, CapLifetimeDevices: U,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 		{
 			code: "studio", priceMinor: 7900, currency: "USD", cycle: "monthly",
 			defs: map[string]int64{
-				CapSaveProjects: 250, CapMediaAssets: 1000, CapReelAssets: 500,
+				CapSaveProjects: 250, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 4, CapExportHeight: 2160,
 				CapAdsCampaigns: 10, CapSeats: 5, CapLifetimeDevices: U,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 		{
@@ -292,17 +331,19 @@ func LoadPlans() PlansConfig {
 			// a product anyone can sell.
 			code: "lifetime1", priceMinor: 19900, currency: "USD", cycle: "lifetime",
 			defs: map[string]int64{
-				CapSaveProjects: U, CapMediaAssets: 1000, CapReelAssets: 500,
+				CapSaveProjects: U, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 2, CapExportHeight: 2160,
 				CapAdsCampaigns: 3, CapSeats: 1, CapLifetimeDevices: 1,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 		{
 			code: "lifetime5", priceMinor: 59900, currency: "USD", cycle: "lifetime",
 			defs: map[string]int64{
-				CapSaveProjects: U, CapMediaAssets: 5000, CapReelAssets: 2000,
+				CapSaveProjects: U, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 4, CapExportHeight: 2160,
 				CapAdsCampaigns: 10, CapSeats: 5, CapLifetimeDevices: 5,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 		{
@@ -311,6 +352,7 @@ func LoadPlans() PlansConfig {
 				CapSaveProjects: U, CapMediaAssets: U, CapReelAssets: U,
 				CapConcurrentTranscodes: 8, CapExportHeight: 2160,
 				CapAdsCampaigns: U, CapSeats: 10, CapLifetimeDevices: 10,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
 			},
 		},
 	}

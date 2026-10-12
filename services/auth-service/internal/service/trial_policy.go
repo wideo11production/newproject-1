@@ -114,6 +114,36 @@ func (s *EntitlementService) Plan(code string) (config.PlanConfig, bool) {
 	return s.plans.Get(code)
 }
 
+// Catalogue returns every plan this service was configured with, in declaration
+// order.
+//
+// Exposed because the self-service plan picker needs to enumerate what is
+// selectable, and it must enumerate the SAME catalogue enforcement reads rather
+// than a second list somewhere. Note what this deliberately does NOT filter: it
+// is the whole catalogue, and hiding lifetime plans from a user who may buy one
+// is a product decision that belongs to the route that displays them, not to the
+// service that holds the data.
+//
+// The nil check is real: the handler holding a nil `EntitlementService` calls
+// this before it has ruled itself out, and a method on a nil receiver panics.
+func (s *EntitlementService) Catalogue() []config.PlanConfig {
+	if s == nil {
+		return nil
+	}
+	return s.plans.Plans
+}
+
+// Codes returns every plan code, in declaration order.
+//
+// Used by error responses that want to say "here is what you may send" rather
+// than "unknown plan", which leaves a caller to guess.
+func (s *EntitlementService) Codes() []string {
+	if s == nil {
+		return nil
+	}
+	return s.plans.Codes()
+}
+
 // TrialEndFromNow is when a trial granted now would end.
 //
 // Never returns nil for a configured length: `nil` means `ends_at NULL` to

@@ -105,6 +105,8 @@ type AuthService struct {
 	// surface cover karte hain; nayi entities (channels) ke liye direct db
 	// chahiye. main.go me `SetDB()` se inject hota hai.
 	db *gorm.DB
+	// entitlements service for checking user's plan limits
+	entitlements *EntitlementService
 }
 
 // SetDB raw GORM handle inject karta hai (creator dashboard ke liye).
@@ -142,6 +144,11 @@ func NewAuthService(cfg *config.Config, userRepo repository.UserRepository, sess
 // Hinglish: dependency injection - constructor ko chhua bina
 func (s *AuthService) SetVerificationRepo(r repository.VerificationTokenRepository) {
 	s.verifRepo = r
+}
+
+// SetEntitlementService injects the entitlement service for quota checks
+func (s *AuthService) SetEntitlementService(es *EntitlementService) {
+	s.entitlements = es
 }
 
 func (s *AuthService) Register(ctx context.Context, req *model.RegisterRequest, deviceInfo model.DeviceInfo) (*model.User, *model.TokenPair, error) {

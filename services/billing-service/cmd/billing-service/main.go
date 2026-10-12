@@ -136,7 +136,19 @@ func main() {
 		payoutProtected.GET("/payouts", payoutHandler.ListPayouts)
 		payoutProtected.DELETE("/payouts/:payoutId", payoutHandler.DeletePayout)
 		// Verify payout = admin action
-		
+
+		// ---- Earnings status ----
+		//
+		// Reads the gate in `service.EarningsSubject.MayEarn` and reports it with
+		// its reason. It is on the protected group because the answer is about the
+		// caller's own account and carries nothing anyone else should read.
+		//
+		// This is what makes the gate VISIBLE. The rule can stop an accrual
+		// correctly and the creator still has no way to learn why their earnings
+		// are zero - and "why is my earning zero" has four different answers that
+		// need four different actions from them.
+		payoutProtected.GET("/me/earnings-status", payoutHandler.EarningsStatus)
+
 		// Device ad revenue - superadmin ledger ke liye (cross-DB data source)
 		payoutProtected.GET("/admin/device-revenue", payoutHandler.GetDeviceRevenues)
 	}

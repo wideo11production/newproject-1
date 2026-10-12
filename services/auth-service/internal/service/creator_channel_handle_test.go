@@ -129,6 +129,10 @@ func handleRequest(handle, name string) *model.CreateChannelRequest {
 		ChannelType:   model.ChannelTypeEducation,
 		MatureContent: model.MatureNo,
 		MadeForKids:   &kids,
+		// T&C is checked first, so it is a precondition of reaching the handle
+		// logic this file is about.
+		TCAccepted:        true,
+		TCAcceptedVersion: "test-v1",
 	}
 }
 

@@ -69,19 +69,25 @@ import (
 )
 
 // TestUnlimitedIsSignalledByTheValueNotTheBool is the contract.
+//
+// The capabilities under test moved when uploading became free and unlimited:
+// this used to read `starter.media_assets == 25`. `media_assets` is now
+// Unlimited on every plan by product decision, so the "bounded plan" half of
+// the example is read from `save_projects` instead. The CONTRACT being pinned -
+// the value carries the bound, the bool only says `granted` - is unchanged.
 func TestUnlimitedIsSignalledByTheValueNotTheBool(t *testing.T) {
 	plans := config.LoadPlans()
 
-	// A bounded plan: the value is a number, and the bool is `granted == true`.
+	// A bounded capability: the value is a number, and the bool is `granted == true`.
 	starter, ok := plans.Get("starter")
 	if !ok {
 		t.Fatal("no `starter` plan in the catalogue")
 	}
-	if got := starter.Grants[config.CapMediaAssets]; got != 25 {
-		t.Errorf("starter grants media_assets = %d, want 25", got)
+	if got := starter.Grants[config.CapSaveProjects]; got != 2 {
+		t.Errorf("starter grants save_projects = %d, want 2", got)
 	}
-	if got := starter.Grants[config.CapMediaAssets]; got == config.Unlimited {
-		t.Error("starter's media_assets must be bounded; it is reporting Unlimited")
+	if got := starter.Grants[config.CapSaveProjects]; got == config.Unlimited {
+		t.Error("starter's save_projects must be bounded; it is reporting Unlimited")
 	}
 
 	// An unbounded plan: the value is Unlimited. The bool is STILL just `granted`,

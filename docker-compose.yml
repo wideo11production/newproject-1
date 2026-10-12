@@ -370,6 +370,19 @@ services:
       # and an unset value would have meant the transcoder quietly kept root).
       MINIO_TRANSCODE_ACCESS_KEY: ${MINIO_TRANSCODE_ACCESS_KEY:?set MINIO_TRANSCODE_ACCESS_KEY in .env}
       MINIO_TRANSCODE_SECRET_KEY: ${MINIO_TRANSCODE_SECRET_KEY:?set MINIO_TRANSCODE_SECRET_KEY in .env}
+      # ---- Scoped account for the MEDIA UPLOAD path ----
+      #
+      # A third account, and the reason is a bug rather than a preference.
+      # `POST /media/initiate` presigns a PUT into the `video` bucket. It used
+      # to sign with MINIO_AUTH_ACCESS_KEY - which is scoped to `avatars` and
+      # `covers` - so MinIO answered `AccessDenied` on EVERY video upload. Not
+      # one unit test caught it: they all had a mocked MinIO client.
+      #
+      # It cannot borrow the transcode account either, because that one carries
+      # READ on `video`. The service that mints upload URLs should not be able
+      # to read anyone's source media back, so it gets its own WRITE-ONLY key.
+      MINIO_UPLOAD_ACCESS_KEY: ${MINIO_UPLOAD_ACCESS_KEY:?set MINIO_UPLOAD_ACCESS_KEY in .env - see infrastructure/storage/policies/auth-video-uploads.json}
+      MINIO_UPLOAD_SECRET_KEY: ${MINIO_UPLOAD_SECRET_KEY:?set MINIO_UPLOAD_SECRET_KEY in .env - see infrastructure/storage/policies/auth-video-uploads.json}
     restart: "no"
 
   # ==========================================================================
@@ -586,6 +599,19 @@ services:
       STORAGE_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
       STORAGE_ACCESS_KEY: ${MINIO_AUTH_ACCESS_KEY:-}
       STORAGE_SECRET_KEY: ${MINIO_AUTH_SECRET_KEY:-}
+      # ---- The write-only `video` account (media uploads only) ----
+      #
+      # DIFFERENT from STORAGE_ACCESS_KEY, and that is the whole point.
+      # STORAGE_ACCESS_KEY is the avatars/covers account: a leak there must not
+      # reach anyone's source media, so it is scoped to `avatars` + `covers`.
+      # A presigned PUT it signs for `video/...` is denied by MinIO - which is
+      # exactly what every video upload was doing.
+      #
+      # This key can write into `video/*` and read nothing. Falls back to empty
+      # (not an error) so a deployment that never uploads media still boots;
+      # `/media/initiate` then refuses with a message naming these vars.
+      MINIO_UPLOAD_ACCESS_KEY: ${MINIO_UPLOAD_ACCESS_KEY:-}
+      MINIO_UPLOAD_SECRET_KEY: ${MINIO_UPLOAD_SECRET_KEY:-}
       STORAGE_AVATAR_BUCKET: ${MINIO_AVATAR_BUCKET:-avatars}
       STORAGE_COVER_BUCKET: ${MINIO_COVER_BUCKET:-covers}
       STORAGE_PRESIGN_TTL_MINUTES: ${STORAGE_PRESIGN_TTL_MINUTES:-15}
@@ -666,10 +692,29 @@ services:
       # users aur policies banata hai. Sirf ye service ko nahi chahiye.
       MINIO_TRANSCODE_ACCESS_KEY: ${MINIO_TRANSCODE_ACCESS_KEY:?set MINIO_TRANSCODE_ACCESS_KEY in .env - transcoding-service is NOT given root credentials}
       MINIO_TRANSCODE_SECRET_KEY: ${MINIO_TRANSCODE_SECRET_KEY:?set MINIO_TRANSCODE_SECRET_KEY in .env - transcoding-service is NOT given root credentials}
+      # ---- The render port, and where the comment block below belongs ----
       # Intake is authenticated. `POST /api/v1/transcode` runs ffmpeg per job, so
       # an open endpoint is a CPU-exhaustion vector: anyone on the network could
       # queue work for free.
       TRANSCODE_INTERNAL_TOKEN: ${TRANSCODE_INTERNAL_TOKEN:?TRANSCODE_INTERNAL_TOKEN is required - the transcode intake runs ffmpeg and must not be open}
+      # ---- THE CALLBACK, and why the job was dying silent ----
+      #
+      # Without these two vars `reportBack` returns BEFORE making a request: it
+      # reads `TRANSCODE_CALLBACK_URL`, finds it empty, and logs nothing. The
+      # transcode completes, the bytes land in MinIO, the renditions are perfect
+      # - and the asset sits at `uploaded` FOREVER, because nothing ever told
+      # auth-service it finished.
+      #
+      # That is the worst possible shape of bug to have shipped: every unit test
+      # passes, the ladder is correct, and the product just silently never
+      # finishes an upload. The visibility is the whole reason to be explicit.
+      #
+      # The internal hostname is deliberate (not `localhost`): this is a
+      # container-to-container call inside the compose network.
+      TRANSCODE_CALLBACK_URL: ${TRANSCODE_CALLBACK_URL:-http://auth-service:8085/api/v1/internal/media/transcode-callback}
+      # Same shared secret as the intake. It is one trust boundary, so a second
+      # credential would be a second thing to rotate for no isolation gained.
+      TRANSCODE_CALLBACK_TOKEN: ${TRANSCODE_INTERNAL_TOKEN:?TRANSCODE_INTERNAL_TOKEN is required - the transcode intake AND its callback share it}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       MINIO_VIDEO_BUCKET: ${MINIO_VIDEO_BUCKET:-video}
       # Public host jo playlist URL me use hoga (client ko yahi dikhta hai)
@@ -680,6 +725,21 @@ services:
       # Kitne transcode parallel chal sakte hain
       TRANSCODING_MAX_WORKERS: ${TRANSCODING_MAX_WORKERS:-2}
       TRANSCODING_TEMP_DIR: /tmp/transcoding
+      # ---- Automated content moderation (self-hosted, zero cost) ----
+      #
+      # Every threshold is a config value, not a constant, so the screening
+      # policy can be tuned against a real corpus without shipping a release.
+      # See the .env block above these for what each one means and why the
+      # defaults are deliberately generous rather than tight.
+      MODERATION_ENABLED: ${MODERATION_ENABLED:-true}
+      MODERATION_SKIN_FLAG_AT: ${MODERATION_SKIN_FLAG_AT:-0.45}
+      MODERATION_SKIN_REJECT_AT: ${MODERATION_SKIN_REJECT_AT:-0.70}
+      MODERATION_RED_FLAG_AT: ${MODERATION_RED_FLAG_AT:-0.20}
+      MODERATION_RED_REJECT_AT: ${MODERATION_RED_REJECT_AT:-0.45}
+      MODERATION_MOTION_SKIN_FLAG_AT: ${MODERATION_MOTION_SKIN_FLAG_AT:-0.55}
+      MODERATION_BLACK_FRAME_REJECT_AT: ${MODERATION_BLACK_FRAME_REJECT_AT:-0.80}
+      MODERATION_AUDIO_SPIKE_FLAG_AT: ${MODERATION_AUDIO_SPIKE_FLAG_AT:-12.0}
+      MODERATION_FRAMES_SAMPLED: ${MODERATION_FRAMES_SAMPLED:-8}
       GIN_MODE: release
     depends_on:
       minio:
@@ -690,7 +750,10 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 2G
+          memory: ${TRANSCODING_MEMORY_LIMIT:-8G}
+        reservations:
+          cpus: "1.0"
+          memory: ${TRANSCODING_MEMORY_RESERVATION:-4G}
     # ---- Restart policy ----
     #
     # Ye service pehle bina restart policy ke thi. Matlab ek transient
@@ -706,6 +769,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
+    shm_size: ${TRANSCODING_SHM_SIZE:-2G}
 
   # Currency Service - Multi-currency microservice (SSOT for exchange rates)
   # exchange_rates table yahi service banati hai; baaki services yahin se padhte hain.

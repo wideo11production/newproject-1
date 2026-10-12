@@ -37,6 +37,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -109,7 +110,38 @@ type StorageService struct {
 	// space share kar sakte hain.
 	presignClient *minio.Client
 
+	// uploadClient - the MEDIA upload path's own client, and a THIRD set of
+	// credentials rather than a reuse.
+	//
+	// WHY A SEPARATE CLIENT
+	// ====================
+	// `CreateMediaUploadTicket` presigns a PUT into the `video` bucket. The
+	// account above (`MINIO_AUTH_ACCESS_KEY`) is scoped to `avatars` and
+	// `covers` only, so a URL it signs for `video/...` is rejected by MinIO
+	// with `AccessDenied` - every video upload failed, and nothing in the code
+	// looked wrong because every unit test used a mocked client.
+	//
+	// It also cannot borrow the transcode account, which carries READ on
+	// `video`: least privilege means the service that mints upload URLs should
+	// not be able to read everyone's source media back.
+	//
+	// So a write-only, `video`-scoped account. This client uses it and nothing
+	// else does. `nil` when the credentials are absent, which makes the upload
+	// path fail loudly rather than silently minting URLs that cannot work.
+	uploadClient *minio.Client
+
+	// uploadPublicClient is the browser-facing counterpart of uploadClient,
+	// for the same reason presignClient exists: the URL must carry the host a
+	// browser can resolve. It signs with the SAME upload credentials, so the
+	// two are interchangeable from MinIO's point of view.
+	uploadPublicClient *minio.Client
+
 	cfg *config.StorageConfig
+
+	// uploadAccessKey / uploadSecretKey - the write-only account's credentials,
+	// cached so the public client is built from them without re-reading env.
+	uploadAccessKey string
+	uploadSecretKey string
 }
 
 // NewStorageService MinIO client banata hai.
@@ -174,10 +206,50 @@ func NewStorageService(cfg *config.StorageConfig) (*StorageService, error) {
 		}
 	}
 
+	// ---- The write-only MEDIA UPLOAD account (see the struct field) ----
+	//
+	// Separate credentials, separate client pair. Absent credentials are NOT
+	// an error here: a deployment that only uses avatars and covers should
+	// still boot. The upload path checks at call time and refuses with a
+	// message that names the missing variable, which is a far better failure
+	// than a container that will not start.
+	uploadKey := strings.TrimSpace(os.Getenv("MINIO_UPLOAD_ACCESS_KEY"))
+	uploadSecret := strings.TrimSpace(os.Getenv("MINIO_UPLOAD_SECRET_KEY"))
+
+	var uploadClient, uploadPublicClient *minio.Client
+	if uploadKey != "" && uploadSecret != "" {
+		uploadCreds := credentials.NewStaticV4(uploadKey, uploadSecret, "")
+
+		uploadClient, err = minio.New(cfg.GetEndpoint(), &minio.Options{
+			Creds:  uploadCreds,
+			Secure: cfg.UseSSL,
+			Region: storageRegion,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		uploadPublicClient = uploadClient
+		if publicEndpoint != cfg.GetEndpoint() {
+			uploadPublicClient, err = minio.New(publicEndpoint, &minio.Options{
+				Creds:  uploadCreds,
+				Secure: strings.HasPrefix(cfg.GetPublicHost(), "https://"),
+				Region: storageRegion,
+			})
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
 	return &StorageService{
-		client:        internalClient,
-		presignClient: presignClient,
-		cfg:           cfg,
+		client:            internalClient,
+		presignClient:     presignClient,
+		uploadClient:      uploadClient,
+		uploadPublicClient: uploadPublicClient,
+		cfg:               cfg,
+		uploadAccessKey:   uploadKey,
+		uploadSecretKey:   uploadSecret,
 	}, nil
 }
 

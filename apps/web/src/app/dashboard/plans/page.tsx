@@ -14,7 +14,8 @@
  *   3. EXPIRY         - server-computed countdown (browser clock nahi)
  *
  * -----------------------------------------------------------------------------
- * WHY ONLY THE CALLER'S OWN PLAN (security rationale)
+ * WHY ONLY THE CALLER'S OWN PLAN (security rationale), AND WHY THERE IS
+ * NOW ALSO A PICKER
  * -----------------------------------------------------------------------------
  * Data same-origin BFF (`/api/auth/my-plan`) se aata hai, jo httpOnly
  * `wideo11_session` cookie se token attach karke auth-service ke
@@ -22,13 +23,31 @@
  * KABHI nahi hota, aur response me koi `user_id` nahi hota - identity
  * token se resolve hoti hai, URL ya body se nahi.
  *
- * Plan CATALOGUE (prices, codes) yahan nahi hai kyunki wo surface
- * superadmin-gated hai (`GET /admin/entitlements`). Ek user ko doosre
- * ki grant ya price list dikhana is page ka kaam nahi. Upgrade ek
- * OPERATOR decision hai - `POST /admin/entitlements` se hota hai,
- * audited aur ek insaan se attributed. Isliye yahan koi "Buy" button
- * nahi: ek button jo kisi bhi plan ko self-service se de do, us plan
- * ko bechne ka matlab hai.
+ * THIS PAGE USED TO BE READ-ONLY, and its header argued that a plan
+ * catalogue had no place here because the catalogue was a superadmin
+ * surface and "a plan a user can hand themselves is a plan you are
+ * selling". That was the product decision at the time, and it was
+ * coherent: uploading was gated by plan, so the plan WAS the product.
+ *
+ * The decision is now the opposite. Uploading is free and unlimited for
+ * every account, and what a paid plan buys is the right to EARN. So the
+ * catalogue belongs here, and so does a button - the thing a user is
+ * choosing is not more permission, it is whether they get paid.
+ *
+ * WHAT THE SERVER STILL HOLDS ON TO
+ *
+ * The picker is not a loophole, and the boundary is not drawn in the UI:
+ *
+ *   - `POST /me/plan` refuses LIFETIME plans. A monthly subscription can
+ *     end when payment stops; a lifetime grant cannot, so it is not
+ *     something a session token may create.
+ *   - The grant is recorded with source `subscription`, from the buyer's
+ *     own session, rather than the `grant` an operator writes.
+ *   - The identity comes from the token. There is no field in the request
+ *     that can name somebody else's account.
+ *
+ * So this page renders what the server offers and nothing more, and the
+ * "upgrade" that used to mean "wait for a human" now means "pick one".
  *
  * -----------------------------------------------------------------------------
  * COUNTDOWN SOURCE
@@ -52,6 +71,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
+import { PlanPicker } from '@/components/plans/plan-picker';
 
 // ---------------------------------------------------------------------------
 // Types (BFF `/api/auth/my-plan` ka response - `trial-countdown.tsx` se
@@ -265,11 +285,24 @@ export default function DashboardPlansPage() {
                   ))}
                 </dl>
                 <p className="mt-3 text-xs text-[#8b949e]">
-                  A limit of 0 means "not in your plan" — that is a denial,
-                  not a quota you have used up.
+                  Uploads are unlimited on every plan. What a paid plan adds is the
+                  right to earn — see <span className="text-[#c9d1d9]">Monetization</span>{' '}
+                  in your plan's allowances.
                 </p>
               </div>
             )}
+
+            {/* ---- Self-service plan picker ----
+                The catalogue comes from the service, not from this file, so the
+                plans on offer are whatever the server selects. This renders them
+                and forwards a choice; it does not decide which plans a user may
+                have. */}
+            <PlanPicker
+              currentPlan={plan?.plan ?? ''}
+              isTrial={plan?.is_trial ?? false}
+              onSubscribed={() => void load()}
+            />
+
 
             <div className="mt-8">
               <Button

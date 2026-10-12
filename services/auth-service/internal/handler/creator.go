@@ -20,6 +20,8 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -367,7 +369,179 @@ func (h *AuthHandler) GetPublicChannelMedia(c *gin.Context) {
 }
 
 // ---------------------------------------------------------------------------
-// GET /api/v1/channels/public   (discovery list - NO auth)
+// GET /api/v1/public/media   (public media discovery - NO auth)
+// ---------------------------------------------------------------------------
+//
+// Returns ready, approved media from public channels for related videos / browse.
+// Supports ?kind=video|reel|audio, ?limit=N, ?offset=N, ?exclude=<asset_id>.
+func (h *AuthHandler) GetPublicMedia(c *gin.Context) {
+	kind := c.Query("kind")
+	limit := 20
+	if raw := c.Query("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			limit = n
+		}
+	}
+	offset := 0
+	if raw := c.Query("offset"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil {
+			offset = n
+		}
+	}
+	exclude := c.Query("exclude")
+
+	items, total, err := h.authService.ListPublicMedia(
+		c.Request.Context(), kind, limit, offset, exclude,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "unknown media kind") {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "invalid_kind",
+				"message": err.Error(),
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not load media"})
+		return
+	}
+	if items == nil {
+		items = []service.PublicMediaItem{}
+	}
+	c.JSON(http.StatusOK, gin.H{"media": items, "count": len(items), "total": total})
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/public/media/:id/stream   (public playback, NO auth)
+// ---------------------------------------------------------------------------
+//
+// STREAMS the object's bytes, rather than redirecting to a signed URL.
+//
+// WHY STREAMING AND NOT A SIGNED URL
+//
+// A presigned URL carries the Host in its signature, so one signed for
+// `localhost:9000` is refused with `AccessDenied` when fetched from
+// `minio:9000` - and inside the container network `localhost:9000` is the caller
+// itself. A playback proxy that mints a URL and then fetches it is a circle.
+//
+// HLS makes the problem unavoidable: the playlist names segments RELATIVELY, so
+// the browser must stay same-origin for a segment to resolve at all. So this
+// opens the object itself (see `StorageService.OpenPublicVideoObject`) and
+// copies it out.
+//
+// The gate is in the service: ready AND approved AND on a public, active
+// channel. Every refusal answers one 404, so the route cannot be used to tell
+// which asset ids exist. See `service.PublicPlayableAsset`.
+//
+// Range is honoured because hls.js ranges the playlist and a seek ranges the
+// segment; ignoring it would make every seek download the whole segment.
+func (h *AuthHandler) GetPublicMediaStream(c *gin.Context) {
+	assetID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		// Same 404 as a missing asset: a malformed id must not be distinguishable
+		// from one that exists, or the route enumerates.
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	rel := strings.TrimSpace(c.Query("path"))
+	if rel == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "missing_path",
+			"message": "path is required, and must be a relative path inside the asset.",
+		})
+		return
+	}
+
+	offset, length, hasRange := parseRangeHeader(c.GetHeader("Range"))
+
+	obj, oerr := h.media.PublicMediaStream(
+		c.Request.Context(), assetID, rel, offset, length)
+	if oerr != nil {
+		if errors.Is(oerr, service.ErrPublicMediaNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+			return
+		}
+		// A bad path is the caller's fault, not the server's.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_path", "message": oerr.Error()})
+		return
+	}
+	// Close is on the failure path too - an unclosed stream holds an HTTP
+	// connection to MinIO per request.
+	defer obj.Body.Close()
+
+	body := io.Reader(obj.Body)
+
+	// gin's `extraHeaders` is a plain string map, and Content-Type is a separate
+	// argument - so it is passed once, not also set in the map.
+	extra := map[string]string{
+		// No-store rather than no-cache: the gate is evaluated per request, and a
+		// cached 404 for a video that becomes approved a minute later is a bug.
+		"Cache-Control": "no-store",
+	}
+
+	if hasRange {
+		// A ranged response is 206 with the byte window, and that window is what
+		// lets a browser seek without fetching the whole segment.
+		if length <= 0 {
+			length = obj.Size - offset
+		}
+		extra["Content-Range"] = fmt.Sprintf("bytes %d-%d/%d", offset, offset+length-1, obj.Size)
+		c.DataFromReader(http.StatusPartialContent, length, obj.ContentType, body, extra)
+		return
+	}
+
+	c.DataFromReader(http.StatusOK, obj.Size, obj.ContentType, body, extra)
+}
+
+// parseRangeHeader reads a single-range `bytes=start-end` header.
+//
+// Returns `hasRange=false` for anything it does not understand, which means
+// "send the whole object" - and that is the safe default: a malformed range
+// header on a video player is far more likely to be a quirk than an attack, and
+// refusing the request would break playback for no gain.
+//
+// Only the first range is honoured. A multi-range request (rare, and unsupported
+// by hls.js) is treated as no range, which is correct if slower.
+func parseRangeHeader(header string) (offset, length int64, ok bool) {
+	if header == "" {
+		return 0, 0, false
+	}
+	const prefix = "bytes="
+	if !strings.HasPrefix(header, prefix) {
+		return 0, 0, false
+	}
+	spec := strings.TrimSpace(strings.TrimPrefix(header, prefix))
+	if spec == "" {
+		return 0, 0, false
+	}
+	// The only range hls.js sends, and the only one a video player needs.
+	dash := strings.Index(spec, "-")
+	if dash < 0 {
+		return 0, 0, false
+	}
+	startStr := strings.TrimSpace(spec[:dash])
+	endStr := strings.TrimSpace(spec[dash+1:])
+
+	if startStr == "" {
+		// A suffix range (`bytes=-500`): the last N bytes. Legitimate but
+		// unsupported here, because the caller has no total length to hand back
+		// without a second round trip.
+		return 0, 0, false
+	}
+	start, serr := strconv.ParseInt(startStr, 10, 64)
+	if serr != nil || start < 0 {
+		return 0, 0, false
+	}
+	if endStr == "" {
+		// Open-ended: to the end of the object.
+		return start, 0, true
+	}
+	end, eerr := strconv.ParseInt(endStr, 10, 64)
+	if eerr != nil || end < start {
+		return 0, 0, false
+	}
+	return start, end - start + 1, true
+}
 // ---------------------------------------------------------------------------
 func (h *AuthHandler) ListPublicChannels(c *gin.Context) {
 	limit := 20
@@ -485,6 +659,16 @@ func writeChannelError(c *gin.Context, err error) {
 	case errors.Is(err, model.ErrURLTooLong), errors.Is(err, model.ErrURLSchemeNotAllowed):
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":   "invalid_url",
+			"message": err.Error(),
+		})
+	case errors.Is(err, model.ErrChannelLimitExceeded):
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "channel_limit_exceeded",
+			"message": model.ErrChannelLimitExceeded.Error(),
+		})
+	case errors.Is(err, model.ErrTCNotAccepted), errors.Is(err, model.ErrTCAcceptanceRequired):
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "tc_acceptance_required",
 			"message": err.Error(),
 		})
 	default:

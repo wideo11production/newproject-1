@@ -18,11 +18,15 @@ package handler
 import (
 	"crypto/subtle"
 	"errors"
+	"fmt"
+	"io"
 	"log"
+	"net"
 	"strings"
 
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -31,6 +35,35 @@ import (
 
 	"github.com/wideo11/auth-service/internal/service"
 )
+
+// MediaQuota reports what this caller may still upload, per kind.
+//
+// The point is to answer the question BEFORE a file is chosen. A trial user has
+// zero of everything, and finding that out after picking a file - and waiting for
+// its SHA-256 - is a bad trade for somebody who just wanted to post a video.
+//
+// The numbers come from the same ledger the upload path enforces, so this can
+// never be more optimistic than the refusal. A read failure here is not fatal:
+// the creator still sees the uploader, and the server still refuses an
+// over-quota upload authoritatively.
+func (h *AuthHandler) MediaQuota(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	quotas, err := h.media.MediaQuota(c.Request.Context(), uuidFromString(uid))
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "quota_unavailable",
+			"message": "Could not read your upload allowance. You can still upload.",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"quotas": quotas})
+}
 
 type mediaRequest struct {
 	Kind              string `json:"kind"`
@@ -43,6 +76,11 @@ type mediaRequest struct {
 	// page and in its counts. Optional: a creator uploads before they have a
 	// channel, and ownership is checked server-side.
 	ChannelID string `json:"channel_id"`
+	// ContentHash is the browser-computed SHA-256 of the file bytes. It exists so
+	// a re-upload of the SAME file reuses the renditions already in the bucket
+	// instead of paying a second ffmpeg pass (SYSTEM-PLAN §5.3). A claim, not a
+	// verification - the bytes never reach this service.
+	ContentHash string `json:"content_hash"`
 }
 
 // InitMedia records the intent to upload and mints the presigned PUT.
@@ -52,6 +90,21 @@ type mediaRequest struct {
 // insert failing afterwards, leaves a URL that can write an object nobody has a
 // record of - and a cleanup job reconciles against rows, so it would never be
 // found.
+//
+// ---- AND IDENTITY COMES BEFORE ALL OF IT ----
+//
+// A creator must be a VERIFIED person before they may put anything on the
+// platform. That check is the first gate here rather than a later one, because
+// everything downstream of a presigned PUT is irreversible: the bytes land in the
+// bucket, the transcode runs, the moderation scan runs - and each of those costs
+// real money on a 4 GB 4K file. Refusing an unverified upload AFTER the upload
+// means having paid for the compute on content from an account nobody can trace.
+//
+// It is also what makes the T&C enforceable. Clause 6 of the channel terms
+// promises that a violator's "credentials and digital footprints" can be reported
+// to law enforcement, and that promise is only true if the uploader was required
+// to prove an identity before uploading. An anonymous upload path makes the
+// whole legal section decoration.
 func (h *AuthHandler) InitMedia(c *gin.Context) {
 	uid, ok := creatorUserID(c)
 	if !ok {
@@ -69,20 +122,46 @@ func (h *AuthHandler) InitMedia(c *gin.Context) {
 		return
 	}
 
+	// ---- KYC gate: a verified, active account before any upload ----
+	//
+	// Refused here rather than at `finalize`, and that ordering is the whole
+	// point. By `finalize` the bytes are already in the bucket, the row exists,
+	// and the transcode is running; the only thing a late refusal achieves is
+	// having paid for the compute.
+	//
+	// The logic already existed - `RequireContentUpload` + `StatusCodeForDecision`
+	// in `service/content_policy.go`, written for exactly this call site with the
+	// comment "Isko upload handler ke SABSE PEHLE call karna hai". It had no
+	// caller. That is the same unreachability pattern the file has met before: a
+	// complete, documented, tested control that nothing invokes.
+	//
+	// The message names what to do, because "forbidden" sends a creator to look
+	// at their account settings rather than at their inbox.
+	decision, derr := h.authService.RequireContentUpload(
+		c.Request.Context(), uuidFromString(uid))
+	if derr != nil {
+		// Fail closed, with the same generic message the service chose. A caller
+		// must not be able to tell "the database is down" from "you are not
+		// allowed", because that distinction is an infrastructure fingerprint.
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "forbidden",
+			"message": decision.Message,
+			"reason":  decision.Reason,
+		})
+		return
+	}
+	if !decision.Allowed {
+		c.JSON(service.StatusCodeForDecision(*decision), gin.H{
+			"error":   "forbidden",
+			"message": decision.Message,
+			"reason":  decision.Reason,
+		})
+		return
+	}
+
 	declared := req.DeclaredBytes
 	if req.Size > 0 {
 		declared = req.Size
-	}
-
-	// The ticket mints the key AND the URL, and validates the content claim. It
-	// is the same code path the avatar and cover uploads use, with the same
-	// bucket rules and the same presign TTL.
-	ticket, err := h.storage.CreateMediaUploadTicket(
-		c.Request.Context(), uuidFromString(uid), req.Filename, req.ContentType,
-	)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media", "message": err.Error()})
-		return
 	}
 
 	// Which channel to file this under, if any. Optional on purpose - a creator
@@ -102,12 +181,69 @@ func (h *AuthHandler) InitMedia(c *gin.Context) {
 		channelID = &parsed
 	}
 
+	// ---- Re-upload dedup (§5.3) ----
+	//
+	// Checked FIRST, before the quota and before any URL is minted, because a hit
+	// means no bytes move at all: the file is already in the bucket, already
+	// probed, already encoded. That is the entire saving - a creator who fixes a
+	// title and re-uploads should not pay a second ffmpeg pass for identical
+	// output, and should not be handed a URL they have no use for.
+	//
+	// The hash is a CLAIM from the browser (the bytes go straight to MinIO on a
+	// presigned PUT, so this service never sees them). The worst case of a lying
+	// client is a wasted transcode, which is exactly what having no dedup costs.
+	hash := strings.ToLower(strings.TrimSpace(req.ContentHash))
+	if hash != "" {
+		reusable, rerr := h.media.FindReusable(c.Request.Context(), uuidFromString(uid), hash)
+		if rerr != nil {
+			// A failed lookup is not a reason to refuse the upload. The slow
+			// path is always correct, just more expensive.
+			log.Printf("[MEDIA] dedup lookup failed for %s: %v", uid, rerr)
+		}
+		if reusable != nil {
+			asset, err := h.media.Reuse(
+				c.Request.Context(), uuidFromString(uid),
+				req.Kind, req.Filename, channelID, reusable,
+			)
+			if err != nil {
+				writeMediaError(c, err)
+				return
+			}
+			c.JSON(http.StatusOK, gin.H{
+				"asset":       asset,
+				"reused":      true,
+				"reused_from": reusable.ID,
+				"note": "This exact file is already stored and encoded under your " +
+					"account, so nothing was re-uploaded.",
+			})
+			return
+		}
+	}
+
+	// The ticket mints the key AND the URL, and validates the content claim. It
+	// is the same code path the avatar and cover uploads use, with the same
+	// bucket rules and the same presign TTL.
+	ticket, err := h.storage.CreateMediaUploadTicket(
+		c.Request.Context(), uuidFromString(uid), req.Filename, req.ContentType,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media", "message": err.Error()})
+		return
+	}
+
 	// Quota + the row. A refusal here means no URL is ever returned, so the
 	// user cannot start an upload they were never entitled to.
+	//
+	// The uploader context is captured HERE, from this request, and nowhere else:
+	// the file goes straight to MinIO on a presigned PUT, so this service never
+	// sees the browser again after `initiate`. T&C clause 6 promises a violator's
+	// footprint can be handed to law enforcement, and this is the only moment that
+	// promise can be kept.
 	asset, err := h.media.Initiate(
 		c.Request.Context(), uuidFromString(uid),
 		req.Kind, req.Filename, req.ContentType, ticket.ObjectKey,
-		declared, req.DeclaredDurationS, channelID,
+		declared, req.DeclaredDurationS, channelID, hash,
+		uploadContextFrom(c),
 	)
 	if err != nil {
 		// The object key is unclaimed now - no row exists, so nothing will ever
@@ -172,7 +308,7 @@ func (h *AuthHandler) FinalizeMedia(c *gin.Context) {
 		if res, terr := h.transcode.Submit(c.Request.Context(), service.TranscodeRequest{
 			VideoID:   asset.ID.String(),
 			SourceURL: h.media.InternalObjectURL(asset),
-			Profile:   "",
+			Kind:      asset.Kind,
 		}); terr == nil {
 			queued, jobID = true, res.JobID
 		} else {
@@ -186,6 +322,120 @@ func (h *AuthHandler) FinalizeMedia(c *gin.Context) {
 		"transcode_job_id": jobID,
 		"note": "Upload recorded. If the transcode could not be queued it will be " +
 			"retried - the asset is stored either way.",
+	})
+}
+
+// RetryMedia re-queues a FAILED asset's transcode without re-uploading.
+//
+// This is the fix for a failure mode that was once permanent. A 4K upload that
+// outran the transcoder's memory wrote `failed` and STAYED failed - because
+// `MarkTranscodeResult` refuses any asset that is not mid-pipeline, and nothing
+// could move a row back. The bytes were fine in the bucket and the creator's
+// only route was to re-upload the whole file.
+//
+// The original object is reused, so a retry costs seconds rather than the upload
+// time of a multi-gigabyte file.
+func (h *AuthHandler) RetryMedia(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	assetID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	// ---- failed -> uploaded, clearing the old reason ----
+	//
+	// The reason is cleared rather than appended because the schema has one
+	// `failure_reason` column: a second failure should record the SECOND error,
+	// not a concatenation nobody can read. Losing the first reason is accepted
+	// for exactly that reason - the audit trail lives in the transcoder's logs.
+	if err := h.media.RetryFailed(c.Request.Context(), assetID, uuidFromString(uid)); err != nil {
+		writeMediaError(c, err)
+		return
+	}
+
+	asset, err := h.media.Get(c.Request.Context(), assetID, uuidFromString(uid))
+	if err != nil {
+		writeMediaError(c, err)
+		return
+	}
+
+	// ---- Queue the transcode against the SAME stored bytes ----
+	//
+	// A failure to queue is NOT a failure of the request, and matches
+	// `FinalizeMedia`'s reasoning: the asset is recorded and re-uploadable, so
+	// the honest answer is "the asset is queued for another try" rather than
+	// "the retry failed, please re-upload".
+	queued := false
+	jobID := ""
+	if h.transcode != nil {
+		if res, terr := h.transcode.Submit(c.Request.Context(), service.TranscodeRequest{
+			VideoID:   asset.ID.String(),
+			SourceURL: h.media.InternalObjectURL(asset),
+			Kind:      asset.Kind,
+		}); terr == nil {
+			queued, jobID = true, res.JobID
+		} else {
+			log.Printf("[MEDIA] retry transcode enqueue FAILED for asset %s: %v", asset.ID, terr)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"asset":            asset,
+		"transcode_queued": queued,
+		"transcode_job_id": jobID,
+		"note": "Retry queued. The original file is reused - nothing is re-uploaded.",
+	})
+}
+
+// DeleteMedia removes a FAILED asset and its stored bytes.
+//
+// Only `failed` is deletable here, and that is deliberate. An in-flight asset is
+// being written to by its own transcode; deleting that row out from under the
+// pipeline is how a callback resurrects a video the creator already removed.
+//
+// The row is deleted first, then the objects. Not the other way around: if the
+// object deletion fails after the row is gone, the result is an unreferenced
+// blob that a later sweep can catch. If the ROW survived an object failure, the
+// creator sees a video that no longer plays and cannot delete it again.
+func (h *AuthHandler) DeleteMedia(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	assetID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	asset, err := h.media.DeleteFailed(c.Request.Context(), assetID, uuidFromString(uid))
+	if err != nil {
+		writeMediaError(c, err)
+		return
+	}
+
+	// Best-effort byte cleanup. A failure here is NOT reported as a failure of
+	// the delete: the row is gone, the video is gone from every list, and the
+	// only consequence is storage that a sweep can reclaim. Reporting 500 would
+	// make the caller believe the delete failed and prompt a retry that would
+	// now 404.
+	if h.storage != nil {
+		if derr := h.storage.DeleteAssetObjects(
+			c.Request.Context(), asset.ObjectKey, asset.ID.String()); derr != nil {
+			log.Printf("[MEDIA] object cleanup failed for deleted asset %s: %v", asset.ID, derr)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"deleted":  true,
+		"asset_id": asset.ID,
+		"message":  "The failed upload was removed.",
 	})
 }
 
@@ -251,6 +501,99 @@ func (h *AuthHandler) TranscodeCallback(c *gin.Context) {
 // Public? NO - it is owner-scoped, because `failure_reason` and `object_key` are
 // not things to hand to a stranger. A caller that only needs "is this ready yet"
 // should poll the owner's own asset list.
+// ---------------------------------------------------------------------------
+// POST /api/v1/auth/media/:id/publish
+// ---------------------------------------------------------------------------
+//
+// Marks an owner's own asset as PUBLISHED - the step that makes it appear on the
+// public video page.
+//
+// WHY THIS IS A SEPARATE STATE AND NOT JUST `moderation_status`
+//
+// `moderation_status` answers "did the screening approve this". `published_at`
+// answers "did the owner CHOOSE to put it live". Those are different questions and
+// collapsing them loses information: an approved clip that the owner is still
+// editing would look identical to one they released.
+//
+// More importantly, the owner's confirmation is the point. Automated screening runs
+// on every upload, but the platform's position is that the owner carries the
+// responsibility for what goes out - so the record of "the owner confirmed, after
+// being shown what they were certifying" has to exist somewhere, and this is it.
+//
+// THE GATE, AND WHY IT IS THE SAME ONE AS EVERYWHERE ELSE
+//
+//	owner          - taken from the token, never the body
+//	ready          - an unfinished transcode is not publishable
+//	moderation approved - a refused clip is structurally unpublishable, and this
+//	                    endpoint refuses the REQUEST rather than overriding the
+//	                    verdict. There is no code path that publishes over the
+//	                    screening result, by design.
+//
+// The confirmation dialogue lives in the UI. This endpoint takes the confirmation
+// as given and records it - if the UI ever stops showing it, this has no way to
+// know, which is exactly why the wording is a statement of existing responsibility
+// rather than a disclaimer the platform grants.
+func (h *AuthHandler) PublishMedia(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	ownerID, perr := uuid.Parse(uid)
+	if perr != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	assetID, perr := uuid.Parse(c.Param("id"))
+	if perr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	// Owner-scoped: a missing asset and someone else's asset answer the same way,
+	// so this cannot be used to discover that an id exists.
+	asset, gerr := h.media.Get(c.Request.Context(), assetID, ownerID)
+	if gerr != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	// The gate. `ready` alone is not enough: `IsVisiblePublic` carries
+	// `ready AND moderation approved`, and refusing here rather than overriding is
+	// what keeps the screening result final.
+	if asset.Status != model.MediaStatusReady {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "not_ready",
+			"message": "This clip is still being processed. You can publish it once it is ready.",
+		})
+		return
+	}
+	if asset.ModerationStatus != model.ModerationApproved {
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "not_screened",
+			"message": "Automated screening has not approved this clip, so it cannot be published.",
+		})
+		return
+	}
+
+	// Idempotent by design. A viewer who double-taps "Publish" gets the same asset
+	// back both times rather than an error on the second tap - and re-publishing a
+	// clip that is already live is a no-op, not a fresh publication event.
+	publishedAt := time.Now().UTC()
+	if err := h.media.MarkPublished(c.Request.Context(), assetID, ownerID, publishedAt); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could_not_publish"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"asset_id":    assetID,
+		"published_at": publishedAt,
+		"live":        true,
+	})
+}
+
 func (h *AuthHandler) MediaStatus(c *gin.Context) {
 	uid, ok := creatorUserID(c)
 	if !ok {
@@ -303,6 +646,64 @@ func progressHint(status string) string {
 	}
 }
 
+// SignedStreamURL returns a short-lived presigned GET for one object inside a
+// media asset, so the owner can actually WATCH it.
+//
+// The `video` bucket is private by design (R6), so a plain URL returns
+// `AccessDenied` for everyone - including the uploader. Without this, every
+// finished upload is invisible, which is a worse outcome than the URL simply
+// being forgotten.
+//
+// Ownership is verified in the SERVICE, not here and not in MinIO: MinIO has no
+// idea who owns an object, so without the check any asset id would sign a URL to
+// anyone's video. The id is read from the token, never from the body.
+//
+// `?path=` is a RELATIVE path inside the asset's prefix (`1080p/playlist.m3u8`,
+// `poster.jpg`, `720p/seg_00000.ts`). Never an absolute object key: a caller
+// must not be able to name a path outside its own asset.
+func (h *AuthHandler) SignedStreamURL(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	assetID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	// Scoped to its owner. A missing asset and someone else's asset produce the
+	// SAME error, so this cannot be used to discover that an id exists.
+	asset, err := h.media.Get(c.Request.Context(), assetID, uuidFromString(uid))
+	if err != nil {
+		writeMediaError(c, err)
+		return
+	}
+
+	rel := strings.TrimSpace(c.Query("path"))
+	if rel == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "missing_path",
+			"message": "path is required, and must be a relative path inside the asset.",
+		})
+		return
+	}
+
+	url, expiresIn, err := h.storage.SignedObjectURL(c.Request.Context(), asset.ID, rel)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_path", "message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"asset_id":   asset.ID,
+		"path":       rel,
+		"url":        url,
+		"expires_in": expiresIn,
+	})
+}
+
 // Bounded, always. This table is unbounded and an unpaginated list is a denial
 // of service with a JSON body.
 func (h *AuthHandler) ListMedia(c *gin.Context) {
@@ -344,6 +745,137 @@ func (h *AuthHandler) GetMedia(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"asset": asset})
+}
+
+// OwnerStream serves the object's bytes to the asset's owner.
+//
+// WHY A SECOND STREAMING ENDPOINT
+//
+// The owner's library contains material the world may not see: a draft on a
+// private channel, an asset still awaiting a moderation verdict. The public
+// route refuses all of those, correctly. So an owner watching their own library
+// needs a route whose authority is the SESSION, not the visibility rule.
+//
+// It streams rather than signing for the same reason the public one does: a
+// presigned URL carries the Host in its signature, so a URL signed for
+// `localhost:9000` is `AccessDenied` when fetched from `minio:9000`, and inside
+// the container network `localhost:9000` is the caller itself. See
+// `StorageService.OpenVideoObject`.
+func (h *AuthHandler) OwnerStream(c *gin.Context) {
+	uid, ok := creatorUserID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	assetID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+		return
+	}
+
+	rel := strings.TrimSpace(c.Query("path"))
+	if rel == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "missing_path",
+			"message": "path is required, and must be a relative path inside the asset.",
+		})
+		return
+	}
+
+	offset, length, hasRange := parseRangeHeader(c.GetHeader("Range"))
+
+	obj, oerr := h.media.OwnerMediaStream(
+		c.Request.Context(), assetID, uuidFromString(uid), rel, offset, length)
+	if oerr != nil {
+		if errors.Is(oerr, service.ErrMediaNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "asset_not_found"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_path", "message": oerr.Error()})
+		return
+	}
+	defer obj.Body.Close()
+
+	extra := map[string]string{
+		// Private, per-owner content: never a shared cache. The signature-free
+		// stream means the gate is re-evaluated on every request.
+		"Cache-Control": "private, no-store",
+	}
+
+	body := io.Reader(obj.Body)
+	if hasRange {
+		if length <= 0 {
+			length = obj.Size - offset
+		}
+		extra["Content-Range"] = fmt.Sprintf("bytes %d-%d/%d", offset, offset+length-1, obj.Size)
+		c.DataFromReader(http.StatusPartialContent, length, obj.ContentType, body, extra)
+		return
+	}
+	c.DataFromReader(http.StatusOK, obj.Size, obj.ContentType, body, extra)
+}
+
+// uploadContextFrom reads the uploader's footprint off the request.
+//
+// WHY THIS IS THE ONLY PLACE IT IS READ
+//
+// The presigned PUT goes straight from the browser to MinIO. After `initiate`
+// this service has no further contact with the uploader, so every later stage -
+// finalize, transcode, moderation, review - is acting on data whose origin is
+// only knowable from a row written here. That is what makes the T&C's
+// law-enforcement clause true or false.
+//
+// ---- THE IP IS THE PROXY-AWARE ONE ----
+//
+// In this deployment auth-service is behind the web BFF, so the REMOTE address of
+// a creator request is the BFF's container IP, not the creator's. Taking it raw
+// would record the same value for every user on the platform, which is worse than
+// nothing: it looks like a footprint and identifies nobody.
+//
+// So `Forwarded` is preferred, then `X-Forwarded-For` (leftmost entry - the
+// original client), and `RemoteAddr` only as the last resort. The trust question
+// - "can this header be spoofed?" - is answered by the deployment: only the BFF
+// can write it because the service is not exposed, which is a property of the
+// network rather than of this code, and it is stated rather than assumed.
+//
+// A SPOOFABLE header is still recorded rather than rejected: a header that lies is
+// itself evidence, and discarding a claim because it might be false would mean
+// recording nothing for the honest case.
+func uploadContextFrom(c *gin.Context) service.UploadContext {
+	req := c.Request
+
+	ip := ""
+	if fwd := strings.TrimSpace(req.Header.Get("X-Forwarded-For")); fwd != "" {
+		// Leftmost entry is the original client; every entry after it is a proxy
+		// that appended itself.
+		if comma := strings.Index(fwd, ","); comma > 0 {
+			ip = strings.TrimSpace(fwd[:comma])
+		} else {
+			ip = fwd
+		}
+	}
+	if ip == "" {
+		// RemoteAddr is host:port, so the port is dropped rather than stored as
+		// part of the address.
+		if host, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+			ip = host
+		} else {
+			ip = req.RemoteAddr
+		}
+	}
+
+	// The device fingerprint is opaque and client-supplied. It is not validated
+	// here because validating it would mean agreeing a schema with the browser,
+	// and a schema that changes becomes a value nobody can read back. Its entire
+	// purpose is CONSISTENCY: the same browser sends the same value.
+	//
+	// It is not an identity. It correlates accounts; it does not authenticate one.
+	fp := strings.TrimSpace(req.Header.Get("X-Device-Fingerprint"))
+
+	return service.UploadContext{
+		IP:        ip,
+		UserAgent: req.UserAgent(),
+		DeviceFP:  fp,
+	}
 }
 
 func writeMediaError(c *gin.Context, err error) {
