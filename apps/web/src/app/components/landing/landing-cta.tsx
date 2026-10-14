@@ -24,6 +24,15 @@ import Link from 'next/link';
 import { Button } from '@wideo11/ui/button';
 import { initialsOf, useSession } from '@wideo11/ui/session-user-menu';
 
+import {
+  grafanaPanel,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+} from '@wideo11/ui/design-system';
+
 // The editor's origin. The welcome CTA sends a signed-in creator straight there,
 // which is the "dashboard is the service selector" idea rather than a second
 // login page.
@@ -56,14 +65,14 @@ export function LandingCta() {
     return (
       <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
         <Link href="/auth/register?next=/" className="w-full sm:w-auto">
-          <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
+          <Button className={`w-full ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85 sm:w-auto`}>
             Create account
           </Button>
         </Link>
         <Link href="/auth/login" className="w-full sm:w-auto">
           <Button
             variant="outline"
-            className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+            className={`w-full ${grafanaText} ${productPanelHover} sm:w-auto`}
           >
             Log in
           </Button>
@@ -94,10 +103,10 @@ export function LandingCta() {
       />
 
       <div className="min-w-0">
-        <p className="truncate text-sm font-semibold text-[#d8d9da]">
+        <p className={`truncate text-sm font-semibold ${grafanaText}`}>
           Welcome back, {name}
         </p>
-        <p className="truncate text-xs text-[#9fa7b3]">
+        <p className={`truncate text-xs ${grafanaTextMuted}`}>
           {needsSetup
             ? 'Finish your security setup to unlock the editor.'
             : 'Your account is ready.'}
@@ -106,14 +115,14 @@ export function LandingCta() {
 
       <div className="ml-1 flex shrink-0 gap-2">
         <Link href="/dashboard" className="hidden sm:block">
-          <Button className="bg-[#5794f2] text-white hover:bg-[#5794f2]/85">
+          <Button className={`${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}>
             Dashboard
           </Button>
         </Link>
         <Link href={EDITOR_URL} className="hidden sm:block">
           <Button
             variant="outline"
-            className="border-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227]"
+            className={`${productSeparation} ${grafanaText} ${productPanelHover}`}
           >
             Editor
           </Button>
@@ -222,26 +231,26 @@ export function MidPageCta() {
   const signedIn = session.state !== 'loading' && session.state !== 'out';
 
   return (
-    <section className="w-full-y-[#2c3235] bg-[#181b1f] px-4 py-12 sm:px-6 lg:px-8">
+    <section className={`w-full-y ${grafanaPanel} px-4 py-12 sm:px-6 lg:px-8`}>
       <div className="mx-auto flex max-w-[1600px] flex-col items-center gap-4 text-center">
         {signedIn ? (
           <>
-            <h2 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
+            <h2 className={`text-xl font-bold tracking-tight ${grafanaText} sm:text-2xl`}>
               Pick up where you left off
             </h2>
-            <p className="max-w-xl text-sm text-[#9fa7b3]">
+            <p className={`max-w-xl text-sm ${grafanaTextMuted}`}>
               Your account is ready - there is nothing to sign up for again.
             </p>
             <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Link href="/dashboard" className="w-full sm:w-auto">
-                <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
+                <Button className={`w-full ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85 sm:w-auto`}>
                   Go to dashboard
                 </Button>
               </Link>
               <Link href={EDITOR_URL} className="w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+                  className={`w-full ${grafanaText} ${productPanelHover} sm:w-auto`}
                 >
                   Open editor
                 </Button>
@@ -250,22 +259,22 @@ export function MidPageCta() {
           </>
         ) : (
           <>
-            <h2 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
+            <h2 className={`text-xl font-bold tracking-tight ${grafanaText} sm:text-2xl`}>
               Ready to publish your first video?
             </h2>
-            <p className="max-w-xl text-sm text-[#9fa7b3]">
+            <p className={`max-w-xl text-sm ${grafanaTextMuted}`}>
               Create an account in under a minute. Free to start, no card required.
             </p>
             <div className="mt-2 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
               <Link href="/auth/register?next=/" className="w-full sm:w-auto">
-                <Button className="w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85 sm:w-auto">
+                <Button className={`w-full ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85 sm:w-auto`}>
                   Register now
                 </Button>
               </Link>
               <Link href="/auth/login" className="w-full sm:w-auto">
                 <Button
                   variant="outline"
-                  className="w-full-[#2c3235] text-[#d8d9da] hover:bg-[#1f2227] sm:w-auto"
+                  className={`w-full ${grafanaText} ${productPanelHover} sm:w-auto`}
                 >
                   Log in
                 </Button>

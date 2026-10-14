@@ -22,7 +22,7 @@
 // THEME (Grafana exact hex, from design-system.ts):
 //   Layout shell: #111217 (grafanaBgHex)
 //   Panels: #181b1f, borders: #2c3235, text: #d8d9da / #9fa7b3
-//   Ye `bg-[#111217]` Tailwind arbitrary value se directly use hote hain.
+//   Ye `${grafanaBg}` Tailwind arbitrary value se directly use hote hain.
 //
 // Hinglish comments: har block ka arth
 
@@ -38,17 +38,25 @@ import LandingShell from '@/components/landing/landing-shell';
 import { OnboardingStepsRow } from '@/components/landing/onboarding-steps';
 import { FaqPortal } from '@/components/landing/faq-portal';
 
+import {
+  grafanaBg,
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+  productMasthead,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // NAVIGATION HEADER - auth links + brand
 // ---------------------------------------------------------------------------
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40-[#2c3235] bg-[#111217]/90 backdrop-blur">
+    <header className={`sticky top-0 z-40 ${grafanaBg}/90 backdrop-blur`}>
       <div className="mx-auto flex max-w-[1600px] items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
         {/* Brand - Wino + Rino lockup (manifest-locked vectors, inline SVG) */}
         <Link href="/" className="flex items-center gap-2.5">
           <BrandLockup size={32} />
-          <span className="text-lg font-semibold tracking-tight text-[#d8d9da]">
+          <span className={`text-lg font-semibold tracking-tight ${grafanaText}`}>
             Wideo11
           </span>
         </Link>
@@ -86,13 +94,13 @@ function SiteHeader() {
 // ---------------------------------------------------------------------------
 function HeroStrip() {
   return (
-    <section className="w-full bg-[#181b1f] px-4 py-6 sm:px-6 lg:px-8">
+    <section className={`w-full ${grafanaPanel} px-4 py-6 sm:px-6 lg:px-8`}>
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold tracking-tight text-[#d8d9da] sm:text-2xl">
+          <h1 className={`text-xl font-bold tracking-tight ${grafanaText} sm:text-2xl`}>
             Now accepting creators
           </h1>
-          <p className="mt-1 text-sm text-[#9fa7b3]">
+          <p className={`mt-1 text-sm ${grafanaTextMuted}`}>
             Publish to the edge, keep every rupee. No paid tools in the loop.
           </p>
         </div>
@@ -122,8 +130,8 @@ function HeroStrip() {
 // ---------------------------------------------------------------------------
 function SiteFooter() {
   return (
-    <footer className="w-full-[#2c3235] bg-[#0f1115] px-4 py-8 text-center sm:px-6 lg:px-8">
-      <p className="text-xs text-[#6b7280]">
+    <footer className={`w-full ${productMasthead} px-4 py-8 text-center sm:px-6 lg:px-8`}>
+      <p className="text-xs text-gray-500">
         Wideo11 - publish to the edge, keep every rupee.
       </p>
     </footer>
@@ -135,9 +143,9 @@ function SiteFooter() {
 // ---------------------------------------------------------------------------
 export default function HomePage() {
   return (
-    // Full-bleed entertainment shell. `bg-[#111217]` = exact Grafana hex.
+    // Full-bleed entertainment shell. `${grafanaBg}` = exact Grafana hex.
     // min-h-screen ensures it fills viewport even on short content.
-    <div className="min-h-screen w-full bg-[#111217] text-[#d8d9da]">
+    <div className={`min-h-screen w-full ${grafanaBg} ${grafanaText}`}>
       <SiteHeader />
       <HeroStrip />
 

@@ -39,6 +39,7 @@ import { MediaLibraryPane } from '@/components/studio/MediaLibraryPane';
 import { ActivePlayerPane } from '@/components/studio/ActivePlayerPane';
 import type { ActivePlayerMeta } from '@/components/studio/ActivePlayerPane';
 import { PublishConfirmDialog } from '@/components/studio/PublishConfirmDialog';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import {
   InlinePlayerProvider,
   useInlinePlayer,
@@ -47,6 +48,17 @@ import {
 import { ownerHlsStreamUrl, ownerPosterStreamUrl, ownerPreviewStreamUrl } from '@/lib/playback';
 import { MediaUpload } from '@/components/channels/media-upload';
 import type { MediaAsset } from '@/lib/media-upload';
+import Link from 'next/link';
+import { Plus, Youtube } from 'lucide-react';
+import { Button } from '@wideo11/ui/button';
+
+import {
+  productFocusRing,
+  productPanel,
+  productPanelHover,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
 
 /** One kind's allowance, as the server measures it. */
 type QuotaEntry = {
@@ -102,6 +114,7 @@ function PlayerSplit({
   shown,
   loading,
   meta,
+  onDeleted,
 }: {
   shown: MediaAsset[];
   loading: boolean;
@@ -110,8 +123,58 @@ function PlayerSplit({
   // and it was: `assetOwnerId` exists on `ActivePlayerMeta` but not on the inline
   // copy here, so the build failed the moment anything passed it.
   meta: ActivePlayerMeta;
+  /**
+   * Drops an asset from the caller's list.
+   *
+   * A callback rather than a `setAssets` passed down, because the list lives in
+   * `StudioWorkspace` — this component only renders a page of it. Owning the
+   * removal where the list is owned is what makes the deletion and the display
+   * agree.
+   */
+  onDeleted: (assetId: string) => void;
 }) {
   const { current, close, navigate, index, total } = useInlinePlayer();
+
+  // ---- delete state ----
+  //
+  // A clip that was uploaded and should not be. The card reports the intent; the
+  // confirmation and the API call live here, so a mis-click cannot delete
+  // anything without a second, deliberate press.
+  const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/media/${encodeURIComponent(deleteTarget.id)}`, {
+        method: 'DELETE',
+        cache: 'no-store',
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { message?: string };
+        setDeleteError(body.message ?? 'That clip could not be deleted.');
+        setDeleting(false);
+        return;
+      }
+
+      // Drop it through the caller, which owns the list.
+      onDeleted(deleteTarget.id);
+
+      // If the deleted clip is the one playing, close the player. Leaving it open
+      // would leave a player pointing at an asset that no longer exists.
+      if (current?.id === deleteTarget.id) close();
+
+      setDeleteTarget(null);
+      setDeleting(false);
+    } catch {
+      setDeleteError('Could not reach the service.');
+      setDeleting(false);
+    }
+  }, [deleteTarget, current?.id, close, onDeleted]);
 
   // ---- publish state ----
   //
@@ -179,13 +242,17 @@ function PlayerSplit({
               // The eligibility rule is the SCREENING verdict, and nothing else.
               // An asset that has not been approved never carries a publish
               // control, so "Go Live" cannot appear on unscreened material.
-              eligibleForPublish={a.moderation_status === 'approved'}
-              isLive={liveIds.includes(a.id) || Boolean(a.published_at)}
-              onPublish={() => {
-                setPublishTarget(a);
-                setPublishError(null);
-              }}
-            />
+          eligibleForPublish={a.moderation_status === 'approved'}
+          isLive={liveIds.includes(a.id) || Boolean(a.published_at)}
+          onPublish={() => {
+            setPublishTarget(a);
+            setPublishError(null);
+          }}
+          onDelete={() => {
+            setDeleteTarget(a);
+            setDeleteError(null);
+          }}
+        />
           ))}
         </MediaLibraryPane>
       </div>
@@ -217,6 +284,30 @@ function PlayerSplit({
         confirming={publishing}
         error={publishError}
       />
+
+      {/* The escape hatch for a clip that should not exist. Deliberately a
+          SEPARATE dialog from the publish one: pressing "Go Live" and pressing
+          "Delete" are opposite intents, and a combined dialog would make it
+          possible to confirm the wrong one with a single mis-read click. */}
+      {deleteTarget ? (
+        <ConfirmDialog
+          isOpen
+          onClose={() => {
+            if (!deleting) setDeleteTarget(null);
+          }}
+          onConfirm={() => {
+            void confirmDelete();
+          }}
+          title={`Delete "${deleteTarget.filename}"?`}
+          message={
+            deleteError ??
+            'This permanently deletes the clip from your library and from anywhere it has been published. ' +
+              'This action cannot be undone.'
+          }
+          confirmText={deleting ? 'Deleting…' : 'Delete'}
+          variant="destructive"
+        />
+      ) : null}
     </div>
   );
 }
@@ -360,76 +451,106 @@ function StudioWorkspace() {
   // thing here, which is the honest reading of an owner's studio.
   const header = channels[0];
 
+  // Early return when no channels (and not loading) - show CTA to create one
+  if (!loading && channels.length === 0) {
+    return (
+      <div className={`flex min-h-screen ${productSunken} text-white`}>
+        <StudioSidebar active={category} onSelect={setCategory} counts={counts} />
+        <div className="min-w-0 flex-1">
+          <StudioHeader />
+          <main className="space-y-4 p-4 sm:p-5">
+            <ChannelHeaderCard
+              displayName={header?.display_name}
+              handle={header?.handle}
+              creator={header?.display_name}
+              subscribers={formatSubscribers(header?.subscriber_count ?? 0)}
+              joined={formatJoined(header?.created_at)}
+              coverUrl={header?.cover_url}
+              avatarUrl={header?.logo_url || header?.image_url}
+              brandHue={header?.brand_hue}
+            />
+            {/* ---- no channels: show CTA to create one ---- */}
+            <div className={`flex flex-col items-center justify-center py-12 rounded-2xl ${productPanel} text-center`}>
+              <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 ${productSunken}`}>
+                <Youtube className="h-8 w-8 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Create a channel first</h3>
+              <p className={`${productTextMuted} text-sm mb-6 max-w-xs`}>
+                You need at least one channel to upload videos. Create your channel to get started.
+              </p>
+              <Link
+                href="/dashboard/channels/setup"
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-white transition-colors ${productFocusRing} focus:outline-none focus:ring-2`}
+                style={{ background: "linear-gradient(135deg, #ff6500 0%, #e05500 100%)" }}
+              >
+                <Plus className="h-4 w-4" />
+                Create Channel
+              </Link>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen bg-[#0d0f11] text-white">
+    <div className={`flex min-h-screen ${productSunken} text-white`}>
       <StudioSidebar active={category} onSelect={setCategory} counts={counts} />
 
       <div className="min-w-0 flex-1">
         <StudioHeader />
 
         <main className="space-y-4 p-4 sm:p-5">
-          {/* ---- channel header ---- */}
-          <ChannelHeaderCard
-            displayName={header?.display_name}
-            handle={header?.handle}
-            creator={header?.display_name}
-            subscribers={formatSubscribers(header?.subscriber_count ?? 0)}
-            joined={formatJoined(header?.created_at)}
-            coverUrl={header?.cover_url}
-            avatarUrl={header?.logo_url || header?.image_url}
-            brandHue={header?.brand_hue}
-          />
+              {/* ---- the uploader ----
+                  ONE dropzone, not two. This page used to render its own dashed box
+                  above `MediaUpload`, which renders its own dashed box as well - so a
+                  creator saw two identical drop targets and neither was clearly "the"
+                  one. The one that survives is `MediaUpload`'s, because it owns the
+                  whole presign -> PUT -> finalize -> transcode chain AND its own file
+                  input, drag state and progress. A second box that only forwarded its
+                  files here was a decoration around a working control. */}
+              <MediaUpload
+                channels={channels.map((c) => ({ id: c.id, label: c.display_name || c.handle }))}
+                files={picked}
+                onStored={onStored}
+                onQueued={() => setPicked([])}
+              />
 
-          {/* ---- the uploader ----
-              ONE dropzone, not two. This page used to render its own dashed box
-              above `MediaUpload`, which renders its own dashed box as well - so a
-              creator saw two identical drop targets and neither was clearly "the"
-              one. The one that survives is `MediaUpload`'s, because it owns the
-              whole presign -> PUT -> finalize -> transcode chain AND its own file
-              input, drag state and progress. A second box that only forwarded its
-              files here was a decoration around a working control. */}
-          <MediaUpload
-            channels={channels.map((c) => ({ id: c.id, label: c.display_name || c.handle }))}
-            files={picked}
-            onStored={onStored}
-            onQueued={() => setPicked([])}
-          />
-
-          {/* ---- what the plan allows ----
-              Shown BEFORE the file picker, because the alternative is a creator
-              choosing a file, waiting for its hash, then being told a capability name
-              they have no context for. */}
-          {quotas.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl bg-[#16181d] px-3 py-2.5 text-xs text-[#8b949e]">
-              {quotas.map((q) => (
-                <span key={q.kind} className="inline-flex items-center gap-1.5">
-                  <span className="font-medium capitalize text-white">{q.kind}</span>
-                  {q.unlimited ? (
-                    <span>unlimited</span>
-                  ) : (
-                    <span>
-                      {q.remaining} of {q.limit} left
-                      {q.used > 0 ? ` (${q.used} used)` : ''}
+              {/* ---- what the plan allows ----
+                  Shown BEFORE the file picker, because the alternative is a creator
+                  choosing a file, waiting for its hash, then being told a capability name
+                  they have no context for. */}
+              {quotas.length > 0 ? (
+                <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 rounded-2xl ${productPanel} px-3 py-2.5 text-xs ${productTextMuted}`}>
+                  {quotas.map((q) => (
+                    <span key={q.kind} className="inline-flex items-center gap-1.5">
+                      <span className="font-medium capitalize text-white">{q.kind}</span>
+                      {q.unlimited ? (
+                        <span>unlimited</span>
+                      ) : (
+                        <span>
+                          {q.remaining} of {q.limit} left
+                          {q.used > 0 ? ` (${q.used} used)` : ''}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              ))}
-            </div>
-          ) : null}
+                  ))}
+                </div>
+              ) : null}
 
-          {loadError ? (
-            <p className="rounded-2xl bg-red-500/5 px-3 py-2 text-xs text-red-300">{loadError}</p>
-          ) : null}
+              {loadError ? (
+                <p className="rounded-2xl bg-red-500/5 px-3 py-2 text-xs text-red-300">{loadError}</p>
+              ) : null}
 
-          {/* ---- the split ---- */}
-          <InlinePlayerProvider playlist={playlist}>
+              {/* ---- the split ---- */}
+              <InlinePlayerProvider playlist={playlist}>
             {/* Channel filter, one row above the library. "All Media" is first so
                 the broadest view is the default and narrowing is a deliberate act. */}
             {channelOptions.length > 0 ? (
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <label
                   htmlFor="studio-channel-filter"
-                  className="text-[10px] font-semibold uppercase tracking-wider text-[#8b949e]"
+                  className={`text-[10px] font-semibold uppercase tracking-wider ${productTextMuted}`}
                 >
                   Channel
                 </label>
@@ -438,7 +559,7 @@ function StudioWorkspace() {
                     id="studio-channel-filter"
                     value={effectiveFilter}
                     onChange={(e) => setChannelFilter(e.target.value)}
-                    className="appearance-none rounded-xl bg-[#16181d] py-1.5 pl-3 pr-8 text-xs font-medium text-white transition-colors hover:bg-[#1f2227] focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+                    className={`appearance-none rounded-xl ${productPanel} py-1.5 pl-3 pr-8 text-xs font-medium text-white transition-colors ${productPanelHover} focus:outline-none focus:ring-1 ${productFocusRing}`}
                   >
                     <option value="all">All Media ({playable.length})</option>
                     {channelOptions.map((c) => (
@@ -449,7 +570,7 @@ function StudioWorkspace() {
                   </select>
                   <svg
                     viewBox="0 0 24 24"
-                    className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#8b949e]"
+                    className={`pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 ${productTextMuted}`}
                     fill="currentColor"
                     aria-hidden="true"
                   >
@@ -457,7 +578,7 @@ function StudioWorkspace() {
                   </svg>
                 </div>
                 {effectiveFilter !== 'all' ? (
-                  <span className="text-[11px] text-[#8b949e]">
+                  <span className={`text-[11px] ${productTextMuted}`}>
                     {channelFiltered.length} clips in this channel
                   </span>
                 ) : null}
@@ -467,6 +588,7 @@ function StudioWorkspace() {
             <PlayerSplit
               shown={shown}
               loading={loading}
+              onDeleted={(assetId) => setAssets((prev) => prev.filter((a) => a.id !== assetId))}
               meta={{
                 creator: header?.display_name,
                 channel: header?.handle,

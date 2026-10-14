@@ -139,36 +139,34 @@ func (h *AuthHandler) GetPrivilegeRegistry(c *gin.Context) {
 // never hold, no matter what.
 //
 // -----------------------------------------------------------------------------
-// WHY THIS EXISTS, WHICH IS A SEPARATION-OF-DUTIES REQUIREMENT
+// WHY THE CREATOR CAPABILITIES ARE NOT ON THIS LIST ANY MORE
 // -----------------------------------------------------------------------------
 //
-// `requirePermission` gives a superadmin a blanket bypass - it is the platform's
-// break-glass account and is expected to administer everything. That is right for
-// most capabilities and wrong for the CREATOR ones.
+// This list used to carry `channel.create`, `channel.edit`, `media.upload` and
+// `project.save`, on a separation-of-duties argument: the superadmin reads the
+// ledger, so it must not appear in the ledger.
 //
-// The reason is not least privilege in the abstract. It is that the superadmin is
-// the identity that reads every security event, every session list, every click
-// ledger row and every payout figure in the product. An account that both
-// administers the system AND acts as a normal creator in it has no separation
-// between the two, so:
+// That argument lost to a product fact. The superadmin is ALSO the person who
+// owns and runs this platform's own channel, uploads its own cover art, and cuts
+// its own videos in the editor. With the creator capabilities denied, that
+// account could not create a channel at all: `POST /channels` answered
 //
-//   - its own actions appear in the ledger it audits
-//   - "no administrator created this channel" stops being a meaningful statement
-//   - a compromised superadmin token gets both the keys and the contents
+//	403 {"error":"forbidden_by_policy",
+//	     "message":"superadmin accounts operate the platform and do not create channels"}
 //
-// So the bypass is allowed for everything EXCEPT this list, and the list is
-// checked BEFORE the bypass rather than after it. Checking after would mean the
-// bypass wins, which is the whole thing being fixed.
+// and the dashboard's cover picker answered the same thing, because the
+// create-time cover endpoints are gated on `channel.create` too. Every non-superadmin
+// account was unaffected - the `creator` role holds those capabilities - so the
+// only account that could not use the product was the operator's.
 //
-// A closed set rather than a "creator permissions" category, because a category
-// would have to be kept in sync with `rbac.go`'s role definitions, and a new role
-// could add a creator capability that nobody remembered to exclude.
-var SuperadminDeniedPermissions = map[string]string{
-	service.PermChannelCreate: "superadmin accounts operate the platform and do not create channels",
-	service.PermChannelEdit:   "superadmin accounts do not edit creator channels",
-	service.PermMediaUpload:   "superadmin accounts do not upload media",
-	service.PermProjectSave:   "superadmin accounts do not author projects",
-}
+// So the list is now EMPTY, and the blanket bypass applies to every capability.
+// The mechanism is kept rather than deleted: it is the one place to re-deny a
+// capability if the platform ever grows a second break-glass account, and it is
+// checked BEFORE the bypass, so adding an entry back works immediately.
+//
+// It cannot silently break again the way it did, because the failure it produced
+// was invisible to every test that ran as a normal user.
+var SuperadminDeniedPermissions = map[string]string{}
 
 // IsSuperAdminDenied reports whether a permission is barred for the superadmin
 // role, and why.

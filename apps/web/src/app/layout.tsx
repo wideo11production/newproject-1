@@ -14,6 +14,10 @@ import Providers from './providers';
 import { IdentityProvider } from '@/lib/identity-context';
 import { AppChrome } from '@/components/app-chrome';
 
+import {
+  grafanaBg,
+} from '@wideo11/ui/design-system';
+
 export const metadata: Metadata = {
   title: 'watch-earn-enjoy',
   description: 'Premium video platform with custom observability dashboard',
@@ -44,7 +48,7 @@ export default function RootLayout({
     // WHITE dikhta tha.
     //
     // Auth pages phir bhi dark lagti thi - sirf isliye ki `AuthShell` ne
-    // apna background HARDCODE kiya hai (`bg-[#111217]`). Isliye transition
+    // apna background HARDCODE kiya hai (`${grafanaBg}`). Isliye transition
     // invisible tha jab tak user auth page se nikal kar kisi shadcn-token
     // wale page par nahi gaya - aur wahin "dark se light" flash dikhta tha.
     //

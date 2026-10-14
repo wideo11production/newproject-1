@@ -10,6 +10,17 @@
 import { useEffect, useState } from 'react';
 import { BarChart3, Users, Upload, DollarSign } from 'lucide-react';
 
+import {
+  grafanaDanger,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productWarning,
+} from '@wideo11/ui/design-system';
+
 type StatCard = {
   label: string;
   value: string;
@@ -33,38 +44,38 @@ export function WorkspaceOverviewView() {
             value: data.total_views?.toLocaleString() ?? '—',
             change: data.views_change ?? '',
             icon: <BarChart3 className="h-2.5 w-2.5" />,
-            color: 'text-[#5794f2]',
+            color: `${grafanaPrimary}`,
           },
           {
             label: 'Subscribers',
             value: data.subscribers?.toLocaleString() ?? '—',
             change: data.subs_change ?? '',
             icon: <Users className="h-2.5 w-2.5" />,
-            color: 'text-[#73bf69]',
+            color: `${grafanaSuccess}`,
           },
           {
             label: 'Uploads',
             value: data.total_uploads?.toLocaleString() ?? '—',
             change: data.uploads_change ?? '',
             icon: <Upload className="h-2.5 w-2.5" />,
-            color: 'text-[#f2495c]',
+            color: `${grafanaDanger}`,
           },
           {
             label: 'Revenue',
             value: data.revenue ? `₹${Number(data.revenue).toLocaleString()}` : '—',
             change: data.revenue_change ?? '',
             icon: <DollarSign className="h-2.5 w-2.5" />,
-            color: 'text-[#f7c548]',
+            color: `${productWarning}`,
           },
         ]);
       })
       .catch(() => {
         // API not yet implemented — show placeholder stats.
         setStats([
-          { label: 'Total Views', value: '0', change: '', icon: <BarChart3 className="h-2.5 w-2.5" />, color: 'text-[#5794f2]' },
-          { label: 'Subscribers', value: '0', change: '', icon: <Users className="h-2.5 w-2.5" />, color: 'text-[#73bf69]' },
-          { label: 'Uploads', value: '0', change: '', icon: <Upload className="h-2.5 w-2.5" />, color: 'text-[#f2495c]' },
-          { label: 'Revenue', value: '₹0', change: '', icon: <DollarSign className="h-2.5 w-2.5" />, color: 'text-[#f7c548]' },
+          { label: 'Total Views', value: '0', change: '', icon: <BarChart3 className="h-2.5 w-2.5" />, color: `${grafanaPrimary}` },
+          { label: 'Subscribers', value: '0', change: '', icon: <Users className="h-2.5 w-2.5" />, color: `${grafanaSuccess}` },
+          { label: 'Uploads', value: '0', change: '', icon: <Upload className="h-2.5 w-2.5" />, color: `${grafanaDanger}` },
+          { label: 'Revenue', value: '₹0', change: '', icon: <DollarSign className="h-2.5 w-2.5" />, color: `${productWarning}` },
         ]);
       })
       .finally(() => setLoading(false));
@@ -73,14 +84,14 @@ export function WorkspaceOverviewView() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-6 w-48 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-[#d8d9da] mb-6">
+      <h1 className={`text-2xl font-bold ${grafanaText} mb-6`}>
         Workspace Overview
       </h1>
 
@@ -88,18 +99,18 @@ export function WorkspaceOverviewView() {
         {stats.map((stat) => (
           <div
             key={stat.label}
-            className="rounded-md bg-[#181b1f] p-5"
+            className={`rounded-md ${grafanaPanel} p-5`}
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
+                <p className={`text-[11px] uppercase tracking-wide ${grafanaTextMuted}`}>
                   {stat.label}
                 </p>
-                <p className="mt-1 text-2xl font-bold text-[#d8d9da]">
+                <p className={`mt-1 text-2xl font-bold ${grafanaText}`}>
                   {stat.value}
                 </p>
                 {stat.change ? (
-                  <p className="mt-1 text-xs text-[#9fa7b3]">{stat.change}</p>
+                  <p className={`mt-1 text-xs ${grafanaTextMuted}`}>{stat.change}</p>
                 ) : null}
               </div>
               <span className={stat.color}>{stat.icon}</span>
@@ -108,8 +119,8 @@ export function WorkspaceOverviewView() {
         ))}
       </div>
 
-      <div className="rounded-md bg-[#181b1f] p-5">
-        <p className="text-sm text-[#9fa7b3]">
+      <div className={`rounded-md ${grafanaPanel} p-5`}>
+        <p className={`text-sm ${grafanaTextMuted}`}>
           Select a tab from the sidebar to navigate to a specific workspace.
         </p>
       </div>

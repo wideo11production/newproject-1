@@ -10,6 +10,21 @@
 import { useEffect, useState } from 'react';
 import { Globe, DollarSign, TrendingUp, Users } from 'lucide-react';
 
+import {
+  grafanaDanger,
+  grafanaDangerBg,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaSuccess,
+  grafanaSuccessBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSunken,
+  productWarning,
+} from '@wideo11/ui/design-system';
+
 type AdRevenueStats = {
   total_revenue: number;
   impressions: number;
@@ -34,7 +49,7 @@ export function CommercialConsoleView() {
   if (loading || !stats) {
     return (
       <div className="p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-6 w-48 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
@@ -47,61 +62,61 @@ export function CommercialConsoleView() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-[#d8d9da] mb-6">
+      <h1 className={`text-2xl font-bold ${grafanaText} mb-6`}>
         Commercial Console
       </h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-        <div className="rounded-md bg-[#181b1f] p-5">
+        <div className={`rounded-md ${grafanaPanel} p-5`}>
           <div className="flex items-center gap-3">
-            <DollarSign className="h-2.5 w-2.5 text-[#5794f2]" />
+            <DollarSign className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
+              <p className={`text-[11px] uppercase tracking-wide ${grafanaTextMuted}`}>
                 Total Revenue
               </p>
-              <p className="mt-1 text-2xl font-bold text-[#d8d9da]">
+              <p className={`mt-1 text-2xl font-bold ${grafanaText}`}>
                 ₹{stats.total_revenue.toLocaleString()}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-md bg-[#181b1f] p-5">
+        <div className={`rounded-md ${grafanaPanel} p-5`}>
           <div className="flex items-center gap-3">
-            <Globe className="h-2.5 w-2.5 text-[#73bf69]" />
+            <Globe className={`h-2.5 w-2.5 ${grafanaSuccess}`} />
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
+              <p className={`text-[11px] uppercase tracking-wide ${grafanaTextMuted}`}>
                 Impressions
               </p>
-              <p className="mt-1 text-2xl font-bold text-[#d8d9da]">
+              <p className={`mt-1 text-2xl font-bold ${grafanaText}`}>
                 {stats.impressions.toLocaleString()}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-md bg-[#181b1f] p-5">
+        <div className={`rounded-md ${grafanaPanel} p-5`}>
           <div className="flex items-center gap-3">
-            <Users className="h-2.5 w-2.5 text-[#f2495c]" />
+            <Users className={`h-2.5 w-2.5 ${grafanaDanger}`} />
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
+              <p className={`text-[11px] uppercase tracking-wide ${grafanaTextMuted}`}>
                 Unique Viewers
               </p>
-              <p className="mt-1 text-2xl font-bold text-[#d8d9da]">
+              <p className={`mt-1 text-2xl font-bold ${grafanaText}`}>
                 {Math.round(stats.impressions * 0.6).toLocaleString()}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="rounded-md bg-[#181b1f] p-5">
+        <div className={`rounded-md ${grafanaPanel} p-5`}>
           <div className="flex items-center gap-3">
-            <TrendingUp className="h-2.5 w-2.5 text-[#f7c548]" />
+            <TrendingUp className={`h-2.5 w-2.5 ${productWarning}`} />
             <div>
-              <p className="text-[11px] uppercase tracking-wide text-[#9fa7b3]">
+              <p className={`text-[11px] uppercase tracking-wide ${grafanaTextMuted}`}>
                 Your Share (20%)
               </p>
-              <p className="mt-1 text-2xl font-bold text-[#d8d9da]">
+              <p className={`mt-1 text-2xl font-bold ${grafanaText}`}>
                 ₹{stats.creator_share.toLocaleString()}
               </p>
             </div>
@@ -110,19 +125,19 @@ export function CommercialConsoleView() {
       </div>
 
       {/* Revenue split visualization */}
-      <div className="mb-8 rounded-md bg-[#181b1f] p-5">
-        <h3 className="mb-4 text-sm font-semibold text-[#d8d9da]">
+      <div className={`mb-8 rounded-md ${grafanaPanel} p-5`}>
+        <h3 className={`mb-4 text-sm font-semibold ${grafanaText}`}>
           Revenue Split (Q3.2)
         </h3>
         <div className="space-y-3">
           <div>
             <div className="flex justify-between text-xs">
-              <span className="text-[#9fa7b3]">Viewer (60%)</span>
-              <span className="text-[#d8d9da]">₹{stats.viewer_share.toLocaleString()}</span>
+              <span className={`${grafanaTextMuted}`}>Viewer (60%)</span>
+              <span className={`${grafanaText}`}>₹{stats.viewer_share.toLocaleString()}</span>
             </div>
-            <div className="mt-1 h-2 rounded-full bg-[#1f2227]">
+            <div className={`mt-1 h-2 rounded-full ${productPanelHover}`}>
               <div
-                className="h-2 rounded-full bg-[#5794f2]"
+                className={`h-2 rounded-full ${grafanaPrimaryBg}`}
                 style={{ width: `${splitPct.viewer}%` }}
               />
             </div>
@@ -130,12 +145,12 @@ export function CommercialConsoleView() {
 
           <div>
             <div className="flex justify-between text-xs">
-              <span className="text-[#9fa7b3]">Creator (20% — subscribed only)</span>
-              <span className="text-[#d8d9da]">₹{stats.creator_share.toLocaleString()}</span>
+              <span className={`${grafanaTextMuted}`}>Creator (20% — subscribed only)</span>
+              <span className={`${grafanaText}`}>₹{stats.creator_share.toLocaleString()}</span>
             </div>
-            <div className="mt-1 h-2 rounded-full bg-[#1f2227]">
+            <div className={`mt-1 h-2 rounded-full ${productPanelHover}`}>
               <div
-                className="h-2 rounded-full bg-[#73bf69]"
+                className={`h-2 rounded-full ${grafanaSuccessBg}`}
                 style={{ width: `${splitPct.creator}%` }}
               />
             </div>
@@ -143,12 +158,12 @@ export function CommercialConsoleView() {
 
           <div>
             <div className="flex justify-between text-xs">
-              <span className="text-[#9fa7b3]">Platform (20%)</span>
-              <span className="text-[#d8d9da]">₹{stats.platform_share.toLocaleString()}</span>
+              <span className={`${grafanaTextMuted}`}>Platform (20%)</span>
+              <span className={`${grafanaText}`}>₹{stats.platform_share.toLocaleString()}</span>
             </div>
-            <div className="mt-1 h-2 rounded-full bg-[#1f2227]">
+            <div className={`mt-1 h-2 rounded-full ${productPanelHover}`}>
               <div
-                className="h-2 rounded-full bg-[#f2495c]"
+                className={`h-2 rounded-full ${grafanaDangerBg}`}
                 style={{ width: `${splitPct.platform}%` }}
               />
             </div>
@@ -157,20 +172,20 @@ export function CommercialConsoleView() {
       </div>
 
       {/* Geofencing */}
-      <div className="rounded-md bg-[#181b1f] p-5">
-        <h3 className="mb-4 text-sm font-semibold text-[#d8d9da]">
+      <div className={`rounded-md ${grafanaPanel} p-5`}>
+        <h3 className={`mb-4 text-sm font-semibold ${grafanaText}`}>
           Top Countries by Revenue
         </h3>
         <div className="space-y-2">
           {stats.top_countries.map((country, i) => (
             <div
               key={country.country}
-              className="flex items-center justify-between rounded-md bg-[#0d0f11] px-3 py-2"
+              className={`flex items-center justify-between rounded-md ${productSunken} px-3 py-2`}
             >
-              <span className="text-sm text-[#d8d9da]">
+              <span className={`text-sm ${grafanaText}`}>
                 #{i + 1} {country.country}
               </span>
-              <span className="text-sm text-[#9fa7b3]">
+              <span className={`text-sm ${grafanaTextMuted}`}>
                 ₹{country.revenue.toLocaleString()} · {country.impressions.toLocaleString()} impressions
               </span>
             </div>

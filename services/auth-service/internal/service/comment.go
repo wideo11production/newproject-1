@@ -279,11 +279,11 @@ func (s *CommentService) attachAuthors(ctx context.Context, comments []model.Com
 		ID       string `gorm:"column:id"`
 		FullName string `gorm:"column:full_name"`
 		Username string `gorm:"column:username"`
-		ImageURL string `gorm:"column:image_url"`
+		ImageURL string `gorm:"column:avatar_url"`
 	}
 	if err := s.db.WithContext(ctx).
 		Table("users").
-		Select("id, full_name, username, image_url").
+		Select("id, full_name, username, avatar_url").
 		Where("id IN ?", ids).
 		Scan(&rows).Error; err != nil {
 		return err

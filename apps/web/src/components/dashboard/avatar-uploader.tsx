@@ -33,6 +33,17 @@ import { useCallback, useRef, useState } from 'react';
 import { Upload, Loader2, X } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 
+import {
+  grafanaBg,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 type Props = {
   /** Current avatar URL (existing) */
   currentUrl?: string;
@@ -180,18 +191,18 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
             Local preview (object URL) upload ke dauraan instant feedback
             deta hai; finalize ke baad real public URL use hota hai. */}
         {showCircle ? (
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full-[#2c3235] bg-[#0d0f11]">
+          <div className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-full ${productSunken}`}>
             {shown ? (
               <img src={shown} alt="" className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full w-full items-center justify-center text-sm font-bold text-[#5794f2]">
+              <div className={`flex h-full w-full items-center justify-center text-sm font-bold ${grafanaPrimary}`}>
                 {initials || '?'}
               </div>
             )}
 
             {/* Upload progress overlay */}
             {busy ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#111217]/85 text-[10px] font-bold text-white">
+              <div className={`absolute inset-0 flex flex-col items-center justify-center ${grafanaBg}/85 text-[10px] font-bold text-white`}>
                 {progress}%
               </div>
             ) : null}
@@ -214,13 +225,13 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
 
           {busy ? (
             <div className="space-y-1.5">
-              <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1f2227]">
+              <div className={`h-1.5 w-full overflow-hidden rounded-full ${productPanelHover}`}>
                 <div
-                  className="h-full rounded-full bg-[#5794f2] transition-all"
+                  className={`h-full rounded-full ${grafanaPrimaryBg} transition-all`}
                   style={{ width: `${progress}%` }}
                 />
               </div>
-              <p className="text-[11px] text-[#9fa7b3]">
+              <p className={`text-[11px] ${grafanaTextMuted}`}>
                 Uploading {progress}%…
               </p>
             </div>
@@ -228,7 +239,7 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
             <div className="flex flex-wrap items-center gap-2">
               <label
                 htmlFor="avatar-file-input"
-                className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
+                className={`inline-flex h-9 cursor-pointer items-center rounded-md ${productPanelHover} px-3 text-sm ${grafanaText} transition-colors hover:${productSeparation} focus-within:ring-2 focus-within:ring-[#5794f2]/50`}
               >
                 {preview || currentUrl ? (
                   <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
@@ -248,7 +259,7 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
                     setProgress(0);
                     setError(null);
                   }}
-                  className="h-9 px-2 text-[#9fa7b3] hover:text-[#d8d9da]"
+                  className={`h-9 px-2 ${grafanaTextMuted} hover:${grafanaText}`}
                   aria-label="Clear selection"
                 >
                   <X className="h-2.5 w-2.5" aria-hidden="true" />
@@ -257,7 +268,7 @@ export function AvatarUploader({ currentUrl, initials, onUploaded }: Props) {
             </div>
           )}
 
-          <p className="mt-1 text-[11px] text-[#9fa7b3]">
+          <p className={`mt-1 text-[11px] ${grafanaTextMuted}`}>
             PNG, JPEG, WebP or GIF. Max 5 MB. Stored on your own server.
           </p>
 

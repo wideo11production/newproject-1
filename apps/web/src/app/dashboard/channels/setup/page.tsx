@@ -58,6 +58,20 @@ import { CoverUploader } from '@/components/channels/cover-uploader';
 import { uploadChannelLogo } from '@/lib/channel-logo-upload';
 import { CHANNEL_TYPES, type ChannelType } from '@/lib/channel-types';
 
+import {
+  grafanaAccentControl,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productIndigo,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+  productWell,
+} from '@wideo11/ui/design-system';
+
 /** The palette entry the server sent, plus how to paint it. */
 type BrandColor = {
   name: string;
@@ -385,7 +399,7 @@ export default function ChannelSetupPage() {
   // ---- Loading / error / redirecting ----
   if (!state) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-12 text-sm text-[#9fa7b3]">
+      <main className={`mx-auto max-w-2xl px-4 py-12 text-sm ${grafanaTextMuted}`}>
         {saveErr || 'Loading channel setup…'}
       </main>
     );
@@ -405,13 +419,13 @@ export default function ChannelSetupPage() {
           type="button"
           data-track="setup-back"
           onClick={() => router.push('/dashboard')}
-          className="mb-3 inline-flex items-center gap-1.5 text-xs text-[#9fa7b3] hover:text-[#d8d9da]"
+          className={`mb-3 inline-flex items-center gap-1.5 text-xs ${grafanaTextMuted} hover:${grafanaText}`}
         >
           <ArrowLeft className="h-2.5 w-2.5" aria-hidden="true" />
           Back to dashboard
         </button>
-        <h1 className="text-lg font-semibold text-[#d8d9da]">Set up your channel</h1>
-        <p className="mt-1 text-xs text-[#9fa7b3]">
+        <h1 className={`text-lg font-semibold ${grafanaText}`}>Set up your channel</h1>
+        <p className={`mt-1 text-xs ${grafanaTextMuted}`}>
           Step 2 of 2. Everything here is optional and you can change it later — but a
           channel with a logo and a colour looks like somebody made it.
         </p>
@@ -460,7 +474,7 @@ export default function ChannelSetupPage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3 bg-[#181b1f] px-4 py-3">
+        <div className={`flex items-center gap-3 ${grafanaPanel} px-4 py-3`}>
           <div
             className="h-11 w-11 shrink-0 overflow-hidden rounded-full"
             style={{ borderColor: hsl(activeBrand), backgroundColor: '#101216' }}
@@ -469,14 +483,14 @@ export default function ChannelSetupPage() {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={logoUrl} alt="" className="h-full w-full object-cover" />
             ) : (
-              <span className="flex h-full w-full items-center justify-center text-[11px] font-bold text-[#9fa7b3]">
+              <span className={`flex h-full w-full items-center justify-center text-[11px] font-bold ${grafanaTextMuted}`}>
                 {(state.display_name || '?').slice(0, 2).toUpperCase()}
               </span>
             )}
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-[#d8d9da]">{state.display_name}</p>
-            <p className="truncate text-[11px] text-[#9fa7b3]">
+            <p className={`truncate text-sm font-medium ${grafanaText}`}>{state.display_name}</p>
+            <p className={`truncate text-[11px] ${grafanaTextMuted}`}>
               {tagline || '@' + state.handle}
             </p>
           </div>
@@ -542,13 +556,13 @@ export default function ChannelSetupPage() {
               <label
                 htmlFor="setup-logo-input"
                 data-track="setup-logo-button"
-                className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[11px] text-[#d8d9da] hover:bg-[#1f2227] ${
+                className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[11px] ${grafanaText} ${productPanelHover} ${
                   logoBusy ? 'pointer-events-none opacity-50' : ''
                 }`}
               >
                 {logoBusy ? `Uploading ${logoProgress}%…` : logoUrl ? 'Replace' : 'Upload logo'}
               </label>
-              <p className="text-[10px] text-[#6b7280]">
+              <p className="text-[10px] text-gray-500">
                 PNG, JPEG or WebP. Under {Math.round(maxLogoBytes / 1024 / 1024)} MB. Stored
                 on your own server.
               </p>
@@ -568,7 +582,7 @@ export default function ChannelSetupPage() {
             dataTrack="setup-section-logo-position"
           >
             <div className="space-y-3">
-              <Label className="text-xs text-[#9fa7b3]">Corner</Label>
+              <Label className={`text-xs ${grafanaTextMuted}`}>Corner</Label>
               <div className="grid grid-cols-2 gap-2">
                 {(['top-left', 'top-right', 'bottom-left', 'bottom-right'] as const).map((pos) => (
                   <button
@@ -582,8 +596,8 @@ export default function ChannelSetupPage() {
                     }}
                     className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                       logoPosition === pos
-                        ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
-                        : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                        ? `${grafanaPrimary}/50 ${grafanaPrimaryBg}/5 ${grafanaText}`
+                        : `${productSeparation} ${productPanelHover} ${grafanaTextMuted}`
                     }`}
                   >
                     <span className="h-2 w-2 rounded" style={{
@@ -595,7 +609,7 @@ export default function ChannelSetupPage() {
                 ))}
               </div>
 
-              <Label className="text-xs text-[#9fa7b3]">Sizing</Label>
+              <Label className={`text-xs ${grafanaTextMuted}`}>Sizing</Label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -607,8 +621,8 @@ export default function ChannelSetupPage() {
                   }}
                   className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                     logoAutoSize
-                      ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
-                      : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                      ? `${grafanaPrimary}/50 ${grafanaPrimaryBg}/5 ${grafanaText}`
+                      : `${productSeparation} ${productPanelHover} ${grafanaTextMuted}`
                   }`}
                 >
                   <Maximize2 className="h-2.5 w-2.5" />
@@ -624,15 +638,15 @@ export default function ChannelSetupPage() {
                   }}
                   className={`flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors ${
                     !logoAutoSize
-                      ? 'border-[#5794f2]/50 bg-[#5794f2]/5 text-[#d8d9da]'
-                      : 'border-[#2c3235] hover:bg-[#1f2227] text-[#9fa7b3]'
+                      ? `${grafanaPrimary}/50 ${grafanaPrimaryBg}/5 ${grafanaText}`
+                      : `${productSeparation} ${productPanelHover} ${grafanaTextMuted}`
                   }`}
                 >
                   <Minimize2 className="h-2.5 w-2.5" />
                   <span className="text-[11px] font-medium">Manual</span>
                 </button>
               </div>
-              <p className="text-[10px] text-[#6b7280]">
+              <p className="text-[10px] text-gray-500">
                 Auto-size fits the logo to the corner at a consistent scale across
                 all project aspect ratios. Manual lets you set a custom size in the
                 editor.
@@ -656,7 +670,7 @@ export default function ChannelSetupPage() {
             onChange={(e) => setTagline(e.target.value)}
             onBlur={() => saveOnBlur({ tagline: tagline.trim() })}
           />
-          <p className="mt-1 text-[10px] text-[#6b7280]">{tagline.length}/120</p>
+          <p className="mt-1 text-[10px] text-gray-500">{tagline.length}/120</p>
         </Section>
 
         {/* ---- Brand colour ----
@@ -703,7 +717,7 @@ export default function ChannelSetupPage() {
               void save({ brand_hue: null, brand_hue_is_null: true });
             }}
             className={`mt-2 text-[10px] underline-offset-2 hover:underline ${
-              brandHue === null ? 'text-[#d8d9da]' : 'text-[#6b7280]'
+              brandHue === null ? `${grafanaText}` : 'text-gray-500'
             }`}
           >
             Use the platform default
@@ -721,7 +735,7 @@ export default function ChannelSetupPage() {
           hint="These decide which uploads get recommended where."
           dataTrack="setup-section-discovery"
         >
-          <Label className="text-xs text-[#9fa7b3]">Category</Label>
+          <Label className={`text-xs ${grafanaTextMuted}`}>Category</Label>
           <select
             value={channelType}
             data-track="setup-channel-type"
@@ -729,7 +743,7 @@ export default function ChannelSetupPage() {
               setChannelType(e.target.value);
               void save({ channel_type: e.target.value });
             }}
-            className="mt-1 h-9 w-full rounded-md bg-[#101216] px-2 text-xs text-[#d8d9da]"
+            className={`mt-1 h-9 w-full rounded-md ${productWell} px-2 text-xs ${grafanaText}`}
           >
             <option value="">Choose a category</option>
             {CHANNEL_TYPES.map((t: ChannelType) => (
@@ -739,7 +753,7 @@ export default function ChannelSetupPage() {
             ))}
           </select>
 
-          <Label className="mt-3 block text-xs text-[#9fa7b3]">Keywords</Label>
+          <Label className={`mt-3 block text-xs ${grafanaTextMuted}`}>Keywords</Label>
           <Input
             value={keywords}
             data-track="setup-keywords"
@@ -747,7 +761,7 @@ export default function ChannelSetupPage() {
             onChange={(e) => setKeywords(e.target.value)}
             onBlur={() => saveOnBlur({ keywords })}
           />
-          <p className="mt-1 text-[10px] text-[#6b7280]">
+          <p className="mt-1 text-[10px] text-gray-500">
             Comma separated. Keywords help people find you — they are not read by
             anyone, so keep them honest.
           </p>
@@ -778,18 +792,18 @@ export default function ChannelSetupPage() {
                   }}
                   className={`flex w-full items-start gap-2.5 rounded-md px-3 py-2 text-left transition-colors ${
                     selected
-                      ? 'border-[#5794f2]/50 bg-[#5794f2]/5'
-                      : 'border-[#2c3235] hover:bg-[#1f2227]'
+                      ? `${grafanaPrimary}/50 ${grafanaPrimaryBg}/5`
+                      : `${productSeparation} ${productPanelHover}`
                   }`}
                 >
                   <span
                     className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-                      selected ? 'border-[#5794f2]' : 'border-[#4b5158]'
+                      selected ? `${grafanaPrimary}` : 'border'
                     }`}
                   />
                   <span>
-                    <span className="block text-xs font-medium text-[#d8d9da]">{v.label}</span>
-                    <span className="block text-[10px] text-[#9fa7b3]">{v.blurb}</span>
+                    <span className={`block text-xs font-medium ${grafanaText}`}>{v.label}</span>
+                    <span className={`block text-[10px] ${grafanaTextMuted}`}>{v.blurb}</span>
                   </span>
                 </button>
               );
@@ -840,12 +854,12 @@ export default function ChannelSetupPage() {
                     }}
                     className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left ${
                       selected
-                        ? 'border-[#5794f2]/50 bg-[#5794f2]/5'
-                        : 'border-[#2c3235] hover:bg-[#1f2227]'
+                        ? `${grafanaPrimary}/50 ${grafanaPrimaryBg}/5`
+                        : `${productSeparation} ${productPanelHover}`
                     }`}
                   >
-                    <span className="text-[11px] font-medium text-[#d8d9da]">{p.label}</span>
-                    <span className="text-[10px] text-[#9fa7b3]">{p.blurb}</span>
+                    <span className={`text-[11px] font-medium ${grafanaText}`}>{p.label}</span>
+                    <span className={`text-[10px] ${grafanaTextMuted}`}>{p.blurb}</span>
                   </button>
                 );
               })}
@@ -908,9 +922,9 @@ export default function ChannelSetupPage() {
 
       {/* ---- Save status ---- */}
       <div className="mt-6 min-h-[20px] text-[11px]">
-        {saving ? <span className="text-[#9fa7b3]">Saving…</span> : null}
+        {saving ? <span className={`${grafanaTextMuted}`}>Saving…</span> : null}
         {saveErr ? <span className="text-red-400">{saveErr}</span> : null}
-        {saveOk ? <span className="text-[#9fa7b3]">{saveOk}</span> : null}
+        {saveOk ? <span className={`${grafanaTextMuted}`}>{saveOk}</span> : null}
       </div>
 
       {/* ---- Finish ----
@@ -918,9 +932,9 @@ export default function ChannelSetupPage() {
           sections on a phone. Never disabled: there is no required field on this
           screen, so there is nothing to be waiting for. A compulsory step whose
           button can be disabled is a step that can trap somebody. */}
-      <div className="fixed inset-x-0 bottom-0 bg-[#0d0f11]/95 backdrop-blur">
+      <div className={`fixed inset-x-0 bottom-0 ${productSunken}/95 backdrop-blur`}>
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
-          <p className="text-[10px] text-[#6b7280]">
+          <p className="text-[10px] text-gray-500">
             You can change all of this later.
           </p>
           <button
@@ -928,7 +942,7 @@ export default function ChannelSetupPage() {
             data-track="setup-finish"
             disabled={saving}
             onClick={() => void finish()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-md bg-[#5794f2] px-4 text-xs font-medium text-white transition-colors hover:bg-[#4a84db] disabled:opacity-60"
+            className={`inline-flex h-9 items-center gap-1.5 rounded-md ${grafanaPrimaryBg} px-4 text-xs font-medium text-white transition-colors hover:${productIndigo} disabled:opacity-60`}
           >
             <Check className="h-2.5 w-2.5" aria-hidden="true" />
             {saving ? 'Finishing…' : 'Finish setup'}
@@ -956,10 +970,10 @@ function Section({
   return (
     <section data-track={dataTrack} className="rounded-md p-4">
       <div className="mb-3 flex items-start gap-2">
-        <span className="mt-0.5 text-[#5794f2]">{icon}</span>
+        <span className={`mt-0.5 ${grafanaPrimary}`}>{icon}</span>
         <div>
-          <h2 className="text-xs font-medium text-[#d8d9da]">{title}</h2>
-          {hint ? <p className="mt-0.5 text-[10px] text-[#9fa7b3]">{hint}</p> : null}
+          <h2 className={`text-xs font-medium ${grafanaText}`}>{title}</h2>
+          {hint ? <p className={`mt-0.5 text-[10px] ${grafanaTextMuted}`}>{hint}</p> : null}
         </div>
       </div>
       {children}
@@ -996,14 +1010,14 @@ function Toggle({
         checked={checked}
         data-track={dataTrack}
         onChange={(e) => onChange(e.target.checked)}
-        className="mt-0.5 h-2.5 w-2.5 shrink-0 accent-[#5794f2]"
+        className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${grafanaAccentControl}`}
       />
       <span className="min-w-0">
-        <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#d8d9da]">
+        <span className={`flex items-center gap-1.5 text-[11px] font-medium ${grafanaText}`}>
           {icon}
           {label}
         </span>
-        {hint ? <span className="mt-0.5 block text-[10px] text-[#9fa7b3]">{hint}</span> : null}
+        {hint ? <span className={`mt-0.5 block text-[10px] ${grafanaTextMuted}`}>{hint}</span> : null}
       </span>
     </label>
   );

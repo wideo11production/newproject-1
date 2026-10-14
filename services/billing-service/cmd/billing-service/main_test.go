@@ -75,7 +75,8 @@ func TestIdentityAdapterIsConstructedAndPassed(t *testing.T) {
 
 	for _, want := range []string{
 		"repository.NewUserIdentityRepository(db)",
-		"service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo)",
+		"repository.NewPushAllocationRepository(db)",
+		"service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo)",
 	} {
 		if !strings.Contains(mainSrc, want) {
 			t.Errorf("main.go is missing %q.\n"+

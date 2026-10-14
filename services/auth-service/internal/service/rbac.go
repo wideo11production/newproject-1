@@ -426,6 +426,21 @@ func (r *RBAC) HighestRank(ctx context.Context, userID uuid.UUID) (int, error) {
 	return *maxRank, nil
 }
 
+// HasRole checks if a user has a specific role (by name) via active appointment.
+func (r *RBAC) HasRole(ctx context.Context, userID uuid.UUID, roleName string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Table("appointments a").
+		Joins("JOIN roles r ON r.id = a.role_id").
+		Where("a.user_id = ? AND r.name = ? AND a.revoked_at IS NULL", userID, roleName).
+		Where("(a.expires_at IS NULL OR a.expires_at > ?)", time.Now().UTC()).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // Appoint gives a user a role.
 //
 // THE BOUND. A granter can only appoint a role STRICTLY below their own, and

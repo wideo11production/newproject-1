@@ -27,6 +27,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Video, Settings, Layers } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productAccentShadowStrong,
+  productAccentSoftBg,
+  productPanel,
+  productPanelHover,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 export interface StudioIconRailProps {
   /** Where the brand tile links to. */
   homeHref?: string;
@@ -46,14 +56,14 @@ export function StudioIconRail({
   return (
     <nav
       aria-label="Workspace rail"
-      className="fixed left-3 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-2 rounded-2xl bg-[#16181d]/80 p-1.5 shadow-xl shadow-black/30 backdrop-blur lg:flex"
+      className={`fixed left-3 top-1/2 z-20 hidden -translate-y-1/2 flex-col gap-2 rounded-2xl ${productPanel}/80 p-1.5 shadow-xl shadow-black/30 backdrop-blur lg:flex`}
     >
       {/* The brand tile is the rail's anchor: it is the only thing on it that
           names the product, and everything else is a destination. */}
       <Link
         href={homeHref}
         aria-label="Wideo11 home"
-        className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#ff6500] text-white shadow-md shadow-[#ff6500]/30 transition-transform hover:scale-105"
+        className={`flex h-10 w-10 items-center justify-center rounded-xl ${productAccentBg} text-white shadow-md ${productAccentShadowStrong} transition-transform hover:scale-105`}
       >
         <Layers className="h-4 w-4" aria-hidden="true" />
       </Link>
@@ -88,8 +98,8 @@ function RailLink({
       title={label}
       className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${
         active
-          ? 'bg-[#ff6500]/15 text-[#ff6500]'
-          : 'text-[#8b949e] hover:bg-[#1f2227] hover:text-white'
+          ? `${productAccentSoftBg} ${productAccent}`
+          : `${productTextMuted} ${productPanelHover} hover:text-white`
       }`}
     >
       {children}

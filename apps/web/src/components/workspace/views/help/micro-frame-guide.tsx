@@ -25,15 +25,30 @@ import { AuraMicroFrameStudio } from '@/components/workspace/dialogs/aura-micro-
 import { useSessionIdentity } from '@/lib/identity-context';
 import { useState } from 'react';
 
+import {
+  grafanaBg,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productAccent,
+  productAccentBg,
+  productFocusRing,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const SECTION_BG = 'bg-[#181b1f]';
-const SECTION_BORDER = 'border-[#2c3235]';
-const TEXT_PRIMARY = 'text-[#d8d9da]';
-const TEXT_SECONDARY = 'text-[#9fa7b3]';
-const ORANGE_RED = 'text-[#ff6500]';
+const SECTION_BG = `${grafanaPanel}`;
+const SECTION_BORDER = `${productSeparation}`;
+const TEXT_PRIMARY = `${grafanaText}`;
+const TEXT_SECONDARY = `${grafanaTextMuted}`;
+const ORANGE_RED = `${productAccent}`;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,7 +67,7 @@ type ShortcutCategory = {
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
     name: 'Navigation',
-    icon: <MousePointer className="h-2.5 w-2.5 text-[#5794f2]" />,
+    icon: <MousePointer className={`h-2.5 w-2.5 ${grafanaPrimary}`} />,
     shortcuts: [
       { key: 'Space', action: 'Play / Pause', description: 'Toggle playback in the micro-frame scrubber' },
       { key: '← / →', action: 'Frame step', description: 'Move one frame backward/forward within the 3-frame buffer ring' },
@@ -62,7 +77,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
   {
     name: 'Editing',
-    icon: <Scissors className="h-2.5 w-2.5 text-[#5794f2]" />,
+    icon: <Scissors className={`h-2.5 w-2.5 ${grafanaPrimary}`} />,
     shortcuts: [
       { key: 'S', action: 'Blade / Split', description: 'Cut the clip at the playhead position' },
       { key: 'Ctrl+Z', action: 'Undo', description: 'Undo the last edit operation' },
@@ -72,7 +87,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
   {
     name: 'Micro-Frame Studio',
-    icon: <Layers className="h-2.5 w-2.5 text-[#5794f2]" />,
+    icon: <Layers className={`h-2.5 w-2.5 ${grafanaPrimary}`} />,
     shortcuts: [
       { key: 'Ctrl+M', action: 'Open Micro-Frame Studio', description: 'Launches the AURA Micro-Frame Studio dialog overlay' },
       { key: 'M', action: 'Add marker', description: 'Drop a marker at the playhead for micro-movement isolation' },
@@ -83,7 +98,7 @@ const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   },
   {
     name: 'Playback Speed',
-    icon: <Gauge className="h-2.5 w-2.5 text-[#5794f2]" />,
+    icon: <Gauge className={`h-2.5 w-2.5 ${grafanaPrimary}`} />,
     shortcuts: [
       { key: 'Alt+←', action: 'Decrease speed', description: 'Reduce playback speed in 0.01x increments' },
       { key: 'Alt+→', action: 'Increase speed', description: 'Increase playback speed in 0.01x increments' },
@@ -144,14 +159,14 @@ export function MicroFrameGuide() {
     <div className={`h-full min-h-screen ${SECTION_BG} ${TEXT_PRIMARY} p-6`}>
       {/* ---- Header ---- */}
       <div className="mb-8 flex items-center gap-3">
-        <HelpCircle className="h-2.5 w-2.5 text-[#ff6500]" aria-hidden="true" />
+        <HelpCircle className={`h-2.5 w-2.5 ${productAccent}`} aria-hidden="true" />
         <h1 className="text-2xl font-bold">AURA Micro-Frame Studio Walkthrough</h1>
       </div>
 
       {/* ---- Section 1: User Profile Menus ---- */}
-      <section className={`mb-8 rounded-md ${SECTION_BORDER} bg-[#0d0f11] p-6`}>
+      <section className={`mb-8 rounded-md ${SECTION_BORDER} ${productSunken} p-6`}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <User className="h-2.5 w-2.5 text-[#5794f2]" />
+          <User className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           User Profile Menus
         </h2>
         <p className={`mb-3 text-sm ${TEXT_SECONDARY}`}>
@@ -159,14 +174,14 @@ export function MicroFrameGuide() {
           determines which verification gate applies, and your AURA license tier controls feature access.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-md bg-[#181b1f] p-3">
-            <p className="text-xs font-medium text-[#d8d9da]">Student Role</p>
+          <div className={`rounded-md ${grafanaPanel} p-3`}>
+            <p className={`text-xs font-medium ${grafanaText}`}>Student Role</p>
             <p className={`mt-1 text-xs ${TEXT_SECONDARY}`}>
               Academic email domains (.edu, .ac.in) → Gate A auto-approval in 1 click.
             </p>
           </div>
-          <div className="rounded-md bg-[#181b1f] p-3">
-            <p className="text-xs font-medium text-[#d8d9da]">Advocate Role</p>
+          <div className={`rounded-md ${grafanaPanel} p-3`}>
+            <p className={`text-xs font-medium ${grafanaText}`}>Advocate Role</p>
             <p className={`mt-1 text-xs ${TEXT_SECONDARY}`}>
               Bar Council domains + Bar Association ID → Gate B manual review with 365-day token.
             </p>
@@ -175,9 +190,9 @@ export function MicroFrameGuide() {
       </section>
 
       {/* ---- Section 2: Key Shortcuts Configuration Grid ---- */}
-      <section className={`mb-8 rounded-md ${SECTION_BORDER} bg-[#0d0f11] p-6`}>
+      <section className={`mb-8 rounded-md ${SECTION_BORDER} ${productSunken} p-6`}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <Settings className="h-2.5 w-2.5 text-[#5794f2]" />
+          <Settings className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           Key Shortcuts Configuration
         </h2>
         <p className={`mb-4 text-sm ${TEXT_SECONDARY}`}>
@@ -185,18 +200,18 @@ export function MicroFrameGuide() {
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {SHORTCUT_CATEGORIES.map((cat) => (
-            <div key={cat.name} className="rounded-md bg-[#181b1f] p-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-[#d8d9da]">
+            <div key={cat.name} className={`rounded-md ${grafanaPanel} p-3`}>
+              <div className={`mb-2 flex items-center gap-2 text-xs font-semibold ${grafanaText}`}>
                 {cat.icon}
                 <span>{cat.name}</span>
               </div>
               <div className="space-y-1.5">
                 {cat.shortcuts.map((sc) => (
                   <div key={sc.key} className="text-[10px]">
-                    <kbd className="inline-block w-10 rounded-[#2c3235] bg-[#111217] px-1 py-0.5 font-mono text-[#ff6500]">
+                    <kbd className={`inline-block w-10 ${productSeparation} ${grafanaBg} px-1 py-0.5 font-mono ${productAccent}`}>
                       {sc.key}
                     </kbd>
-                    <span className={`ml-1 block text-[#d8d9da]`}>{sc.action}</span>
+                    <span className={`ml-1 block ${grafanaText}`}>{sc.action}</span>
                     <span className={`text-[9px] ${TEXT_SECONDARY}`}>{sc.description}</span>
                   </div>
                 ))}
@@ -207,44 +222,44 @@ export function MicroFrameGuide() {
       </section>
 
       {/* ---- Section 3: How to Isolate Critical Micro-Movements ---- */}
-      <section className={`mb-8 rounded-md ${SECTION_BORDER} bg-[#0d0f11] p-6`}>
+      <section className={`mb-8 rounded-md ${SECTION_BORDER} ${productSunken} p-6`}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <Play className="h-2.5 w-2.5 text-[#5794f2]" />
+          <Play className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           How to Isolate Critical Micro-Movements with 3-Frame Studio Precision
         </h2>
         <ol className="space-y-3 text-sm">
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-[#1f2227] text-xs font-bold ${ORANGE_RED}`}>1</span>
+            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ${productPanelHover} text-xs font-bold ${ORANGE_RED}`}>1</span>
             <span>
-              <strong className="font-medium text-[#d8d9da]">Position the playhead.</strong>
+              <strong className={`font-medium ${grafanaText}`}>Position the playhead.</strong>
               <span className={` ${TEXT_SECONDARY}`}> Use Left/Right arrow keys or drag the scrubber to the frame where the micro-movement begins. The playhead activates the 3-frame buffer ring: Frame-1, Frame-0 (active), and Frame+1.</span>
             </span>
           </li>
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-[#1f2227] text-xs font-bold ${ORANGE_RED}`}>2</span>
+            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ${productPanelHover} text-xs font-bold ${ORANGE_RED}`}>2</span>
             <span>
-              <strong className="font-medium text-[#d8d9da]">Reduce playback speed.</strong>
-              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className="rounded-[#2c3235] bg-[#181b1f] px-1 py-0.5 font-mono text-xs text-[#ff6500]">Alt+←</kbd> to decrease speed in 0.01x increments. At 0.01x, one full second of timeline equals 100 seconds of playback, giving you frame-level visibility.</span>
+              <strong className={`font-medium ${grafanaText}`}>Reduce playback speed.</strong>
+              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className={`${productSeparation} ${grafanaPanel} px-1 py-0.5 font-mono text-xs ${productAccent}`}>Alt+←</kbd> to decrease speed in 0.01x increments. At 0.01x, one full second of timeline equals 100 seconds of playback, giving you frame-level visibility.</span>
             </span>
           </li>
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-[#1f2227] text-xs font-bold ${ORANGE_RED}`}>3</span>
+            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ${productPanelHover} text-xs font-bold ${ORANGE_RED}`}>3</span>
             <span>
-              <strong className="font-medium text-[#d8d9da]">Add markers.</strong>
-              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className="rounded-[#2c3235] bg-[#181b1f] px-1 py-0.5 font-mono text-xs text-[#ff6500]">M</kbd> at each boundary of the micro-movement. Markers snap the 3-frame buffer to exact start/end points.</span>
+              <strong className={`font-medium ${grafanaText}`}>Add markers.</strong>
+              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className={`${productSeparation} ${grafanaPanel} px-1 py-0.5 font-mono text-xs ${productAccent}`}>M</kbd> at each boundary of the micro-movement. Markers snap the 3-frame buffer to exact start/end points.</span>
             </span>
           </li>
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-[#1f2227] text-xs font-bold ${ORANGE_RED}`}>4</span>
+            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ${productPanelHover} text-xs font-bold ${ORANGE_RED}`}>4</span>
             <span>
-              <strong className="font-medium text-[#d8d9da]">Use the Blade tool.</strong>
-              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className="rounded-[#2c3235] bg-[#181b1f] px-1 py-0.5 font-mono text-xs text-[#ff6500]">S</kbd> to split precisely at the playhead. The 3-frame boundary lock ensures splits only occur within the buffered range, preventing accidental edits outside the region of interest.</span>
+              <strong className={`font-medium ${grafanaText}`}>Use the Blade tool.</strong>
+              <span className={` ${TEXT_SECONDARY}`}> Press <kbd className={`${productSeparation} ${grafanaPanel} px-1 py-0.5 font-mono text-xs ${productAccent}`}>S</kbd> to split precisely at the playhead. The 3-frame boundary lock ensures splits only occur within the buffered range, preventing accidental edits outside the region of interest.</span>
             </span>
           </li>
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full bg-[#1f2227] text-xs font-bold ${ORANGE_RED}`}>5</span>
+            <span className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full ${productPanelHover} text-xs font-bold ${ORANGE_RED}`}>5</span>
             <span>
-              <strong className="font-medium text-[#d8d9da]">Review the millisecond timestamps.</strong>
+              <strong className={`font-medium ${grafanaText}`}>Review the millisecond timestamps.</strong>
               <span className={` ${TEXT_SECONDARY}`}> The scrubber displays absolute HH:MM:MMM timestamps. Verify the micro-movement duration matches your expectations before exporting.</span>
             </span>
           </li>
@@ -252,9 +267,9 @@ export function MicroFrameGuide() {
       </section>
 
       {/* ---- Section 4: Logo & Sponsor Placement Tools ---- */}
-      <section className={`mb-8 rounded-md ${SECTION_BORDER} bg-[#0d0f11] p-6`}>
+      <section className={`mb-8 rounded-md ${SECTION_BORDER} ${productSunken} p-6`}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <FileImage className="h-2.5 w-2.5 text-[#5794f2]" />
+          <FileImage className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           Logo and Sponsor Placement Tools
         </h2>
         <div className="space-y-4 text-sm">
@@ -263,9 +278,9 @@ export function MicroFrameGuide() {
             Trial mode applies a visible watermark; premium export removes it.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md bg-[#181b1f] p-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-[#d8d9da]">
-                <FileImage className="h-2.5 w-2.5 text-[#73bf69]" />
+            <div className={`rounded-md ${grafanaPanel} p-3`}>
+              <div className={`flex items-center gap-2 text-xs font-medium ${grafanaText}`}>
+                <FileImage className={`h-2.5 w-2.5 ${grafanaSuccess}`} />
                 Trial Bounds
               </div>
               <p className={`mt-1 text-xs ${TEXT_SECONDARY}`}>
@@ -273,9 +288,9 @@ export function MicroFrameGuide() {
                 30-second output limit per export.
               </p>
             </div>
-            <div className="rounded-md bg-[#181b1f] p-3">
-              <div className="flex items-center gap-2 text-xs font-medium text-[#d8d9da]">
-                <FileVideo className="h-2.5 w-2.5 text-[#ff6500]" />
+            <div className={`rounded-md ${grafanaPanel} p-3`}>
+              <div className={`flex items-center gap-2 text-xs font-medium ${grafanaText}`}>
+                <FileVideo className={`h-2.5 w-2.5 ${productAccent}`} />
                 Premium Export
               </div>
               <p className={`mt-1 text-xs ${TEXT_SECONDARY}`}>
@@ -293,20 +308,20 @@ export function MicroFrameGuide() {
       </section>
 
       {/* ---- Section 5: FAQs ---- */}
-      <section className={`rounded-md ${SECTION_BORDER} bg-[#0d0f11] p-6`}>
+      <section className={`rounded-md ${SECTION_BORDER} ${productSunken} p-6`}>
         <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold">
-          <HelpCircle className="h-2.5 w-2.5 text-[#5794f2]" />
+          <HelpCircle className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           Frequently Asked Questions
         </h2>
         <div className="space-y-3">
           {FAQ_ENTRIES.map((faq, idx) => (
             <details
               key={idx}
-              className="rounded-md bg-[#181b1f] p-3 text-sm"
+              className={`rounded-md ${grafanaPanel} p-3 text-sm`}
             >
-              <summary className={`cursor-pointer text-xs font-medium text-[#d8d9da] list-none flex items-center justify-between`}>
+              <summary className={`cursor-pointer text-xs font-medium ${grafanaText} list-none flex items-center justify-between`}>
                 <span>{faq.question}</span>
-                <ExternalLink className="h-2.5 w-2.5 text-[#9fa7b3] transition-transform duration-150 group-open:rotate-90" />
+                <ExternalLink className={`h-2.5 w-2.5 ${grafanaTextMuted} transition-transform duration-150 group-open:rotate-90`} />
               </summary>
               <p className={`mt-2 text-xs ${TEXT_SECONDARY} leading-relaxed`}>
                 {faq.answer}
@@ -320,7 +335,7 @@ export function MicroFrameGuide() {
       <div className="mt-8 flex justify-center">
         <Button
           onClick={() => setShowDialog(true)}
-          className="bg-[#ff6500] text-white hover:bg-[#ff6500]/85 focus:ring-[#ff6500]/50"
+          className={`${productAccentBg} text-white hover:${productAccentBg}/85 ${productFocusRing}/50`}
         >
           <Layers className="mr-2 h-2.5 w-2.5" />
           Try AURA Micro-Frame Studio

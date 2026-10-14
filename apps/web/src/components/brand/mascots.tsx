@@ -127,7 +127,7 @@ export function MascotEmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-md-dashed-grafana-border bg-grafana-panel/30 px-6 py-10 text-center">
+    <div className="flex flex-col items-center justify-center gap-3 rounded-md border-dashed-grafana-border bg-grafana-panel/30 px-6 py-10 text-center">
       <Mascot name={name} size={56} />
       <div>
         <p className="text-sm font-medium text-grafana-text">{title}</p>

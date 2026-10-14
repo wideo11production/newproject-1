@@ -66,6 +66,7 @@ var expectedCatalogue = []specPlan{
 	{"lifetime1", "Lifetime 1", "lifetime"},
 	{"lifetime5", "Lifetime 5", "lifetime"},
 	{"lifetime10", "Lifetime 10", "lifetime"},
+	{"lifetime_aura", "Lifetime AURA", "lifetime"},
 }
 
 // TestEveryPlanHasACodeAndALabel asserts the catalogue matches the spec.

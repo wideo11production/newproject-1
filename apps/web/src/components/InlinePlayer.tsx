@@ -52,6 +52,19 @@ import {
 } from 'lucide-react';
 import { formatDuration } from '@/lib/media-upload';
 
+import {
+  grafanaPrimary,
+  productAccent,
+  productAccentBg,
+  productAccentControl,
+  productPanel,
+  productPanelHover,
+  productSeparation,
+  productSeparationStrong,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 export interface InlinePlayerAsset {
   id: string;
   filename: string;
@@ -288,16 +301,16 @@ export function InlinePlayer({
       ref={rootRef}
       aria-label={`Inline player: ${asset.filename}`}
       data-inline-player=""
-      className="flex h-full flex-col overflow-hidden rounded-md bg-[#16181d]"
+      className={`flex h-full flex-col overflow-hidden rounded-md ${productPanel}`}
     >
       {/* ---- header ---- */}
-      <header className="flex items-start gap-2 border-b border-[#2c3235] px-3 py-2.5">
+      <header className={`flex items-start gap-2 border-b ${productSeparation} px-3 py-2.5`}>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-medium text-white" title={asset.filename}>
             {asset.filename}
           </h2>
           {asset.subtitle ? (
-            <p className="truncate text-[11px] text-[#8b949e]">{asset.subtitle}</p>
+            <p className={`truncate text-[11px] ${productTextMuted}`}>{asset.subtitle}</p>
           ) : null}
         </div>
 
@@ -306,7 +319,7 @@ export function InlinePlayer({
             <button
               onClick={() => onNavigate('prev')}
               disabled={!hasPrev}
-              className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+              className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white disabled:opacity-30 disabled:hover:bg-transparent`}
               aria-label="Previous video"
               title="Previous"
             >
@@ -317,7 +330,7 @@ export function InlinePlayer({
             <button
               onClick={() => onNavigate('next')}
               disabled={!hasNext}
-              className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+              className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white disabled:opacity-30 disabled:hover:bg-transparent`}
               aria-label="Next video"
               title="Next"
             >
@@ -330,7 +343,7 @@ export function InlinePlayer({
 
         <button
           onClick={onClose}
-          className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+          className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
           aria-label="Close player"
           title="Close (Esc)"
         >
@@ -343,8 +356,8 @@ export function InlinePlayer({
         {isAudio ? (
           <div className="flex aspect-video items-center justify-center">
             <div className="text-center p-6">
-              <Music className="mx-auto mb-3 h-12 w-12 text-[#ff6500]" />
-              <p className="text-[11px] text-[#8b949e]">Audio track</p>
+              <Music className={`mx-auto mb-3 h-12 w-12 ${productAccent}`} />
+              <p className={`text-[11px] ${productTextMuted}`}>Audio track</p>
             </div>
           </div>
         ) : (
@@ -381,7 +394,7 @@ export function InlinePlayer({
 
             {loading && !playError ? (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <Loader2 className="h-8 w-8 animate-spin text-[#5794f2]" />
+                <Loader2 className={`h-8 w-8 animate-spin ${grafanaPrimary}`} />
               </div>
             ) : null}
 
@@ -398,7 +411,7 @@ export function InlinePlayer({
                 className="absolute inset-0 flex items-center justify-center bg-black/40 transition-colors hover:bg-black/30"
                 aria-label="Play"
               >
-                <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#ff6500] text-white transition-transform hover:scale-105">
+                <span className={`flex h-14 w-14 items-center justify-center rounded-full ${productAccentBg} text-white transition-transform hover:scale-105`}>
                   <Play className="ml-0.5 h-7 w-7" />
                 </span>
               </button>
@@ -424,15 +437,15 @@ export function InlinePlayer({
         ) : null}
 
         {/* ---- controls ---- */}
-        <div className="bg-[#0d0f11] px-3 pb-3 pt-2">
+        <div className={`${productSunken} px-3 pb-3 pt-2`}>
           {/* Seekbar */}
-          <div className="group relative h-1.5 w-full cursor-pointer rounded-full bg-[#2c3235]">
+          <div className={`group relative h-1.5 w-full cursor-pointer rounded-full ${productSeparation}`}>
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-[#3a4045]"
+              className={`absolute inset-y-0 left-0 rounded-full ${productSeparationStrong}`}
               style={{ width: `${bufferedPct}%` }}
             />
             <div
-              className="absolute inset-y-0 left-0 rounded-full bg-[#ff6500]"
+              className={`absolute inset-y-0 left-0 rounded-full ${productAccentBg}`}
               style={{ width: `${progressPct}%` }}
             />
             <input
@@ -450,7 +463,7 @@ export function InlinePlayer({
               className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0"
             />
             <div
-              className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#ff6500] opacity-0 transition-opacity group-hover:opacity-100"
+              className={`pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ${productAccentBg} opacity-0 transition-opacity group-hover:opacity-100`}
               style={{ left: `${progressPct}%` }}
             />
           </div>
@@ -458,7 +471,7 @@ export function InlinePlayer({
           <div className="mt-2 flex items-center gap-1">
             <button
               onClick={togglePlay}
-              className="rounded p-1.5 text-white transition-colors hover:bg-[#1f2227]"
+              className={`rounded p-1.5 text-white transition-colors ${productPanelHover}`}
               aria-label={isPlaying ? 'Pause' : 'Play'}
               title={isPlaying ? 'Pause' : 'Play'}
             >
@@ -468,7 +481,7 @@ export function InlinePlayer({
             {/* Skip ±10s - the single most used control on any player */}
             <button
               onClick={() => seekBy(-10)}
-              className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+              className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
               aria-label="Back 10 seconds"
               title="Back 10s"
             >
@@ -476,7 +489,7 @@ export function InlinePlayer({
             </button>
             <button
               onClick={() => seekBy(10)}
-              className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+              className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
               aria-label="Forward 10 seconds"
               title="Forward 10s"
             >
@@ -486,7 +499,7 @@ export function InlinePlayer({
             <div className="group/vol flex items-center">
               <button
                 onClick={toggleMute}
-                className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                 aria-label={isMuted ? 'Unmute' : 'Mute'}
                 title={isMuted ? 'Unmute' : 'Mute'}
               >
@@ -512,11 +525,11 @@ export function InlinePlayer({
                   }
                 }}
                 aria-label="Volume"
-                className="ml-1 h-1 w-0 cursor-pointer appearance-none rounded-full bg-[#3a4045] opacity-0 transition-all duration-200 accent-[#ff6500] focus:w-16 focus:opacity-100 group-hover/vol:w-16 group-hover/vol:opacity-100"
+                className={`ml-1 h-1 w-0 cursor-pointer appearance-none rounded-full ${productSeparationStrong} opacity-0 transition-all duration-200 ${productAccentControl} focus:w-16 focus:opacity-100 group-hover/vol:w-16 group-hover/vol:opacity-100`}
               />
             </div>
 
-            <span className="ml-1 select-none whitespace-nowrap font-mono text-[11px] text-[#8b949e]">
+            <span className={`ml-1 select-none whitespace-nowrap font-mono text-[11px] ${productTextMuted}`}>
               {formatDuration(currentTime)} / {formatDuration(duration || asset.duration_seconds || 0)}
             </span>
 
@@ -529,14 +542,14 @@ export function InlinePlayer({
                   setShowSpeedMenu((v) => !v);
                   setShowQualityMenu(false);
                 }}
-                className="rounded px-2 py-1 text-[11px] font-medium text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                className={`rounded px-2 py-1 text-[11px] font-medium ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                 aria-label="Playback speed"
                 title="Playback speed"
               >
                 {playbackRate}x
               </button>
               {showSpeedMenu ? (
-                <div className="absolute bottom-full right-0 z-10 mb-2 min-w-[92px] overflow-hidden rounded-md bg-[#16181d] py-1 shadow-xl">
+                <div className={`absolute bottom-full right-0 z-10 mb-2 min-w-[92px] overflow-hidden rounded-md ${productPanel} py-1 shadow-xl`}>
                   {PLAYBACK_RATES.map((rate) => (
                     <button
                       key={rate}
@@ -545,10 +558,10 @@ export function InlinePlayer({
                         setPlaybackRate(rate);
                         setShowSpeedMenu(false);
                       }}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors hover:bg-[#1f2227]"
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors ${productPanelHover}`}
                     >
                       {rate}x
-                      {playbackRate === rate ? <Check className="h-3 w-3 text-[#ff6500]" /> : null}
+                      {playbackRate === rate ? <Check className={`h-3 w-3 ${productAccent}`} /> : null}
                     </button>
                   ))}
                 </div>
@@ -562,14 +575,14 @@ export function InlinePlayer({
                   setShowQualityMenu((v) => !v);
                   setShowSpeedMenu(false);
                 }}
-                className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                 aria-label="Quality"
                 title="Quality"
               >
                 <Settings className="h-[18px] w-[18px]" />
               </button>
               {showQualityMenu ? (
-                <div className="absolute bottom-full right-0 z-10 mb-2 min-w-[104px] overflow-hidden rounded-md bg-[#16181d] py-1 shadow-xl">
+                <div className={`absolute bottom-full right-0 z-10 mb-2 min-w-[104px] overflow-hidden rounded-md ${productPanel} py-1 shadow-xl`}>
                   <button
                     onClick={() => {
                       const hls = hlsRef.current;
@@ -577,10 +590,10 @@ export function InlinePlayer({
                       setQuality('auto');
                       setShowQualityMenu(false);
                     }}
-                    className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors hover:bg-[#1f2227]"
+                    className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors ${productPanelHover}`}
                   >
                     Auto
-                    {quality === 'auto' ? <Check className="h-3 w-3 text-[#ff6500]" /> : null}
+                    {quality === 'auto' ? <Check className={`h-3 w-3 ${productAccent}`} /> : null}
                   </button>
                   {levels.map((opt) => (
                     <button
@@ -591,10 +604,10 @@ export function InlinePlayer({
                         setQuality(opt.label);
                         setShowQualityMenu(false);
                       }}
-                      className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors hover:bg-[#1f2227]"
+                      className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-[12px] text-white transition-colors ${productPanelHover}`}
                     >
                       {opt.label}
-                      {quality === opt.label ? <Check className="h-3 w-3 text-[#ff6500]" /> : null}
+                      {quality === opt.label ? <Check className={`h-3 w-3 ${productAccent}`} /> : null}
                     </button>
                   ))}
                 </div>
@@ -603,7 +616,7 @@ export function InlinePlayer({
 
             <button
               onClick={toggleFullscreen}
-              className="rounded p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+              className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
               aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
               title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
             >
@@ -615,7 +628,7 @@ export function InlinePlayer({
           {atBottom && !loading ? (
             <button
               onClick={togglePlay}
-              className="mt-2 w-full rounded bg-[#16181d] py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#1f2227]"
+              className={`mt-2 w-full rounded ${productPanel} py-2 text-[12px] font-medium text-white transition-colors ${productPanelHover}`}
             >
               Replay
             </button>
@@ -625,9 +638,9 @@ export function InlinePlayer({
 
       {/* ---- footer ---- */}
       <div className="flex-1 overflow-y-auto px-3 py-3" style={{ scrollbarWidth: 'thin' }}>
-        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-[#8b949e]">
+        <div className={`flex flex-wrap items-center gap-1.5 text-[10px] ${productTextMuted}`}>
           {asset.kind ? (
-            <span className="rounded bg-[#0d0f11] px-1.5 py-0.5 capitalize">{asset.kind}</span>
+            <span className={`rounded ${productSunken} px-1.5 py-0.5 capitalize`}>{asset.kind}</span>
           ) : null}
           {asset.width && asset.height ? <span>
               {asset.width}x{asset.height}
@@ -636,7 +649,7 @@ export function InlinePlayer({
         {asset.watch_href ? (
           <a
             href={asset.watch_href}
-            className="mt-3 inline-block text-[12px] text-[#5794f2] transition-colors hover:text-[#ff6500]"
+            className={`mt-3 inline-block text-[12px] ${grafanaPrimary} transition-colors hover:${productAccent}`}
           >
             Open full page
           </a>

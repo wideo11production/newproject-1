@@ -31,6 +31,16 @@ import { Image as ImageIcon, Upload, X } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { COVER_ACCEPTED, uploadChannelCover } from '@/lib/channel-cover-upload';
 
+import {
+  grafanaBg,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 type Props = {
   /** Which channel this cover belongs to */
   channelId: string;
@@ -75,6 +85,10 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
         await onUploaded(publicUrl);
         setProgress(100);
       } catch (err) {
+        // The server's OWN message, unaltered — see the note in
+        // `channel-wizard-fields.tsx`. The generic sentence this used to print
+        // ("requires creator permissions... contact support") explained neither
+        // the real cause nor the actual remedy.
         setError(err instanceof Error ? err.message : 'Upload failed. Please retry.');
       } finally {
         setBusy(false);
@@ -100,7 +114,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
   return (
     <div className="space-y-2">
       {/* 16:9 banner preview */}
-      <div className="relative aspect-video w-full overflow-hidden rounded-md bg-[#0d0f11]">
+      <div className={`relative aspect-video w-full overflow-hidden rounded-md ${productSunken}`}>
         {shown ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -110,13 +124,13 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center">
-            <ImageIcon className="h-2.5 w-2.5 text-[#9fa7b3]" aria-hidden="true" />
-            <p className="mt-1 text-[11px] text-[#9fa7b3]">No cover image</p>
+            <ImageIcon className={`h-2.5 w-2.5 ${grafanaTextMuted}`} aria-hidden="true" />
+            <p className={`mt-1 text-[11px] ${grafanaTextMuted}`}>No cover image</p>
           </div>
         )}
 
         {busy ? (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#111217]/85 text-xs font-bold text-white">
+          <div className={`absolute inset-0 flex items-center justify-center ${grafanaBg}/85 text-xs font-bold text-white`}>
             {progress}%
           </div>
         ) : null}
@@ -136,19 +150,19 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
 
         {busy ? (
           <div className="space-y-1.5">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1f2227]">
+            <div className={`h-1.5 w-full overflow-hidden rounded-full ${productPanelHover}`}>
               <div
-                className="h-full rounded-full bg-[#5794f2] transition-all"
+                className={`h-full rounded-full ${grafanaPrimaryBg} transition-all`}
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-[11px] text-[#9fa7b3]">Uploading {progress}%…</p>
+            <p className={`text-[11px] ${grafanaTextMuted}`}>Uploading {progress}%…</p>
           </div>
         ) : (
           <div className="flex flex-wrap items-center gap-2">
             <label
               htmlFor={inputId}
-              className="inline-flex h-9 cursor-pointer items-center rounded-md bg-[#1f2227] px-3 text-sm text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-within:ring-2 focus-within:ring-[#5794f2]/50"
+              className={`inline-flex h-9 cursor-pointer items-center rounded-md ${productPanelHover} px-3 text-sm ${grafanaText} transition-colors hover:${productSeparation} focus-within:ring-2 focus-within:ring-[#5794f2]/50`}
             >
               <Upload className="mr-1.5 h-2.5 w-2.5" aria-hidden="true" />
               {preview || currentUrl ? 'Replace cover' : 'Upload cover'}
@@ -164,7 +178,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
                   setProgress(0);
                   setError(null);
                 }}
-                className="h-9 px-2 text-[#9fa7b3] hover:text-[#d8d9da]"
+                className={`h-9 px-2 ${grafanaTextMuted} hover:${grafanaText}`}
                 aria-label="Clear selection"
               >
                 <X className="h-2.5 w-2.5" aria-hidden="true" />
@@ -173,7 +187,7 @@ export function CoverUploader({ channelId, currentUrl, onUploaded }: Props) {
           </div>
         )}
 
-        <p className="mt-1 text-[11px] text-[#9fa7b3]">
+        <p className={`mt-1 text-[11px] ${grafanaTextMuted}`}>
           PNG, JPEG or WebP. Under 4 MB. Stored on your own server.
         </p>
 

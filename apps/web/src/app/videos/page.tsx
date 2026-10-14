@@ -51,6 +51,12 @@ import {
 } from '@/components/InlinePlayerProvider';
 import { hlsStreamUrl, posterStreamUrl, previewStreamUrl, relativeObjectPath } from '@/lib/playback';
 
+import {
+  productHeroGradientText,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 /** One item from the public media list. */
 type PublicMedia = {
   id: string;
@@ -124,7 +130,7 @@ function DiscoverSplit({
                 subtitle={m.channel_name ?? undefined}
                 watchHref={`/watch/${m.id}`}
                 sortKey={m.created_at ?? ''}
-                matchKey={`${m.filename} ${m.channel_name ?? ''} ${m.channel_handle ?? ''}`}
+                matchKey={`${m.filename} ${m.channel_name ?? ``} ${m.channel_handle ?? ``}`}
                 // No publish affordance and no owner controls: these are other
                 // people's clips, and the library pane has no authority over them.
                 eligibleForPublish={false}
@@ -199,17 +205,17 @@ export default function DiscoverPage() {
   const playlist = useMemo(() => shown.map(toPlayerAsset), [shown]);
 
   return (
-    <div className="min-h-screen bg-[#0d0f11] text-white">
+    <div className={`min-h-screen ${productSunken} text-white`}>
       <div className="mx-auto max-w-[1800px] px-4 py-6 sm:px-6">
         {/* ---- heading ---- */}
         <header className="mb-5">
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
             Discover the{' '}
-            <span className="bg-gradient-to-r from-[#ff6500] to-[#ff8a3d] bg-clip-text text-transparent">
+            <span className={`${productHeroGradientText}`}>
               Global Community
             </span>
           </h1>
-          <p className="mt-1 text-xs text-[#8b949e]">
+          <p className={`mt-1 text-xs ${productTextMuted}`}>
             Every clip published on the platform, from every creator.
           </p>
         </header>
@@ -228,7 +234,7 @@ export default function DiscoverPage() {
               <h2 className="text-sm font-medium text-white">
                 {tab === 'all' ? 'All User Media Library' : labelForTab(tab)}
               </h2>
-              <span className="text-[11px] text-[#8b949e]">{shown.length} clips</span>
+              <span className={`text-[11px] ${productTextMuted}`}>{shown.length} clips</span>
             </div>
 
             <InlinePlayerProvider playlist={playlist}>

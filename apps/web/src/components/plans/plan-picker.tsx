@@ -52,6 +52,18 @@ import { Check, Loader2, Globe, AlertCircle, Info } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { useCountryCurrency, type Region, type CountryCurrencyInfo } from '@/lib/country-currency';
 
+import {
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  productPanel,
+  productPanelDeep,
+  productPanelHover,
+  productSeparation,
+  productTextBody,
+  productTextMuted,
+  productTextTertiary,
+} from '@wideo11/ui/design-system';
+
 type SelectablePlan = {
   code: string;
   name: string;
@@ -168,13 +180,13 @@ export function PlanPicker({
   };
 
   return (
-    <section className="mt-8 rounded-xl border border-[#2c3235] bg-[#1f2227] p-6">
+    <section className={`mt-8 rounded-xl border ${productSeparation} ${productPanelHover} p-6`}>
       {/* Country/Currency indicator */}
       <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-[#e6e6e6]">Choose your plan</h2>
+        <h2 className={`text-sm font-semibold ${productTextBody}`}>Choose your plan</h2>
         <div className="flex items-center gap-2">
-          {countryLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8b949e]" />}
-          <div className="flex items-center gap-1.5 text-xs text-[#8b949e]">
+          {countryLoading && <Loader2 className={`h-3.5 w-3.5 animate-spin ${productTextMuted}`} />}
+          <div className={`flex items-center gap-1.5 text-xs ${productTextMuted}`}>
             <Globe className="h-3 w-3" />
             <span>
               {countryInfo.countryName} ({countryInfo.currency})
@@ -198,14 +210,14 @@ export function PlanPicker({
         </div>
       </div>
 
-      <p className="mt-1 max-w-xl text-xs text-[#8b949e]">
+      <p className={`mt-1 max-w-xl text-xs ${productTextMuted}`}>
         Uploads are free and unlimited on every plan. A paid plan adds the right to
         earn — ads still run on every channel either way, and a channel with no
         active subscription earns nothing.
       </p>
 
       {/* Region notice */}
-      <p className="mt-3 text-xs text-[#5794f2] flex items-center gap-1">
+      <p className={`mt-3 text-xs ${grafanaPrimary} flex items-center gap-1`}>
         <Info className="h-3 w-3" />
         Showing plans for <strong>{getRegionLabel(countryInfo.region)}</strong> region. 
         Prices update automatically when your location changes.
@@ -245,10 +257,10 @@ export function PlanPicker({
               key={p.code}
               className={`flex flex-col justify-between rounded-lg border p-4 relative ${
                 current
-                  ? 'border-[#5794f2] bg-[#5794f2]/5'
+                  ? `${grafanaPrimary} ${grafanaPrimaryBg}/5`
                   : isForUserRegion
-                  ? 'border-[#2c3235] bg-[#16181d]'
-                  : 'border-[#2c3235] bg-[#13151a] opacity-70'
+                  ? `${productSeparation} ${productPanel}`
+                  : `${productSeparation} ${productPanelDeep} opacity-70`
               }`}
             >
               {!isForUserRegion && !current && (
@@ -259,34 +271,34 @@ export function PlanPicker({
 
               <div>
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-[#e6e6e6]">{p.name}</h3>
+                  <h3 className={`text-sm font-semibold ${productTextBody}`}>{p.name}</h3>
                   {current && (
-                    <span className="rounded-full border border-[#5794f2]/50 bg-[#5794f2]/10 px-2 py-0.5 text-[11px] font-medium text-[#5794f2]">
+                    <span className={`rounded-full border ${grafanaPrimary}/50 ${grafanaPrimaryBg}/10 px-2 py-0.5 text-[11px] font-medium ${grafanaPrimary}`}>
                       {isTrial ? 'on trial' : 'your plan'}
                     </span>
                   )}
                 </div>
 
                 <p className="mt-2 flex items-baseline gap-1">
-                  <span className="text-lg font-semibold text-[#e6e6e6]">
+                  <span className={`text-lg font-semibold ${productTextBody}`}>
                     {p.cycle === 'trial' || p.price_minor === 0
                       ? 'Free'
                       : formatPrice(p.price_minor, p.currency)}
                   </span>
                   {p.cycle !== 'trial' && p.price_minor > 0 && (
-                    <span className="text-xs text-[#8b949e]">/ month</span>
+                    <span className={`text-xs ${productTextMuted}`}>/ month</span>
                   )}
                   {p.cycle === 'trial' && (
-                    <span className="text-xs text-[#8b949e]">
+                    <span className={`text-xs ${productTextMuted}`}>
                       {p.trial_days ? `for ${p.trial_days} days` : ''}
                     </span>
                   )}
                 </p>
 
-                <dl className="mt-3 space-y-1 text-xs text-[#8b949e]">
+                <dl className={`mt-3 space-y-1 text-xs ${productTextMuted}`}>
                   <div className="flex items-center gap-1.5">
                     <dt>Max channels</dt>
-                    <dd className="ml-auto font-mono text-[#c9d1d9]">
+                    <dd className={`ml-auto font-mono ${productTextTertiary}`}>
                       {p.max_channels === 'unlimited'
                         ? 'Unlimited'
                         : (p.max_channels ?? 3)}
@@ -294,7 +306,7 @@ export function PlanPicker({
                   </div>
                   <div className="flex items-center gap-1.5">
                     <dt>Can earn</dt>
-                    <dd className="ml-auto font-mono text-[#c9d1d9]">
+                    <dd className={`ml-auto font-mono ${productTextTertiary}`}>
                       {monetised ? 'Yes' : 'No'}
                     </dd>
                   </div>
@@ -308,8 +320,8 @@ export function PlanPicker({
                 onClick={() => void subscribe(p.code)}
                 className={`mt-4 w-full ${
                   current
-                    ? 'border border-[#2c3235] bg-transparent text-[#8b949e]'
-                    : 'bg-[#5794f2] text-white hover:bg-[#5794f2]/85'
+                    ? `border ${productSeparation} bg-transparent ${productTextMuted}`
+                    : `${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`
                 } disabled:opacity-50`}
               >
                 {busy === p.code ? (
@@ -326,12 +338,12 @@ export function PlanPicker({
       </div>
 
       {plans.length === 0 && !loadError && (
-        <p className="mt-4 text-xs text-[#8b949e]">Loading plans…</p>
+        <p className={`mt-4 text-xs ${productTextMuted}`}>Loading plans…</p>
       )}
 
       {/* Minimum balance notice - only shown after subscription in T&C */}
-      <div className="mt-6 pt-4 border-t border-[#2c3235]">
-        <p className="text-xs text-[#8b949e] flex items-center gap-1.5">
+      <div className={`mt-6 pt-4 border-t ${productSeparation}`}>
+        <p className={`text-xs ${productTextMuted} flex items-center gap-1.5`}>
           <Info className="h-3 w-3" />
           <span>Minimum balance requirement applies after subscription. See Terms & Conditions for details.</span>
         </p>

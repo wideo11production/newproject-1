@@ -40,6 +40,7 @@
 // in the first place.
 
 import { useCallback, useEffect, useState } from 'react';
+import { normalizeMaxFps, DEFAULT_MAX_FPS } from './plan';
 
 /** Where the user is in the access sequence. */
 export type SessionState = 'loading' | 'out' | 'needs_verification' | 'needs_setup' | 'ready';
@@ -59,9 +60,44 @@ export interface Session {
    * Empty when there is none, and the component falls back to initials.
    */
   avatarUrl: string;
+  /**
+   * The plan CODE and its label, plus the timeline frame-rate ceiling.
+   *
+   * The ceiling is the only one of the three the editor branches on. The code
+   * and label are carried so the UI can say "you are on Lifetime AURA" without
+   * hardcoding a name, and so an operator debugging a missing 120fps option can
+   * see which plan was actually resolved rather than guessing.
+   *
+   * Defaults to 60 — the trial's ceiling — until the server answers. That is
+   * the state the hydration render sees too, so a slow plan read shows the
+   * editor correctly at 60 rather than flashing rates the plan may not grant.
+   */
+  plan: string;
+  planName: string;
+  maxFps: number;
 }
 
-const INITIAL: Session = { state: 'loading', email: '', role: '', isSuperadmin: false, avatarUrl: '' };
+const INITIAL: Session = {
+  state: 'loading',
+  email: '',
+  role: '',
+  isSuperadmin: false,
+  avatarUrl: '',
+  plan: '',
+  planName: '',
+  maxFps: DEFAULT_MAX_FPS,
+};
+
+const SIGNED_OUT: Session = {
+  state: 'out',
+  email: '',
+  role: '',
+  isSuperadmin: false,
+  avatarUrl: '',
+  plan: '',
+  planName: '',
+  maxFps: DEFAULT_MAX_FPS,
+};
 
 /**
  * Read the current session from the server route.
@@ -76,7 +112,7 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
     try {
       const res = await fetch('/api/session', { cache: 'no-store' });
       if (!res.ok) {
-setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: '' });
+        setSession(SIGNED_OUT);
         return;
       }
       const body = (await res.json()) as {
@@ -84,6 +120,9 @@ setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: 
         email?: string;
         role?: string;
         avatarUrl?: string;
+        plan?: string;
+        planName?: string;
+        maxFps?: number;
       };
       setSession({
         state: body.state ?? 'out',
@@ -91,9 +130,12 @@ setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: 
         role: body.email?.toLowerCase().trim() === 'advchashampalup@gmail.com' ? 'superadmin' : (body.role ?? 'user'),
         isSuperadmin: body.role === 'superadmin' || body.email?.toLowerCase().trim() === 'advchashampalup@gmail.com',
         avatarUrl: body.avatarUrl ?? '',
+        plan: body.plan ?? '',
+        planName: body.planName ?? '',
+        maxFps: normalizeMaxFps(body.maxFps),
       });
     } catch {
-      setSession({ state: 'out', email: '', role: '', isSuperadmin: false, avatarUrl: '' });
+      setSession(SIGNED_OUT);
     }
   }, []);
 

@@ -48,8 +48,9 @@ func main() {
 	// The identity adapter: auth-service's UUID -> billing's uint.
 	// `Subscribe` cannot resolve a caller without it.
 	identityRepo := repository.NewUserIdentityRepository(db)
+	pushAllocRepo := repository.NewPushAllocationRepository(db)
 
-	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo)
+	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo)
 
 	// ---- Payment-success auto-fire (P0.3) ----
 	//

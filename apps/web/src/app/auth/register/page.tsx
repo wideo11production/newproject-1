@@ -71,6 +71,12 @@ import { reportSecurityViolation } from '@/lib/audit-tracking';
 // `//evil.com` jaisa value open-redirect ban sakta hai.
 import { safeNext } from '@/lib/safe-next';
 
+import {
+  grafanaText,
+  grafanaTextMuted,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 // Strength levels: 0 = empty, 4 = strong (green)
 type Strength = 0 | 1 | 2 | 3 | 4;
 
@@ -469,7 +475,7 @@ return (
     title="Create your account"
     description="Free to begin, no card required."
     footer={
-      <p className="text-center text-sm text-[#9fa7b3]">
+      <p className={`text-center text-sm ${grafanaTextMuted}`}>
         Already have an account?{' '}
         <Link
           href="/auth/login"
@@ -556,7 +562,7 @@ return (
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
-            className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40`}
           >
             {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
           </button>
@@ -603,7 +609,7 @@ return (
                   ? 'text-amber-400'
                   : strength >= 2
                   ? 'text-orange-400'
-                  : 'text-[#9fa7b3]'
+                  : `${grafanaTextMuted}`
               }`}
             >
               {strengthLabel}
@@ -635,7 +641,7 @@ return (
             type="button"
             onClick={() => setShowPassword((v) => !v)}
             aria-label={showPassword ? 'Hide passwords' : 'Show passwords'}
-            className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+            className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40`}
           >
             {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
           </button>
@@ -655,11 +661,11 @@ return (
           id="terms"
           checked={acceptedTerms}
           onCheckedChange={(v) => setAcceptedTerms(v === true)}
-          className="mt-px-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
+          className="mt-px data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600"
         />
         <label
           htmlFor="terms"
-          className="cursor-pointer select-none text-xs leading-snug text-[#9fa7b3]"
+          className={`cursor-pointer select-none text-xs leading-snug ${grafanaTextMuted}`}
         >
           I agree to the{' '}
           <span className="font-medium text-blue-400">Terms &amp; Conditions</span> and{' '}
@@ -716,11 +722,11 @@ return (
                 );
               }
             }}
-            className="mt-px shrink-0-[#3d4348] data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
+            className="mt-px shrink-0 data-[state=checked]:border-blue-600 data-[state=checked]:bg-blue-600 disabled:opacity-50"
           />
           <label
             htmlFor="biometric"
-            className="min-w-0 flex-1 cursor-pointer select-none text-xs font-medium leading-snug text-[#d8d9da]"
+            className={`min-w-0 flex-1 cursor-pointer select-none text-xs font-medium leading-snug ${grafanaText}`}
           >
             Enable biometric login
           </label>
@@ -754,7 +760,7 @@ return (
             aria-expanded={showBiometricHelp}
             aria-controls="biometric-help"
             aria-label="About biometric login"
-            className="inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full-[#3d4348] text-[10px] font-bold leading-none text-[#9fa7b3] transition-colors hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+            className={`inline-flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold leading-none ${grafanaTextMuted} transition-colors hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50`}
           >
             ?
           </button>
@@ -765,7 +771,7 @@ return (
             ho. Idle state me kuch nahi - card auto-height hai, par extra line
             sirf tabhi aati hai jab zaroorat ho. */}
         {biometricEnrolling || biometricMessage ? (
-          <p className="mt-1 text-[11px] leading-snug text-[#9fa7b3]">
+          <p className={`mt-1 text-[11px] leading-snug ${grafanaTextMuted}`}>
             {biometricEnrolling
               ? 'Touch your fingerprint or face to finish setting up...'
               : biometricMessage}
@@ -799,20 +805,20 @@ return (
             id="biometric-help"
             role="region"
             aria-label="About biometric login"
-            className="mt-1.5 space-y-1.5 rounded-md bg-[#0d0f11]/70 p-2.5"
+            className={`mt-1.5 space-y-1.5 rounded-md ${productSunken}/70 p-2.5`}
           >
-            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+            <p className={`text-[11px] leading-relaxed ${grafanaTextMuted}`}>
               Biometric login uses your device&apos;s own security hardware - a
               fingerprint scanner or a face camera. Your biometric data never
               leaves the device and is never sent to our servers. We only store
               a public key that your device generates.
             </p>
-            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+            <p className={`text-[11px] leading-relaxed ${grafanaTextMuted}`}>
               This is an addition, not a replacement. Your password keeps
               working, and you can turn biometrics off at any time from
               settings.
             </p>
-            <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+            <p className={`text-[11px] leading-relaxed ${grafanaTextMuted}`}>
               If this checkbox is not showing, your device was not detected as
               having a platform authenticator. Check that you opened the site
               at <span className="font-mono">http://localhost:3000</span> (WebAuthn

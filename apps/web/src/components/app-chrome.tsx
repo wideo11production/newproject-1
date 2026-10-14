@@ -35,6 +35,10 @@ import {
 import { BarChart3, Activity, Bell, Settings, HelpCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
+import {
+  surfaceRaised,
+} from '@wideo11/ui/design-system';
+
 /**
  * Sirf ye routes par dashboard console chrome (sidebar + header) dikhta hai.
  *
@@ -78,10 +82,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-screen flex-col bg-gray-950">
-      {/* BORDERLESS DESIGN: Header separator uses bg-[#1a1a1a] (rich charcoal) contrast
+      {/* BORDERLESS DESIGN: Header separator uses ${surfaceRaised} (rich charcoal) contrast
           against main area bg-gray-950 instead of a hard. Visual hierarchy
           maintained through background color difference, not lines. */}
-      <header className="bg-[#1a1a1a]">
+      <header className={`${surfaceRaised}`}>
         <div className="container mx-auto flex items-center justify-between px-4 py-3">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-bold text-ink">Wideo11</h1>
@@ -140,11 +144,11 @@ export function AppChrome({ children }: { children: ReactNode }) {
       </header>
 
       <div className="flex-1 overflow-hidden">
-        {/* BORDERLESS DESIGN: Sidebar separator uses bg-[#1a1a1a] (rich charcoal)
+        {/* BORDERLESS DESIGN: Sidebar separator uses ${surfaceRaised} (rich charcoal)
           instead of. Main content area has no visible separator -
           the background contrast between sidebar and main provides the
           visual division. */}
-        <aside className="absolute left-0 top-0 z-10 hidden h-full w-64 bg-[#1a1a1a]/90 backdrop-blur-sm md:block">
+        <aside className={`absolute left-0 top-0 z-10 hidden h-full w-64 ${surfaceRaised}/90 backdrop-blur-sm md:block`}>
           <div className="p-4">
             <div className="space-y-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-400">

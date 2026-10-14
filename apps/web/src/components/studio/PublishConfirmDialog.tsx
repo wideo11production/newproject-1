@@ -44,6 +44,23 @@ import {
   Square,
 } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productAccentHoverBg,
+  productAccentSoftBg,
+  productCheckboxChecked,
+  productCheckboxUnchecked,
+  productDivider,
+  productInfo,
+  productPanel,
+  productPanelHover,
+  productPeerFocusRing,
+  productSunken,
+  productTextBody,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 /** The statement an owner is certifying, item by item. */
 export interface ComplianceItem {
   id: string;
@@ -212,12 +229,12 @@ export function PublishConfirmDialog({
         aria-modal="true"
         aria-labelledby="publish-dialog-title"
         tabIndex={-1}
-        className="relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl bg-[#16181d] shadow-2xl shadow-black/60 focus:outline-none"
+        className={`relative z-10 flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl ${productPanel} shadow-2xl shadow-black/60 focus:outline-none`}
       >
         {/* ---- header ---- */}
-        <header className="flex items-start gap-3 border-b border-[#2c3235] px-5 py-4">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#ff6500]/15">
-            <ShieldAlert className="h-4 w-4 text-[#ff6500]" aria-hidden="true" />
+        <header className={`flex items-start gap-3 border-b ${productDivider} px-5 py-4`}>
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${productAccentSoftBg}`}>
+            <ShieldAlert className={`h-4 w-4 ${productAccent}`} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
             <h2
@@ -226,10 +243,10 @@ export function PublishConfirmDialog({
             >
               Publish confirmation — aapki khud ki zimmedari
             </h2>
-            <p className="mt-0.5 text-[11px] text-[#8b949e]">
+            <p className={`mt-0.5 text-[11px] ${productTextMuted}`}>
               {assetTitle ? (
                 <>
-                  <span className="text-[#e6e6e6]">{assetTitle}</span> — live karne se pehle har point
+                  <span className={`${productTextBody}`}>{assetTitle}</span> — live karne se pehle har point
                   padhein aur tick karein.
                 </>
               ) : (
@@ -240,7 +257,7 @@ export function PublishConfirmDialog({
           <button
             onClick={onClose}
             disabled={confirming}
-            className="rounded-lg p-1.5 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white disabled:opacity-40"
+            className={`rounded-lg p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white disabled:opacity-40`}
             aria-label="Close"
           >
             <X className="h-4 w-4" />
@@ -251,24 +268,24 @@ export function PublishConfirmDialog({
             The core of the dialog. It is a statement, not a question, and every
             clause names the owner as the responsible party. */}
         <div className="flex-1 overflow-y-auto px-5 py-4" style={{ scrollbarWidth: 'thin' }}>
-          <div className="mb-4 rounded-xl bg-[#0d0f11] p-3.5">
-            <p className="text-[12px] leading-relaxed text-[#e6e6e6]">
+          <div className={`mb-4 rounded-xl ${productSunken} p-3.5`}>
+            <p className={`text-[12px] leading-relaxed ${productTextBody}`}>
               Main <span className="font-semibold text-white">khud</span> ne is clip ko ache se
               check kiya hai. Ismein kissi bhi tarah ka{' '}
-              <span className="font-semibold text-[#ff6500]">adultery, child prone content</span>,{' '}
-              <span className="font-semibold text-[#ff6500]">terrorist activities</span>{' '}
+              <span className={`font-semibold ${productAccent}`}>adultery, child prone content</span>,{' '}
+              <span className={`font-semibold ${productAccent}`}>terrorist activities</span>{' '}
               ya koi bhi illegal activity —{' '}
-              <span className="font-semibold text-[#ff6500]">drugs</span>, riot ya public violence
+              <span className={`font-semibold ${productAccent}`}>drugs</span>, riot ya public violence
               shamil hai — nahi hai.
             </p>
-            <p className="mt-2.5 text-[12px] leading-relaxed text-[#e6e6e6]">
+            <p className={`mt-2.5 text-[12px] leading-relaxed ${productTextBody}`}>
               Agar aisa kuch milta hai, to iski{' '}
               <span className="font-semibold text-white">jimmedari puri tarah se mere apne hosh mein
               hai</span>{' '}
               aur main ise apni personal responsibility ke roop mein maanta/manti hoon. Platform
               zimmedari nahi leti.
             </p>
-            <p className="mt-2.5 text-[12px] leading-relaxed text-[#e6e6e6]">
+            <p className={`mt-2.5 text-[12px] leading-relaxed ${productTextBody}`}>
               Kisi bhi tarah ki illegal activity ki surat mein{' '}
               <span className="font-semibold text-red-400">legal action</span> aa sakta hai, jiska
               irada <span className="font-semibold text-white">channel owner</span>{' '}
@@ -279,7 +296,7 @@ export function PublishConfirmDialog({
           {/* ---- the checklist ---- */}
           <fieldset className="space-y-1.5">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <legend className="text-[10px] font-semibold uppercase tracking-wider text-[#8b949e]">
+              <legend className={`text-[10px] font-semibold uppercase tracking-wider ${productTextMuted}`}>
                 Confirm karne ke liye har point tick karein ({checkedCount}/{COMPLIANCE_ITEMS.length})
               </legend>
 
@@ -289,7 +306,7 @@ export function PublishConfirmDialog({
                 type="button"
                 onClick={toggleAll}
                 aria-label={allChecked ? 'Clear all confirmations' : 'Select all confirmations'}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-[#0d0f11] px-2 py-1 text-[10px] font-medium text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                className={`flex shrink-0 items-center gap-1 rounded-lg ${productSunken} px-2 py-1 text-[10px] font-medium ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
               >
                 {allChecked ? (
                   <>
@@ -311,7 +328,7 @@ export function PublishConfirmDialog({
                 <label
                   key={item.id}
                   className={`flex cursor-pointer gap-2.5 rounded-xl p-2.5 transition-colors ${
-                    on ? 'bg-[#ff6500]/[0.07]' : 'bg-[#0d0f11] hover:bg-[#1f2227]'
+                    on ? `${productAccentBg}/[0.07]` : `${productSunken} ${productPanelHover}`
                   }`}
                 >
                   <input
@@ -324,15 +341,15 @@ export function PublishConfirmDialog({
                       colour consistently across browsers. */}
                   <span
                     aria-hidden="true"
-                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#ff6500] ${
-                      on ? 'border-[#ff6500] bg-[#ff6500]' : 'border-[#3a4045] bg-transparent'
+                    className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${productPeerFocusRing} ${
+                      on ? `${productCheckboxChecked} ${productAccentBg}` : `${productCheckboxUnchecked}`
                     }`}
                   >
                     {on ? <CheckCircle2 className="h-3 w-3 text-white" /> : null}
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-[12px] font-medium text-white">{item.title}</span>
-                    <span className="mt-0.5 block text-[11px] leading-relaxed text-[#8b949e]">
+                    <span className={`mt-0.5 block text-[11px] leading-relaxed ${productTextMuted}`}>
                       {item.detail}
                     </span>
                   </span>
@@ -345,8 +362,8 @@ export function PublishConfirmDialog({
               The owner should know what was checked and what was not, because a
               screening pass that is implied to be total is a lie the platform
               would be telling. */}
-          <p className="mt-4 flex items-start gap-2 rounded-xl bg-[#0d0f11] px-3 py-2.5 text-[11px] leading-relaxed text-[#8b949e]">
-            <Film className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#5794f2]" aria-hidden="true" />
+          <p className={`mt-4 flex items-start gap-2 rounded-xl ${productSunken} px-3 py-2.5 text-[11px] leading-relaxed ${productTextMuted}`}>
+            <Film className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${productInfo}`} aria-hidden="true" />
             <span>
               Is upload par automated screening pehle hi chal chuki hai — frame-by-frame visual checks
               aur line-by-line text checks, bina kisi manual moderation ke. Screening har cheez pakad
@@ -363,11 +380,11 @@ export function PublishConfirmDialog({
         </div>
 
         {/* ---- footer ---- */}
-        <footer className="flex items-center justify-end gap-2 border-t border-[#2c3235] px-5 py-3.5">
+        <footer className={`flex items-center justify-end gap-2 border-t ${productDivider} px-5 py-3.5`}>
           <button
             onClick={onClose}
             disabled={confirming}
-            className="rounded-lg bg-[#0d0f11] px-4 py-2 text-xs font-medium text-[#e6e6e6] transition-colors hover:bg-[#1f2227] disabled:opacity-40"
+            className={`rounded-lg ${productSunken} px-4 py-2 text-xs font-medium ${productTextBody} transition-colors ${productPanelHover} disabled:opacity-40`}
           >
             Cancel
           </button>
@@ -375,7 +392,7 @@ export function PublishConfirmDialog({
             onClick={submit}
             disabled={!allChecked || confirming}
             title={allChecked ? undefined : 'Confirm karne ke liye saare points tick karein'}
-            className="flex items-center gap-1.5 rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#e05500] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#ff6500]"
+            className={`flex items-center gap-1.5 rounded-lg ${productAccentBg} px-4 py-2 text-xs font-semibold text-white transition-colors ${productAccentHoverBg} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:${productAccentBg}`}
           >
             {confirming ? (
               <>

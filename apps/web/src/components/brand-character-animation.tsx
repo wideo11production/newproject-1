@@ -13,13 +13,22 @@
 // `prefers-reduced-motion` respected via `motion-safe:` prefix.
 //
 // BORDERLESS DESIGN: Character avatar uses bg-gradient-to-br for visual
-// separation instead of ring/border. Status dot uses bg-[#73bf69] with
+// separation instead of ring/border. Status dot uses ${grafanaSuccessBg} with
 // box-shadow for depth. All interactive elements use rounded-md geometry
 // and 150ms color transitions. Orange-red (#ff6500) accent preserved for
 // Clip character and action buttons.
 
 import { useEffect, useState } from 'react';
 import { cn } from '@wideo11/ui/lib/utils';
+
+import {
+  grafanaSuccessBg,
+  grafanaText,
+  grafanaTextMuted,
+  productAccentBg,
+  productAccentRing,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
 
 interface CharacterConfig {
   name: string;
@@ -64,7 +73,7 @@ const CHARACTERS: Record<string, CharacterConfig> = {
     role: 'The cut',
     image: '/clip.png',
     tint: 'from-[#ff6500] to-[#ff6500]/70',
-    ring: 'ring-[#ff6500]/40',
+    ring: `${productAccentRing}/40`,
     loop: 'cut',
     speaks: ['cut', 'trim', 'split'],
   },
@@ -100,8 +109,8 @@ export function BrandCharacterAnimation({
   if (!mounted) {
     return (
       <div className="flex flex-col items-center gap-3">
-        <div className="h-16 w-16 animate-pulse rounded-full bg-[#1f2227]" />
-        <div className="h-3 w-40 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-16 w-16 animate-pulse rounded-full ${productPanelHover}`} />
+        <div className={`h-3 w-40 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
@@ -141,23 +150,23 @@ export function BrandCharacterAnimation({
           </span>
         </div>
         <span
-          className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full-surface-raised bg-[#73bf69] motion-safe:animate-pulse"
+          className={`absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-full-surface-raised ${grafanaSuccessBg} motion-safe:animate-pulse`}
           aria-hidden="true"
         />
       </div>
 
       <div className="max-w-xs">
-        <p className="text-sm font-medium text-[#d8d9da]">
-          {char.name} <span className="text-[#9fa7b3]">· {char.role}</span>
+        <p className={`text-sm font-medium ${grafanaText}`}>
+          {char.name} <span className={`${grafanaTextMuted}`}>· {char.role}</span>
         </p>
         {message && (
-          <p className="mt-1 text-xs text-[#9fa7b3]">{message}</p>
+          <p className={`mt-1 text-xs ${grafanaTextMuted}`}>{message}</p>
         )}
         {action && onAction && (
           <button
             type="button"
             onClick={onAction}
-            className="mt-2 rounded-md bg-[#ff6500] px-3 py-1 text-[10px] font-medium text-white transition-colors duration-150 hover:bg-[#ff6500]/85"
+            className={`mt-2 rounded-md ${productAccentBg} px-3 py-1 text-[10px] font-medium text-white transition-colors duration-150 hover:${productAccentBg}/85`}
           >
             {action}
           </button>

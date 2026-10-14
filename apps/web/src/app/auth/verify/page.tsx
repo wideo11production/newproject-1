@@ -36,6 +36,16 @@ import {
   PRIMARY_BUTTON_CLASS,
 } from '@/components/auth/auth-shell';
 
+import {
+  grafanaFocusRingVisible,
+  grafanaPrimary,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 /**
  * `useSearchParams` client hook hai jo build time par static render me
  * unavailable hota hai. Next.js isko Suspense boundary ke andar use karne ki
@@ -569,7 +579,7 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
           <Send className="mt-0.5 h-2.5 w-2.5 shrink-0" />
           <p className="leading-relaxed">{feedback}</p>
         </div>
-        <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+        <p className={`text-[11px] leading-relaxed ${grafanaTextMuted}`}>
           Your previous verification link is no longer valid - only the newest
           email link will work. The new link is valid for 30 minutes.
         </p>
@@ -579,7 +589,7 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
             setState('idle');
             setFeedback('');
           }}
-          className="text-xs text-[#9fa7b3] underline transition-colors hover:text-[#d8d9da]"
+          className={`text-xs ${grafanaTextMuted} underline transition-colors hover:${grafanaText}`}
         >
           Send another email
         </button>
@@ -589,10 +599,10 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
 
   return (
     <form onSubmit={handleResend} className="space-y-3">
-      <div className="flex items-start gap-2.5 rounded-md bg-[#0d0f11]/50 p-3">
-        <Send className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#9fa7b3]" />
+      <div className={`flex items-start gap-2.5 rounded-md ${productSunken}/50 p-3`}>
+        <Send className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${grafanaTextMuted}`} />
         <div className="min-w-0 flex-1 space-y-2.5">
-          <p className="text-xs leading-relaxed text-[#d8d9da]">
+          <p className={`text-xs leading-relaxed ${grafanaText}`}>
             Didn&apos;t get the email, or did it expire?
           </p>
 
@@ -606,14 +616,14 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
               placeholder="you@example.com"
               autoComplete="email"
               required
-              className="h-10 w-full rounded-md bg-[#0d0f11] px-3 text-sm text-[#d8d9da] placeholder:text-[#9fa7b3]/60 focus:border-[#5794f2] focus:outline-none focus:ring-2 focus:ring-[#5794f2]/30"
+              className={`h-10 w-full rounded-md ${productSunken} px-3 text-sm ${grafanaText} placeholder:${grafanaTextMuted}/60 focus:${grafanaPrimary} focus:outline-none focus:ring-2 focus:ring-[#5794f2]/30`}
             />
           ) : null}
 
           <button
             type="submit"
             disabled={state === 'sending' || !email.trim()}
-            className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-[#1f2227] text-sm font-medium text-[#d8d9da] transition-colors hover:bg-[#2c3235] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-md ${productPanelHover} text-sm font-medium ${grafanaText} transition-colors hover:${productSeparation} ${grafanaFocusRingVisible} disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {state === 'sending' ? (
               <>

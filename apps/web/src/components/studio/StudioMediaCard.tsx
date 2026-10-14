@@ -36,10 +36,22 @@
  * tree, and reading a prop is the only way to get a typed, comparable value.
  */
 
-import { Play, Radio } from 'lucide-react';
+import { Play, Radio, Trash2 } from 'lucide-react';
 import { HoverPreviewThumbnail } from '../HoverPreviewThumbnail';
 import { formatDuration } from '@/lib/media-upload';
 import { useInlinePlayer, type InlinePlayerAsset } from '../InlinePlayerProvider';
+
+import {
+  productAccent,
+  productAccentBg,
+  productAccentHoverBg,
+  productAccentSoftBg,
+  productActiveRing,
+  productPanel,
+  productPanelHover,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
 
 type MediaKind = 'video' | 'reel' | 'audio';
 
@@ -66,6 +78,15 @@ export interface StudioMediaCardProps {
   /** Text the library's search box matches against. */
   matchKey?: string;
   watchHref?: string;
+  /**
+   * Opens a delete confirmation for this clip.
+   *
+   * The card does NOT delete anything itself. It reports the intent and the
+   * caller owns the confirmation and the API call — a card that deleted directly
+   * would delete a clip on a mis-click with no undo, and the owner needs to be
+   * the one to confirm.
+   */
+  onDelete?: () => void;
   /**
    * Whether this clip has passed the mandatory checks and may be offered for
    * publication. Absent means no publish affordance at all, which is the correct
@@ -134,6 +155,7 @@ export function StudioMediaCard({
   sortKey,
   matchKey,
   watchHref,
+  onDelete,
   eligibleForPublish = false,
   isLive = false,
   onPublish,
@@ -160,7 +182,7 @@ export function StudioMediaCard({
   };
 
   const glow = isActive
-    ? 'ring-2 ring-[#ff6500] ring-offset-2 ring-offset-[#0d0f11] shadow-[0_0_18px_-2px_rgba(255,101,0,0.45)]'
+    ? `${productActiveRing}`
     : 'ring-1 ring-transparent hover:ring-[#2c3235]';
 
   // ---- list variant ----
@@ -184,7 +206,7 @@ export function StudioMediaCard({
           }
         }}
         tabIndex={0}
-        className={`group flex cursor-pointer items-center gap-2.5 rounded-xl bg-[#16181d] p-1.5 transition-colors hover:bg-[#1f2227] ${glow}`}
+        className={`group flex cursor-pointer items-center gap-2.5 rounded-xl ${productPanel} p-1.5 transition-colors ${productPanelHover} ${glow}`}
       >
         {/* ---- the thumbnail, sized by THIS row ----
             `aspect="fill"` plus an explicit box, so the frame takes the size the row
@@ -232,8 +254,8 @@ export function StudioMediaCard({
           <p className="truncate text-xs font-medium text-white" title={filename}>
             {filename}
           </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-[#8b949e]">
-            <span className="rounded bg-[#0d0f11] px-1.5 py-0.5 capitalize">{kind}</span>
+          <div className={`mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] ${productTextMuted}`}>
+            <span className={`rounded ${productSunken} px-1.5 py-0.5 capitalize`}>{kind}</span>
             {durationSeconds > 0 ? <span>{formatDuration(durationSeconds)}</span> : null}
             {width && height ? <span>
                 {width}x{height}
@@ -243,7 +265,7 @@ export function StudioMediaCard({
         </div>
 
         {isActive ? (
-          <span className="shrink-0 rounded-full bg-[#ff6500]/15 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#ff6500]">
+          <span className={`shrink-0 rounded-full ${productAccentSoftBg} px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${productAccent}`}>
             Playing
           </span>
         ) : (
@@ -252,7 +274,6 @@ export function StudioMediaCard({
               eligible={eligibleForPublish && canPlay}
               isLive={isLive}
               onPublish={onPublish}
-              variant="list"
             />
             <button
               onClick={(e) => {
@@ -262,10 +283,24 @@ export function StudioMediaCard({
               disabled={!canPlay}
               aria-label={`Play ${filename}`}
               title={canPlay ? 'Play here' : 'Not playable yet'}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#0d0f11] text-white transition-colors hover:bg-[#ff6500] disabled:opacity-40 disabled:hover:bg-[#0d0f11]"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productAccentBg} text-white transition-colors ${productAccentHoverBg} disabled:opacity-40`}
             >
-              <Play className="ml-0.5 h-3 w-3" />
+              <Play className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
+
+            {onDelete ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete();
+                }}
+                aria-label={`Delete ${filename}`}
+                title="Delete"
+                className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productSunken} text-red-400 transition-colors hover:bg-red-500/20`}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            ) : null}
           </>
         )}
       </article>
@@ -280,7 +315,7 @@ export function StudioMediaCard({
       data-active={isActive ? 'true' : 'false'}
       data-asset-id={id}
       aria-label={filename}
-      className={`group relative overflow-hidden rounded-xl bg-[#16181d] transition-colors hover:bg-[#1f2227] ${glow}`}
+      className={`group relative overflow-hidden rounded-xl ${productPanel} transition-colors ${productPanelHover} ${glow}`}
     >
       <HoverPreviewThumbnail
         id={id}
@@ -304,27 +339,61 @@ export function StudioMediaCard({
         className="!rounded-none"
       />
 
-      {/* caption */}
+      {/* ---- caption + action row ---- */}
       <div className="p-2">
         <p className="truncate text-[11px] font-medium text-white" title={filename}>
           {filename}
         </p>
-        <div className="mt-0.5 flex items-center gap-1.5">
-          <p className="min-w-0 flex-1 truncate text-[10px] text-[#8b949e]">
-            {canPlay ? (durationSeconds > 0 ? formatDuration(durationSeconds) : 'Ready') : 'Not ready'}
-            {subtitle ? ` · ${subtitle}` : ''}
-          </p>
+        <p className={`mt-0.5 truncate text-[10px] ${productTextMuted}`}>
+          {canPlay ? (durationSeconds > 0 ? formatDuration(durationSeconds) : 'Ready') : 'Not ready'}
+          {subtitle ? ` · ${subtitle}` : ''}
+        </p>
+
+        {/* The action row: Play | Go Live | Delete, icons only.
+            All three sit here in the card footer rather than on the thumbnail, so
+            the frame stays a clean hover-preview surface. Each is an icon plus a
+            tooltip - the words they used to carry ("Play", "Go Live", "Live")
+            overflowed a narrow card and overlapped each other. */}
+        <div className="mt-1.5 flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              activate();
+            }}
+            disabled={!canPlay}
+            aria-label={`Play ${filename}`}
+            title={canPlay ? 'Play here' : 'Not playable yet'}
+            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productAccentBg} text-white transition-colors ${productAccentHoverBg} disabled:opacity-40`}
+          >
+            <Play className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+
           <PublishAffordance
             eligible={eligibleForPublish && canPlay}
             isLive={isLive}
             onPublish={onPublish}
-            variant="grid"
           />
+
+          {onDelete ? (
+            <button
+              onClick={(e) => {
+                // Without this the click also activates the card behind it, so a
+                // delete would open the confirm dialog AND the player.
+                e.stopPropagation();
+                onDelete();
+              }}
+              aria-label={`Delete ${filename}`}
+              title="Delete"
+              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productSunken} text-red-400 transition-colors hover:bg-red-500/20`}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
         </div>
       </div>
 
       {isActive ? (
-        <span className="pointer-events-none absolute left-1.5 top-1.5 rounded-full bg-[#ff6500] px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+        <span className={`pointer-events-none absolute left-1.5 top-1.5 rounded-full ${productAccentBg} px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white`}>
           Playing
         </span>
       ) : null}
@@ -350,22 +419,22 @@ function PublishAffordance({
   eligible,
   isLive,
   onPublish,
-  variant,
 }: {
   eligible: boolean;
   isLive: boolean;
   onPublish?: () => void;
-  variant: 'grid' | 'list';
 }) {
   if (isLive) {
+    // Icon only, no text. The text was removed because on a narrow card the
+    // word "Live" plus a radio glyph plus the Play and Delete icons overflowed
+    // and overlapped each other. The tooltip carries what the text used to.
     return (
       <span
-        className={`shrink-0 rounded-full bg-red-500/15 px-1.5 py-0.5 font-semibold uppercase tracking-wide text-red-400 ${
-          variant === 'grid' ? 'text-[8px]' : 'text-[9px]'
-        }`}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-red-500/15 text-red-400"
         title="This clip is live"
+        aria-label="Live"
       >
-        Live
+        <Radio className="h-3.5 w-3.5" aria-hidden="true" />
       </span>
     );
   }
@@ -377,16 +446,11 @@ function PublishAffordance({
         e.stopPropagation();
         onPublish?.();
       }}
-      className={`shrink-0 rounded-full bg-[#ff6500] font-semibold uppercase tracking-wide text-white transition-colors hover:bg-[#e05500] ${
-        variant === 'grid' ? 'px-1.5 py-0.5 text-[8px]' : 'px-2 py-1 text-[9px]'
-      }`}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productAccentBg} text-white transition-colors ${productAccentHoverBg}`}
       title="Go live — publish this clip"
       aria-label="Go live"
     >
-      <span className="flex items-center gap-1">
-        <Radio className={variant === 'grid' ? 'h-2 w-2' : 'h-2.5 w-2.5'} />
-        Go Live
-      </span>
+      <Radio className="h-3.5 w-3.5" aria-hidden="true" />
     </button>
   );
 }

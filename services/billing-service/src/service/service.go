@@ -17,22 +17,23 @@ import (
 // BillingService orchestrates billing operations including invoice management,
 // payment processing, and reconciliation.
 type BillingService struct {
-	planRepo     repository.SubscriptionPlanRepository
-	subRepo      repository.SubscriptionRepository
-	taxRepo      repository.TaxRateRepository
-	invoiceRepo  repository.InvoiceRepository
-	itemRepo     repository.InvoiceItemRepository
-	paymentRepo  repository.PaymentRepository
-	expenseRepo  repository.ManualExpenseRepository
+	planRepo      repository.SubscriptionPlanRepository
+	subRepo       repository.SubscriptionRepository
+	taxRepo       repository.TaxRateRepository
+	invoiceRepo   repository.InvoiceRepository
+	itemRepo      repository.InvoiceItemRepository
+	paymentRepo   repository.PaymentRepository
+	expenseRepo   repository.ManualExpenseRepository
 	// identityRepo is the uint<->UUID adapter. Required: without it
 	// every caller of `Subscribe` is unresolvable, which is the
 	// 400 `user_id_not_resolvable` crash this field closes.
-	identityRepo repository.UserIdentityRepository
+	identityRepo  repository.UserIdentityRepository
 	// entitlement fires the grant at auth-service when a sale is
 	// recorded. Optional (nil = the fire is disabled), because the
 	// write it guards is a payment that must not roll back if auth
 	// is briefly unreachable. Set via SetEntitlementFirer.
-	entitlement EntitlementFirer
+	entitlement   EntitlementFirer
+	pushAllocRepo repository.PushAllocationRepository
 }
 
 // EntitlementFirer records a sale as a plan grant in auth-service.
@@ -55,16 +56,18 @@ func NewBillingService(
 	paymentRepo repository.PaymentRepository,
 	expenseRepo repository.ManualExpenseRepository,
 	identityRepo repository.UserIdentityRepository,
+	pushAllocRepo repository.PushAllocationRepository,
 ) *BillingService {
 	return &BillingService{
-		planRepo:    planRepo,
-		subRepo:     subRepo,
-		taxRepo:     taxRepo,
-		invoiceRepo: invoiceRepo,
-		itemRepo:    itemRepo,
-		paymentRepo: paymentRepo,
-		expenseRepo: expenseRepo,
-		identityRepo: identityRepo,
+		planRepo:      planRepo,
+		subRepo:       subRepo,
+		taxRepo:       taxRepo,
+		invoiceRepo:   invoiceRepo,
+		itemRepo:      itemRepo,
+		paymentRepo:   paymentRepo,
+		expenseRepo:   expenseRepo,
+		identityRepo:  identityRepo,
+		pushAllocRepo: pushAllocRepo,
 	}
 }
 
@@ -177,9 +180,23 @@ func (s *BillingService) Subscribe(ctx context.Context, authUserID, planCode str
 	case model.BillingCycleAnnually:
 		periodStart = now
 		periodEnd = now.AddDate(1, 0, 0)
+	case model.BillingCycleLifetime:
+		periodStart = now
+		periodEnd = now.AddDate(100, 0, 0) // effectively never expires
 	default:
 		periodStart = now
 		periodEnd = now.AddDate(1, 0, 0)
+	}
+
+	// Determine tier state token based on plan
+	tierStateToken := "60fps"
+	if plan.IsStandalone {
+		// Check if it's the AURA lifetime plan
+		if strings.Contains(strings.ToLower(plan.Code), "aura") || plan.MaxFPS >= 120 {
+			tierStateToken = "240hz"
+		} else {
+			tierStateToken = "lifetime"
+		}
 	}
 
 	sub := &model.Subscription{
@@ -187,12 +204,13 @@ func (s *BillingService) Subscribe(ctx context.Context, authUserID, planCode str
 		PlanID:            plan.ID,
 		Status:            model.SubscriptionStatusActive,
 		StartDate:         now,
-		EndDate:           now.AddDate(0, 1, 0),
+		EndDate:           periodEnd,
 		CurrentPeriodStart: periodStart,
 		CurrentPeriodEnd:   periodEnd,
-		AutoRenew:          autoRenew,
-		PaymentProvider:    model.PaymentProviderStripe,
-		PaymentMethod:      model.PaymentMethodCreditCard,
+		AutoRenew:         autoRenew && plan.Cycle != model.BillingCycleLifetime, // lifetime plans don't auto-renew
+		PaymentProvider:   model.PaymentProviderStripe,
+		PaymentMethod:     model.PaymentMethodCreditCard,
+		TierStateToken:    tierStateToken,
 	}
 
 	if err := s.subRepo.Create(ctx, sub); err != nil {
@@ -212,6 +230,11 @@ func (s *BillingService) Subscribe(ctx context.Context, authUserID, planCode str
 		} else {
 			log.Printf("[entitlement] grant fired for user %s plan %s (source=subscription)", authUserID, plan.Code)
 		}
+	}
+
+	// Grant push notifications for lifetime AURA plan
+	if plan.Cycle == model.BillingCycleLifetime && strings.Contains(strings.ToLower(plan.Code), "aura") {
+		s.grantPushAllocation(ctx, billingUserID, plan.Code)
 	}
 
 	return sub, nil
@@ -1164,3 +1187,25 @@ func (s *BillingService) GenerateInvoiceFromSubscription(ctx context.Context, su
 	
 	return s.CreateInvoice(ctx, sub.UserID, &subscriptionID, items, sub.Plan.Currency, time.Now().AddDate(0, 1, 0), "")
 }
+
+// grantPushAllocation grants 1000 push notifications for lifetime AURA plan purchasers.
+// Quota expires in 3 months (absolute time-barred limit). Source tagged for audit.
+func (s *BillingService) grantPushAllocation(ctx context.Context, userID uint, planCode string) {
+	alloc := &model.PushAllocation{
+		UserID:         userID,
+		QuotaTotal:     1000,
+		QuotaRemaining: 1000,
+		ExpiresAt:      time.Now().AddDate(0, 3, 0),
+		Source:         "lifetime_aura",
+	}
+	if err := s.pushAllocRepo.Create(ctx, alloc); err != nil {
+		log.Printf("[push] failed to persist allocation for user %d plan %s: %v", userID, planCode, err)
+		return
+	}
+	log.Printf("[push] granted 1000 push notifications to user %d (source=lifetime_aura, expires in 3m)", userID)
+}
+
+
+
+
+

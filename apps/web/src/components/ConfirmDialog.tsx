@@ -15,6 +15,18 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, X, Check, Trash2 } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productAccentHoverBg,
+  productPanel,
+  productSeparation,
+  productSeparationStrong,
+  productSunken,
+  productTextBody,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 interface ConfirmDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -102,30 +114,30 @@ export function ConfirmDialog({
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="relative w-full max-w-md bg-[#16181d] rounded-lg shadow-2xl border border-[#2c3235] overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200"
+        className={`relative w-full max-w-md ${productPanel} rounded-lg shadow-2xl border ${productSeparation} overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200`}
       >
         {/* Header */}
-        <div className="flex items-start gap-3 p-5 border-b border-[#2c3235]">
-          <div className={`flex-shrink-0 p-2 rounded-lg ${variant === 'destructive' ? 'bg-red-500/10' : 'bg-[#ff6500]/10'}`}>
+        <div className={`flex items-start gap-3 p-5 border-b ${productSeparation}`}>
+          <div className={`flex-shrink-0 p-2 rounded-lg ${variant === 'destructive' ? 'bg-red-500/10' : `${productAccentBg}/10`}`}>
             {icon || (
               variant === 'destructive' ? (
                 <AlertCircle className="h-5 w-5 text-red-500" />
               ) : (
-                <Check className="h-5 w-5 text-[#ff6500]" />
+                <Check className={`h-5 w-5 ${productAccent}`} />
               )
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 id="confirm-title" className="text-lg font-semibold text-[#e6e6e6]">
+            <h2 id="confirm-title" className={`text-lg font-semibold ${productTextBody}`}>
               {title}
             </h2>
-            <p id="confirm-message" className="mt-1 text-sm text-[#8b949e]">
+            <p id="confirm-message" className={`mt-1 text-sm ${productTextMuted}`}>
               {message}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="flex-shrink-0 p-1 rounded hover:bg-[#2c3235] transition-colors text-[#8b949e] hover:text-[#e6e6e6]"
+            className={`flex-shrink-0 p-1 rounded hover:${productSeparation} transition-colors ${productTextMuted} hover:${productTextBody}`}
             aria-label="Close"
           >
             <X className="h-[10px] w-[10px]" />
@@ -133,11 +145,11 @@ export function ConfirmDialog({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center justify-end gap-2 p-4 bg-[#0d0f11]/50">
+        <div className={`flex items-center justify-end gap-2 p-4 ${productSunken}/50`}>
           <button
             onClick={onClose}
             type="button"
-            className="px-4 py-2 rounded-md text-sm font-medium text-[#8b949e] bg-[#2c3235] hover:bg-[#3a4045] transition-colors"
+            className={`px-4 py-2 rounded-md text-sm font-medium ${productTextMuted} ${productSeparation} hover:${productSeparationStrong} transition-colors`}
           >
             {cancelText}
           </button>
@@ -147,7 +159,7 @@ export function ConfirmDialog({
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               variant === 'destructive'
                 ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-[#ff6500] text-white hover:bg-[#e05500]'
+                : `${productAccentBg} text-white ${productAccentHoverBg}`
             }`}
           >
             {confirmText}

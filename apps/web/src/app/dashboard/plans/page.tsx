@@ -73,6 +73,17 @@ import {
 import { Button } from '@wideo11/ui/button';
 import { PlanPicker } from '@/components/plans/plan-picker';
 
+import {
+  grafanaPrimary,
+  productPanel,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+  productTextBody,
+  productTextMuted,
+  productTextTertiary,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Types (BFF `/api/auth/my-plan` ka response - `trial-countdown.tsx` se
 // same shape, wahan se import isliye NAHI kiya kyunki wahan component hai
@@ -177,13 +188,13 @@ export default function DashboardPlansPage() {
   const limitRows = Object.entries(limits);
 
   return (
-    <div className="min-h-screen bg-[#0d0f11] text-[#e6e6e6]">
+    <div className={`min-h-screen ${productSunken} ${productTextBody}`}>
       <div className="mx-auto max-w-3xl px-4 py-8">
         {/* ---- Header: back + title ---- */}
         <div className="mb-6 flex items-center gap-3">
           <Link
             href="/dashboard"
-            className="flex items-center gap-1 rounded-md text-sm text-[#8b949e] transition-colors hover:text-[#e6e6e6]"
+            className={`flex items-center gap-1 rounded-md text-sm ${productTextMuted} transition-colors hover:${productTextBody}`}
           >
             <ChevronLeft className="h-2.5 w-2.5" />
             Dashboard
@@ -191,13 +202,13 @@ export default function DashboardPlansPage() {
         </div>
 
         <h1 className="mb-1 text-2xl font-bold">Your plan</h1>
-        <p className="mb-6 text-sm text-[#8b949e]">
+        <p className={`mb-6 text-sm ${productTextMuted}`}>
           Capabilities and expiry for your account. Upgrades are granted by
           an operator, not purchased here.
         </p>
 
         {loading && !plan ? (
-          <div className="flex items-center gap-2 rounded-md bg-[#16181d] p-6 text-sm text-[#8b949e]">
+          <div className={`flex items-center gap-2 rounded-md ${productPanel} p-6 text-sm ${productTextMuted}`}>
             <Loader2 className="h-2.5 w-2.5 animate-spin" />
             Loading your plan…
           </div>
@@ -208,10 +219,10 @@ export default function DashboardPlansPage() {
           </div>
         ) : !plan || !plan.has_plan ? (
           /* ---- No plan: honest empty state, fake "free trial" nahi ---- */
-          <div className="rounded-md bg-[#16181d] p-6">
-            <CreditCard className="mb-3 h-6 w-6 text-[#8b949e]" />
+          <div className={`rounded-md ${productPanel} p-6`}>
+            <CreditCard className={`mb-3 h-6 w-6 ${productTextMuted}`} />
             <p className="text-sm font-medium">No active plan</p>
-            <p className="mt-1 text-xs text-[#8b949e]">
+            <p className={`mt-1 text-xs ${productTextMuted}`}>
               Your account has no granted plan. An operator can grant one
               from the admin surface — this page cannot sell or self-grant
               a plan, by design.
@@ -220,11 +231,11 @@ export default function DashboardPlansPage() {
         ) : (
           <>
             {/* ---- Current plan card ---- */}
-            <div className="rounded-md bg-[#16181d] p-5">
+            <div className={`rounded-md ${productPanel} p-5`}>
               <div className="flex flex-wrap items-center gap-3">
-                <ShieldCheck className="h-2.5 w-2.5 text-[#5794f2]" />
+                <ShieldCheck className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
                 <span className="text-lg font-semibold">{plan.plan_name}</span>
-                <code className="rounded bg-[#0d0f11] px-1.5 py-0.5 text-xs text-[#8b949e]">
+                <code className={`rounded ${productSunken} px-1.5 py-0.5 text-xs ${productTextMuted}`}>
                   {plan.plan}
                 </code>
                 {plan.is_trial && (
@@ -242,19 +253,19 @@ export default function DashboardPlansPage() {
 
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
                 <div>
-                  <p className="text-xs text-[#8b949e]">Expires</p>
+                  <p className={`text-xs ${productTextMuted}`}>Expires</p>
                   <p className="mt-0.5 font-medium">
                     {plan.expires_at ? formatDate(plan.expires_at) : 'Never (lifetime)'}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#8b949e]">Time remaining</p>
+                  <p className={`text-xs ${productTextMuted}`}>Time remaining</p>
                   <p className="mt-0.5 font-mono font-medium">
                     {remaining === null ? '—' : formatRemaining(remaining)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-xs text-[#8b949e]">Status</p>
+                  <p className={`text-xs ${productTextMuted}`}>Status</p>
                   <p className="mt-0.5 font-medium">
                     {remaining !== null && remaining <= 0
                       ? 'Expired — refresh pending'
@@ -267,7 +278,7 @@ export default function DashboardPlansPage() {
             {/* ---- Limits grid ---- */}
             {limitRows.length > 0 && (
               <div className="mt-6">
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#8b949e]">
+                <h2 className={`mb-3 flex items-center gap-2 text-sm font-semibold ${productTextMuted}`}>
                   <CalendarClock className="h-2.5 w-2.5" />
                   What your plan includes
                 </h2>
@@ -275,18 +286,18 @@ export default function DashboardPlansPage() {
                   {limitRows.map(([key, value]) => (
                     <div
                       key={key}
-                      className="flex items-center justify-between rounded-md bg-[#16181d] px-4 py-3"
+                      className={`flex items-center justify-between rounded-md ${productPanel} px-4 py-3`}
                     >
-                      <dt className="text-sm text-[#c9d1d9]">{humanize(key)}</dt>
-                      <dd className="font-mono text-sm font-medium text-[#e6e6e6]">
+                      <dt className={`text-sm ${productTextTertiary}`}>{humanize(key)}</dt>
+                      <dd className={`font-mono text-sm font-medium ${productTextBody}`}>
                         {value === 'unlimited' ? 'Unlimited' : value}
                       </dd>
                     </div>
                   ))}
                 </dl>
-                <p className="mt-3 text-xs text-[#8b949e]">
+                <p className={`mt-3 text-xs ${productTextMuted}`}>
                   Uploads are unlimited on every plan. What a paid plan adds is the
-                  right to earn — see <span className="text-[#c9d1d9]">Monetization</span>{' '}
+                  right to earn — see <span className={`${productTextTertiary}`}>Monetization</span>{' '}
                   in your plan's allowances.
                 </p>
               </div>
@@ -309,7 +320,7 @@ export default function DashboardPlansPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => void load()}
-                className="border-[#2c3235] text-[#c9d1d9] hover:bg-[#1f2227]"
+                className={`${productSeparation} ${productTextTertiary} ${productPanelHover}`}
               >
                 Refresh
               </Button>

@@ -149,18 +149,24 @@ var dotSubstitutes = []string{
 	"、", "।", "۔", "·",
 }
 
-// spaceChars are the separators used to break a domain into pieces.
+// exoticSeparators are the invisible and exotic separators deleted from a comment
+// before scanning: zero-width space, joiners, bidi marks. All of them render as
+// NOTHING in a browser, so `exa​mple.com` reads as `example.com` to a human and
+// resolves as a domain to a link checker.
 //
-// The space itself, and then the Unicode ones a spammer reaches for when a space
-// is filtered. Zero-width characters are here too: they do not render at all, so
-// "exa​mple.com" LOOKS like ordinary text while a normaliser sees a clean domain.
-var spaceChars = []string{
-	" ", "\t", "\n", "\r",
-	" ", " ", " ", " ", " ", " ",
-	// Zero-width: space, non-joiner, joiner, no-break space, word joiner,
-	// invisible separator, and the bidi marks used to reorder displayed text.
-	"​", "‌", "‍", "", "⁠", "⁡", "‪", "‫", "‬", "‭", "‮",
+// Ordinary space (U+0020) and the other ASCII whitespace are DELIBERATELY absent
+// - they are real text, and deleting them is what let "visit example.com for
+// more" through as prose.
+var exoticSeparators = []string{
+	"​", "‌", "‍", "",
+	"⁠",
+	"⁡", "⁢", "⁣",
+	" ", " ", " ", " ",
+	" ", " ", " ", " ",
+	" ", " ", " ",
+	" ", " ",
 }
+
 
 // LinkDetection is a found link and where it was.
 type LinkDetection struct {
@@ -220,7 +226,18 @@ func detectLink(body string) (LinkDetection, bool) {
 		return LinkDetection{Kind: "domain", Snippet: d}, true
 	}
 
-	// ---- 5. An IP literal. ----
+	// ---- 5. The spaced form: "e x a m p l e . c o m". ----
+	//
+	// A separate pass over the ORIGINAL body, not a mode of the normaliser.
+	// Deleting every space to catch this form is what broke ordinary sentences -
+	// "visit example.com for more" became "visitexample.comformore" and matched
+	// nothing. So the two problems are kept apart: the normaliser keeps spaces,
+	// and this scan tolerates them locally.
+	if d, ok := findSpacedDomain(body); ok {
+		return LinkDetection{Kind: "domain (spaced)", Snippet: d}, true
+	}
+
+	// ---- 6. An IP literal. ----
 	if d, ok := findIPLiteral(flatLower); ok {
 		return LinkDetection{Kind: "ip address", Snippet: d}, true
 	}
@@ -230,33 +247,48 @@ func detectLink(body string) (LinkDetection, bool) {
 
 // normaliseForLinkDetection flattens the obfuscations into plain ASCII.
 //
-// Two transformations, in order:
+// Two transforms, and the SECOND is the one this function got wrong first.
 //
-//	1. Every dot substitute becomes a real ".". This is what reunites
-//	   "example[.]com" with "example.com".
-//	2. Every separator is REMOVED, not replaced with a space. Replacing would
-//	   leave "example . com" which still is not a domain; deleting is what turns
-//	   "e x a m p l e . c o m" into "example.com".
+//	1. Every dot substitute becomes a real ".". This reunites "example[.]com"
+//	   with "example.com", and it runs first because several substitutes contain
+//	   the spaces step 2 would otherwise delete.
 //
-// Note the ordering matters: a substitute containing a space, "(. )" or
-// "[ . ]", needs the substitute handled BEFORE the separators are deleted, or the
-// substitute is destroyed and its pieces are re-joined into a plain dot anyway.
+//	2. Separator characters are deleted - but ONLY the zero-width and odd ones.
+//
+// ---- THE BUG THIS FIXES ----
+//
+// The first version deleted SPACES too, to defeat `e x a m p l e . c o m`. That
+// cannot work: it also turns "visit example.com for more" into
+// "visitexample.comformore", which contains no TLD boundary and therefore matches
+// nothing - so the ordinary sentence, the most common case of all, was the one
+// that got through. My end-to-end test caught it: a link ban that allows
+// "visit example.com for more" is a ban that stops almost nothing.
+//
+// ---- WHY NOT JUST MATCH THE SPACED FORM DIRECTLY ----
+//
+// A spaced domain is matched by a SECOND, separate pass that strips spaces from a
+// WINDOW around a candidate, rather than by destroying every space in the string
+// and hoping the rest still parses. That keeps the two problems independent:
+// ordinary prose stays prose, and a real obfuscation still gets caught.
 func normaliseForLinkDetection(s string) string {
-	// Work on the original for dot substitutes, because some of them contain
-	// spaces that step 2 would delete.
+	// ---- 1. dot substitutes, before any separator is touched ----
 	out := s
 	for _, d := range dotSubstitutes {
 		if strings.Contains(out, d) {
 			out = strings.ReplaceAll(out, d, ".")
 		}
 	}
-	// Then delete the separators. Runes rather than bytes, because the zero-width
-	// and middle-dot characters are multi-byte and a byte-wise delete would leave
-	// their continuation bytes behind as garbage.
+
+	// ---- 2. drop zero-width and odd separators, KEEP ordinary spaces ----
+	//
+	// A space is meaningful text and must survive: it is what separates two words,
+	// and the domain scan relies on it to find where a token ends. Only the
+	// invisible and exotic separators - the ones a human cannot see and a spammer
+	// uses to split a word - are removed here.
 	var b strings.Builder
 	b.Grow(len(out))
 	for _, r := range out {
-		if isSeparatorRune(r) {
+		if isZeroWidthOrExoticSeparator(r) {
 			continue
 		}
 		b.WriteRune(r)
@@ -264,9 +296,15 @@ func normaliseForLinkDetection(s string) string {
 	return b.String()
 }
 
-// isSeparatorRune reports whether r is one of the ignored separator characters.
-func isSeparatorRune(r rune) bool {
-	for _, s := range spaceChars {
+// isZeroWidthOrExoticSeparator reports whether r is an invisible or exotic
+// separator that should be deleted outright.
+//
+// Deliberately EXCLUDES U+0020 (space), U+0009 (tab), U+000A (LF) and U+000D (CR):
+// those are ordinary whitespace and carry meaning. The spaced-domain form is
+// handled separately, by `findSpacedDomain`, because deleting spaces here breaks
+// every ordinary sentence.
+func isZeroWidthOrExoticSeparator(r rune) bool {
+	for _, s := range exoticSeparators {
 		for _, sr := range s {
 			if sr == r {
 				return true
@@ -365,6 +403,175 @@ func findBareDomain(lower string) (string, bool) {
 	return "", false
 }
 
+// findSpacedDomain scans for a domain written with spaces between its pieces.
+//
+// "e x a m p l e . c o m" and "example . com" are both written this way, and both
+// are the same domain. This is a SEPARATE pass rather than a mode of the
+// normaliser, because the only way to catch it inside the normaliser was to
+// delete every space - which also destroys ordinary prose. That trade is exactly
+// what let "visit example.com for more" through: the spaces went, the words fused
+// into "visitexample.comformore", and there was no TLD boundary left to match.
+//
+// The scan is deliberately narrow so it cannot overfire:
+//
+//   - the label must be at least 2 characters; one letter plus spaces is almost
+//     never a domain
+//   - the TLD must be a KNOWN one
+//   - a run of spaces between pieces is at most 3, because a real spaced domain
+//     does not pad its labels by a line of whitespace
+//
+// It returns the original substring so the reason shown to the author is the text
+// they actually typed.
+func findSpacedDomain(body string) (string, bool) {
+	// Flatten only the exotic separators, keeping the ordinary spaces that this
+	// scan exists to tolerate.
+	var b strings.Builder
+	b.Grow(len(body))
+	for _, r := range body {
+		if isZeroWidthOrExoticSeparator(r) {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	s := strings.ToLower(b.String())
+
+	isSpace := func(c byte) bool { return c == ' ' || c == '\t' || c == '\n' || c == '\r' }
+	isAlnum := func(c byte) bool {
+		return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')
+	}
+
+	skipSpaces := func(i, limit int) int {
+		j := i
+		for j < len(s) && isSpace(s[j]) {
+			j++
+		}
+		if j == i || j-i > limit {
+			// Either there is no space at all, or the run is too long to be a
+			// spaced domain. Both mean "this position is not one".
+			return i
+		}
+		return j
+	}
+
+	for i := 0; i < len(s); i++ {
+		if !isAlnum(s[i]) {
+			continue
+		}
+		start := i
+
+		// ---- the label ----
+		//
+		// Single-spaced letters count too: `e x a m p l e` is the label in
+		// `e x a m p l e . c o m`. So consume alnum runs separated by single
+		// separators, and require the result to be at least 2 real characters.
+		labelChars := 0
+		j := i
+		for j < len(s) {
+			if isAlnum(s[j]) {
+				labelChars++
+				j++
+				continue
+			}
+			// Only a single separator may sit inside a label; anything else ends it.
+			if s[j] != ' ' && s[j] != '\t' {
+				break
+			}
+			k := j + 1
+			for k < len(s) && (s[k] == ' ' || s[k] == '\t') {
+				k++
+			}
+			// More than one separator, or end of string, or a non-alnum next:
+			// the label ends at j, not k.
+			if k-j > 1 || k >= len(s) || !isAlnum(s[k]) {
+				break
+			}
+			j = k
+		}
+		if labelChars < 2 {
+			i = j
+			if i == start {
+				// Guarantee forward progress: without this a position that cannot
+				// start a label would spin forever.
+				i = start + 1
+			}
+			continue
+		}
+		i = j
+
+		// ---- a separator, then a dot or one of its bracketed forms ----
+		afterSpace := skipSpaces(i, 3)
+		if afterSpace == i {
+			continue
+		}
+		if afterSpace >= len(s) {
+			continue
+		}
+		dotWidth := dotTokenWidth(s[afterSpace:])
+		if dotWidth == 0 {
+			continue
+		}
+
+		// ---- a separator, then the TLD ----
+		dotEnd := afterSpace + dotWidth
+		if dotEnd >= len(s) {
+			continue
+		}
+		afterDot := skipSpaces(dotEnd, 3)
+		if afterDot == dotEnd || afterDot >= len(s) {
+			continue
+		}
+		tldStart := afterDot
+		tldB := make([]byte, 0, 8)
+		k := tldStart
+		for k < len(s) {
+			if isAlnum(s[k]) {
+				tldB = append(tldB, s[k])
+				k++
+				continue
+			}
+			// A single separator may sit inside the TLD too, exactly as it may
+			// inside the label: `c o m` is `com` written with spaces.
+			if s[k] != ' ' && s[k] != '\t' {
+				break
+			}
+			m := k + 1
+			for m < len(s) && (s[m] == ' ' || s[m] == '\t') {
+				m++
+			}
+			if m-k > 1 || m >= len(s) || !isAlnum(s[m]) {
+				break
+			}
+			k = m
+		}
+		if len(tldB) == 0 {
+			continue
+		}
+		if !knownTLDs[string(tldB)] {
+			continue
+		}
+
+		return s[start:k], true
+	}
+	return "", false
+}
+
+// dotTokenWidth returns the byte width of the dot token starting at s[0], or 0
+// when there is none. A bare "." is 1; "[.]" is 3; "{.}" is 3.
+func dotTokenWidth(s string) int {
+	switch {
+	case strings.HasPrefix(s, "[.]"):
+		return 3
+	case strings.HasPrefix(s, "(.)"):
+		return 3
+	case strings.HasPrefix(s, "{.}"):
+		return 3
+	case strings.HasPrefix(s, "<.>"):
+		return 3
+	case strings.HasPrefix(s, "."):
+		return 1
+	}
+	return 0
+}
 // findIPLiteral finds an IPv4 or IPv6 literal.
 //
 // IPv4 only for the practical case, and it requires four octets AND a port or

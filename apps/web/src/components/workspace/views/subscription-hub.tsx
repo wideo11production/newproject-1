@@ -15,6 +15,19 @@
 import { useState } from 'react';
 import { Check, Zap, Monitor } from 'lucide-react';
 
+import {
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+  productAccent,
+  productAccentBg,
+  productAccentBrightBg,
+  productAccentDeepBg,
+  productAccentRing,
+  productFocusRing,
+  productSeparationLight,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Plan definitions — monetization tier structures
 // ---------------------------------------------------------------------------
@@ -43,7 +56,7 @@ const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
     maxResolution: '1920x1080',
     features: ['60 FPS ceiling', '1080p export', '5 projects', 'Standard filters'],
     isStandalone: false,
-    accent: 'border-[#ff6500]/30',
+    accent: 'border/30',
   },
   {
     id: 'standard-group',
@@ -55,7 +68,7 @@ const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
     maxResolution: '3840x2160',
     features: ['60 FPS ceiling', '4K export', 'Unlimited projects', 'Premium filters'],
     isStandalone: false,
-    accent: 'border-[#ff6500]/50',
+    accent: 'border/50',
   },
   {
     id: 'aura-standalone',
@@ -73,7 +86,7 @@ const SUBSCRIPTION_TIERS: SubscriptionTier[] = [
       'Priority support',
     ],
     isStandalone: true,
-    accent: 'border-[#ff6500]',
+    accent: 'border',
   },
 ];
 
@@ -114,9 +127,9 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#d8d9da]">Subscription Hub</h1>
-        <div className="text-xs text-[#9fa7b3]">
-          Active tier: <span className="text-[#ff6500] font-medium">{currentTier}</span>
+        <h1 className={`text-2xl font-bold ${grafanaText}`}>Subscription Hub</h1>
+        <div className={`text-xs ${grafanaTextMuted}`}>
+          Active tier: <span className={`${productAccent} font-medium`}>{currentTier}</span>
         </div>
       </div>
 
@@ -130,45 +143,45 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
             <div
               key={tier.id}
               className={`
-                relative rounded-md bg-[#181b1f] p-5 transition-all duration-150
+                relative rounded-md ${grafanaPanel} p-5 transition-all duration-150
                 ${tier.accent}
-                ${isActive ? 'ring-2 ring-[#ff6500]' : ''}
+                ${isActive ? `ring-2 ${productAccentRing}` : ''}
               `}
             >
               {/* Active / purchased badge */}
               {isActive && (
-                <div className="absolute -top-2 right-4 rounded-full bg-[#ff6500] px-2 py-0.5 text-[7px] font-bold text-white">
+                <div className={`absolute -top-2 right-4 rounded-full ${productAccentBg} px-2 py-0.5 text-[7px] font-bold text-white`}>
                   ACTIVE
                 </div>
               )}
 
               {/* Standalone lifetime indicator */}
               {tier.isStandalone && (
-                <div className="absolute -top-2 left-4 rounded-full bg-[#ff6500] px-2 py-0.5 text-[7px] font-bold text-white">
+                <div className={`absolute -top-2 left-4 rounded-full ${productAccentBg} px-2 py-0.5 text-[7px] font-bold text-white`}>
                   LIFETIME
                 </div>
               )}
 
               <div className="mb-4 flex items-baseline gap-2">
-                <span className="text-3xl font-bold text-[#d8d9da]">{tier.price}</span>
-                <span className="text-xs text-[#9fa7b3]">{tier.cycle}</span>
+                <span className={`text-3xl font-bold ${grafanaText}`}>{tier.price}</span>
+                <span className={`text-xs ${grafanaTextMuted}`}>{tier.cycle}</span>
               </div>
 
-              <h2 className="mb-1 text-xl font-semibold text-[#d8d9da]">{tier.name}</h2>
-              <p className="mb-4 text-sm text-[#9fa7b3]">{tier.description}</p>
+              <h2 className={`mb-1 text-xl font-semibold ${grafanaText}`}>{tier.name}</h2>
+              <p className={`mb-4 text-sm ${grafanaTextMuted}`}>{tier.description}</p>
 
-              <ul className="mb-4 space-y-1 text-xs text-[#9fa7b3]">
+              <ul className={`mb-4 space-y-1 text-xs ${grafanaTextMuted}`}>
                 {tier.features.map((f) => (
                   <li key={f} className="flex items-center gap-2">
-                    <Check className="h-2.5 w-2.5 text-[#ff6500]" />
+                    <Check className={`h-2.5 w-2.5 ${productAccent}`} />
                     <span>{f}</span>
                   </li>
                 ))}
               </ul>
 
-              <div className="mb-2 flex items-center gap-4 text-xs text-[#9fa7b3]">
+              <div className={`mb-2 flex items-center gap-4 text-xs ${grafanaTextMuted}`}>
                 <span className="flex items-center gap-1">
-                  <Monitor className="h-2.5 w-2.5 text-[#ff6500]" />
+                  <Monitor className={`h-2.5 w-2.5 ${productAccent}`} />
                   Max {tier.maxFps} FPS
                 </span>
                 <span>Resolution: {tier.maxResolution}</span>
@@ -182,8 +195,8 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
                     rounded px-4 py-2 text-xs font-medium text-white
                     transition-colors duration-150
                     ${isActive
-                      ? 'cursor-default bg-[#3a3f45]'
-                      : 'bg-[#ff6500] hover:bg-[#ff7a00] active:bg-[#e05a00] focus:outline-none focus:ring-2 focus:ring-[#ff6500]'}
+                      ? `cursor-default ${productSeparationLight}`
+                      : `${productAccentBg} hover:${productAccentBrightBg} active:${productAccentDeepBg} focus:outline-none focus:ring-2 ${productFocusRing}`}
                     disabled:opacity-50
                   `}
                 >
@@ -200,7 +213,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
                 </button>
 
                 {justPurchased && (
-                  <span className="text-xs text-[#ff6500]">Purchased!</span>
+                  <span className={`text-xs ${productAccent}`}>Purchased!</span>
                 )}
               </div>
             </div>
@@ -210,7 +223,7 @@ export function SubscriptionHubView({ currentTier = 'standard-monthly', onPurcha
 
       {/* Status change indicator */}
       {success && (
-        <div className="mt-4 rounded-md/30 bg-[#ff6500]/10 p-3 text-xs text-[#ff6500]">
+        <div className={`mt-4 rounded-md/30 ${productAccentBg}/10 p-3 text-xs ${productAccent}`}>
           Purchase successful. FPS ceiling and resolution limits have been updated in your profile.
         </div>
       )}

@@ -716,6 +716,25 @@ func main() {
 	// so there is no field to get wrong. See `internal/handler/my_entitlements.go`.
 	protected.GET("/me/entitlements", authHandler.GetMyEntitlements)
 
+	// ---- PERMISSIONS SELF-HEALING ----
+	//
+	// Users who registered before the auto-appointment fix may lack the creator
+	// role. This endpoint lets them self-heal without support intervention.
+	// Idempotent: returns fixed=false if already has role, fixed=true if granted.
+	protected.POST("/me/fix-permissions", authHandler.FixPermissions)
+
+	// ---- THE FREE CREATOR PLAN ----
+	//
+	// Grants the `trial` plan to a caller who holds NO live entitlement, which is
+	// the state of every account created before registration granted one
+	// automatically. Separate from `/me/plan` because that route refuses any plan
+	// whose cycle is not `monthly`, and the trial's whole point is that the SERVER
+	// picks its end date. See internal/handler/free_plan.go.
+	//
+	// Idempotent and read-only when a plan is already live: a caller holding a
+	// subscription or a lifetime purchase is told so and left alone.
+	protected.POST("/me/free-plan", authHandler.ActivateFreePlan)
+
 	// ---- SELF-SERVICE PLANS ----
 	//
 	// The user-facing counterpart to the superadmin grant route. A user who

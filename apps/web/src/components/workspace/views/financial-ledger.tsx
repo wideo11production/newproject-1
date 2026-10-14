@@ -13,6 +13,17 @@
 import { useEffect, useState } from 'react';
 import { Wallet, Receipt, TrendingUp, Calendar } from 'lucide-react';
 
+import {
+  grafanaDanger,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productWarning,
+} from '@wideo11/ui/design-system';
+
 type LedgerEntry = {
   uuid: string;
   gross_amount: number;
@@ -64,7 +75,7 @@ export function FinancialLedgerView() {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-6 w-48 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
@@ -78,56 +89,56 @@ export function FinancialLedgerView() {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-[#d8d9da] mb-6">
+      <h1 className={`text-2xl font-bold ${grafanaText} mb-6`}>
         Financial Ledger Hub
       </h1>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-8">
-        <div className="rounded-md bg-[#181b1f] p-4">
-          <p className="text-[11px] uppercase text-[#9fa7b3]">Gross Revenue</p>
-          <p className="mt-1 text-xl font-bold text-[#d8d9da]">
+        <div className={`rounded-md ${grafanaPanel} p-4`}>
+          <p className={`text-[11px] uppercase ${grafanaTextMuted}`}>Gross Revenue</p>
+          <p className={`mt-1 text-xl font-bold ${grafanaText}`}>
             {formatCurrency(monthTotal.gross)}
           </p>
         </div>
-        <div className="rounded-md bg-[#181b1f] p-4">
-          <p className="text-[11px] uppercase text-[#9fa7b3]">GST (18% IN)</p>
-          <p className="mt-1 text-xl font-bold text-[#f2495c]">
+        <div className={`rounded-md ${grafanaPanel} p-4`}>
+          <p className={`text-[11px] uppercase ${grafanaTextMuted}`}>GST (18% IN)</p>
+          <p className={`mt-1 text-xl font-bold ${grafanaDanger}`}>
             {formatCurrency(monthTotal.gst)}
           </p>
         </div>
-        <div className="rounded-md bg-[#181b1f] p-4">
-          <p className="text-[11px] uppercase text-[#9fa7b3]">Sister Share (5%)</p>
-          <p className="mt-1 text-xl font-bold text-[#f7c548]">
+        <div className={`rounded-md ${grafanaPanel} p-4`}>
+          <p className={`text-[11px] uppercase ${grafanaTextMuted}`}>Sister Share (5%)</p>
+          <p className={`mt-1 text-xl font-bold ${productWarning}`}>
             {formatCurrency(monthTotal.sister)}
           </p>
         </div>
-        <div className="rounded-md bg-[#181b1f] p-4">
-          <p className="text-[11px] uppercase text-[#9fa7b3]">Net to Wallets</p>
-          <p className="mt-1 text-xl font-bold text-[#73bf69]">
+        <div className={`rounded-md ${grafanaPanel} p-4`}>
+          <p className={`text-[11px] uppercase ${grafanaTextMuted}`}>Net to Wallets</p>
+          <p className={`mt-1 text-xl font-bold ${grafanaSuccess}`}>
             {formatCurrency(monthTotal.net)}
           </p>
         </div>
-        <div className="rounded-md bg-[#181b1f] p-4">
-          <p className="text-[11px] uppercase text-[#9fa7b3]">Your Share (20%)</p>
-          <p className="mt-1 text-xl font-bold text-[#5794f2]">
+        <div className={`rounded-md ${grafanaPanel} p-4`}>
+          <p className={`text-[11px] uppercase ${grafanaTextMuted}`}>Your Share (20%)</p>
+          <p className={`mt-1 text-xl font-bold ${grafanaPrimary}`}>
             {formatCurrency(monthTotal.yours)}
           </p>
         </div>
       </div>
 
-      <div className="rounded-md bg-[#181b1f] p-5">
+      <div className={`rounded-md ${grafanaPanel} p-5`}>
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-[#d8d9da]">
+          <h3 className={`text-sm font-semibold ${grafanaText}`}>
             Settlement History (last 30)
           </h3>
-          <button className="text-xs text-[#9fa7b3] hover:text-[#d8d9da]">
+          <button className={`text-xs ${grafanaTextMuted} hover:${grafanaText}`}>
             <Calendar className="inline h-2.5 w-2.5 mr-1" />
             This month
           </button>
         </div>
 
         {entries.length === 0 ? (
-          <div className="py-8 text-center text-[#9fa7b3]">
+          <div className={`py-8 text-center ${grafanaTextMuted}`}>
             <Wallet className="mx-auto h-6 w-6 mb-2" />
             <p>No settlement history yet.</p>
           </div>
@@ -135,32 +146,32 @@ export function FinancialLedgerView() {
           <div className="overflow-x-auto custom-scrollbar horizontal">
             <table className="w-full text-left text-xs">
               <thead>
-                <tr className="border-b-[#2c3235]">
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Settlement</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Gross</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">GST</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Viewer (60%)</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Creator (20%)</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Platform (20%)</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Sister</th>
-                  <th className="pb-2 text-[10px] uppercase text-[#9fa7b3]">Date</th>
+                <tr className="border-b">
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Settlement</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Gross</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>GST</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Viewer (60%)</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Creator (20%)</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Platform (20%)</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Sister</th>
+                  <th className={`pb-2 text-[10px] uppercase ${grafanaTextMuted}`}>Date</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map((e) => (
-                  <tr key={e.uuid} className="border-b-[#2c3235]/40">
+                  <tr key={e.uuid} className="border-b/40">
                     <td className="py-2">
-                      <span className="font-mono text-[10px] text-[#9fa7b3]">
+                      <span className={`font-mono text-[10px] ${grafanaTextMuted}`}>
                         {e.uuid.slice(0, 8)}...
                       </span>
                     </td>
                     <td className="py-2">{formatCurrency(e.gross_amount)}</td>
-                    <td className="py-2 text-[#f2495c]">{formatCurrency(e.gst_total)}</td>
+                    <td className={`py-2 ${grafanaDanger}`}>{formatCurrency(e.gst_total)}</td>
                     <td className="py-2">{formatCurrency(e.viewer_amount)}</td>
-                    <td className="py-2 text-[#5794f2]">{formatCurrency(e.creator_amount)}</td>
+                    <td className={`py-2 ${grafanaPrimary}`}>{formatCurrency(e.creator_amount)}</td>
                     <td className="py-2">{formatCurrency(e.platform_amount)}</td>
-                    <td className="py-2 text-[#f7c548]">{formatCurrency(e.sister_share)}</td>
-                    <td className="py-2 text-[#9fa7b3]">{formatDate(e.created_at)}</td>
+                    <td className={`py-2 ${productWarning}`}>{formatCurrency(e.sister_share)}</td>
+                    <td className={`py-2 ${grafanaTextMuted}`}>{formatDate(e.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -36,6 +36,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ThumbsUp, MessageSquare, Send, Loader2, Trash2, Pencil, X, Check } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productAccentHoverBg,
+  productBadgeSurface,
+  productFocusRing,
+  productInfo,
+  productPanel,
+  productPanelHover,
+  productPlaceholder,
+  productSeparation,
+  productSunken,
+  productTextBody,
+  productTextMuted,
+  productTextSubtle,
+} from '@wideo11/ui/design-system';
+
 /** One comment as the API returns it. */
 export interface Comment {
   id: string;
@@ -80,30 +97,33 @@ interface CommentsProps {
  */
 export function commentHasLink(text: string): boolean {
   const lower = text.toLowerCase();
-
   // 1. Any scheme.
   if (/(https?|ftp|ftps|sftp|ws|wss|javascript|data|file|mailto|tel|magnet|irc|ircs|gopher|ssh|tg|whatsapp):\/?\//i.test(text)) {
     return true;
   }
-
-  // 2. Flatten the separators the way the server does: delete them, so "e x a m
-  //    p l e" becomes "example" rather than staying spaced.
+  // 2. Flatten the dot substitutes, then delete the EXOTIC separators only -
+  //    zero-width, joiners, nbsp. Ordinary spaces are deliberately kept, exactly
+  //    as the server does, because deleting them is what let "visit example.com
+  //    for more" through as prose.
   let flat = lower;
-  for (const d of ['[.]', '(.)', '{.}', '<.>', '·', '•', '․', '．', '｡', '、', '।', '۔']) {
+  for (const d of ['[.]', '(.)', '{.}', '<.>', 'Â·', 'â€¢', 'â€¤', 'ï¼Ž', 'ï½¡', 'ã€', 'à¥¤', 'Û”']) {
     flat = flat.split(d).join('.');
   }
-  // Remove the separators: spaces AND the zero-width characters, which are the
-  // ones that survive a "strip whitespace" pass.
-  flat = flat.replace(/[\s  - ​‌‍﻿⁠⁡‪-‮]/g, '');
-
-  // 3. www., or a bare domain with a known TLD, or an IP literal.
+  flat = flat.replace(/[\u200b-\u200d\ufeff\u2060-\u2064\u2000-\u200a\u00a0]/g, '');
+  // 3. www.
   if (flat.includes('www.')) return true;
-  // eslint-disable-next-line no-control-regex
-  if (/\b[a-z0-9-]+\.(com|net|org|edu|gov|int|info|biz|io|co|uk|us|video|tv|me|app|dev|xyz|online|site|shop|link|ly)\b/i.test(flat)) {
+  // 4. A bare domain with a known TLD.
+  if (/\b[a-z0-9-]+\.(?:com|net|org|edu|gov|int|info|biz|io|co|uk|us|video|tv|me|app|dev|xyz|online|site|shop|link|ly)\b/.test(flat)) {
     return true;
   }
-  if (/\b\d{1,3}(\.\d{1,3}){3}(:\d+)?/.test(flat)) return true;
-
+  // 5. The spaced forms: "e x a m p l e . c o m" and "example . com". Strip a
+  //    single separator BETWEEN two single characters, then re-test.
+  const despace = flat.replace(/(?<=\b[a-z0-9]) (?=[a-z0-9]\b)/g, '');
+  if (/[a-z0-9-]+\.(?:com|net|org|edu|gov|int|info|biz|io|co|uk|us|video|tv|me|app|dev|xyz|online|site|shop|link|ly)\b/.test(despace)) {
+    return true;
+  }
+  // 6. An IP literal.
+  if (/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?/.test(flat)) return true;
   return false;
 }
 
@@ -278,13 +298,13 @@ export function Comments({
   );
 
   return (
-    <section className="shrink-0 rounded-2xl bg-[#0d0f11] p-3" data-comments="">
+    <section className={`shrink-0 rounded-2xl ${productSunken} p-3`} data-comments="">
       {/* ---- header ---- */}
       <div className="mb-2.5 flex items-center gap-2">
-        <MessageSquare className="h-3.5 w-3.5 text-[#ff6500]" aria-hidden="true" />
+        <MessageSquare className={`h-3.5 w-3.5 ${productAccent}`} aria-hidden="true" />
         <h3 className="text-xs font-semibold text-white">Comments</h3>
         {total > 0 ? (
-          <span className="rounded-full bg-[#16181d] px-2 py-0.5 text-[10px] text-[#8b949e]">
+          <span className={`rounded-full ${productPanel} px-2 py-0.5 text-[10px] ${productTextMuted}`}>
             {total}
           </span>
         ) : null}
@@ -306,12 +326,12 @@ export function Comments({
             aria-label={placeholder}
             aria-invalid={draftBlocked || overLimit}
             maxLength={MAX_COMMENT_LENGTH + 200}
-            className="min-w-0 flex-1 rounded-full bg-[#16181d] px-3 py-2 text-xs text-white placeholder-[#5a6066] focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+            className={`min-w-0 flex-1 rounded-full ${productPanel} px-3 py-2 text-xs text-white ${productPlaceholder} ${productFocusRing}`}
           />
           <button
             type="submit"
             disabled={!canPost}
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#ff6500] text-white transition-colors hover:bg-[#e05500] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-[#ff6500]"
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${productAccentBg} text-white transition-colors ${productAccentHoverBg} disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:${productAccentBg}`}
             aria-label="Post comment"
             title={canPost ? 'Post' : 'Nothing to post'}
           >
@@ -336,7 +356,7 @@ export function Comments({
             Too long — {trimmedLength} of {MAX_COMMENT_LENGTH} characters.
           </p>
         ) : (
-          <p className="pl-1 text-[10px] text-[#5a6066]">
+          <p className={`pl-1 text-[10px] ${productTextSubtle}`}>
             Links are not permitted in comments.
           </p>
         )}
@@ -352,10 +372,10 @@ export function Comments({
       {/* ---- the thread ---- */}
       {loading ? (
         <div className="mt-3 flex justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-[#5794f2]" aria-hidden="true" />
+          <Loader2 className={`h-5 w-5 animate-spin ${productInfo}`} aria-hidden="true" />
         </div>
       ) : comments.length === 0 ? (
-        <p className="mt-3 text-[11px] text-[#5a6066]">
+        <p className={`mt-3 text-[11px] ${productTextSubtle}`}>
           No comments yet. Be the first to say something.
         </p>
       ) : (
@@ -409,7 +429,7 @@ export function Comments({
       {hasMore ? (
         <button
           onClick={() => void load(offset)}
-          className="mt-3 w-full rounded-lg bg-[#16181d] py-2 text-[11px] font-medium text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+          className={`mt-3 w-full rounded-lg ${productPanel} py-2 text-[11px] font-medium ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
         >
           Load more comments
         </button>
@@ -459,14 +479,14 @@ function CommentRow({
   const replyBlocked = commentHasLink(editDraft);
 
   return (
-    <li className="rounded-xl bg-[#16181d] px-3 py-2.5">
+    <li className={`rounded-xl ${productPanel} px-3 py-2.5`}>
       <div className="flex gap-2.5">
         {/* avatar */}
         {comment.author_avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={comment.author_avatar} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
         ) : (
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#2c3235] text-[10px] font-semibold text-white">
+          <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${productBadgeSurface} text-[10px] font-semibold text-white`}>
             {(comment.author_name || '?').slice(0, 1).toUpperCase()}
           </span>
         )}
@@ -478,9 +498,9 @@ function CommentRow({
               {comment.author_name}
             </span>
             {comment.author_handle ? (
-              <span className="shrink-0 text-[10px] text-[#5a6066]">@{comment.author_handle}</span>
+              <span className={`shrink-0 text-[10px] ${productTextSubtle}`}>@{comment.author_handle}</span>
             ) : null}
-            <span className="shrink-0 text-[10px] text-[#5a6066]">
+            <span className={`shrink-0 text-[10px] ${productTextSubtle}`}>
               {formatWhen(comment.created_at)}
               {comment.edited_at ? ' (edited)' : ''}
             </span>
@@ -493,7 +513,7 @@ function CommentRow({
                 value={editDraft}
                 onChange={(e) => onEditDraft(e.target.value)}
                 aria-label="Edit comment"
-                className="w-full rounded-full bg-[#0d0f11] px-2.5 py-1.5 text-[11px] text-white focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+                className={`w-full rounded-full ${productSunken} px-2.5 py-1.5 text-[11px] text-white ${productFocusRing}`}
               />
               {replyBlocked ? (
                 <p className="text-[10px] text-amber-400">Links are not allowed in comments.</p>
@@ -505,21 +525,21 @@ function CommentRow({
                     onSubmitReply();
                   }}
                   disabled={replyBlocked || !editDraft.trim()}
-                  className="flex items-center gap-1 rounded-full bg-[#ff6500] px-2.5 py-1 text-[10px] font-semibold text-white disabled:opacity-40"
+                  className={`flex items-center gap-1 rounded-full ${productAccentBg} px-2.5 py-1 text-[10px] font-semibold text-white disabled:opacity-40`}
                 >
                   <Check className="h-3 w-3" />
                   Save
                 </button>
                 <button
                   onClick={onCancelEdit}
-                  className="rounded-full bg-[#0d0f11] px-2.5 py-1 text-[10px] text-[#8b949e]"
+                  className={`rounded-full ${productSunken} px-2.5 py-1 text-[10px] ${productTextMuted}`}
                 >
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[#e6e6e6]">
+            <p className={`mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed ${productTextBody}`}>
               {comment.body}
             </p>
           )}
@@ -532,8 +552,8 @@ function CommentRow({
               aria-pressed={comment.viewer_has_liked}
               className={`flex items-center gap-1 text-[10px] transition-colors ${
                 comment.viewer_has_liked
-                  ? 'text-[#ff6500]'
-                  : 'text-[#8b949e] hover:text-white'
+                  ? `${productAccent}`
+                  : `${productTextMuted} hover:text-white`
               } disabled:opacity-50`}
               title={comment.viewer_has_liked ? 'Unlike' : 'Like'}
             >
@@ -543,7 +563,7 @@ function CommentRow({
 
             <button
               onClick={onReply}
-              className="text-[10px] text-[#8b949e] transition-colors hover:text-white"
+              className={`text-[10px] ${productTextMuted} transition-colors hover:text-white`}
             >
               Reply
             </button>
@@ -552,7 +572,7 @@ function CommentRow({
               <>
                 <button
                   onClick={() => onStartEdit(comment.id, comment.body)}
-                  className="flex items-center gap-1 text-[10px] text-[#8b949e] transition-colors hover:text-white"
+                  className={`flex items-center gap-1 text-[10px] ${productTextMuted} transition-colors hover:text-white`}
                   title="Edit"
                 >
                   <Pencil className="h-2.5 w-2.5" />
@@ -560,7 +580,7 @@ function CommentRow({
                 </button>
                 <button
                   onClick={onDelete}
-                  className="flex items-center gap-1 text-[10px] text-[#8b949e] transition-colors hover:text-red-400"
+                  className={`flex items-center gap-1 text-[10px] ${productTextMuted} transition-colors hover:text-red-400`}
                   title="Delete"
                 >
                   <Trash2 className="h-2.5 w-2.5" />
@@ -579,12 +599,12 @@ function CommentRow({
                   onChange={(e) => onEditDraft(e.target.value)}
                   placeholder={`Reply to ${comment.author_name}`}
                   aria-label={`Reply to ${comment.author_name}`}
-                  className="min-w-0 flex-1 rounded-full bg-[#0d0f11] px-2.5 py-1.5 text-[11px] text-white placeholder-[#5a6066] focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+                  className={`min-w-0 flex-1 rounded-full ${productSunken} px-2.5 py-1.5 text-[11px] text-white ${productPlaceholder} ${productFocusRing}`}
                 />
                 <button
                   onClick={onSubmitReply}
                   disabled={replyBlocked || !editDraft.trim()}
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#ff6500] text-white disabled:opacity-40"
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${productAccentBg} text-white disabled:opacity-40`}
                   aria-label="Post reply"
                 >
                   <Send className="h-3 w-3" />
@@ -598,14 +618,14 @@ function CommentRow({
 
           {/* nested replies - ONE level, per `model.MaxCommentDepth` */}
           {comment.replies && comment.replies.length > 0 ? (
-            <ul className="mt-2 space-y-2 border-l border-[#2c3235] pl-2.5">
+            <ul className={`mt-2 space-y-2 border-l ${productSeparation} pl-2.5`}>
               {comment.replies.map((r) => (
                 <li key={r.id} className="flex gap-2">
                   {r.author_avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={r.author_avatar} alt="" className="h-5 w-5 shrink-0 rounded-full object-cover" />
                   ) : (
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2c3235] text-[9px] font-semibold text-white">
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${productBadgeSurface} text-[9px] font-semibold text-white`}>
                       {(r.author_name || '?').slice(0, 1).toUpperCase()}
                     </span>
                   )}
@@ -614,18 +634,18 @@ function CommentRow({
                       <span className="truncate text-[10px] font-semibold text-white">
                         {r.author_name}
                       </span>
-                      <span className="shrink-0 text-[9px] text-[#5a6066]">
+                      <span className={`shrink-0 text-[9px] ${productTextSubtle}`}>
                         {formatWhen(r.created_at)}
                       </span>
                     </div>
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-[#e6e6e6]">
+                    <p className={`mt-0.5 whitespace-pre-wrap break-words text-[11px] leading-relaxed ${productTextBody}`}>
                       {r.body}
                     </p>
                     <button
                       onClick={() => onLikeReply(r)}
                       aria-pressed={r.viewer_has_liked}
                       className={`mt-1 flex items-center gap-1 text-[10px] transition-colors ${
-                        r.viewer_has_liked ? 'text-[#ff6500]' : 'text-[#8b949e] hover:text-white'
+                        r.viewer_has_liked ? `${productAccent}` : `${productTextMuted} hover:text-white`
                       }`}
                     >
                       <ThumbsUp className={`h-3 w-3 ${r.viewer_has_liked ? 'fill-current' : ''}`} />
@@ -651,5 +671,8 @@ function formatWhen(iso: string): string {
   if (s < 3600) return `${Math.floor(s / 60)}m`;
   if (s < 86400) return `${Math.floor(s / 3600)}h`;
   if (s < 604800) return `${Math.floor(s / 86400)}d`;
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  // Locale and timezone pinned, not `undefined`. An unpinned date lets the
+  // server and the viewer's browser disagree about the day, which React reports
+  // as hydration mismatch #300.
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }

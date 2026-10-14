@@ -46,6 +46,17 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productActiveTabGradient,
+  productBrandGradientActive,
+  productPanel,
+  productPanelHover,
+  productTextMuted,
+  productTextSubtle,
+} from '@wideo11/ui/design-system';
+
 export type MediaCategory =
   | 'all'
   | 'video'
@@ -134,7 +145,7 @@ export function StudioSidebar({ active, onSelect, counts, homeHref = '/dashboard
         aria-label="Wideo11 home"
         aria-current={isHome ? 'page' : undefined}
         className={`mb-2 flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-lg transition-transform hover:scale-105 ${
-          isHome ? 'bg-gradient-to-br from-[#ff6500] to-[#c2410c] shadow-[#ff6500]/30' : 'bg-[#16181d] shadow-black/30'
+          isHome ? `${productBrandGradientActive}` : `${productPanel} shadow-black/30`
         }`}
       >
         <LayoutGrid className="h-4 w-4" aria-hidden="true" />
@@ -151,13 +162,13 @@ export function StudioSidebar({ active, onSelect, counts, homeHref = '/dashboard
             title={label}
             className={`group flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors ${
               on
-                ? 'bg-gradient-to-r from-[#ff6500]/25 to-[#ff6500]/5 text-[#ff6500]'
-                : 'text-[#8b949e] hover:bg-[#16181d] hover:text-white'
+                ? `${productActiveTabGradient} ${productAccent}`
+                : `${productTextMuted} hover:${productPanel} hover:text-white`
             }`}
           >
             <span
               className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-                on ? 'bg-[#ff6500]/20' : 'bg-[#16181d] group-hover:bg-[#1f2227]'
+                on ? `${productAccentBg}/20` : `${productPanel} group-${productPanelHover}`
               }`}
             >
               <Icon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -168,7 +179,7 @@ export function StudioSidebar({ active, onSelect, counts, homeHref = '/dashboard
               </span>
             </span>
             {typeof count === 'number' ? (
-              <span className="shrink-0 text-[9px] tabular-nums text-[#5a6066]">{count}</span>
+              <span className={`shrink-0 text-[9px] tabular-nums ${productTextSubtle}`}>{count}</span>
             ) : null}
           </button>
         );

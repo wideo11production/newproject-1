@@ -110,6 +110,7 @@ import { DEFAULT_TRANSITION_DURATION } from '../lib/engine/transitions';
 import {
   clampPxPerFrame,
   coerceFps,
+  coerceFpsTo,
   frameToSeconds,
   rescalePxPerFrame,
   secondsToFrame,
@@ -164,7 +165,23 @@ export function VideoEditor() {
   // clip is 48 frames at 24 and 120 at 60, so which rate is in force changes
   // what every number on the timeline means.
   const [settings, patch] = useSettings();
-  const fps = coerceFps(settings.fps);
+
+  // ---- THE PLAN'S FRAME-RATE CEILING ----
+  //
+  // `session.maxFps` is the plan's `max_fps` capability: 60 on every plan except
+  // the AURA lifetime plan, which is 240. It is read from the same server route
+  // that answers the access gate, so it cannot disagree with the dashboard, and
+  // it arrives as 60 until the server answers — which is also the value the
+  // hydration render sees, so a slow read never flashes a rate the plan may not
+  // grant.
+  const maxFps = session.maxFps ?? 60;
+
+  // The rate in force is the saved one CLAMPED to the plan. Not the saved one:
+  // a project saved at 240fps on AURA and reopened on a 60fps plan would
+  // otherwise keep counting at 240 while every dropdown on screen offered
+  // nothing above 60 — the timeline would be showing frame numbers the user
+  // cannot select, and the ruler would disagree with the toolbar.
+  const fps = coerceFpsTo(settings.fps, maxFps);
 
   // ---- Project ----
   const [projectId, setProjectId] = useState('p-welcome');
@@ -1960,6 +1977,7 @@ if (!mod) {
       />
       <EditorToolbar
         showToolbar={false}
+        maxFps={maxFps}
         canSplit={Boolean(panelClip)}
         canDelete={selectedIds.size > 0}
         canUndo={history.length > 0}
@@ -2400,6 +2418,7 @@ if (!mod) {
           (rose-500 bar + triangle head) within this RULER_HEIGHT window. ---- */}
         <div className="relative flex shrink-0 flex-col overflow-hidden bg-[#1a1a1a]">
           <TimelineToolbar
+            maxFps={maxFps}
             canSplit={Boolean(panelClip)}
             canDelete={selectedIds.size > 0}
             canUndo={history.length > 0}

@@ -26,12 +26,16 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Home, Upload, BookOpen, PlayCircle, ChevronDown } from 'lucide-react';
 
-interface StudioHeaderProps {
-  /** Signed-in user's display name, for the profile chip. */
-  displayName?: string;
-  /** Signed-in user's avatar, when there is one. */
-  avatarUrl?: string | null;
-}
+import {
+  productAccent,
+  productAccentBg,
+  productAccentShadow,
+  productBadgeSurface,
+  productPanel,
+  productPanelHover,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
 
 const NAV = [
   { href: '/dashboard', label: 'Home', icon: Home },
@@ -39,6 +43,13 @@ const NAV = [
   { href: '/resources', label: 'Resources', icon: BookOpen },
   { href: '/videos', label: 'Player', icon: PlayCircle },
 ];
+
+interface StudioHeaderProps {
+  /** Signed-in user's display name, for the profile chip. */
+  displayName?: string;
+  /** Signed-in user's avatar, when there is one. */
+  avatarUrl?: string | null;
+}
 
 export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeaderProps) {
   const pathname = usePathname();
@@ -50,7 +61,7 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
       <nav className="mx-auto flex max-w-[1800px] items-center gap-3 px-4 py-2.5 sm:px-6" aria-label="Studio">
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2" aria-label="Wideo11 home">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#ff6500] shadow-md shadow-[#ff6500]/25">
+          <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${productAccentBg} shadow-md ${productAccentShadow}`}>
             <PlayCircle className="h-4 w-4 text-white" aria-hidden="true" />
           </span>
           <span className="text-sm font-semibold tracking-tight text-white">Wideo11</span>
@@ -67,8 +78,8 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
                   aria-current={active ? 'page' : undefined}
                   className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                     active
-                      ? 'bg-[#16181d] text-[#ff6500]'
-                      : 'text-[#8b949e] hover:bg-[#16181d] hover:text-white'
+                      ? `${productPanel} ${productAccent}`
+                      : `${productTextMuted} hover:${productPanel} hover:text-white`
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -85,7 +96,7 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
         <div className="relative">
           <button
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-full bg-[#16181d] py-1 pl-1 pr-2.5 transition-colors hover:bg-[#1f2227]"
+            className={`flex items-center gap-2 rounded-full ${productPanel} py-1 pl-1 pr-2.5 transition-colors ${productPanelHover}`}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
             aria-label="Account menu"
@@ -94,14 +105,14 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
             ) : (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2c3235] text-[10px] font-semibold text-white">
+              <span className={`flex h-6 w-6 items-center justify-center rounded-full ${productBadgeSurface} text-[10px] font-semibold text-white`}>
                 {displayName.slice(0, 1).toUpperCase()}
               </span>
             )}
             <span className="hidden max-w-[10ch] truncate text-xs font-medium text-white sm:inline">
               {displayName}
             </span>
-            <ChevronDown className="h-3 w-3 text-[#8b949e]" aria-hidden="true" />
+            <ChevronDown className={`h-3 w-3 ${productTextMuted}`} aria-hidden="true" />
           </button>
 
           {menuOpen ? (
@@ -111,12 +122,12 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden="true" />
               <div
                 role="menu"
-                className="absolute right-0 z-20 mt-1.5 w-44 overflow-hidden rounded-xl bg-[#16181d] py-1 shadow-xl shadow-black/40"
+                className={`absolute right-0 z-20 mt-1.5 w-44 overflow-hidden rounded-xl ${productPanel} py-1 shadow-xl shadow-black/40`}
               >
                 <Link
                   href="/dashboard"
                   role="menuitem"
-                  className="block px-3 py-2 text-xs text-white transition-colors hover:bg-[#1f2227]"
+                  className={`block px-3 py-2 text-xs text-white transition-colors ${productPanelHover}`}
                   onClick={() => setMenuOpen(false)}
                 >
                   Dashboard
@@ -124,7 +135,7 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
                 <Link
                   href="/dashboard/settings"
                   role="menuitem"
-                  className="block px-3 py-2 text-xs text-white transition-colors hover:bg-[#1f2227]"
+                  className={`block px-3 py-2 text-xs text-white transition-colors ${productPanelHover}`}
                   onClick={() => setMenuOpen(false)}
                 >
                   Settings
@@ -144,7 +155,7 @@ export function StudioHeader({ displayName = 'Creator', avatarUrl }: StudioHeade
                       }
                     })();
                   }}
-                  className="block w-full px-3 py-2 text-left text-xs text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  className={`block w-full px-3 py-2 text-left text-xs ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                 >
                   Sign out
                 </button>

@@ -33,6 +33,20 @@ import {
   Film,
 } from 'lucide-react';
 
+import {
+  productAccent,
+  productAccentBg,
+  productFocusRing,
+  productIconMuted,
+  productInfo,
+  productPanel,
+  productPlaceholder,
+  productSunken,
+  productTextGroupLabel,
+  productTextMuted,
+  productTextSubtle,
+} from '@wideo11/ui/design-system';
+
 export type LibrarySort = 'newest' | 'oldest' | 'name' | 'duration';
 
 interface SortOption {
@@ -70,15 +84,15 @@ export function MediaLibraryPane({
   const [query, setQuery] = useState('');
 
   return (
-    <section className="flex h-full min-h-0 flex-col rounded-2xl bg-[#0d0f11]" data-media-library="">
+    <section className={`flex h-full min-h-0 flex-col rounded-2xl ${productSunken}`} data-media-library="">
       {/* ---- library header ----
           One row of controls, and they wrap rather than overflow: a 320px
           viewport should not have to horizontally scroll the toolbar. */}
       <div className="flex flex-wrap items-center gap-2 px-3 pb-2.5 pt-3">
         <div className="flex items-center gap-2">
-          <Film className="h-4 w-4 text-[#ff6500]" aria-hidden="true" />
+          <Film className={`h-4 w-4 ${productAccent}`} aria-hidden="true" />
           <h2 className="text-sm font-semibold text-white">Media Library</h2>
-          <span className="rounded-full bg-[#16181d] px-2 py-0.5 text-[10px] font-medium text-[#8b949e]">
+          <span className={`rounded-full ${productPanel} px-2 py-0.5 text-[10px] font-medium ${productTextMuted}`}>
             {count}
           </span>
         </div>
@@ -86,7 +100,7 @@ export function MediaLibraryPane({
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* view mode */}
           <div
-            className="flex items-center gap-0.5 rounded-lg bg-[#16181d] p-0.5"
+            className={`flex items-center gap-0.5 rounded-lg ${productPanel} p-0.5`}
             role="radiogroup"
             aria-label="View mode"
           >
@@ -95,7 +109,7 @@ export function MediaLibraryPane({
               aria-checked={view === 'grid'}
               onClick={() => setView('grid')}
               className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                view === 'grid' ? 'bg-[#ff6500] text-white' : 'text-[#8b949e] hover:text-white'
+                view === 'grid' ? `${productAccentBg} text-white` : `${productTextMuted} hover:text-white`
               }`}
               title="Grid view"
             >
@@ -107,7 +121,7 @@ export function MediaLibraryPane({
               aria-checked={view === 'list'}
               onClick={() => setView('list')}
               className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                view === 'list' ? 'bg-[#ff6500] text-white' : 'text-[#8b949e] hover:text-white'
+                view === 'list' ? `${productAccentBg} text-white` : `${productTextMuted} hover:text-white`
               }`}
               title="List view"
             >
@@ -119,7 +133,7 @@ export function MediaLibraryPane({
           {/* size - VISIBLE IN BOTH VIEWS. It used to be gated on grid only, which
               made it a dead control in list view. */}
           <div
-            className="flex items-center gap-0.5 rounded-lg bg-[#16181d] p-0.5"
+            className={`flex items-center gap-0.5 rounded-lg ${productPanel} p-0.5`}
             role="radiogroup"
             aria-label="Thumbnail size"
           >
@@ -128,7 +142,7 @@ export function MediaLibraryPane({
               aria-checked={size === 'small'}
               onClick={() => setSize('small')}
               className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                size === 'small' ? 'bg-[#ff6500] text-white' : 'text-[#8b949e] hover:text-white'
+                size === 'small' ? `${productAccentBg} text-white` : `${productTextMuted} hover:text-white`
               }`}
             >
               Small
@@ -138,7 +152,7 @@ export function MediaLibraryPane({
               aria-checked={size === 'medium'}
               onClick={() => setSize('medium')}
               className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
-                size === 'medium' ? 'bg-[#ff6500] text-white' : 'text-[#8b949e] hover:text-white'
+                size === 'medium' ? `${productAccentBg} text-white` : `${productTextMuted} hover:text-white`
               }`}
             >
               Medium
@@ -148,14 +162,14 @@ export function MediaLibraryPane({
           {/* sort */}
           <div className="relative">
             <SlidersHorizontal
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b949e]"
+              className={`pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${productTextMuted}`}
               aria-hidden="true"
             />
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as LibrarySort)}
               aria-label="Sort by"
-              className="appearance-none rounded-lg bg-[#16181d] py-1.5 pl-7 pr-7 text-[11px] font-medium text-[#8b949e] transition-colors hover:text-white focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+              className={`appearance-none rounded-lg ${productPanel} py-1.5 pl-7 pr-7 text-[11px] font-medium ${productTextMuted} transition-colors hover:text-white ${productFocusRing}`}
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -165,7 +179,7 @@ export function MediaLibraryPane({
             </select>
             <svg
               viewBox="0 0 24 24"
-              className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#8b949e]"
+              className={`pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 ${productTextMuted}`}
               fill="currentColor"
               aria-hidden="true"
             >
@@ -176,7 +190,7 @@ export function MediaLibraryPane({
           {/* search */}
           <div className="relative">
             <Search
-              className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#8b949e]"
+              className={`pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 ${productTextMuted}`}
               aria-hidden="true"
             />
             <input
@@ -185,7 +199,7 @@ export function MediaLibraryPane({
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
               aria-label={searchPlaceholder}
-              className="w-40 rounded-lg bg-[#16181d] py-1.5 pl-7 pr-2.5 text-[11px] text-white placeholder-[#5a6066] transition-colors focus:w-56 focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
+              className={`w-40 rounded-lg ${productPanel} py-1.5 pl-7 pr-2.5 text-[11px] text-white ${productPlaceholder} transition-colors focus:w-56 ${productFocusRing}`}
             />
           </div>
         </div>
@@ -198,12 +212,12 @@ export function MediaLibraryPane({
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3" style={{ scrollbarWidth: 'thin' }}>
         {loading ? (
           <div className="flex h-40 items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin text-[#5794f2]" />
+            <Loader2 className={`h-6 w-6 animate-spin ${productInfo}`} />
           </div>
         ) : count === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center text-center">
-            <Film className="mb-2 h-7 w-7 text-[#2c3235]" aria-hidden="true" />
-            <p className="text-xs text-[#8b949e]">{emptyMessage}</p>
+            <Film className={`mb-2 h-7 w-7 ${productIconMuted}`} aria-hidden="true" />
+            <p className={`text-xs ${productTextMuted}`}>{emptyMessage}</p>
           </div>
         ) : (
           <LibrarySurface view={view} size={size} sort={sort} query={query}>
@@ -222,6 +236,69 @@ export function MediaLibraryPane({
  * the controls are - a control that changes a value the cards never read is a
  * control that lies.
  */
+/** A clip's display shape, derived from what the card itself would render. */
+type CardShape = 'landscape' | 'letterbox' | 'portrait' | 'square';
+
+const SHAPE_LABELS: Record<CardShape, string> = {
+  landscape: 'Landscape',
+  letterbox: 'Long reels',
+  portrait: 'Vertical',
+  square: 'Audio',
+};
+
+/**
+ * The minimum column width for a shape.
+ *
+ * Portrait gets a NARROWER minimum because a portrait card's height comes from
+ * its width - 168px wide would be 300px tall, a tower. Letterbox (4:1) gets a
+ * WIDER minimum because squeezed into a narrow column it becomes a sliver.
+ */
+function columnMin(shape: CardShape, size: 'small' | 'medium'): number {
+  const scale = size === 'small' ? 0.78 : 1;
+  switch (shape) {
+    case 'portrait':
+      return Math.round(116 * scale);
+    case 'letterbox':
+      return Math.round(260 * scale);
+    case 'square':
+      return Math.round(132 * scale);
+    case 'landscape':
+    default:
+      return Math.round(168 * scale);
+  }
+}
+
+/** Read a card's shape off the element's props. */
+function shapeOf(node: ReactNode): CardShape {
+  const props = (node as unknown as { props?: Record<string, unknown> })?.props ?? {};
+  const kind = String(props.kind ?? '');
+  const duration = Number(props.durationSeconds ?? 0);
+  const w = Number(props.width ?? 0);
+  const h = Number(props.height ?? 0);
+
+  if (kind === 'audio') return 'square';
+  // Orientation is a fact about the file, so it beats any inference from kind -
+  // the same rule `cardAspect()` uses.
+  if (w > 0 && h > 0 && h > w) return 'portrait';
+  if (kind === 'reel' && duration >= 60) return 'letterbox';
+  return 'landscape';
+}
+
+/** Group cards by shape, preserving the sort order INSIDE each group. */
+function groupByShape(items: ReactNode[]): Array<{ shape: CardShape; label: string; items: ReactNode[] }> {
+  const order: CardShape[] = ['landscape', 'letterbox', 'portrait', 'square'];
+  const buckets = new Map<CardShape, ReactNode[]>();
+  for (const node of items) {
+    const shape = shapeOf(node);
+    const bucket = buckets.get(shape);
+    if (bucket) bucket.push(node);
+    else buckets.set(shape, [node]);
+  }
+  return order
+    .filter((shape) => buckets.has(shape))
+    .map((shape) => ({ shape, label: SHAPE_LABELS[shape], items: buckets.get(shape) ?? [] }));
+}
+
 function LibrarySurface({
   children,
   view,
@@ -268,6 +345,20 @@ function LibrarySurface({
     );
   }, [items, size, view]);
 
+  // ---------------------------------------------------------------------------
+  // THE RULES OF HOOKS - all hooks BEFORE any early return
+  // ---------------------------------------------------------------------------
+  // `groups` used to be computed AFTER the `view === 'list'` early return below,
+  // which is a Rules of Hooks violation: the hook does not run at all in list
+  // view, then suddenly exists when the view flips back to grid. React reports
+  // the resulting mismatch as error #300 and tears down the whole tree - which
+  // is exactly the "list view crashes, grid works" report.
+  //
+  // So both `rows` and `groups` are computed unconditionally here, and the early
+  // return only picks which one to render.
+  const groups = useMemo(() => groupByShape(items), [items]);
+  const multiGroup = groups.length > 1;
+
   if (view === 'list') {
     return (
       <div className="space-y-1.5" role="list" aria-label="Media list">
@@ -276,16 +367,31 @@ function LibrarySurface({
     );
   }
 
-  // auto-fill rather than fixed columns: on a 50% pane the card size is whatever
-  // fits, and a fixed 3-col grid would produce 3 squashed cards at 400px.
+  // ---- ORIENTATION-AWARE GRIDS ----
+  // Cards are grouped by display shape so a portrait reel does not force a whole
+  // row to 300px tall, which used to leave a 200px void under every landscape
+  // card. Each group gets its own column width, and a lone group shows no label.
   return (
-    <div
-      className="grid gap-2.5"
-      style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${size === 'small' ? 132 : 168}px, 1fr))` }}
-      role="list"
-      aria-label="Media grid"
-    >
-      {items}
+    <div className="space-y-5">
+      {groups.map((group) => (
+        <section key={group.shape} aria-label={group.label}>
+          {multiGroup ? (
+            <h3 className={`mb-2 ${productTextGroupLabel}`}>
+              {group.label}
+              <span className={`ml-1.5 font-normal normal-case tracking-normal ${productTextSubtle}`}>
+                {group.items.length}
+              </span>
+            </h3>
+          ) : null}
+          <div
+            className="grid gap-2.5"
+            style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${columnMin(group.shape, size)}px, 1fr))` }}
+            role="list"
+          >
+            {group.items}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

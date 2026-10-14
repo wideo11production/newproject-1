@@ -39,6 +39,20 @@ import { Slider } from '@wideo11/ui/slider';
 import { Play, Pause, SkipBack, SkipForward, Scissors, Layers, Type, Settings, X, ZoomIn, ZoomOut, Wand2 } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 
+import {
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+  productAccent,
+  productAccentBg,
+  productAccentRing,
+  productNeutral,
+  productPanelHover,
+  productRingSeparation,
+  productSunken,
+  productTextQuiet,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -109,7 +123,7 @@ function frameToTimestamp(frame: number, fps: number): string {
   const hours = Math.floor(totalMs / 3600000);
   const minutes = Math.floor((totalMs % 3600000) / 60000);
   const ms = totalMs % 1000;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(ms).padStart(3, '0')}`;
+  return `${String(hours).padStart(2, `0`)}:${String(minutes).padStart(2, `0`)}:${String(ms).padStart(3, `0`)}`;
 }
 
 /**
@@ -120,7 +134,7 @@ function msToTimestamp(ms: number): string {
   const hours = Math.floor(totalMs / 3600000);
   const minutes = Math.floor((totalMs % 3600000) / 60000);
   const remainingMs = totalMs % 1000;
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingMs).padStart(3, '0')}`;
+  return `${String(hours).padStart(2, `0`)}:${String(minutes).padStart(2, `0`)}:${String(remainingMs).padStart(3, `0`)}`;
 }
 
 /**
@@ -388,7 +402,7 @@ export function AuraMicroFrameStudio({
         <Button
           variant="ghost"
           size="sm"
-          className="group flex items-center gap-1.5 rounded-md bg-transparent text-xs text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
+          className={`group flex items-center gap-1.5 rounded-md bg-transparent text-xs ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0`}
         >
           <Layers className="h-2.5 w-2.5 transition-transform duration-150 group-hover:scale-110" />
           AURA Micro-Frame
@@ -399,15 +413,15 @@ export function AuraMicroFrameStudio({
           borders/outlines (border-0 outline-none shadow-none), rounded-md
           container. Hinglish: koi outer line nahi, flat color depth se
           separation, medium rounded corners. */}
-      <DialogContent className="fixed left-[50%] top-[50%] z-[9999] grid w-[90vw] max-w-6xl translate-x-[-50%] translate-y-[-50%] gap-2 rounded-md border-0 bg-[#1e1e1e] p-0 shadow-none outline-none ring-0">
+      <DialogContent className={`fixed left-[50%] top-[50%] z-[9999] grid w-[90vw] max-w-6xl translate-x-[-50%] translate-y-[-50%] gap-2 rounded-md border-0 ${productNeutral} p-0 shadow-none outline-none ring-0`}>
         {/* ---- Dialog Header (hyper-flat, orange-red accent) ---- */}
         <DialogHeader className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <Layers className="h-2.5 w-2.5 text-[#ff6500]" />
-            <DialogTitle className="text-sm font-semibold text-[#d8d9da]">
+            <Layers className={`h-2.5 w-2.5 ${productAccent}`} />
+            <DialogTitle className={`text-sm font-semibold ${grafanaText}`}>
               AURA Micro-Frame Studio
             </DialogTitle>
-            <span className="rounded-md bg-[#ff6500]/10 px-2 py-0.5 text-[10px] font-medium text-[#ff6500]">
+            <span className={`rounded-md ${productAccentBg}/10 px-2 py-0.5 text-[10px] font-medium ${productAccent}`}>
               SUPERADMIN GATED
             </span>
           </div>
@@ -415,7 +429,7 @@ export function AuraMicroFrameStudio({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+              className={`h-7 w-7 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
             >
               <X className="h-2.5 w-2.5" />
             </Button>
@@ -429,7 +443,7 @@ export function AuraMicroFrameStudio({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+              className={`h-7 w-7 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
               onClick={() => {
                 let newSpeed = playbackSpeed * 0.5;
                 if (newSpeed < 0.01) newSpeed = 0.01;
@@ -447,8 +461,8 @@ export function AuraMicroFrameStudio({
               className={cn(
                 'h-7 w-7 rounded-md bg-transparent p-0 shadow-none transition-all duration-150 hover:bg-transparent focus:ring-0 focus:ring-offset-0',
                 isPlaying
-                  ? 'bg-[#ff6500]/10 text-[#ff6500]'
-                  : 'text-[#9fa7b3] hover:text-[#ff6500]',
+                  ? `${productAccentBg}/10 ${productAccent}`
+                  : `${grafanaTextMuted} hover:${productAccent}`,
               )}
               onClick={onPlayPause}
               aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -464,7 +478,7 @@ export function AuraMicroFrameStudio({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+              className={`h-7 w-7 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
               onClick={() => {
                 let newSpeed = playbackSpeed * 2;
                 if (newSpeed > 4.0) newSpeed = 0.01;
@@ -482,7 +496,7 @@ export function AuraMicroFrameStudio({
             <select
               value={playbackSpeed}
               onChange={(e) => onPlaybackSpeedChange?.(parseFloat(e.target.value))}
-              className="w-20 rounded-md border-0 bg-[#0d0f11] px-1.5 py-0.5 text-xs text-[#d8d9da] outline-none transition-all duration-150 hover:text-[#ff6500] focus:text-[#ff6500]"
+              className={`w-20 rounded-md border-0 ${productSunken} px-1.5 py-0.5 text-xs ${grafanaText} outline-none transition-all duration-150 hover:${productAccent} focus:${productAccent}`}
               aria-label="Playback speed"
             >
               {PLAYBACK_SPEEDS.map((speed) => (
@@ -515,10 +529,10 @@ export function AuraMicroFrameStudio({
           </div>
 
           {/* Timestamp Display — microsecond precision `HH:MM:SS.mmmuuu` */}
-          <div className="flex-shrink-0 font-mono text-xs text-[#d8d9da]">
-            <span className="text-[#ff6500]">{usToTimestamp(currentTimeMs * 1000)}</span>
-            <span className="mx-1 text-[#5a5f66]">/</span>
-            <span className="text-[#9fa7b3]">{usToTimestamp(effectiveDurationMs * 1000)}</span>
+          <div className={`flex-shrink-0 font-mono text-xs ${grafanaText}`}>
+            <span className={`${productAccent}`}>{usToTimestamp(currentTimeMs * 1000)}</span>
+            <span className={`mx-1 ${productTextQuiet}`}>/</span>
+            <span className={`${grafanaTextMuted}`}>{usToTimestamp(effectiveDurationMs * 1000)}</span>
           </div>
         </div>
 
@@ -526,11 +540,11 @@ export function AuraMicroFrameStudio({
         <div className="relative flex items-center justify-center gap-2 px-4 py-3">
           {/* Zoom lock controls — brush sirf >= 4x par unlock */}
           <div className="absolute right-4 top-2 flex items-center gap-1">
-            <span className="mr-1 font-mono text-[10px] text-[#5a5f66]">{zoomLevel}x</span>
+            <span className={`mr-1 font-mono text-[10px] ${productTextQuiet}`}>{zoomLevel}x</span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
+              className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0`}
               onClick={() => setZoomLevel((z) => Math.max(1, z - 1))}
               aria-label="Zoom out"
               title="Zoom out"
@@ -540,7 +554,7 @@ export function AuraMicroFrameStudio({
             <Button
               variant="ghost"
               size="sm"
-              className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0"
+              className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0`}
               onClick={() => setZoomLevel((z) => Math.min(MAX_ZOOM_LEVEL, z + 1))}
               aria-label="Zoom in"
               title="Zoom in (4x par sub-pixel brush unlock)"
@@ -551,8 +565,8 @@ export function AuraMicroFrameStudio({
               className={cn(
                 'ml-1 rounded-md px-1.5 py-0.5 text-[10px] transition-all duration-150',
                 isBrushActive
-                  ? 'bg-[#ff6500]/10 text-[#ff6500]'
-                  : 'bg-[#0d0f11] text-[#5a5f66]',
+                  ? `${productAccentBg}/10 ${productAccent}`
+                  : `${productSunken} ${productTextQuiet}`,
               )}
             >
               {isBrushActive ? 'BRUSH UNLOCKED' : 'LOCKED <4x'}
@@ -572,9 +586,9 @@ export function AuraMicroFrameStudio({
                 className={cn(
                   'relative flex h-16 w-24 cursor-pointer items-center justify-center overflow-hidden rounded-md border-0 transition-all duration-150',
                   isActive
-                    ? 'ring-1 ring-[#ff6500]'
-                    : 'ring-1 ring-[#2c3235] hover:ring-[#ff6500]/50 hover:text-[#ff6500]',
-                  'bg-[#0d0f11]',
+                    ? `ring-1 ${productAccentRing}`
+                    : `ring-1 ${productRingSeparation} hover:${productAccentRing}/50 hover:${productAccent}`,
+                  `${productSunken}`,
                 )}
                 aria-label={`Frame ${frame} ${label}`}
                 title={`Frame ${frame} — ${label}`}
@@ -583,8 +597,8 @@ export function AuraMicroFrameStudio({
                   className={cn(
                     'absolute inset-0',
                     isActive
-                      ? 'bg-[#ff6500]/5'
-                      : 'bg-[#1f2227]/80 group-hover:bg-[#ff6500]/5',
+                      ? `${productAccentBg}/5`
+                      : `${productPanelHover}/80 group-hover:${productAccentBg}/5`,
                   )}
                 />
                 {/* Microscopic pixel selection brush surface — sirf active tile
@@ -593,7 +607,7 @@ export function AuraMicroFrameStudio({
                   <div
                     className={cn(
                       'absolute inset-0 cursor-crosshair touch-none',
-                      isPainting ? 'bg-[#ff6500]/5' : 'bg-transparent',
+                      isPainting ? `${productAccentBg}/5` : 'bg-transparent',
                     )}
                     onPointerDown={handleBrushDown}
                     onPointerMove={handleBrushMove}
@@ -604,15 +618,15 @@ export function AuraMicroFrameStudio({
                     title="Drag to isolate pixel matrix bounds"
                   />
                 )}
-                <span className="relative z-10 font-mono text-[10px] text-[#9fa7b3]">
+                <span className={`relative z-10 font-mono text-[10px] ${grafanaTextMuted}`}>
                   {label}
                 </span>
-                <span className="relative z-10 mt-1 text-[8px] uppercase tracking-wider text-[#5a5f66]">
+                <span className={`relative z-10 mt-1 text-[8px] uppercase tracking-wider ${productTextQuiet}`}>
                   {isPrev ? 'PREV' : isActive ? 'ACTIVE' : isNext ? 'NEXT' : 'BUF'}
                 </span>
                 {/* Selection bounds readout — normalized + percentage dono */}
                 {isActive && brushBounds && (
-                  <span className="relative z-10 mt-0.5 font-mono text-[8px] text-[#ff6500]">
+                  <span className={`relative z-10 mt-0.5 font-mono text-[8px] ${productAccent}`}>
                     SEL {Math.round(brushBounds.x * 100)}%,{Math.round(brushBounds.y * 100)}% ·{' '}
                     {Math.round(brushBounds.w * 100)}x{Math.round(brushBounds.h * 100)}%
                   </span>
@@ -621,7 +635,7 @@ export function AuraMicroFrameStudio({
                 <span
                   className={cn(
                     'relative z-10 mt-0.5 text-[11px] font-medium',
-                    isActive ? 'text-[#ff6500]' : 'text-[#5a5f66]',
+                    isActive ? `${productAccent}` : `${productTextQuiet}`,
                   )}
                 >
                   F{frame}
@@ -636,15 +650,15 @@ export function AuraMicroFrameStudio({
             3-frame buffer me hard-clamped pixel swap ke liye. Edit op existing
             timeline storage hook (onTimelineSync) par jata hai. Har edit ka
             provenance record rehta hai — koi anti-forensic blending nahi hai. */}
-        <div className="mx-4 mb-2 flex items-center gap-2 rounded-md bg-[#0d0f11] p-2">
-          <Wand2 className="h-2.5 w-2.5 shrink-0 text-[#9fa7b3] transition-colors duration-150" />
+        <div className={`mx-4 mb-2 flex items-center gap-2 rounded-md ${productSunken} p-2`}>
+          <Wand2 className={`h-2.5 w-2.5 shrink-0 ${grafanaTextMuted} transition-colors duration-150`} />
           <input
             type="text"
             value={promptText}
             onChange={(e) => setPromptText(e.target.value)}
             placeholder={isBrushActive ? 'Describe replacement (e.g., "remove background sign")…' : 'Zoom 4x+ to unlock pixel brush…'}
             disabled={!isBrushActive}
-            className="h-6 flex-1 rounded-md border-0 bg-transparent px-2 text-xs text-[#d8d9da] outline-none transition-all duration-150 placeholder:text-[#5a5f66] focus:bg-[#181b1f] disabled:cursor-not-allowed disabled:opacity-50"
+            className={`h-6 flex-1 rounded-md border-0 bg-transparent px-2 text-xs ${grafanaText} outline-none transition-all duration-150 placeholder:${productTextQuiet} focus:${grafanaPanel} disabled:cursor-not-allowed disabled:opacity-50`}
             aria-label="Inpainting prompt"
           />
           <Button
@@ -653,8 +667,8 @@ export function AuraMicroFrameStudio({
             className={cn(
               'h-6 shrink-0 rounded-md px-2 text-[11px] shadow-none transition-all duration-150 focus:ring-0 focus:ring-offset-0',
               isBrushActive && brushBounds && promptText.trim()
-                ? 'bg-[#ff6500] text-white hover:bg-[#ff6500]'
-                : 'bg-transparent text-[#5a5f66] hover:bg-transparent',
+                ? `${productAccentBg} text-white hover:${productAccentBg}`
+                : `bg-transparent ${productTextQuiet} hover:bg-transparent`,
             )}
             disabled={!isBrushActive || !brushBounds || !promptText.trim()}
             onClick={executeObjectReplacement}
@@ -670,7 +684,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
             aria-label="Slice clip (saves to WideoCut Pro core)"
             title="Slice clip — saves to core hooks"
           >
@@ -679,7 +693,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
             aria-label="Overlay adjustments (saves to core storage)"
             title="Overlay adjustments — saves to core storage"
           >
@@ -688,7 +702,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
             aria-label="Text expressions (saves to core variables)"
             title="Text expressions — saves to core variables DB"
           >
@@ -697,7 +711,7 @@ export function AuraMicroFrameStudio({
           <Button
             variant="ghost"
             size="sm"
-            className="h-4 w-4 rounded-md bg-transparent p-0 text-[#9fa7b3] shadow-none transition-all duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent"
+            className={`h-4 w-4 rounded-md bg-transparent p-0 ${grafanaTextMuted} shadow-none transition-all duration-150 hover:bg-transparent hover:${productAccent} focus:ring-0 focus:ring-offset-0 data-[state=open]:bg-transparent`}
             aria-label="Settings"
             title="Settings"
           >

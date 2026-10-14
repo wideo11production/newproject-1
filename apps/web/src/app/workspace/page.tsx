@@ -21,11 +21,17 @@ import { WorkspaceSidebar } from '@/components/workspace/workspace-sidebar';
 import { useSessionIdentity } from '@/lib/identity-context';
 import { Suspense } from 'react';
 
+import {
+  grafanaBg,
+  grafanaText,
+  grafanaTextMuted,
+} from '@wideo11/ui/design-system';
+
 // Fallback shown while a tab's code chunk loads.
 function WorkspaceLoading() {
   return (
-    <div className="flex items-center justify-center gap-3 p-8 text-[#9fa7b3]">
-      <div className="h-2.5 w-2.5 animate-spin rounded-full-[#5794f2]-transparent" />
+    <div className={`flex items-center justify-center gap-3 p-8 ${grafanaTextMuted}`}>
+      <div className="h-2.5 w-2.5 animate-spin rounded-full-transparent" />
       <span>Loading workspace...</span>
     </div>
   );
@@ -42,7 +48,7 @@ export default function WorkspacePage() {
   const hasRevenue = (identity.total_revenue ?? 0) > 0;
 
   return (
-    <div className="flex min-h-screen bg-[#111217] text-[#d8d9da]">
+    <div className={`flex min-h-screen ${grafanaBg} ${grafanaText}`}>
       <Suspense fallback={<WorkspaceLoading />}>
         <WorkspaceSidebar
           userRole={userRole}

@@ -37,6 +37,17 @@ import {
   FORM_SPACING,
 } from '@/components/auth/auth-shell';
 
+import {
+  grafanaDanger,
+  grafanaText,
+  grafanaTextMuted,
+  productAccent,
+  productAccentRing,
+  productPanelHover,
+  productSunken,
+  surfaceRaised,
+} from '@wideo11/ui/design-system';
+
 export default function LoginPage() {
   // Click tracking: `GlobalActivityTracker` already captures every click on this
   // page, from `app/layout.tsx`. A second `useClickTracking` here used to write
@@ -339,15 +350,15 @@ export default function LoginPage() {
         >
           <div className="space-y-4 text-center">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full-600/50 bg-red-950/40">
-              <span className="font-mono text-xl font-bold text-[#f2495c]">
+              <span className={`font-mono text-xl font-bold ${grafanaDanger}`}>
                 {mins}:{secs.toString().padStart(2, '0')}
               </span>
             </div>
-            <p className="animate-pulse text-sm font-semibold text-[#f2495c]">
+            <p className={`animate-pulse text-sm font-semibold ${grafanaDanger}`}>
               Warning: Account will be blocked if biometric credentials are not verified
               within 3 minutes.
             </p>
-            <p className="text-xs leading-relaxed text-[#9fa7b3]">
+            <p className={`text-xs leading-relaxed ${grafanaTextMuted}`}>
               An incorrect security PIN was entered. The countdown resets once it
               reaches zero.
             </p>
@@ -378,7 +389,7 @@ export default function LoginPage() {
       title="Welcome back"
       description="Log in to manage your channels, catalog and payouts."
       footer={
-        <p className="text-center text-sm text-[#9fa7b3]">
+        <p className={`text-center text-sm ${grafanaTextMuted}`}>
           New to Wideo11?{' '}
           <Link
             href="/auth/register"
@@ -421,7 +432,7 @@ export default function LoginPage() {
               type="button"
                onClick={() => setShowPassword((v) => !v)}
                aria-label={showPassword ? 'Hide password' : 'Show password'}
-               className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:text-[#ff6500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40"
+               className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors hover:${productAccent} focus-visible:outline-none focus-visible:ring-2 focus-visible:${productAccentRing}/40`}
              >
               {showPassword ? <EyeOff className="h-2.5 w-2.5" /> : <Eye className="h-2.5 w-2.5" />}
             </button>
@@ -439,7 +450,7 @@ export default function LoginPage() {
           <Link
             href="/auth/reset-password"
             prefetch={false}
-            className="flex items-center gap-1 text-xs text-[#9fa7b3] transition-colors duration-150 hover:text-[#ff6500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/40 rounded-md"
+            className={`flex items-center gap-1 text-xs ${grafanaTextMuted} transition-colors duration-150 hover:${productAccent} focus-visible:outline-none focus-visible:ring-2 focus-visible:${productAccentRing}/40 rounded-md`}
           >
             <Lock className="h-2.5 w-2.5" aria-hidden="true" />
             Forgot password?
@@ -451,7 +462,7 @@ export default function LoginPage() {
         {message ? (
             <div
             role="alert"
-            className="flex items-start gap-2 rounded-md border-0 bg-[#1a1a1a] p-2.5 text-xs text-red-300"
+            className={`flex items-start gap-2 rounded-md border-0 ${surfaceRaised} p-2.5 text-xs text-red-300`}
           >
             <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
             <span className="leading-relaxed">{message}</span>
@@ -480,15 +491,15 @@ export default function LoginPage() {
           (dono cards baseline aligned dikhein). Ab AuthShell ka card FIXED
           `h-[500px]` hai, to ye filler ki zaroorat nahi - ye ab apne aap
           content ki height leta hai. Compact kar diya gaya hai. */}
-      <div className="mt-4 flex items-start gap-2.5 rounded-md bg-[#0d0f11]/40 p-2.5">
-        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-[#1f2227]">
-          <Lock className="h-2.5 w-2.5 text-[#9fa7b3]" />
+      <div className={`mt-4 flex items-start gap-2.5 rounded-md ${productSunken}/40 p-2.5`}>
+        <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productPanelHover}`}>
+          <Lock className={`h-2.5 w-2.5 ${grafanaTextMuted}`} />
         </div>
         <div className="space-y-0.5">
-          <p className="text-xs font-medium leading-none text-[#d8d9da]">
+          <p className={`text-xs font-medium leading-none ${grafanaText}`}>
             Secure sign in
           </p>
-          <p className="text-[11px] leading-relaxed text-[#9fa7b3]">
+          <p className={`text-[11px] leading-relaxed ${grafanaTextMuted}`}>
             Passwords are hashed with bcrypt. We never store or log your plain
             text password.
           </p>

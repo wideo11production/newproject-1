@@ -44,6 +44,16 @@ import {
 import { cn } from '@wideo11/ui/lib/utils';
 import { BrandLockup } from '@wideo11/ui/brand/characters';
 
+import {
+  grafanaFocusRingVisible,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 export type SidebarTab = {
   id: string;
   label: string;
@@ -172,14 +182,14 @@ export function DashboardSidebar() {
             title={collapsed ? tab.label : undefined}
             className={cn(
               'group flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50',
+              `${grafanaFocusRingVisible}`,
               active
-                ? 'bg-[#1f2227] text-[#d8d9da]'
-                : 'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]'
+                ? `${productPanelHover} ${grafanaText}`
+                : `${grafanaTextMuted} ${productPanelHover}/60 hover:${grafanaText}`
             )}
           >
             <span
-              className={cn('shrink-0', active ? 'text-[#5794f2]' : 'text-[#9fa7b3]')}
+              className={cn('shrink-0', active ? `${grafanaPrimary}` : `${grafanaTextMuted}`)}
               aria-hidden="true"
             >
               {tab.icon}
@@ -190,7 +200,7 @@ export function DashboardSidebar() {
             {/* Active indicator - collapsed state me bhi dikhta hai */}
             {active ? (
               <span
-                className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-[#5794f2]"
+                className={`ml-auto h-1.5 w-1.5 shrink-0 rounded-full ${grafanaPrimaryBg}`}
                 aria-hidden="true"
               />
             ) : null}
@@ -203,20 +213,20 @@ export function DashboardSidebar() {
   return (
     <>
       {/* ---- Mobile: top bar + toggle ---- */}
-      <div className="flex items-center justify-between-[#2c3235] bg-[#181b1f] px-3 py-2 lg:hidden">
+      <div className={`flex items-center justify-between ${grafanaPanel} px-3 py-2 lg:hidden`}>
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
           aria-label="Open navigation"
           aria-expanded={mobileOpen}
           aria-controls="dashboard-sidebar"
-          className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+          className={`flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`}
         >
           <Menu className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
         <span className="flex items-center gap-2">
           <BrandLockup size={22} />
-          <span className="text-sm font-semibold text-[#d8d9da]">Wideo11</span>
+          <span className={`text-sm font-semibold ${grafanaText}`}>Wideo11</span>
         </span>
         {/* Spacer taaki 3-dot menu (right side) ke saath align ho.
             3-dot menu header me hi hai - is bar me nahi, isliye ye
@@ -234,18 +244,18 @@ export function DashboardSidebar() {
           />
           <div
             id="dashboard-sidebar"
-            className="fixed inset-y-0 left-0 z-50 w-64-[#2c3235] bg-[#181b1f] lg:hidden"
+            className={`fixed inset-y-0 left-0 z-50 w-64 ${grafanaPanel} lg:hidden`}
           >
-            <div className="flex items-center justify-between-[#2c3235] px-3 py-2.5">
+            <div className="flex items-center justify-between px-3 py-2.5">
               <span className="flex items-center gap-2">
                 <BrandLockup size={22} />
-                <span className="text-sm font-semibold text-[#d8d9da]">Wideo11</span>
+                <span className={`text-sm font-semibold ${grafanaText}`}>Wideo11</span>
               </span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+                className={`flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`}
               >
                 <X className="h-2.5 w-2.5" aria-hidden="true" />
               </button>
@@ -258,20 +268,20 @@ export function DashboardSidebar() {
       {/* ---- Desktop: fixed rail ---- */}
       <aside
         className={cn(
-          'hidden shrink-0-[#2c3235] bg-[#181b1f] lg:flex lg:flex-col',
+          `hidden shrink-0 ${grafanaPanel} lg:flex lg:flex-col`,
           collapsed ? 'w-16' : 'w-56'
         )}
       >
         {/* Brand */}
         <div
           className={cn(
-            'flex h-14 shrink-0 items-center-[#2c3235]',
+            'flex h-14 shrink-0 items-center',
             collapsed ? 'justify-center px-2' : 'gap-2 px-4'
           )}
         >
           <BrandLockup size={22} />
           {!collapsed ? (
-            <span className="truncate text-sm font-semibold text-[#d8d9da]">
+            <span className={`truncate text-sm font-semibold ${grafanaText}`}>
               Wideo11
             </span>
           ) : null}
@@ -280,7 +290,7 @@ export function DashboardSidebar() {
         {nav}
 
         {/* Collapse toggle - bottom pe, taaki sidebar ke end me dikhe */}
-        <div className="mt-auto-[#2c3235] p-2">
+        <div className="mt-auto p-2">
           <button
             type="button"
             onClick={toggleCollapsed}
@@ -288,8 +298,8 @@ export function DashboardSidebar() {
             aria-controls="dashboard-sidebar-nav"
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors',
-              'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
+              `${grafanaTextMuted} ${productPanelHover}/60 hover:${grafanaText}`,
+              `${grafanaFocusRingVisible}`
             )}
           >
             {collapsed ? (

@@ -167,7 +167,7 @@ export default function ChannelGrid({
   // with no channels, the emptiest possible presentation is the right one.
   if (!channels || channels.length === 0) {
     return (
-      <div className="rounded-2xl-dashed/10 px-8 py-20 text-center">
+      <div className="rounded-md border-dashed/10 px-8 py-20 text-center">
         <p className="text-[13px] uppercase tracking-[0.16em] text-white/30">
           {type ? 'Nothing in this category' : 'No public channels yet'}
         </p>

@@ -46,14 +46,44 @@ export type Fps = (typeof SUPPORTED_FPS)[number];
 export const DEFAULT_FPS: Fps = 30;
 
 /**
+ * The frame rates every plan may use, and the two that only AURA may.
+ *
+ * This is the product rule, stated once: **120 and 240 belong to the AURA
+ * lifetime plan; everything else is capped at 60.** Trial, all three monthly
+ * durations, and the non-AURA lifetime tiers (1 / 5 / 10) see the standard
+ * list — which is why the split is a slice of `SUPPORTED_FPS` rather than a
+ * second list that could drift from it.
+ */
+/** Rates offered on every plan, AURA included. */
+export const STANDARD_FPS = [24, 25, 30, 50, 60] as const;
+/** Rates ONLY the AURA plan offers. */
+export const AURA_ONLY_FPS = [120, 240] as const;
+
+/** The playback speeds every plan may use. */
+export const STANDARD_PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 4] as const;
+
+/**
+ * The micro-step speeds, which only make sense at a high frame rate.
+ *
+ * Below 0.1x a normal-rate timeline is a slideshow — there is nothing between
+ * two frames to look at. At 120 or 240 there is, and that is the entire point
+ * of micro-frame analysis: stepping through a 240fps clip at 0.01x shows one
+ * frame of motion roughly every second and a half.
+ */
+export const MICRO_PLAYBACK_SPEEDS = [0.0001, 0.001, 0.01, 0.05, 0.1] as const;
+
+/**
  * Playback speed dropdown ka shared list (user: "speed ke options bhi add
  * kardo" + micro-steps). Hinglish: 0.0001x se 4x tak — 0.0001x/0.001x/0.01x
  * micro-steps micro-frame analysis ke liye (frame-by-frame dekhna), baaki
- * standard editing speeds. Yahi ek list teeno toolbars + AURA studio use
- * karte hain, taaki consistency rahe.
+ * standard editing speeds.
+ *
+ * This is the AURA set. A non-AURA plan reads `STANDARD_PLAYBACK_SPEEDS`
+ * instead — see `playbackSpeedsFor`, which is what the UI actually calls.
  */
 export const PLAYBACK_SPEEDS = [
-  0.0001, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 4,
+  ...MICRO_PLAYBACK_SPEEDS,
+  ...STANDARD_PLAYBACK_SPEEDS,
 ] as const;
 
 /**
@@ -70,11 +100,87 @@ export function isFps(n: number): n is Fps {
   return (SUPPORTED_FPS as readonly number[]).includes(n);
 }
 
+/**
+ * The frame rates a plan may use, filtered from the master list.
+ *
+ * `maxFps` is the plan's CEILING (auth-service's `max_fps` capability), not a
+ * requested rate. 60 yields the standard five; 240 yields all seven. A ceiling
+ * that arrives unreadable or absurd falls back to 60 rather than to the master
+ * list — the failure direction that hides rates is safe, the one that grants
+ * them is not.
+ */
+export function fpsFor(maxFps: number): Fps[] {
+  const ceiling = Number.isFinite(maxFps) && maxFps > 0 ? Math.floor(maxFps) : 60;
+  return SUPPORTED_FPS.filter((f) => f <= ceiling) as Fps[];
+}
+
+/**
+ * The playback speeds a plan may use.
+ *
+ * AURA at a high frame rate gets the micro-steps as well; everything else gets
+ * the ordinary nine. The two lists are concatenated in the same order the
+ * dropdown used to show, so nothing visibly reorders for an AURA user.
+ */
+export function playbackSpeedsFor(maxFps: number): number[] {
+  const ceiling = Number.isFinite(maxFps) && maxFps > 0 ? Math.floor(maxFps) : 60;
+  if (ceiling >= AURA_ONLY_FPS[0]) {
+    return [...PLAYBACK_SPEEDS];
+  }
+  return [...STANDARD_PLAYBACK_SPEEDS];
+}
+
+/** True when the ceiling unlocks the AURA-only rates and speeds. */
+export function hasHighFrameRates(maxFps: number): boolean {
+  const ceiling = Number.isFinite(maxFps) && maxFps > 0 ? Math.floor(maxFps) : 60;
+  return ceiling >= AURA_ONLY_FPS[0];
+}
+
 /** Nearest supported rate. Used when a saved project declares something else. */
 export function coerceFps(n: number): Fps {
   let best: Fps = DEFAULT_FPS;
   for (const f of SUPPORTED_FPS) {
     if (Math.abs(f - n) < Math.abs(best - n)) best = f;
+  }
+  return best;
+}
+
+/**
+ * Nearest rate a plan may use.
+ *
+ * The one that matters for a RESTORE: a project saved at 240fps on AURA and
+ * reopened on a 60fps plan must land on 60, not on an unrenderable 240 and not
+ * on the nearest legal rate either side of the ceiling. Clamping to the ceiling
+ * and then taking the nearest legal rate below it is both.
+ */
+export function coerceFpsTo(n: number, maxFps: number): Fps {
+  const allowed = fpsFor(maxFps);
+  if (allowed.length === 0) return DEFAULT_FPS;
+  const ceiling = allowed[allowed.length - 1];
+  const clamped = Math.min(Math.max(n, allowed[0]), ceiling);
+  let best = allowed[0];
+  for (const f of allowed) {
+    if (Math.abs(f - clamped) < Math.abs(best - clamped)) best = f;
+  }
+  return best;
+}
+
+/**
+ * Nearest speed a plan may use, and 1 when the value is not usable at all.
+ *
+ * A saved `playbackRate` of 0.0001 restored on a non-AURA plan becomes 1 —
+ * real time — rather than the nearest legal speed. 0.1x would be the nearer
+ * number and the wrong answer: the user is not asking for a slow preview, they
+ * are holding a value from a feature they do not have, and real time is the
+ * state every project is cut at.
+ */
+export function coerceSpeedTo(rate: number, maxFps: number): number {
+  const allowed = playbackSpeedsFor(maxFps);
+  if (allowed.length === 0) return 1;
+  if (allowed.includes(rate)) return rate;
+  if (!hasHighFrameRates(maxFps) && rate < STANDARD_PLAYBACK_SPEEDS[0]) return 1;
+  let best = allowed[0];
+  for (const s of allowed) {
+    if (Math.abs(s - rate) < Math.abs(best - rate)) best = s;
   }
   return best;
 }

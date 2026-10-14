@@ -36,6 +36,20 @@ import { useEffect, useState } from 'react';
 import { FileText, ShieldCheck, X } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 
+import {
+  grafanaAccentControl,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaTextMuted,
+  productPanel,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+  productTextBody,
+  productTextMuted,
+  productTextTertiary,
+} from '@wideo11/ui/design-system';
+
 /**
  * Current T&C version. Jab bhi T&C ka text badle, ye bump karo.
  *
@@ -93,12 +107,12 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
       aria-modal="true"
       aria-labelledby="tc-dialog-title"
     >
-      <div className="w-full max-w-lg rounded-lg border border-[#2c3235] bg-[#16181d] shadow-xl">
+      <div className={`w-full max-w-lg rounded-lg border ${productSeparation} ${productPanel} shadow-xl`}>
         {/* ---- Header ---- */}
-        <div className="flex items-start justify-between border-b border-[#2c3235] p-4">
+        <div className={`flex items-start justify-between border-b ${productSeparation} p-4`}>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-2.5 w-2.5 text-[#5794f2]" />
-            <h2 id="tc-dialog-title" className="text-sm font-semibold text-[#e6e6e6]">
+            <ShieldCheck className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
+            <h2 id="tc-dialog-title" className={`text-sm font-semibold ${productTextBody}`}>
               Channel Terms &amp; Conditions
             </h2>
           </div>
@@ -106,7 +120,7 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
             type="button"
             onClick={onCancel}
             aria-label="Close"
-            className="rounded p-1 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-[#e6e6e6]"
+            className={`rounded p-1 ${productTextMuted} transition-colors ${productPanelHover} hover:${productTextBody}`}
           >
             <X className="h-2.5 w-2.5" />
           </button>
@@ -114,17 +128,17 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
 
         {/* ---- Body ---- */}
         <div className="max-h-[60vh] space-y-4 overflow-y-auto p-4">
-          <p className="text-xs text-[#9fa7b3]">
+          <p className={`text-xs ${grafanaTextMuted}`}>
             Channel banane se pehle in baaton par sehet len a zaroori hai. Ye
             same rules free aur paid dono channel par lagu hote hain.
           </p>
 
           {/* 1. Ads + Earning policy */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               1. Ads &amp; Earning Policy
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Mere chahe Free channel hon ya Paid channel, sabhi par ads
               dikhaye jayenge. Earning sirf unhi channels par hogi jinki active
               paid subscription li gayi hai.
@@ -132,11 +146,11 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
           </section>
 
           {/* 2. Expired subscription */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               2. Expired Subscription
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Agar subscription khatam ho jati hai aur payment nahi hoti, toh
               us dauran hone wali views/activity ki koi earning ya claim mujhe
               nahi milega. Earning sirf payment ke baad se hi dobara active
@@ -145,11 +159,11 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
           </section>
 
           {/* 3. Channel limit */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               3. Channel Limit
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Main ek samay par maximum 3 channels tak manage kar sakta hoon
               aur har channel ke liye alag subscription/minimum balance ka
               niyam lagu hoga.
@@ -170,25 +184,25 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
               ================================================================== */}
 
           {/* 4. Zero tolerance */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               4. Zero-Tolerance Content Policy
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Is platform par adult/NSFW content, illegal drugs ya controlled
               substances, aur terrorist/extremist activity ko promote karne ke
-              liye <strong className="text-[#e6e6e6]">zero-tolerance</strong>{' '}
+              liye <strong className={`${productTextBody}`}>zero-tolerance</strong>{' '}
               policy hai. Aisa koi bhi content upload, share ya promote karna
               sakht mana hai.
             </p>
           </section>
 
           {/* 5. Right to screen */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               5. Right to Screen &amp; Remove
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Meri upload ki gayi kisi bhi content ko platform apni marzi se
               monitor, scan, screen, modify karne, approval rokne ya permanently
               delete karne ka adhikar rakhta hai — bina koi prior notice diye.
@@ -198,11 +212,11 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
           </section>
 
           {/* 6. Account suspension */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               6. Account Suspension &amp; Legal Action
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Content guidelines ki karokram tootne par mera account immedietly
               permanently band kiya ja sakta hai, acche ki earning forfeit ho
               sakti hai, aur meri credentials/device details ko relevant law
@@ -211,11 +225,11 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
           </section>
 
           {/* 7. Liability */}
-          <section className="rounded-md bg-[#0d0f11] p-3">
-            <h3 className="mb-1 text-xs font-semibold text-[#e6e6e6]">
+          <section className={`rounded-md ${productSunken} p-3`}>
+            <h3 className={`mb-1 text-xs font-semibold ${productTextBody}`}>
               7. User Liability &amp; Indemnification
             </h3>
-            <p className="text-xs leading-relaxed text-[#c9d1d9]">
+            <p className={`text-xs leading-relaxed ${productTextTertiary}`}>
               Jo content main upload karta hoon uski poori zimmedari meri hai.
               Platform user-generated content ki kisi bhi legal consequence ke
               liye zimmedaar nahi hai, aur main platform ko is seam me bachane
@@ -228,7 +242,7 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
             href={DETAILED_TC_URL}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 text-xs text-[#5794f2] underline hover:no-underline"
+            className={`flex items-center gap-1.5 text-xs ${grafanaPrimary} underline hover:no-underline`}
           >
             <FileText className="h-2.5 w-2.5" />
             Detailed Terms &amp; Conditions padhein
@@ -236,13 +250,13 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
         </div>
 
         {/* ---- Footer: checkbox + actions ---- */}
-        <div className="space-y-3 border-t border-[#2c3235] p-4">
-          <label className="flex cursor-pointer items-start gap-2 text-xs text-[#c9d1d9]">
+        <div className={`space-y-3 border-t ${productSeparation} p-4`}>
+          <label className={`flex cursor-pointer items-start gap-2 text-xs ${productTextTertiary}`}>
             <input
               type="checkbox"
               checked={accepted}
               onChange={(e) => setAccepted(e.target.checked)}
-              className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#5794f2]"
+              className={`mt-0.5 h-4 w-4 shrink-0 cursor-pointer ${grafanaAccentControl}`}
               data-testid="tc-checkbox"
             />
             <span>
@@ -258,7 +272,7 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
               variant="outline"
               size="sm"
               onClick={onCancel}
-              className="border-[#2c3235] text-[#c9d1d9] hover:bg-[#1f2227]"
+              className={`${productSeparation} ${productTextTertiary} ${productPanelHover}`}
             >
               Cancel
             </Button>
@@ -267,7 +281,7 @@ export function ChannelTermsDialog({ open, onAccept, onCancel }: Props) {
               size="sm"
               disabled={!accepted}
               onClick={onAccept}
-              className="bg-[#5794f2] text-white hover:bg-[#5794f2]/85 disabled:opacity-40"
+              className={`${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85 disabled:opacity-40`}
               data-testid="tc-accept"
             >
               Accept &amp; Continue

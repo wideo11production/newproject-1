@@ -28,6 +28,13 @@
 import { Globe, Cpu, Wallet, type LucideIcon } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 
+import {
+  grafanaBg,
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+} from '@wideo11/ui/design-system';
+
 /**
  * ONBOARDING STEPS - static data.
  *
@@ -80,7 +87,7 @@ const ONBOARDING_STEPS: ReadonlyArray<{
 export function OnboardingStepsRow({ className }: { className?: string }) {
   return (
     <section
-      className={cn('w-full bg-[#181b1f] py-16 sm:py-20', className)}
+      className={cn(`w-full ${grafanaPanel} py-16 sm:py-20`, className)}
       aria-labelledby="onboarding-heading"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -88,11 +95,11 @@ export function OnboardingStepsRow({ className }: { className?: string }) {
         <div className="max-w-2xl">
           <h2
             id="onboarding-heading"
-            className="text-2xl font-bold tracking-tight text-[#d8d9da] sm:text-3xl"
+            className={`text-2xl font-bold tracking-tight ${grafanaText} sm:text-3xl`}
           >
             How it actually works
           </h2>
-          <p className="mt-3 text-sm leading-relaxed text-[#9fa7b3] sm:text-base">
+          <p className={`mt-3 text-sm leading-relaxed ${grafanaTextMuted} sm:text-base`}>
             Three steps from signup to your first settled payout. No paid tools,
             no third-party network - just containers we run ourselves.
           </p>
@@ -121,7 +128,7 @@ export function OnboardingStepsRow({ className }: { className?: string }) {
                     Actually: icon circle me, number neeche as text. Let me do:
                     - Circle with Icon inside
                     - Step number as small label above/beside */}
-                <div className="relative flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[#111217]"
+                <div className={`relative flex h-[52px] w-[52px] items-center justify-center rounded-full ${grafanaBg}`}
                   style={{ borderColor: step.accent }}>
                   {/* Icon - accent color me */}
                   <Icon className="h-6 w-6" style={{ color: step.accent }} aria-hidden="true" />
@@ -137,14 +144,14 @@ export function OnboardingStepsRow({ className }: { className?: string }) {
                 </p>
 
                 {/* ---- STEP TITLE ---- */}
-                <h3 className="mt-1 text-lg font-semibold text-[#d8d9da]">
+                <h3 className={`mt-1 text-lg font-semibold ${grafanaText}`}>
                   {step.title}
                 </h3>
 
                 {/* ---- STEP DESCRIPTION ----
                     Line-clamp-none - full text (important content, truncate
                     nahi karna). Text-sm readable. */}
-                <p className="mt-2 text-sm leading-relaxed text-[#9fa7b3]">
+                <p className={`mt-2 text-sm leading-relaxed ${grafanaTextMuted}`}>
                   {step.description}
                 </p>
               </div>

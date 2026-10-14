@@ -36,6 +36,17 @@ import { qrToSvg } from '@/lib/qr';
 import { usePwaInstall } from '@/lib/use-pwa-install';
 import { Button } from '@wideo11/ui/button';
 
+import {
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 export function InstallPanel({ onClose }: { onClose: () => void }) {
   const { state, install } = usePwaInstall();
   const [copied, setCopied] = useState(false);
@@ -84,26 +95,26 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
       {/* ---- Header ---- */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-[#d8d9da]">Install Wideo11</h2>
-          <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
+          <h2 className={`text-base font-semibold ${grafanaText}`}>Install Wideo11</h2>
+          <p className={`mt-1 text-xs leading-relaxed ${grafanaTextMuted}`}>
             Run it like a native app - no app store needed.
           </p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-md px-2 py-1 text-xs text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+          className={`shrink-0 rounded-md px-2 py-1 text-xs ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`}
         >
           Close
         </button>
       </div>
 
       {/* ---- 1. Install on this device ---- */}
-      <div className="rounded-md bg-[#0d0f11] p-4">
+      <div className={`rounded-md ${productSunken} p-4`}>
         <div className="flex items-start gap-3">
-          <Download className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#5794f2]" aria-hidden="true" />
+          <Download className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${grafanaPrimary}`} aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-[#d8d9da]">Install on this device</p>
+            <p className={`text-sm font-medium ${grafanaText}`}>Install on this device</p>
 
             {state.installed || state.isInstalled ? (
               <p className="mt-1 flex items-center gap-1.5 text-xs text-emerald-400">
@@ -112,25 +123,25 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
               </p>
             ) : state.hasPrompt ? (
               <>
-                <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
+                <p className={`mt-1 text-xs leading-relaxed ${grafanaTextMuted}`}>
                   Add Wideo11 to your home screen or app list.
                 </p>
                 <Button
                   onClick={() => void install()}
-                  className="mt-3 h-9 w-full bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                  className={`mt-3 h-9 w-full ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
                 >
                   Install app
                 </Button>
               </>
             ) : isIOS ? (
               /* iOS me `beforeinstallprompt` nahi hota - alag tarika hai */
-              <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
-                On iPhone: tap <span className="font-medium text-[#d8d9da]">Share</span>{' '}
+              <p className={`mt-1 text-xs leading-relaxed ${grafanaTextMuted}`}>
+                On iPhone: tap <span className={`font-medium ${grafanaText}`}>Share</span>{' '}
                 (the square-with-arrow icon), then{' '}
-                <span className="font-medium text-[#d8d9da]">Add to Home Screen</span>.
+                <span className={`font-medium ${grafanaText}`}>Add to Home Screen</span>.
               </p>
             ) : (
-              <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
+              <p className={`mt-1 text-xs leading-relaxed ${grafanaTextMuted}`}>
                 This browser has not offered install yet. You can still use the
                 QR code below, or install later from your browser menu.
               </p>
@@ -146,12 +157,12 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* ---- 2. QR for phone ---- */}
-      <div className="rounded-md bg-[#0d0f11] p-4">
+      <div className={`rounded-md ${productSunken} p-4`}>
         <div className="flex items-start gap-3">
-          <Smartphone className="mt-0.5 h-2.5 w-2.5 shrink-0 text-[#73bf69]" aria-hidden="true" />
+          <Smartphone className={`mt-0.5 h-2.5 w-2.5 shrink-0 ${grafanaSuccess}`} aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-[#d8d9da]">Open on your phone</p>
-            <p className="mt-1 text-xs leading-relaxed text-[#9fa7b3]">
+            <p className={`text-sm font-medium ${grafanaText}`}>Open on your phone</p>
+            <p className={`mt-1 text-xs leading-relaxed ${grafanaTextMuted}`}>
               Scan with your phone camera to open the same page there.
             </p>
           </div>
@@ -170,14 +181,14 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
 
             {/* Link + copy (QR scan ke bina bhi kaam chal jaye) */}
             <div className="flex w-full items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-md bg-[#181b1f] px-2.5 py-1.5 text-[11px] text-[#9fa7b3]">
+              <code className={`min-w-0 flex-1 truncate rounded-md ${grafanaPanel} px-2.5 py-1.5 text-[11px] ${grafanaTextMuted}`}>
                 {targetUrl}
               </code>
               <Button
                 onClick={copyLink}
                 variant="outline"
                 size="sm"
-                className="h-8 shrink-0-[#2c3235] px-2.5 text-[#d8d9da] hover:bg-[#1f2227]"
+                className={`h-8 shrink-0 px-2.5 ${grafanaText} ${productPanelHover}`}
                 aria-label="Copy link"
               >
                 {copied ? (
@@ -208,11 +219,11 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
             ) : null}
           </div>
         ) : (
-          <p className="mt-3 text-xs text-[#9fa7b3]">Preparing QR code...</p>
+          <p className={`mt-3 text-xs ${grafanaTextMuted}`}>Preparing QR code...</p>
         )}
       </div>
 
-      <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-[#9fa7b3]">
+      <p className={`flex items-start gap-1.5 text-[11px] leading-relaxed ${grafanaTextMuted}`}>
         <ExternalLink className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
         <span>
           Installed apps keep working offline and launch like any other app on

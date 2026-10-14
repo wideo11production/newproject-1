@@ -287,32 +287,59 @@ func TestPermissionMiddlewareIsExported(t *testing.T) {
 // TestSuperadminIsBarredFromCreatorCapabilities pins the separation of duties.
 //
 // `RequirePermission` grants a superadmin a blanket bypass - correctly, for the
-// administrative capabilities. But the superadmin identity is the one that reads
-// every security event, session list and ledger row in the product. An account
-// that both administers the system and acts as an ordinary creator has no
-// separation between the two: its own actions land in the ledger it audits, and a
-// compromised superadmin token gets both the keys and the contents.
+// TestSuperadminDenySetIsCheckedBeforeTheBypass guards the mechanism.
 //
-// The deny set is checked BEFORE the bypass, which is the only ordering that works
-// - checking after means the bypass wins, which is the thing being prevented.
-func TestSuperadminIsBarredFromCreatorCapabilities(t *testing.T) {
+// The deny set used to carry `channel.create`, `channel.edit`, `media.upload` and
+// `project.save`, on a separation-of-duties argument: the superadmin reads every
+// security event, session list and ledger row, so an account that also acts as an
+// ordinary creator has no separation between administering the system and using
+// it.
+//
+// That argument lost to a product fact. The superadmin is also the person who
+// owns and runs this platform's own channel, uploads its cover art, and cuts its
+// own videos in the editor. With the creator capabilities denied that account got
+//
+//	403 forbidden_by_policy "superadmin accounts operate the platform
+//	                      and do not create channels"
+//
+// from POST /channels and from both create-time cover endpoints, which are gated
+// on `channel.create` too. Every other account was unaffected - the `creator`
+// role holds those capabilities - so the only account locked out of creating a
+// channel was the operator's.
+//
+// So the deny set is now empty and the bypass covers every capability. What this
+// test still pins is the MECHANISM, because the mechanism is what a future edit
+// needs to work when the platform grows a second break-glass account: the deny
+// check is still consulted, and it is still consulted BEFORE `c.Next()`.
+//
+// The deny set must be checked BEFORE the bypass, which is the only ordering that
+// works - checking after means the bypass wins, which is the thing being prevented.
+func TestSuperadminDenySetIsCheckedBeforeTheBypass(t *testing.T) {
 	b, err := os.ReadFile("../../internal/handler/rbac.go")
 	if err != nil {
 		t.Fatalf("cannot read rbac.go: %v", err)
 	}
 	clean := stripComments(string(b))
 
-	// The deny set must exist and be non-empty.
+	// The deny set must exist, so a future re-deny has somewhere to go.
 	denyIdx := strings.Index(clean, "SuperadminDeniedPermissions")
 	if denyIdx < 0 {
 		t.Fatal("SuperadminDeniedPermissions does not exist.\n" +
-			"  Without it a superadmin can create channels, so its own content appears in\n" +
-			"  the ledger it audits and the separation of duties is only a convention.")
+			"  Without it there is nowhere to re-deny a capability for a second\n" +
+			"  break-glass account, and the separation-of-duties check has to be\n" +
+			"  rewritten from scratch.")
 	}
 
-	for _, perm := range []string{"PermChannelCreate", "PermChannelEdit", "PermMediaUpload"} {
-		if !strings.Contains(clean, "service."+perm) {
-			t.Errorf("SuperadminDeniedPermissions does not include service.%s", perm)
+	// And it must be empty: the operator's own account must be able to run a
+	// channel. This is the assertion that would have caught the original bug,
+	// which no test saw because every test ran as a normal user.
+	for _, perm := range []string{"PermChannelCreate", "PermChannelEdit", "PermMediaUpload", "PermProjectSave"} {
+		if strings.Contains(clean, "service."+perm) {
+			t.Errorf("SuperadminDeniedPermissions still denies service.%s.\n"+
+				"  That is the 403 the operator's own account hit on POST /channels and\n"+
+				"  on both create-time cover endpoints. The superadmin is the person who\n"+
+				"  runs this platform's channel, so the creator capabilities must not be\n"+
+				"  denied to it.", perm)
 		}
 	}
 
@@ -350,8 +377,8 @@ func TestSuperadminIsBarredFromCreatorCapabilities(t *testing.T) {
 	switch {
 	case denyInBranch < 0:
 		t.Error("the superadmin branch never consults IsSuperAdminDenied.\n" +
-			"  A superadmin can create channels, so its own content lands in the ledger\n" +
-			"  it audits and the separation of duties is only a convention.")
+			"  Re-denying a capability for a second break-glass account would then\n" +
+			"  have no effect at all, silently.")
 	case admitInBranch < 0:
 		t.Error("the superadmin branch never admits, so nothing can use it at all")
 	case denyInBranch > admitInBranch:

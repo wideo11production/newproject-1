@@ -33,6 +33,22 @@ import { Switch } from '@wideo11/ui/switch';
 import { Card } from '@wideo11/ui/card';
 import { cn } from '@wideo11/ui/lib/utils';
 
+import {
+  grafanaBg,
+  grafanaDanger,
+  grafanaDangerBg,
+  grafanaPrimary,
+  grafanaSuccess,
+  grafanaSuccessBg,
+  grafanaText,
+  grafanaTextMuted,
+  productAccentBg,
+  productAccentRing,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Type definitions
 // ---------------------------------------------------------------------------
@@ -198,11 +214,11 @@ export function AuraFramerateView() {
     // Skeleton loader — Movavi style: clean gray blocks.
     return (
       <div className="p-6">
-        <div className="mb-8 h-5 w-64 animate-pulse rounded bg-[#1f2227]" />
-        <div className="mb-6 h-4 w-80 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`mb-8 h-5 w-64 animate-pulse rounded ${productPanelHover}`} />
+        <div className={`mb-6 h-4 w-80 animate-pulse rounded ${productPanelHover}`} />
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-40 animate-pulse rounded-md bg-[#1f2227]" />
+            <div key={i} className={`h-40 animate-pulse rounded-md ${productPanelHover}`} />
           ))}
         </div>
       </div>
@@ -214,8 +230,8 @@ export function AuraFramerateView() {
       {/* Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-[#d8d9da]">AURA Premium Framerate</h1>
-          <p className="mt-1 text-sm text-[#9fa7b3]">
+          <h1 className={`text-2xl font-bold ${grafanaText}`}>AURA Premium Framerate</h1>
+          <p className={`mt-1 text-sm ${grafanaTextMuted}`}>
             120 FPS / 240Hz encoding — licensed lifetime only. Zero discounts permitted.
           </p>
         </div>
@@ -223,7 +239,7 @@ export function AuraFramerateView() {
           variant="ghost"
           size="sm"
           onClick={checkEligibility}
-          className="text-[#9fa7b3] hover:text-[#d8d9da]"
+          className={`${grafanaTextMuted} hover:${grafanaText}`}
         >
           Refresh
         </Button>
@@ -231,32 +247,32 @@ export function AuraFramerateView() {
 
       {/* License status bar — flat, no badges, clean */}
       {eligibility && (
-        <div className="mb-6 rounded-md bg-[#0d0f11]-[#2c3235] px-4 py-3">
+        <div className={`mb-6 rounded-md  px-4 py-3`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FrameIcon className="h-2.5 w-2.5 text-[#5794f2]" />
-              <span className="text-sm text-[#9fa7b3]">
-                License: <span className="font-medium text-[#d8d9da]">{eligibility.license_type || 'none'}</span>
+              <FrameIcon className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
+              <span className={`text-sm ${grafanaTextMuted}`}>
+                License: <span className={`font-medium ${grafanaText}`}>{eligibility.license_type || 'none'}</span>
                 {eligibility.license_active && (
-                  <span className="mx-2 text-[#73bf69]">● Active</span>
+                  <span className={`mx-2 ${grafanaSuccess}`}>● Active</span>
                 )}
                 {!eligibility.license_active && eligibility.license_type !== 'none' && (
-                  <span className="mx-2 text-[#f2495c]">● Inactive</span>
+                  <span className={`mx-2 ${grafanaDanger}`}>● Inactive</span>
                 )}
               </span>
             </div>
             {eligibility.is_eligible && (
-              <Badge className="border-[#73bf69]/30 bg-[#73bf69]/10 text-[#73bf69]">
+              <Badge className={`border/30 ${grafanaSuccessBg}/10 ${grafanaSuccess}`}>
                 PREMIUM UNLOCKED
               </Badge>
             )}
             {!eligibility.is_eligible && eligibility.license_type !== 'none' && eligibility.license_active && (
-              <Badge variant="secondary" className="border-[#2c3235] bg-[#1f2227] text-[#f2495c]">
+              <Badge variant="secondary" className={`${productSeparation} ${productPanelHover} ${grafanaDanger}`}>
                 60 FPS CEILING
               </Badge>
             )}
             {!eligibility.is_eligible && !eligibility.license_active && (
-              <Badge variant="secondary" className="border-[#2c3235] bg-[#1f2227] text-[#9fa7b3]">
+              <Badge variant="secondary" className={`${productSeparation} ${productPanelHover} ${grafanaTextMuted}`}>
                 STANDARD
               </Badge>
             )}
@@ -279,30 +295,30 @@ export function AuraFramerateView() {
             <div
               key={card.tier}
               className={cn(
-                'relative flex flex-col items-center gap-2 rounded-md bg-[#0d0f11] p-4 text-center transition-all',
+                `relative flex flex-col items-center gap-2 rounded-md ${productSunken} p-4 text-center transition-all`,
                 isActive
-                  ? 'border-[#ff6500] ring-2 ring-[#ff6500]/50'
-                  : 'border-[#2c3235] hover:border-[#5794f2]/50',
+                  ? `border ring-2 ${productAccentRing}/50`
+                  : `${productSeparation} hover:${grafanaPrimary}/50`,
                 isBeyondEligibility && 'opacity-40',
               )}
             >
               {card.isPremium && (
-                <div className="absolute -top-2 right-2 rounded-full bg-[#ff6500] px-1.5 py-0.5 text-[8px] font-bold text-white">
+                <div className={`absolute -top-2 right-2 rounded-full ${productAccentBg} px-1.5 py-0.5 text-[8px] font-bold text-white`}>
                   AURA
                 </div>
               )}
-              <span className="text-xs uppercase tracking-widener text-[#9fa7b3]">
+              <span className={`text-xs uppercase tracking-widener ${grafanaTextMuted}`}>
                 {card.label}
               </span>
-              <span className="text-2xl font-bold text-[#d8d9da]">{card.fps}</span>
-              <span className="text-[10px] text-[#9fa7b3]">FPS · {card.refresh}</span>
+              <span className={`text-2xl font-bold ${grafanaText}`}>{card.fps}</span>
+              <span className={`text-[10px] ${grafanaTextMuted}`}>FPS · {card.refresh}</span>
               {isLocked && (
-                <div className="absolute inset-0 flex items-center justify-center rounded-md bg-[#0d0f11]/80">
-                  <span className="text-xs text-[#9fa7b3]">License required</span>
+                <div className={`absolute inset-0 flex items-center justify-center rounded-md ${productSunken}/80`}>
+                  <span className={`text-xs ${grafanaTextMuted}`}>License required</span>
                 </div>
               )}
               {isActive && (
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-[#ff6500] p-0.5">
+                <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full ${productAccentBg} p-0.5`}>
                   <Check className="h-2.5 w-2.5 text-white" />
                 </div>
               )}
@@ -312,13 +328,13 @@ export function AuraFramerateView() {
       </div>
 
       {/* 240Hz refresh optimization toggle — clean, flat */}
-      <div className="mb-8 rounded-md bg-[#0d0f11] p-4">
+      <div className={`mb-8 rounded-md ${productSunken} p-4`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Monitor className="h-2.5 w-2.5 text-[#5794f2]" />
+            <Monitor className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
             <div>
-              <h3 className="text-sm font-semibold text-[#d8d9da]">240Hz Display Optimization</h3>
-              <p className="text-xs text-[#9fa7b3]">
+              <h3 className={`text-sm font-semibold ${grafanaText}`}>240Hz Display Optimization</h3>
+              <p className={`text-xs ${grafanaTextMuted}`}>
                 Enables 240 FPS encoding path for 240Hz displays (lifetime license required).
               </p>
             </div>
@@ -327,7 +343,7 @@ export function AuraFramerateView() {
             checked={eligibility ? eligibility.display_refresh === 240 : false}
             disabled={!eligibility?.is_eligible}
             className={cn(
-              'data-[state=checked]:bg-[#ff6500]',
+              `data-[state=checked]:${productAccentBg}`,
               !eligibility?.is_eligible && 'opacity-50',
             )}
             onCheckedChange={(checked) => {
@@ -341,21 +357,21 @@ export function AuraFramerateView() {
       </div>
 
       {/* Project application — flat input */}
-      <div className="mb-6 rounded-md bg-[#0d0f11] p-4">
-        <h3 className="mb-3 text-sm font-semibold text-[#d8d9da]">Apply to Project</h3>
+      <div className={`mb-6 rounded-md ${productSunken} p-4`}>
+        <h3 className={`mb-3 text-sm font-semibold ${grafanaText}`}>Apply to Project</h3>
         <div className="flex gap-3">
           <input
             type="text"
             value={projectUuid}
             onChange={(e) => setProjectUuid(e.target.value)}
             placeholder="Project UUID"
-            className="flex-1 rounded-md bg-[#111217] px-3 py-2 text-sm text-[#d8d9da] placeholder-[#9fa7b3]/50 focus:border-[#ff6500] focus:outline-none"
+            className={`flex-1 rounded-md ${grafanaBg} px-3 py-2 text-sm ${grafanaText} placeholder:${grafanaTextMuted}/50 focus:border focus:outline-none`}
           />
           <Button
             size="sm"
             onClick={applyToProject}
             disabled={applying || !projectUuid.trim()}
-            className="bg-[#ff6500] text-white hover:bg-[#ff6500]/85"
+            className={`${productAccentBg} text-white hover:${productAccentBg}/85`}
           >
             {applying ? 'Applying...' : 'Apply'}
           </Button>
@@ -364,26 +380,26 @@ export function AuraFramerateView() {
 
       {/* Active profile display — minimal */}
       {profile && (
-        <div className="rounded-md bg-[#0d0f11] p-4">
-          <h3 className="mb-3 text-sm font-semibold text-[#d8d9da]">
-            Active Profile: <span className="text-[#5794f2]">{projectUuid || '—'}</span>
+        <div className={`rounded-md ${productSunken} p-4`}>
+          <h3 className={`mb-3 text-sm font-semibold ${grafanaText}`}>
+            Active Profile: <span className={`${grafanaPrimary}`}>{projectUuid || '—'}</span>
           </h3>
           <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div>
-              <span className="text-xs uppercase tracking-wide text-[#9fa7b3]">Tier</span>
-              <p className="font-medium text-[#d8d9da]">{profile.tier}</p>
+              <span className={`text-xs uppercase tracking-wide ${grafanaTextMuted}`}>Tier</span>
+              <p className={`font-medium ${grafanaText}`}>{profile.tier}</p>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-[#9fa7b3]">FPS</span>
-              <p className="font-medium text-[#d8d9da]">{profile.effective_fps}</p>
+              <span className={`text-xs uppercase tracking-wide ${grafanaTextMuted}`}>FPS</span>
+              <p className={`font-medium ${grafanaText}`}>{profile.effective_fps}</p>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-[#9fa7b3]">Display</span>
-              <p className="font-medium text-[#d8d9da]">{profile.display_refresh}Hz</p>
+              <span className={`text-xs uppercase tracking-wide ${grafanaTextMuted}`}>Display</span>
+              <p className={`font-medium ${grafanaText}`}>{profile.display_refresh}Hz</p>
             </div>
             <div>
-              <span className="text-xs uppercase tracking-wide text-[#9fa7b3]">Mode</span>
-              <p className="font-medium text-[#d8d9da]">
+              <span className={`text-xs uppercase tracking-wide ${grafanaTextMuted}`}>Mode</span>
+              <p className={`font-medium ${grafanaText}`}>
                 {profile.auto_activated ? 'Auto' : profile.manual_override ? 'Override' : 'Default'}
               </p>
             </div>
@@ -393,9 +409,9 @@ export function AuraFramerateView() {
 
       {/* Error boundary — minimal visual clutter */}
       {error && (
-        <div className="mt-4 flex items-center gap-2 rounded-md bg-[#f2495c]/10-[#f2495c]/30 px-3 py-2">
-          <FrameIcon className="h-2.5 w-2.5 text-[#f2495c]" />
-          <span className="text-xs text-[#f2495c]">{error}</span>
+        <div className={`mt-4 flex items-center gap-2 rounded-md /30 px-3 py-2`}>
+          <FrameIcon className={`h-2.5 w-2.5 ${grafanaDanger}`} />
+          <span className={`text-xs ${grafanaDanger}`}>{error}</span>
         </div>
       )}
     </div>

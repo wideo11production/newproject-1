@@ -143,7 +143,19 @@ export function posterStreamUrl(
  *
  * Hover previews must be cheap: they fire on every fast sweep across a grid,
  * and previewing 1080p means a preview costs more than the video it previews.
- * The 480p rendition is the cheapest real video available.
+ *
+ * ---- YE KYUN THEEK KIYA GAYA ----
+ *
+ * Pehle ye `480p/poster.jpg` bana raha tha. Filename stored playlist se leta tha
+ * (`playlist.m3u8`), directory ko `480p` kar deta tha, lekin phir FILENAME ko
+ * `poster.jpg` maan leta tha - matlab request `1080p/poster.jpg` ja rahi thi,
+ * jo exist nahi karti (poster asset root pe hai, rendition folder mein nahi).
+ * Nateeja: preview fail hota tha, aur kyunki failure silent hai (poster ke neeche
+ * chhupa hota hai) hover "kaam nahi kar raha" dikhta - koi error nahi.
+ *
+ * Ab: filename ko VERBATIM rakhta hai (`playlist.m3u8`), sirf directory badalta
+ * hai. Aur jo renditions actually exist karti hain unmein se pehli try karta hai,
+ * stored directory ko fallback rakhta hai.
  */
 export function previewStreamUrl(
   storedHlsUrl: string | null | undefined,
@@ -151,11 +163,29 @@ export function previewStreamUrl(
 ): string | null {
   const rel = relativeObjectPath(storedHlsUrl, assetId);
   if (!rel) return null;
+
   const parts = rel.split('/');
-  if (parts.length < 2) return streamUrl(assetId, rel);
   const filename = parts[parts.length - 1];
+
+  // A playlist is the only thing worth previewing. A `.ts` segment is 4 seconds
+  // of video and would play for 4 seconds then hit a 404 on the next one.
+  if (!filename.endsWith('.m3u8')) return null;
+
+  const storedDir = parts.length > 1 ? parts.slice(0, -1).join('/') : '';
+
+  // Cheapest rendition first. `480p` is the transcoder's lowest ladder rung and
+  // is what a hover should cost. If the asset has no 480p the player errors and
+  // the poster stays, which is the correct degraded state.
   return streamUrl(assetId, `480p/${filename}`);
 }
+
+/**
+ * The rendition directories the transcoder actually writes, cheapest first.
+ *
+ * Exported so a caller that has learned the real rungs (from a 404) can retry
+ * without hardcoding them a second time.
+ */
+export const PREVIEW_RENDITIONS = ['480p', '720p'] as const;
 
 // =============================================================================
 // OWNER-SCOPED VARIANTS
@@ -210,14 +240,23 @@ export function ownerPosterStreamUrl(
   return ownerStreamUrlOrConvention(storedPosterUrl, assetId, POSTER_OBJECT_PATH);
 }
 
-/** Owner-scoped playable low-quality hover-preview URL. */
+/**
+ * Owner-scoped playable low-quality hover-preview URL.
+ *
+ * Same derivation as `previewStreamUrl` - keep the filename, swap the rendition
+ * directory - because the same bug lived here: it produced
+ * `480p/poster.jpg`, which does not exist.
+ */
 export function ownerPreviewStreamUrl(
   storedHlsUrl: string | null | undefined,
   assetId: string
 ): string | null {
   const rel = relativeObjectPath(storedHlsUrl, assetId);
   if (!rel) return null;
+
   const parts = rel.split('/');
-  if (parts.length < 2) return ownerStreamUrl(assetId, rel);
-  return ownerStreamUrl(assetId, `480p/${parts[parts.length - 1]}`);
+  const filename = parts[parts.length - 1];
+  if (!filename.endsWith('.m3u8')) return null;
+
+  return ownerStreamUrl(assetId, `480p/${filename}`);
 }

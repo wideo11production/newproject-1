@@ -52,6 +52,17 @@ import type { HeroSlide } from '@/lib/landing/ad-pool';
 // iske bina hi chalta hai, isliye hum dono path support karte hain.
 import Hls from 'hls.js';
 
+import {
+  grafanaBg,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productDot,
+  productDotActive,
+  productMastheadFade,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 /** Autoplay interval per slide (ms) */
 const AUTOPLAY_MS = 7000;
 
@@ -354,7 +365,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
                   Bottom-left aligned - Prime Video style. Text ke neeche
                   gradient scrim taaki white text readable rahe. */}
               <div className="absolute inset-0 flex items-end">
-                <div className="w-full bg-gradient-to-t from-[#111217] via-[#111217]/80 to-transparent px-6 pb-12 pt-24 sm:px-10 lg:px-16">
+                <div className={`w-full ${productMastheadFade} px-6 pb-12 pt-24 sm:px-10 lg:px-16`}>
                   <div className="flex items-end gap-4">
                     {/* Character - manifest-locked vector. `decorative`
                         true kyunki adjacent text already naam bata deta hai
@@ -368,11 +379,11 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
 
                     <div className="min-w-0">
                       {/* Slide title */}
-                      <h2 className="text-2xl font-bold tracking-tight text-[#d8d9da] sm:text-3xl lg:text-4xl">
+                      <h2 className={`text-2xl font-bold tracking-tight ${grafanaText} sm:text-3xl lg:text-4xl`}>
                         {slide.title}
                       </h2>
                       {/* Slide subtitle - line-clamp-2 to long text control */}
-                      <p className="mt-2 line-clamp-2 max-w-2xl text-sm leading-relaxed text-[#9fa7b3] sm:text-base">
+                      <p className={`mt-2 line-clamp-2 max-w-2xl text-sm leading-relaxed ${grafanaTextMuted} sm:text-base`}>
                         {slide.subtitle}
                       </p>
 
@@ -400,7 +411,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
                           href={
                             session.state === 'ready' ? '/dashboard' : (slide.ctaHref ?? '/dashboard')
                           }
-                          className="mt-5 inline-flex items-center gap-2 rounded-md bg-[#5794f2] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#5794f2]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+                          className={`mt-5 inline-flex items-center gap-2 rounded-md ${grafanaPrimaryBg} px-5 py-2.5 text-sm font-semibold text-white transition-colors ${grafanaPrimaryBg}/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
                         >
                           <Play className="h-2.5 w-2.5" aria-hidden="true" />
                           {session.state === 'ready'
@@ -420,13 +431,13 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
       {/* ---- CONTROLS (bottom center) ----
           Prev/Next arrows + dot indicators + play/pause toggle.
           Keyboard accessible (buttons, aria-labels). */}
-      <div className="absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full bg-[#111217]/80 px-3 py-1.5 backdrop-blur">
+      <div className={`absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-3 rounded-full ${grafanaBg}/80 px-3 py-1.5 backdrop-blur`}>
         {/* Prev button */}
         <button
           type="button"
           onClick={goPrev}
           aria-label="Previous slide"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
         >
           <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
@@ -445,8 +456,8 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
               className={cn(
                 'h-1.5 rounded-full transition-all',
                 idx === activeIndex
-                  ? 'w-6 bg-[#5794f2]'
-                  : 'w-1.5 bg-[#9fa7b3]/50 hover:bg-[#9fa7b3]'
+                  ? `w-6 ${grafanaPrimaryBg}`
+                  : `w-1.5 ${productDot} ${productDotActive}`
               )}
             />
           ))}
@@ -457,7 +468,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
           type="button"
           onClick={goNext}
           aria-label="Next slide"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
         >
           <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
         </button>
@@ -467,7 +478,7 @@ export default function HeroCarousel({ slides, className }: HeroCarouselProps) {
           type="button"
           onClick={() => setIsPaused((p) => !p)}
           aria-label={isPaused ? 'Resume autoplay' : 'Pause autoplay'}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+          className={`flex h-8 w-8 items-center justify-center rounded-full ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
         >
           {isPaused ? (
             <Play className="h-2.5 w-2.5" aria-hidden="true" />

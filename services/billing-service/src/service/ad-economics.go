@@ -204,10 +204,13 @@ func CalculateCampaignEconomics(c *AdCampaign) *CampaignEconomics {
 type PlanTier string
 
 const (
-	TierQuarterly PlanTier = "quarterly" // 3 months
-	TierBiannual  PlanTier = "biannual"  // 6 months
-	TierAnnual    PlanTier = "annual"    // 12 months
-	TierLifetime  PlanTier = "lifetime"  // one-time
+	TierQuarterly      PlanTier = "quarterly"       // 3 months
+	TierBiannual       PlanTier = "biannual"        // 6 months
+	TierAnnual         PlanTier = "annual"          // 12 months
+	TierLifetime       PlanTier = "lifetime"        // one-time single user
+	TierLifetimeGroup5 PlanTier = "lifetime_group5" // one-time group of 5
+	TierLifetimeGroup10 PlanTier = "lifetime_group10" // one-time group of 10
+	TierLifetimeAURA   PlanTier = "lifetime_aura"   // one-time single + AURA
 )
 
 // Region - kaun sa plan group (currency ke hisaab se)
@@ -237,25 +240,65 @@ type Plan struct {
 
 // PlanPriceTable - region aur tier ke hisaab se pricing
 //
-// Aapke diye gaye numbers:
-//   India: 300/3mo, 500/6mo, 1000/12mo, min balance 1000
-//   High:  $150/3mo,  $250/6mo,  $500/12mo,  min balance 1000
-//   Low:   450/3mo,   750/6mo,   1500/12mo, min balance 3000
+// VIDEO EDITOR PLANS (7 tiers):
+//   Monthly: 3mo, 6mo, 12mo
+//   Lifetime: single, group5, group10, single_aura
+//
+// India (INR) pricing:
+//   Quarterly:     999  (3 months)
+//   Biannual:      1799 (6 months) 
+//   Annual:        2999 (12 months)
+//   Lifetime:      7999 (single)
+//   Lifetime G5:   19999 (group of 5)
+//   Lifetime G10:  34999 (group of 10)
+//   Lifetime AURA: 12999 (single + AURA)
+//
+// High (USD) pricing:
+//   Quarterly:     $29  (3 months)
+//   Biannual:      $49  (6 months)
+//   Annual:        $79  (12 months)
+//   Lifetime:      $199 (single)
+//   Lifetime G5:   $499 (group of 5)
+//   Lifetime G10:  $899 (group of 10)
+//   Lifetime AURA: $299 (single + AURA)
+//
+// Low (LOCAL) pricing:
+//   Quarterly:     1499 (3 months)
+//   Biannual:      2699 (6 months)
+//   Annual:        4499 (12 months)
+//   Lifetime:      11999 (single)
+//   Lifetime G5:   29999 (group of 5)
+//   Lifetime G10:  52999 (group of 10)
+//   Lifetime AURA: 18999 (single + AURA)
+//
+// Min balance: India=1000, High=1000, Low=3000 (same as before)
 var PlanPriceTable = map[Region]map[PlanTier]*Plan{
 	RegionIndia: {
-		TierQuarterly: {Tier: TierQuarterly, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(300), Days: 90, MinBalance: decimal.NewFromInt(1000)},
-		TierBiannual:  {Tier: TierBiannual, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(500), Days: 180, MinBalance: decimal.NewFromInt(1000)},
-		TierAnnual:    {Tier: TierAnnual, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(1000), Days: 365, MinBalance: decimal.NewFromInt(1000)},
+		TierQuarterly:       {Tier: TierQuarterly, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(999), Days: 90, MinBalance: decimal.NewFromInt(1000)},
+		TierBiannual:        {Tier: TierBiannual, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(1799), Days: 180, MinBalance: decimal.NewFromInt(1000)},
+		TierAnnual:          {Tier: TierAnnual, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(2999), Days: 365, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetime:        {Tier: TierLifetime, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(7999), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeGroup5:  {Tier: TierLifetimeGroup5, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(19999), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeGroup10: {Tier: TierLifetimeGroup10, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(34999), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeAURA:    {Tier: TierLifetimeAURA, Region: RegionIndia, Currency: "INR", Price: decimal.NewFromInt(12999), Days: 0, MinBalance: decimal.NewFromInt(1000)},
 	},
 	RegionHigh: {
-		TierQuarterly: {Tier: TierQuarterly, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(150), Days: 90, MinBalance: decimal.NewFromInt(1000)},
-		TierBiannual:  {Tier: TierBiannual, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(250), Days: 180, MinBalance: decimal.NewFromInt(1000)},
-		TierAnnual:    {Tier: TierAnnual, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(500), Days: 365, MinBalance: decimal.NewFromInt(1000)},
+		TierQuarterly:       {Tier: TierQuarterly, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(29), Days: 90, MinBalance: decimal.NewFromInt(1000)},
+		TierBiannual:        {Tier: TierBiannual, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(49), Days: 180, MinBalance: decimal.NewFromInt(1000)},
+		TierAnnual:          {Tier: TierAnnual, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(79), Days: 365, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetime:        {Tier: TierLifetime, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(199), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeGroup5:  {Tier: TierLifetimeGroup5, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(499), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeGroup10: {Tier: TierLifetimeGroup10, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(899), Days: 0, MinBalance: decimal.NewFromInt(1000)},
+		TierLifetimeAURA:    {Tier: TierLifetimeAURA, Region: RegionHigh, Currency: "USD", Price: decimal.NewFromInt(299), Days: 0, MinBalance: decimal.NewFromInt(1000)},
 	},
 	RegionLow: {
-		TierQuarterly: {Tier: TierQuarterly, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(450), Days: 90, MinBalance: decimal.NewFromInt(3000)},
-		TierBiannual:  {Tier: TierBiannual, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(750), Days: 180, MinBalance: decimal.NewFromInt(3000)},
-		TierAnnual:    {Tier: TierAnnual, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(1500), Days: 365, MinBalance: decimal.NewFromInt(3000)},
+		TierQuarterly:       {Tier: TierQuarterly, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(1499), Days: 90, MinBalance: decimal.NewFromInt(3000)},
+		TierBiannual:        {Tier: TierBiannual, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(2699), Days: 180, MinBalance: decimal.NewFromInt(3000)},
+		TierAnnual:          {Tier: TierAnnual, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(4499), Days: 365, MinBalance: decimal.NewFromInt(3000)},
+		TierLifetime:        {Tier: TierLifetime, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(11999), Days: 0, MinBalance: decimal.NewFromInt(3000)},
+		TierLifetimeGroup5:  {Tier: TierLifetimeGroup5, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(29999), Days: 0, MinBalance: decimal.NewFromInt(3000)},
+		TierLifetimeGroup10: {Tier: TierLifetimeGroup10, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(52999), Days: 0, MinBalance: decimal.NewFromInt(3000)},
+		TierLifetimeAURA:    {Tier: TierLifetimeAURA, Region: RegionLow, Currency: "LOCAL", Price: decimal.NewFromInt(18999), Days: 0, MinBalance: decimal.NewFromInt(3000)},
 	},
 }
 

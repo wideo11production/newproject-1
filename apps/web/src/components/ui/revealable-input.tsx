@@ -66,6 +66,11 @@
 import { useId, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
+import {
+  grafanaText,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 export interface RevealableInputProps
   extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value' | 'onChange'> {
   value: string;
@@ -110,7 +115,7 @@ export function RevealableInput({
         aria-label={shown ? hideLabel : revealLabel}
         aria-pressed={shown}
         title={shown ? hideLabel : revealLabel}
-        className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[#6b7280] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus:outline-none focus:ring-2 focus:ring-[#5794f2]"
+        className={`absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-gray-500 transition-colors ${productPanelHover} hover:${grafanaText} focus:outline-none focus:ring-2 focus:ring-[#5794f2]`}
       >
         {shown ? (
           <EyeOff className="h-2.5 w-2.5" aria-hidden="true" />

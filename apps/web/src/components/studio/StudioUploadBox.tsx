@@ -31,6 +31,16 @@
 import { useCallback, useRef, useState } from 'react';
 import { UploadCloud } from 'lucide-react';
 
+import {
+  productAccent,
+  productDashedDropzone,
+  productDropzoneActive,
+  productDropzoneHover,
+  productPanel,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 interface StudioUploadBoxProps {
   onFiles?: (files: File[]) => void;
   /** Rendered in place of the default copy when a caller owns the text. */
@@ -95,21 +105,21 @@ export function StudioUploadBox({
       data-dragging={dragging ? 'true' : 'false'}
       className={`group relative w-full cursor-pointer rounded-2xl px-6 py-10 text-center transition-all duration-200 sm:py-14 ${
         dragging
-          ? 'border-2 border-solid border-[#ff6500] bg-[#ff6500]/[0.06]'
-          : 'border-2 border-dashed border-[#3a4045] bg-[#0d0f11] hover:border-[#ff6500]/60 hover:bg-[#16181d]'
+          ? `${productDropzoneActive}`
+          : `${productDashedDropzone} ${productSunken} ${productDropzoneHover} hover:${productPanel}`
       } ${accepting ? '' : 'pointer-events-none opacity-50'}`}
     >
       {/* The icon is the only saturated element in the box, so the eye lands on
           it before it lands on the text. */}
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#16181d] shadow-md shadow-black/30 transition-transform duration-200 group-hover:scale-105">
+      <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${productPanel} shadow-md shadow-black/30 transition-transform duration-200 group-hover:scale-105`}>
         <UploadCloud
-          className={`h-6 w-6 transition-colors ${dragging ? 'text-[#ff6500]' : 'text-[#8b949e] group-hover:text-[#ff6500]'}`}
+          className={`h-6 w-6 transition-colors ${dragging ? `${productAccent}` : `${productTextMuted} group-${productAccent}`}`}
           aria-hidden="true"
         />
       </div>
 
       <p className="text-sm font-medium text-white sm:text-base">{title}</p>
-      <p className="mx-auto mt-1.5 max-w-md text-xs text-[#8b949e]">{hint}</p>
+      <p className={`mx-auto mt-1.5 max-w-md text-xs ${productTextMuted}`}>{hint}</p>
 
       <input
         ref={inputRef}

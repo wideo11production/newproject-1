@@ -561,6 +561,7 @@ var knownCapabilities = []string{
 	config.CapMaxChannels,
 	config.CapMinBalance,
 	config.CapMonetization,
+	config.CapMaxFps,
 }
 
 var _ = strconv.Itoa

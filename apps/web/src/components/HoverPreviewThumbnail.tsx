@@ -41,6 +41,13 @@ import { Play, Music, Film, Video as VideoIcon } from 'lucide-react';
 import { PreviewVideo } from './PreviewVideo';
 import { formatDuration } from '@/lib/media-upload';
 
+import {
+  productPanel,
+  productPanelHover,
+  productSunken,
+  productTextBody,
+} from '@wideo11/ui/design-system';
+
 type MediaKind = 'video' | 'reel' | 'audio';
 
 interface HoverPreviewThumbnailProps {
@@ -60,6 +67,14 @@ interface HoverPreviewThumbnailProps {
   onOpen?: () => void;
   onHoverChange?: (hovering: boolean) => void;
   badge?: React.ReactNode;
+  /**
+   * Whether to render a play button OVER the frame.
+   *
+   * Default false: the play action lives in the row below with Go Live and
+   * Delete, so a button on the picture would be a second, competing target that
+   * also covers the hover preview.
+   */
+  showPlayOverlay?: boolean;
   /**
    * Whether to render this component's own caption under the frame.
    *
@@ -115,6 +130,7 @@ export function HoverPreviewThumbnail({
   onOpen,
   onHoverChange,
   badge,
+  showPlayOverlay = false,
   showCaption = true,
 }: HoverPreviewThumbnailProps) {
   const [hovering, setHovering] = useState(false);
@@ -213,14 +229,31 @@ export function HoverPreviewThumbnail({
     onOpen?.();
   };
 
-  const handlePreviewError = () => {
+  const handlePreviewError = useCallback(() => {
+    // ---- YE ASLI FIX HAI ----
+    //
+    // Pehle sirf `previewFailed` set hota tha. Lekin poster is liye chhupa hota
+    // hai kyunki `previewing` TRUE hai — aur error ke baad bhi true rehta tha.
+    // Nateeja: poster gayab, preview video bhi failed, aur thumbnail BLANK.
+    //
+    // Ye exactly woh bug hai jo report hua: "hover karne par thumbnail blank ho
+    // jaata hai".
+    //
+    // Kyun fail hota hai: preview URL `480p/playlist.m3u8` hai. Har asset ke paas
+    // har rendition nahi hota (chhote clips 480p skip ho sakte hain), aur ek 404
+    // yahan tak pahuncha deta hai.
+    //
+    // `previewing` false karne se preview unmount ho jaata hai aur poster WAPAS
+    // aa jaata hai — yaani ek missing rendition se poora card nahi toota.
     setPreviewFailed(true);
-    stopPreview();
-  };
+    setPreviewing(false);
+    setHovering(false);
+    onHoverChange?.(false);
+  }, [onHoverChange]);
 
   return (
     <article
-      className={`group relative cursor-pointer overflow-hidden rounded-md bg-[#16181d] transition-colors hover:bg-[#1f2227] ${className}`}
+      className={`group relative cursor-pointer overflow-hidden rounded-md ${productPanel} transition-colors ${productPanelHover} ${className}`}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
       onClick={handleClick}
@@ -231,21 +264,26 @@ export function HoverPreviewThumbnail({
           none, so the parent's box wins and the frame is absolutely positioned to
           it instead. */}
       <div className={aspectClass ? `relative w-full ${aspectClass}` : 'absolute inset-0'}>
-        {/* poster */}
+        {/* poster - stays VISIBLE under the preview rather than fading out.
+            The preview layer is stacked on top with `object-cover`, so a loading
+            or failed preview shows the poster through instead of a blank frame.
+            Fading the poster out on hover is what made cards go blank. */}
         {showPoster ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={poster ?? ''}
+            // NOT `poster ?? ''`. An empty string resolves to the page URL, so
+            // the browser requests the page itself as an image and logs a 404 -
+            // the exact "Failed to load resource: 404" this was producing.
+            // `poster!` is safe because `showPoster` already proved it non-null.
+            src={poster as string}
             alt=""
             loading="lazy"
             decoding="async"
             onError={() => setPosterFailed(true)}
-            className={`absolute inset-0 h-full w-full object-cover transition-all duration-300 ${
-              previewing ? 'scale-105 opacity-0' : 'scale-100 opacity-100'
-            }`}
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0d0f11] text-[#4a5055]">
+          <div className="absolute inset-0 flex items-center justify-center ${productSunken} ${productIconMuted}">
             {kindIcon(kind)}
           </div>
         )}
@@ -261,37 +299,45 @@ export function HoverPreviewThumbnail({
           <PreviewVideo
             src={previewUrl}
             onError={handlePreviewError}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
-              previewing ? 'opacity-100' : 'opacity-0'
-            }`}
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : null}
 
         {/* duration */}
         {durationSeconds > 0 ? (
-          <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/80 px-1 font-mono text-[10px] text-white">
+          <span className={`pointer-events-none absolute bottom-1 right-1 rounded ${productSunken} px-1 font-mono text-[10px] ${productTextBody}`}>
             {formatDuration(durationSeconds)}
           </span>
         ) : null}
 
         {badge ? <div className="absolute left-2 top-2 z-10">{badge}</div> : null}
 
-        {/* hover overlay */}
-        <div
-          className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-opacity duration-200 ${
-            hovering ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          <button
-            type="button"
-            data-hover-play=""
-            className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-[#0d0f11] shadow-lg transition-transform duration-150 hover:scale-110"
-            aria-label={`Play ${filename}`}
-            title="Play here"
+        {/* ---- the action overlay ----
+            OFF by default. A play button sitting in the middle of the thumbnail
+            was two problems at once: it covered the frame the hover preview is
+            playing inside, and it competed with the real controls in the row
+            below. The play action belongs where "Go Live" and "Delete" are, so
+            all three are one row instead of one on the picture and two under it.
+
+            Still available for callers that genuinely want a full-bleed play
+            target (a hero, a spotlight) - they pass `showPlayOverlay`. */}
+        {showPlayOverlay ? (
+          <div
+            className={`pointer-events-none absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-opacity duration-200 ${
+              hovering ? 'opacity-100' : 'opacity-0'
+            }`}
           >
-            <Play className="ml-0.5 h-4 w-4" />
-          </button>
-        </div>
+            <button
+              type="button"
+              data-hover-play=""
+              className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/90 ${productSunken} shadow-lg transition-transform duration-150 hover:scale-110"
+              aria-label={`Play ${filename}`}
+              title="Play here"
+            >
+              <Play className="ml-0.5 h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
 
         {/* kind chip - hidden while previewing so the frame is clean video */}
         <span

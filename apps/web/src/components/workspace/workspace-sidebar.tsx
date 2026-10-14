@@ -32,10 +32,10 @@
  * Hinglish comments: har block ka full arth.
  *
  * BORDERLESS DESIGN: Ye sidebar hard borders se hai azad - visual separation
- * bg color contrast se hota hai (bg-[#181b1f] sidebar, bg-[#1a1a1a] separators).
+ * bg color contrast se hota hai (${grafanaPanel} sidebar, ${surfaceRaised} separators).
  * Koi bhi/border-b/border-t class nahi hai. Saare interactive elements
  * rounded-md geometry pe hain aur 150ms color transitions use karte hain.
- * Active/hover states bg-[#1f2227] ya orange-red (#ff6500) se hote hain,
+ * Active/hover states ${productPanelHover} ya orange-red (#ff6500) se hote hain,
  * koi ring/border nahi.
  */
 
@@ -59,6 +59,18 @@ import {
 } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 import { BrandCharacterAnimation } from '@/components/brand-character-animation';
+
+import {
+  grafanaFocusRingVisible,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productAccent,
+  productPanelHover,
+  surfaceRaised,
+} from '@wideo11/ui/design-system';
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded view components — sabhi separately chunk hote hain.
@@ -207,11 +219,11 @@ const TAB_VIEWS: Record<Exclude<WorkspaceTab['id'], 'editor'>, React.LazyExoticC
 function ViewSkeleton() {
   return (
     <div className="flex flex-col gap-4 p-6">
-      <div className="h-8 w-48 animate-pulse rounded bg-[#1f2227]" />
+      <div className={`h-8 w-48 animate-pulse rounded ${productPanelHover}`} />
       <div className="space-y-3">
-        <div className="h-4 w-full max-w-3xl animate-pulse rounded bg-[#1f2227]" />
-        <div className="h-4 w-full max-w-2xl animate-pulse rounded bg-[#1f2227]" />
-        <div className="h-4 w-full max-w-xl animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-4 w-full max-w-3xl animate-pulse rounded ${productPanelHover}`} />
+        <div className={`h-4 w-full max-w-2xl animate-pulse rounded ${productPanelHover}`} />
+        <div className={`h-4 w-full max-w-xl animate-pulse rounded ${productPanelHover}`} />
       </div>
     </div>
   );
@@ -298,7 +310,7 @@ export function WorkspaceSidebar({
       // External — handled by new tab on click.
       return (
         <div className="p-6">
-          <p className="text-[#9fa7b3]">
+          <p className={`${grafanaTextMuted}`}>
             The WideoCut Editor opens in a new tab. Use the sidebar button to launch it.
           </p>
         </div>
@@ -339,14 +351,14 @@ export function WorkspaceSidebar({
             title={collapsed ? tab.label : undefined}
             className={cn(
               'group flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition-all',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50',
+              `${grafanaFocusRingVisible}`,
               active
-                ? 'bg-[#1f2227] text-[#d8d9da] shadow-inner'
-                : 'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]'
+                ? `${productPanelHover} ${grafanaText} shadow-inner`
+                : `${grafanaTextMuted} ${productPanelHover}/60 hover:${grafanaText}`
             )}
           >
             <span
-              className={cn('shrink-0', active ? 'text-[#5794f2]' : 'text-[#9fa7b3]')}
+              className={cn('shrink-0', active ? `${grafanaPrimary}` : `${grafanaTextMuted}`)}
               aria-hidden="true"
             >
               {tab.icon}
@@ -355,7 +367,7 @@ export function WorkspaceSidebar({
             <span className={cn('truncate', collapsed && 'sr-only')}>{tab.label}</span>
             {active ? (
               <span
-                className="ml-auto h-2 w-2 shrink-0 rounded-full bg-[#5794f2]"
+                className={`ml-auto h-2 w-2 shrink-0 rounded-full ${grafanaPrimaryBg}`}
                 aria-hidden="true"
               />
             ) : null}
@@ -368,17 +380,17 @@ export function WorkspaceSidebar({
   return (
     <>
       {/* ---- Mobile top bar ---- */}
-      <div className="flex items-center justify-between bg-[#1a1a1a] px-3 py-2 lg:hidden">
+      <div className={`flex items-center justify-between ${surfaceRaised} px-3 py-2 lg:hidden`}>
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
           aria-label="Open workspace navigation"
           aria-expanded={mobileOpen}
-          className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+          className={`flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`}
         >
           <Menu className="h-2.5 w-2.5" />
         </button>
-        <span className="text-sm font-semibold text-[#d8d9da]">Workspace</span>
+        <span className={`text-sm font-semibold ${grafanaText}`}>Workspace</span>
         {/* ---- Help button on mobile ---- */}
         <button
           type="button"
@@ -387,8 +399,8 @@ export function WorkspaceSidebar({
           onClick={() => setHelpOpen(!helpOpen)}
           aria-label="Help"
           className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]',
-            helpOpen && 'text-[#ff6500]',
+            `flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`,
+            helpOpen && `${productAccent}`,
           )}
         >
           <HelpCircle className="h-2.5 w-2.5" />
@@ -403,14 +415,14 @@ export function WorkspaceSidebar({
             onClick={() => setMobileOpen(false)}
             aria-hidden="true"
           />
-          <div className="fixed inset-y-0 left-0 z-50 w-64 bg-[#1a1a1a] lg:hidden">
-            <div className="flex items-center justify-between bg-[#1a1a1a] px-3 py-2.5">
-              <span className="text-sm font-semibold text-[#d8d9da]">Workspace</span>
+          <div className={`fixed inset-y-0 left-0 z-50 w-64 ${surfaceRaised} lg:hidden`}>
+            <div className={`flex items-center justify-between ${surfaceRaised} px-3 py-2.5`}>
+              <span className={`text-sm font-semibold ${grafanaText}`}>Workspace</span>
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation"
-                className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] hover:bg-[#1f2227] hover:text-[#d8d9da]"
+                className={`flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} ${productPanelHover} hover:${grafanaText}`}
               >
                 <X className="h-2.5 w-2.5" />
               </button>
@@ -423,13 +435,13 @@ export function WorkspaceSidebar({
       {/* ---- Desktop sidebar ---- */}
       <aside
         className={cn(
-          'hidden shrink-0 bg-[#1a1a1a] lg:flex lg:flex-col',
+          `hidden shrink-0 ${surfaceRaised} lg:flex lg:flex-col`,
           collapsed ? 'w-16' : 'w-64'
         )}
       >
-        <div className="bg-[#1a1a1a] p-4">
+        <div className={`${surfaceRaised} p-4`}>
           <div className="flex items-center justify-between">
-            <h2 className={cn('text-xs font-bold text-[#5794f2] uppercase', collapsed && 'sr-only')}>
+            <h2 className={cn(`text-xs font-bold ${grafanaPrimary} uppercase`, collapsed && 'sr-only')}>
               Workspace
             </h2>
             {/* ---- Help dropdown ----
@@ -443,8 +455,8 @@ export function WorkspaceSidebar({
                 onClick={() => setHelpOpen(!helpOpen)}
                 aria-label="Help"
                 className={cn(
-                  'flex h-6 w-6 items-center justify-center rounded-md text-[#9fa7b3] transition-colors duration-150',
-                  helpOpen ? 'text-[#ff6500]' : 'hover:bg-[#1f2227] hover:text-[#d8d9da]',
+                  `flex h-6 w-6 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors duration-150`,
+                  helpOpen ? `${productAccent}` : `${productPanelHover} hover:${grafanaText}`,
                 )}
                 title="Help"
               >
@@ -460,7 +472,7 @@ export function WorkspaceSidebar({
                   <div
                     role="menu"
                     aria-label="Help"
-                    className="absolute right-0 top-9 z-50 w-56 rounded-md bg-[#181b1f] py-1 shadow-xl"
+                    className={`absolute right-0 top-9 z-50 w-56 rounded-md ${grafanaPanel} py-1 shadow-xl`}
                   >
                     <button
                     role="menuitem"
@@ -468,7 +480,7 @@ export function WorkspaceSidebar({
                       setActiveTab('help-micro-frame');
                       setHelpOpen(false);
                     }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-[#d8d9da] transition-colors hover:bg-[#1f2227] hover:text-[#ff6500]"
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-xs ${grafanaText} transition-colors ${productPanelHover} hover:${productAccent}`}
                   >
                     <HelpCircle className="h-2.5 w-2.5" />
                     AURA Micro-Frame Studio Walkthrough
@@ -482,15 +494,15 @@ export function WorkspaceSidebar({
 
         {nav}
 
-        <div className="mt-auto bg-[#1a1a1a] p-2">
+        <div className={`mt-auto ${surfaceRaised} p-2`}>
           <button
             type="button"
             onClick={toggleCollapsed}
             aria-expanded={!collapsed}
             className={cn(
               'flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm',
-              'text-[#9fa7b3] hover:bg-[#1f2227]/60 hover:text-[#d8d9da]',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
+              `${grafanaTextMuted} ${productPanelHover}/60 hover:${grafanaText}`,
+              `${grafanaFocusRingVisible}`
             )}
           >
             {collapsed ? (

@@ -66,6 +66,23 @@ import { RevealableInput } from '@/components/ui/revealable-input';
 import { Label } from '@wideo11/ui/label';
 import { BrandLockup } from '@wideo11/ui/brand/characters';
 
+import {
+  grafanaBg,
+  grafanaDanger,
+  grafanaInfo,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  grafanaWarning,
+  productCheckboxOff,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+} from '@wideo11/ui/design-system';
+
 // ---------------------------------------------------------------------------
 // Types (backend ke response se match)
 // ---------------------------------------------------------------------------
@@ -414,8 +431,8 @@ export default function UserSettingsPage() {
   // ---- Guards ----
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#111217]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#5794f2]" />
+      <div className={`flex min-h-screen items-center justify-center ${grafanaBg}`}>
+        <Loader2 className={`h-8 w-8 animate-spin ${grafanaPrimary}`} />
       </div>
     );
   }
@@ -428,13 +445,13 @@ export default function UserSettingsPage() {
     newPassword === confirmPassword;
 
   return (
-    <div className="min-h-screen bg-[#111217] text-[#d8d9da]">
+    <div className={`min-h-screen ${grafanaBg} ${grafanaText}`}>
       {/* ---- Header ---- */}
-      <header className="border-b-[#2c3235] bg-[#181b1f]">
+      <header className={`border-b ${grafanaPanel}`}>
         <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
           <Link
             href="/dashboard"
-            className="flex h-9 w-9 items-center justify-center rounded-md text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da]"
+            className={`flex h-9 w-9 items-center justify-center rounded-md ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText}`}
             aria-label="Back to dashboard"
           >
             <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
@@ -447,7 +464,7 @@ export default function UserSettingsPage() {
       <main className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Your settings</h1>
-          <p className="mt-1 text-sm text-[#9fa7b3]">
+          <p className={`mt-1 text-sm ${grafanaTextMuted}`}>
             Everything in one place. Changes apply to all your devices.
           </p>
         </div>
@@ -476,14 +493,14 @@ export default function UserSettingsPage() {
             ================================================================== */}
         <div className="grid gap-6 lg:grid-cols-2">
           {/* ---- CARD 1: PROFILE + AVATAR ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <CircleUser className="h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" />
+              <CircleUser className={`h-2.5 w-2.5 ${grafanaPrimary}`} aria-hidden="true" />
               Profile
             </h2>
 
             <div className="mt-4 flex items-center gap-4">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-full-[#2c3235] bg-[#0d0f11]">
+              <div className={`h-16 w-16 shrink-0 overflow-hidden rounded-full ${productSunken}`}>
                 {settings?.avatar_url ? (
                   <img
                     src={settings.avatar_url}
@@ -491,14 +508,14 @@ export default function UserSettingsPage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-full w-full items-center justify-center text-lg font-bold text-[#5794f2]">
+                  <div className={`flex h-full w-full items-center justify-center text-lg font-bold ${grafanaPrimary}`}>
                     {(settings?.username || settings?.email || '?').slice(0, 2).toUpperCase()}
                   </div>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">@{settings?.username}</p>
-                <p className="truncate text-xs text-[#9fa7b3]">{settings?.email}</p>
+                <p className={`truncate text-xs ${grafanaTextMuted}`}>{settings?.email}</p>
                 {settings?.role === 'superadmin' ? (
                   <span className="mt-1 inline-block rounded-full bg-amber-950/60 px-2 py-0.5 text-[10px] text-amber-300">
                     Superadmin
@@ -508,7 +525,7 @@ export default function UserSettingsPage() {
             </div>
 
             <div className="mt-4 space-y-2">
-              <Label htmlFor="avatar" className="text-xs text-[#9fa7b3]">
+              <Label htmlFor="avatar" className={`text-xs ${grafanaTextMuted}`}>
                 Profile image URL
               </Label>
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -517,12 +534,12 @@ export default function UserSettingsPage() {
                   value={avatarInput}
                   onChange={(e) => setAvatarInput(e.target.value)}
                   placeholder="https://... ya /avatars/me.png"
-                  className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
+                  className={`h-10 ${productSunken} text-sm`}
                 />
                 <Button
                   onClick={saveAvatar}
                   disabled={avatarBusy}
-                  className="h-10 shrink-0 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                  className={`h-10 shrink-0 ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
                 >
                   {avatarBusy ? (
                     <Loader2 className="h-2.5 w-2.5 animate-spin" />
@@ -534,16 +551,16 @@ export default function UserSettingsPage() {
                   )}
                 </Button>
               </div>
-              <p className="text-[11px] text-[#9fa7b3]">
+              <p className={`text-[11px] ${grafanaTextMuted}`}>
                 Paste an image address. Clear it and save to remove.
               </p>
             </div>
           </section>
 
           {/* ---- CARD 2: APPEARANCE (theme + accent) ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Palette className="h-2.5 w-2.5 text-[#a78bfa]" aria-hidden="true" />
+              <Palette className="h-2.5 w-2.5 text-violet-400" aria-hidden="true" />
               Appearance
             </h2>
 
@@ -551,7 +568,7 @@ export default function UserSettingsPage() {
                 Click karte hi INSTANT apply hota hai (user ko turant feedback).
                 DB me save karne ke liye "Save" button hai. */}
             <div className="mt-4 space-y-2">
-              <Label className="text-xs text-[#9fa7b3]">Theme</Label>
+              <Label className={`text-xs ${grafanaTextMuted}`}>Theme</Label>
               <div className="grid grid-cols-2 gap-2">
                 {(meta?.themes ?? Object.keys(THEME_META)).map((theme) => {
                   const m = THEME_META[theme];
@@ -566,8 +583,8 @@ export default function UserSettingsPage() {
                       }}
                       className={`rounded-md p-2.5 text-left transition-colors ${
                         active
-                          ? 'border-[#5794f2] bg-[#1f2227]'
-                          : 'border-[#2c3235] hover:border-[#3d4348]'
+                          ? `${grafanaPrimary} ${productPanelHover}`
+                          : `${productSeparation} hover:border`
                       }`}
                     >
                       <span className="flex items-center gap-1.5">
@@ -579,14 +596,14 @@ export default function UserSettingsPage() {
                           />
                         ))}
                         {active ? (
-                          <Check className="ml-auto h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" />
+                          <Check className={`ml-auto h-2.5 w-2.5 ${grafanaPrimary}`} aria-hidden="true" />
                         ) : null}
                       </span>
                       <span className="mt-1.5 block text-xs font-medium">
                         {m?.label ?? theme}
                       </span>
                       {m?.hint ? (
-                        <span className="mt-0.5 block text-[10px] text-[#9fa7b3]">
+                        <span className={`mt-0.5 block text-[10px] ${grafanaTextMuted}`}>
                           {m.hint}
                         </span>
                       ) : null}
@@ -598,7 +615,7 @@ export default function UserSettingsPage() {
 
             {/* ---- Accent ---- */}
             <div className="mt-4 space-y-2">
-              <Label className="text-xs text-[#9fa7b3]">Accent colour</Label>
+              <Label className={`text-xs ${grafanaTextMuted}`}>Accent colour</Label>
               <div className="flex flex-wrap gap-2">
                 {(meta?.accents ?? []).map((a) => {
                   const active = settings?.accent === a.Hex;
@@ -629,7 +646,7 @@ export default function UserSettingsPage() {
                 )
               }
               disabled={saving === 'appearance'}
-              className="mt-4 h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
+              className={`mt-4 h-10 w-full ${productPanelHover} ${grafanaText} hover:${productSeparation}`}
             >
               {saving === 'appearance' ? (
                 <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -643,14 +660,14 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 3: LANGUAGE ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Languages className="h-2.5 w-2.5 text-[#73bf69]" aria-hidden="true" />
+              <Languages className={`h-2.5 w-2.5 ${grafanaSuccess}`} aria-hidden="true" />
               Language
             </h2>
 
             <div className="mt-4 space-y-2">
-              <Label htmlFor="language" className="text-xs text-[#9fa7b3]">
+              <Label htmlFor="language" className={`text-xs ${grafanaTextMuted}`}>
                 App language
               </Label>
               <select
@@ -659,10 +676,10 @@ export default function UserSettingsPage() {
                 onChange={(e) =>
                   setSettings((prev) => (prev ? { ...prev, language: e.target.value } : prev))
                 }
-                className="h-10 w-full rounded-md bg-[#0d0f11] px-3 text-sm text-[#d8d9da] focus:border-[#5794f2] focus:outline-none"
+                className={`h-10 w-full rounded-md ${productSunken} px-3 text-sm ${grafanaText} focus:${grafanaPrimary} focus:outline-none`}
               >
                 {(meta?.languages ?? []).map((l) => (
-                  <option key={l.Code} value={l.Code} className="bg-[#181b1f]">
+                  <option key={l.Code} value={l.Code} className={`${grafanaPanel}`}>
                     {l.Name}
                   </option>
                 ))}
@@ -672,7 +689,7 @@ export default function UserSettingsPage() {
             <Button
               onClick={() => save({ language: settings?.language }, 'language')}
               disabled={saving === 'language'}
-              className="mt-4 h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
+              className={`mt-4 h-10 w-full ${productPanelHover} ${grafanaText} hover:${productSeparation}`}
             >
               {saving === 'language' ? (
                 <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -683,9 +700,9 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 4: CONTENT + SUBSCRIPTIONS ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <Video className="h-2.5 w-2.5 text-[#f2495c]" aria-hidden="true" />
+              <Video className={`h-2.5 w-2.5 ${grafanaDanger}`} aria-hidden="true" />
               Content and subscriptions
             </h2>
 
@@ -759,12 +776,12 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 5: SECURITY PIN (locked -> unlocked) ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <KeyRound className="h-2.5 w-2.5 text-[#f2cc0c]" aria-hidden="true" />
+              <KeyRound className={`h-2.5 w-2.5 ${grafanaWarning}`} aria-hidden="true" />
               Security PIN
             </h2>
-            <p className="mt-1 text-xs text-[#9fa7b3]">
+            <p className={`mt-1 text-xs ${grafanaTextMuted}`}>
               {pinUnlocked
                 ? 'PIN confirmed. Choose your new 6-digit PIN.'
                 : 'Confirm your current PIN to unlock the change form.'}
@@ -784,7 +801,7 @@ export default function UserSettingsPage() {
                 <Button
                   onClick={unlockPinForm}
                   disabled={pinCheckBusy || currentPin.length !== 6}
-                  className="h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
+                  className={`h-10 w-full ${productPanelHover} ${grafanaText} hover:${productSeparation}`}
                 >
                   {pinCheckBusy ? (
                     <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -826,14 +843,14 @@ export default function UserSettingsPage() {
                       setConfirmPin('');
                     }}
                     variant="ghost"
-                    className="h-10 shrink-0-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
+                    className={`h-10 shrink-0 ${grafanaTextMuted} ${productPanelHover}`}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={rolloverPin}
                     disabled={!pinReady || pinBusy}
-                    className="h-10 flex-1 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                    className={`h-10 flex-1 ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
                   >
                     {pinBusy ? (
                       <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -842,7 +859,7 @@ export default function UserSettingsPage() {
                     )}
                   </Button>
                 </div>
-                <p className="text-[11px] text-[#9fa7b3]">
+                <p className={`text-[11px] ${grafanaTextMuted}`}>
                   Changing your PIN signs out every other device.
                 </p>
               </div>
@@ -850,12 +867,12 @@ export default function UserSettingsPage() {
           </section>
 
           {/* ---- CARD 6: PASSWORD (locked -> unlocked) ---- */}
-          <section className="rounded-md bg-[#181b1f] p-5">
+          <section className={`rounded-md ${grafanaPanel} p-5`}>
             <h2 className="flex items-center gap-2 text-sm font-semibold">
-              <ShieldCheck className="h-2.5 w-2.5 text-[#8ab8ff]" aria-hidden="true" />
+              <ShieldCheck className={`h-2.5 w-2.5 ${grafanaInfo}`} aria-hidden="true" />
               Password
             </h2>
-            <p className="mt-1 text-xs text-[#9fa7b3]">
+            <p className={`mt-1 text-xs ${grafanaTextMuted}`}>
               {pwUnlocked
                 ? 'Password confirmed. Set your new password below.'
                 : 'Confirm your current password to unlock the change form.'}
@@ -867,7 +884,7 @@ export default function UserSettingsPage() {
             {!pwUnlocked ? (
               <div className="mt-4 space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="curPw" className="text-xs text-[#9fa7b3]">
+                  <Label htmlFor="curPw" className={`text-xs ${grafanaTextMuted}`}>
                     Current password
                   </Label>
                   {/*
@@ -882,13 +899,13 @@ export default function UserSettingsPage() {
                     onValueChange={setCurrentPassword}
                     revealLabel="Show current password"
                     hideLabel="Hide current password"
-                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
+                    className={`h-10 ${productSunken} text-sm`}
                   />
                 </div>
                 <Button
                   onClick={unlockPasswordForm}
                   disabled={pwCheckBusy || currentPassword.length === 0}
-                  className="h-10 w-full bg-[#1f2227] text-[#d8d9da] hover:bg-[#2c3235]"
+                  className={`h-10 w-full ${productPanelHover} ${grafanaText} hover:${productSeparation}`}
                 >
                   {pwCheckBusy ? (
                     <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -904,7 +921,7 @@ export default function UserSettingsPage() {
               /* ---- STEP 2 (UNLOCKED): naya password form ---- */
               <div className="mt-4 space-y-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="newPw" className="text-xs text-[#9fa7b3]">
+                  <Label htmlFor="newPw" className={`text-xs ${grafanaTextMuted}`}>
                     New password
                   </Label>
                   <RevealableInput
@@ -914,7 +931,7 @@ export default function UserSettingsPage() {
                     onValueChange={setNewPassword}
                     revealLabel="Show new password"
                     hideLabel="Hide new password"
-                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
+                    className={`h-10 ${productSunken} text-sm`}
                   />
                   {newPassword.length > 0 && newPassword.length < 12 ? (
                     <p className="text-[11px] text-amber-400">
@@ -923,7 +940,7 @@ export default function UserSettingsPage() {
                   ) : null}
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="confPw" className="text-xs text-[#9fa7b3]">
+                  <Label htmlFor="confPw" className={`text-xs ${grafanaTextMuted}`}>
                     Confirm new password
                   </Label>
                   {/*
@@ -946,7 +963,7 @@ export default function UserSettingsPage() {
                     onValueChange={setConfirmPassword}
                     revealLabel="Show confirmed password"
                     hideLabel="Hide confirmed password"
-                    className="h-10-[#2c3235] bg-[#0d0f11] text-sm"
+                    className={`h-10 ${productSunken} text-sm`}
                   />
                   {confirmPassword.length > 0 &&
                   confirmPassword !== newPassword ? (
@@ -964,14 +981,14 @@ export default function UserSettingsPage() {
                       setConfirmPassword('');
                     }}
                     variant="ghost"
-                    className="h-10 shrink-0-[#2c3235] text-[#9fa7b3] hover:bg-[#1f2227]"
+                    className={`h-10 shrink-0 ${grafanaTextMuted} ${productPanelHover}`}
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={changePassword}
                     disabled={!passwordReady || passwordBusy}
-                    className="h-10 flex-1 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                    className={`h-10 flex-1 ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
                   >
                     {passwordBusy ? (
                       <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
@@ -980,7 +997,7 @@ export default function UserSettingsPage() {
                     )}
                   </Button>
                 </div>
-                <p className="text-[11px] text-[#9fa7b3]">
+                <p className={`text-[11px] ${grafanaTextMuted}`}>
                   At least 12 characters. Changing it signs out every other
                   device.
                 </p>
@@ -1009,7 +1026,7 @@ function PinField({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={id} className="text-xs text-[#9fa7b3]">
+      <Label htmlFor={id} className={`text-xs ${grafanaTextMuted}`}>
         {label}
       </Label>
       {/*
@@ -1036,7 +1053,7 @@ function PinField({
         placeholder="••••••"
         revealLabel={`Show ${label}`}
         hideLabel={`Hide ${label}`}
-        className="h-10-[#2c3235] bg-[#0d0f11] font-mono tracking-widest"
+        className={`h-10 ${productSunken} font-mono tracking-widest`}
       />
       {error ? <p className="text-[11px] text-amber-400">{error}</p> : null}
     </div>
@@ -1058,13 +1075,13 @@ function ToggleRow({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-md bg-[#0d0f11] p-3">
-      <span className="shrink-0 text-[#9fa7b3]" aria-hidden="true">
+    <div className={`flex items-center gap-3 rounded-md ${productSunken} p-3`}>
+      <span className={`shrink-0 ${grafanaTextMuted}`} aria-hidden="true">
         {icon}
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium">{label}</p>
-        <p className="text-[11px] text-[#9fa7b3]">{hint}</p>
+        <p className={`text-[11px] ${grafanaTextMuted}`}>{hint}</p>
       </div>
       <button
         type="button"
@@ -1073,7 +1090,7 @@ function ToggleRow({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-          checked ? 'bg-[#5794f2]' : 'bg-[#3d4348]'
+          checked ? `${grafanaPrimaryBg}` : `${productCheckboxOff}`
         }`}
       >
         <span

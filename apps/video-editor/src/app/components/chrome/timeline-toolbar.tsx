@@ -33,7 +33,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@wideo11/ui/select';
-import { SUPPORTED_FPS, clampPxPerFrame, PLAYBACK_SPEEDS, formatSpeed } from '../../lib/engine/frames';
+import {
+  SUPPORTED_FPS,
+  AURA_ONLY_FPS,
+  MICRO_PLAYBACK_SPEEDS,
+  PLAYBACK_SPEEDS,
+  formatSpeed,
+  clampPxPerFrame,
+  hasHighFrameRates,
+} from '../../lib/engine/frames';
 
 interface TimelineToolbarProps {
   canSplit: boolean;
@@ -65,14 +73,18 @@ interface TimelineToolbarProps {
   playbackRate: number;
   onPlaybackRate: (rate: number) => void;
   onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
+  /**
+   * The plan's frame-rate ceiling, in fps.
+   *
+   * 60 on every plan except the AURA lifetime plan, which is 240. Both
+   * dropdowns below are filtered from this one number, so the second toolbar on
+   * screen cannot offer a rate the first one refuses.
+   */
+  maxFps: number;
   /** Recorder kholta hai (RecorderDialog). Hinglish: timeline toolbar me
    *  recording icon — same 10px glyph + muted->#ff6500 hover pattern. */
   onRecord?: () => void;
 }
-
-// Hinglish: Playback speeds — shared list (frames.ts): 0.0001x micro-step se
-// 4x tak. AURA studio ke identical set — consistency.
-const PLAYBACK_RATES = PLAYBACK_SPEEDS;
 
 export function TimelineToolbar({
   canSplit,
@@ -104,9 +116,22 @@ export function TimelineToolbar({
   playbackRate,
   onPlaybackRate,
   onEdgeEdit,
+  maxFps,
   onRecord,
 }: TimelineToolbarProps) {
   const zoomPct = Math.round((pxPerFrame / 3) * 100);
+
+  // ---- THE PLAN'S CEILING, APPLIED TO THE TWO DROPDOWNS ----
+  //
+  // Both lists are the FULL set, and the AURA-only entries are DISABLED rather
+  // than removed. A list that hides the 240fps option is a list that never tells
+  // you it exists; a list that shows it greyed out with "(AURA)" on it tells you
+  // both what you are missing and what it is called. Same derivation as the
+  // editor toolbar, from the same constants, so the two cannot disagree about
+  // what a plan may use.
+  const fpsOptions = SUPPORTED_FPS;
+  const speedOptions = PLAYBACK_SPEEDS;
+  const auraRates = hasHighFrameRates(maxFps);
 
   const groups: Array<Array<{
     id: string;
@@ -365,20 +390,34 @@ export function TimelineToolbar({
         <Select value={String(playbackRate)} onValueChange={(v) => onPlaybackRate(Number(v))}>
           <SelectTrigger
             aria-label="Playback speed"
+            title={
+              auraRates
+                ? 'Playback speed — AURA plan, micro-steps included'
+                : 'Playback speed — the micro-steps below 0.25x need the AURA plan'
+            }
             className="h-6 w-16 rounded-md border-0 bg-surface px-1 text-[7px] text-fg outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
-            {PLAYBACK_RATES.map((r) => (
-              <SelectItem
-                key={r}
-                value={String(r)}
-                className="rounded-md text-[7px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
-              >
-                {formatSpeed(r)}
-              </SelectItem>
-            ))}
+            {speedOptions.map((r) => {
+              const isMicroSpeed = MICRO_PLAYBACK_SPEEDS.includes(r as (typeof MICRO_PLAYBACK_SPEEDS)[number]);
+              const blocked = isMicroSpeed && !auraRates;
+              return (
+                <SelectItem
+                  key={r}
+                  value={String(r)}
+                  disabled={blocked}
+                  className={`rounded-md text-[7px] outline-none transition-colors duration-150 ${
+                    blocked
+                      ? 'text-fg-muted/40 cursor-not-allowed'
+                      : 'text-fg-muted focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white'
+                  }`}
+                >
+                  {formatSpeed(r)}{blocked ? ' (AURA)' : ''}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </ToolbarGroup>
@@ -386,20 +425,33 @@ export function TimelineToolbar({
         <Select value={String(fps)} onValueChange={(v) => onFpsChange(Number(v))}>
           <SelectTrigger
             aria-label="Timeline frame rate"
+            title={
+              auraRates
+                ? 'Timeline frame rate — AURA plan, 120 and 240 included'
+                : 'Timeline frame rate — 120 and 240 need the AURA plan'
+            }
             className="h-6 w-16 rounded-md border-0 bg-surface px-1 text-[7px] text-fg outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
-            {SUPPORTED_FPS.map((f) => (
-              <SelectItem
-                key={f}
-                value={String(f)}
-                className="rounded-md text-[7px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
-              >
-                {f} fps
-              </SelectItem>
-            ))}
+            {fpsOptions.map((f) => {
+              const blocked = AURA_ONLY_FPS.includes(f as (typeof AURA_ONLY_FPS)[number]) && !auraRates;
+              return (
+                <SelectItem
+                  key={f}
+                  value={String(f)}
+                  disabled={blocked}
+                  className={`rounded-md text-[7px] outline-none transition-colors duration-150 ${
+                    blocked
+                      ? 'text-fg-muted/40 cursor-not-allowed'
+                      : 'text-fg-muted focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white'
+                  }`}
+                >
+                  {f} fps{blocked ? ' (AURA)' : ''}
+                </SelectItem>
+              );
+            })}
           </SelectContent>
         </Select>
       </ToolbarGroup>

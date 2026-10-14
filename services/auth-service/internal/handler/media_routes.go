@@ -414,7 +414,7 @@ func (h *AuthHandler) DeleteMedia(c *gin.Context) {
 		return
 	}
 
-	asset, err := h.media.DeleteFailed(c.Request.Context(), assetID, uuidFromString(uid))
+	asset, err := h.media.DeleteAsset(c.Request.Context(), assetID, uuidFromString(uid))
 	if err != nil {
 		writeMediaError(c, err)
 		return
@@ -435,7 +435,7 @@ func (h *AuthHandler) DeleteMedia(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"deleted":  true,
 		"asset_id": asset.ID,
-		"message":  "The failed upload was removed.",
+		"message":  "The asset was removed.",
 	})
 }
 
@@ -905,3 +905,5 @@ func writeMediaError(c *gin.Context, err error) {
 // isErr keeps `errors.Is` out of every branch above, and keeps the switch
 // readable as a policy rather than as a comparison chain.
 func isErr(err, target error) bool { return errors.Is(err, target) }
+
+

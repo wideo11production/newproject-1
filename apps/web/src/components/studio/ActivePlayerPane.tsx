@@ -27,10 +27,13 @@
  * with no label ("congressmlasecondchannel") is a value nobody can place.
  */
 
-import { useCallback, useState } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
 import { InlinePlayer, type InlinePlayerAsset } from '../InlinePlayerProvider';
-import { Comments, type Comment } from './Comments';
+import { Comments } from './Comments';
+
+import {
+  productPanel,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
 
 // The asset type lives with the player, so it is aliased here rather than
 // redeclared. A second copy is a second place for a player prop to drift.
@@ -99,7 +102,14 @@ export function ActivePlayerPane({
           label="Date"
           value={
             meta?.date
-              ? new Date(meta.date).toLocaleDateString(undefined, { dateStyle: 'medium' })
+              ? // Locale and timezone pinned, not `undefined`. An unpinned format
+                // lets the server (UTC container) and the client (viewer's
+                // timezone) disagree, which React reports as hydration mismatch
+                // #300 - and that takes the whole page's client runtime down.
+                new Date(meta.date).toLocaleDateString('en-US', {
+                  dateStyle: 'medium',
+                  timeZone: 'UTC',
+                })
               : 'Unknown'
           }
         />
@@ -122,8 +132,8 @@ function InfoCard({
   avatar?: string | null;
 }) {
   return (
-    <div className="rounded-xl bg-[#16181d] p-3 shadow-md shadow-black/20">
-      <p className="text-[9px] font-semibold uppercase tracking-wider text-[#8b949e]">{label}</p>
+    <div className={`rounded-xl ${productPanel} p-3 shadow-md shadow-black/20`}>
+      <p className={`text-[9px] font-semibold uppercase tracking-wider ${productTextMuted}`}>{label}</p>
       <div className="mt-1.5 flex items-center gap-2">
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element

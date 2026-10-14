@@ -36,6 +36,16 @@ import { ChevronLeft, ChevronRight, TrendingUp, Wallet, Users } from 'lucide-rea
 import { cn } from '@wideo11/ui/lib/utils';
 import type { PoolRow, PoolTile } from '@/lib/landing/ad-pool';
 
+import {
+  grafanaBg,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 /**
  * Row ke liye icon map - title se match karke.
  * NOTE: Exact title match (case-insensitive). Agar title change ho to
@@ -79,14 +89,14 @@ export default function ContentRow({ row, className }: ContentRowProps) {
       {/* ---- ROW HEADER (title + optional subtitle) ---- */}
       <div className="mb-3 flex items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-lg font-semibold tracking-tight text-[#d8d9da]">
+          <h3 className={`flex items-center gap-2 text-lg font-semibold tracking-tight ${grafanaText}`}>
             {/* Row icon - title-based, optional */}
-            {Icon ? <Icon className="h-2.5 w-2.5 text-[#5794f2]" aria-hidden="true" /> : null}
+            {Icon ? <Icon className={`h-2.5 w-2.5 ${grafanaPrimary}`} aria-hidden="true" /> : null}
             {row.title}
           </h3>
           {/* Optional subtitle */}
           {row.subtitle ? (
-            <p className="mt-0.5 text-xs text-[#9fa7b3]">{row.subtitle}</p>
+            <p className={`mt-0.5 text-xs ${grafanaTextMuted}`}>{row.subtitle}</p>
           ) : null}
         </div>
 
@@ -98,7 +108,7 @@ export default function ContentRow({ row, className }: ContentRowProps) {
             type="button"
             onClick={() => scrollByPage(-1)}
             aria-label={`Scroll ${row.title} left`}
-            className="flex h-8 w-8 items-center justify-center rounded-full-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+            className={`flex h-8 w-8 items-center justify-center rounded-full ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
           >
             <ChevronLeft className="h-2.5 w-2.5" aria-hidden="true" />
           </button>
@@ -106,7 +116,7 @@ export default function ContentRow({ row, className }: ContentRowProps) {
             type="button"
             onClick={() => scrollByPage(1)}
             aria-label={`Scroll ${row.title} right`}
-            className="flex h-8 w-8 items-center justify-center rounded-full-[#2c3235] text-[#9fa7b3] transition-colors hover:bg-[#1f2227] hover:text-[#d8d9da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60"
+            className={`flex h-8 w-8 items-center justify-center rounded-full ${grafanaTextMuted} transition-colors ${productPanelHover} hover:${grafanaText} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}
           >
             <ChevronRight className="h-2.5 w-2.5" aria-hidden="true" />
           </button>
@@ -177,7 +187,7 @@ function ContentTile({ tile }: { tile: PoolTile }) {
 
       {/* Highlight badge (e.g. "₹3,180" for earnings row) - top-left */}
       {tile.highlight ? (
-        <span className="absolute left-1.5 top-1.5 rounded bg-[#111217]/85 px-1.5 py-0.5 font-mono text-[10px] font-bold text-[#73bf69] backdrop-blur">
+        <span className={`absolute left-1.5 top-1.5 rounded ${grafanaBg}/85 px-1.5 py-0.5 font-mono text-[10px] font-bold ${grafanaSuccess} backdrop-blur`}>
           {tile.highlight}
         </span>
       ) : null}
@@ -187,17 +197,17 @@ function ContentTile({ tile }: { tile: PoolTile }) {
   // Tile text block - title (2-line clamp) + optional meta
   const body = (
     <div className="p-2.5">
-      <p className="line-clamp-2 text-xs font-medium leading-snug text-[#d8d9da]">
+      <p className={`line-clamp-2 text-xs font-medium leading-snug ${grafanaText}`}>
         {tile.title}
       </p>
       {/* Optional meta (views / channel type) */}
-      {tile.meta ? <p className="mt-1 text-[10px] text-[#9fa7b3]">{tile.meta}</p> : null}
+      {tile.meta ? <p className={`mt-1 text-[10px] ${grafanaTextMuted}`}>{tile.meta}</p> : null}
     </div>
   );
 
   // Shared tile shell classes - dono branches identical
   const shellClass = cn(
-    'group relative block w-[160px] shrink-0 snap-start overflow-hidden rounded-md bg-[#181b1f] transition-colors hover:border-[#5794f2]/50 sm:w-[200px] lg:w-[240px]'
+    `group relative block w-[160px] shrink-0 snap-start overflow-hidden rounded-md ${grafanaPanel} transition-colors hover:${grafanaPrimary}/50 sm:w-[200px] lg:w-[240px]`
   );
 
   // ---- BRANCH A: tile has an internal route -> render a <Link> ----

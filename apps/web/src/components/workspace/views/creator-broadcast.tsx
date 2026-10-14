@@ -11,6 +11,20 @@ import { useEffect, useState } from 'react';
 import { Upload, Shield, Database, AlertTriangle } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 
+import {
+  grafanaDanger,
+  grafanaDangerBg,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSunken,
+  productWarning,
+} from '@wideo11/ui/design-system';
+
 type UploadSession = {
   uuid: string;
   filename: string;
@@ -82,31 +96,31 @@ export function CreatorBroadcastView() {
   if (loading && !sessions.length) {
     return (
       <div className="p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-6 w-48 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold text-[#d8d9da] mb-6">
+      <h1 className={`text-2xl font-bold ${grafanaText} mb-6`}>
         Creator Broadcast Pack
       </h1>
 
       {/* Quota card */}
-      <div className="mb-6 rounded-md bg-[#181b1f] p-5">
+      <div className={`mb-6 rounded-md ${grafanaPanel} p-5`}>
         <div className="flex items-center gap-3">
-          <Database className="h-2.5 w-2.5 text-[#5794f2]" />
+          <Database className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
           <div>
-            <h3 className="font-semibold text-[#d8d9da]">Upload Quota</h3>
+            <h3 className={`font-semibold ${grafanaText}`}>Upload Quota</h3>
             {quota ? (
-              <p className="text-sm text-[#9fa7b3]">
+              <p className={`text-sm ${grafanaTextMuted}`}>
                 Max file: {quota.max_file_size_mb > 0 ? `${quota.max_file_size_mb} MB` : 'Unlimited'}
                 {' · '}
                 Daily uploads: {quota.max_daily_uploads > 0 ? quota.max_daily_uploads : 'Unlimited'}
               </p>
             ) : (
-              <p className="text-sm text-[#9fa7b3]">Loading quota info...</p>
+              <p className={`text-sm ${grafanaTextMuted}`}>Loading quota info...</p>
             )}
           </div>
         </div>
@@ -114,12 +128,12 @@ export function CreatorBroadcastView() {
 
       {/* Blacklist alert */}
       {blacklist ? (
-        <div className="mb-6 rounded-md/30 bg-[#f2495c]/10 p-4">
-          <div className="flex items-center gap-2 text-[#f2495c]">
+        <div className={`mb-6 rounded-md/30 ${grafanaDangerBg}/10 p-4`}>
+          <div className={`flex items-center gap-2 ${grafanaDanger}`}>
             <AlertTriangle className="h-2.5 w-2.5" />
             <span className="font-semibold">Account Blacklisted</span>
           </div>
-          <p className="mt-1 text-sm text-[#f2495c]/80">
+          <p className={`mt-1 text-sm ${grafanaDanger}/80`}>
             Your account has been blacklisted due to a content safety violation.
             Contact support to appeal.
           </p>
@@ -129,7 +143,7 @@ export function CreatorBroadcastView() {
       {/* Upload button */}
       <div className="mb-6">
         <Button
-          className="bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+          className={`${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
           onClick={() => {
             // Dispatch to upload init flow.
             window.location.href = '/broadcast/new';
@@ -142,11 +156,11 @@ export function CreatorBroadcastView() {
 
       {/* Sessions list with safety status */}
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-[#d8d9da]">Recent Uploads</h3>
+        <h3 className={`text-sm font-semibold ${grafanaText}`}>Recent Uploads</h3>
         {sessions.length === 0 ? (
-          <div className="rounded-md bg-[#0d0f11] p-6 text-center">
-            <Upload className="mx-auto h-6 w-6 text-[#9fa7b3]" />
-            <p className="mt-2 text-sm text-[#9fa7b3]">No uploads yet.</p>
+          <div className={`rounded-md ${productSunken} p-6 text-center`}>
+            <Upload className={`mx-auto h-6 w-6 ${grafanaTextMuted}`} />
+            <p className={`mt-2 text-sm ${grafanaTextMuted}`}>No uploads yet.</p>
           </div>
         ) : (
           sessions.map((s) => {
@@ -154,27 +168,27 @@ export function CreatorBroadcastView() {
             return (
               <div
                 key={s.uuid}
-                className="flex items-center justify-between rounded-md bg-[#0d0f11] p-3"
+                className={`flex items-center justify-between rounded-md ${productSunken} p-3`}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-[#d8d9da]">
+                  <p className={`truncate text-sm font-medium ${grafanaText}`}>
                     {s.filename}
                   </p>
-                  <p className="text-xs text-[#9fa7b3]">
+                  <p className={`text-xs ${grafanaTextMuted}`}>
                     {formatBytes(s.file_size)} · Category: {s.category} · Status: {s.status}
                   </p>
                 </div>
                 {safety ? (
                   <span className={`ml-3 text-xs ${
-                    safety.status === 'clean' ? 'text-[#73bf69]'
-                    : safety.status === 'flagged' ? 'text-[#f2495c]'
-                    : safety.status === 'scanning' ? 'text-[#f7c548]'
-                    : 'text-[#9fa7b3]'
+                    safety.status === 'clean' ? `${grafanaSuccess}`
+                    : safety.status === 'flagged' ? `${grafanaDanger}`
+                    : safety.status === 'scanning' ? `${productWarning}`
+                    : `${grafanaTextMuted}`
                   }`}>
                     Safety: {safety.status}
                   </span>
                 ) : (
-                  <Shield className="ml-3 h-2.5 w-2.5 text-[#9fa7b3]" />
+                  <Shield className={`ml-3 h-2.5 w-2.5 ${grafanaTextMuted}`} />
                 )}
               </div>
             );

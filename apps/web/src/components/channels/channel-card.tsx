@@ -161,7 +161,7 @@ export function ChannelCard({
     <Link
       href={`/channel/@${channel.handle}`}
       data-track={`gallery-card-${channel.handle}`}
-      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0d0f11] rounded-2xl"
+      className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 focus-visible:ring-offset-2 focus-visible:ring-offset rounded-2xl"
     >
       <article className="relative flex h-full flex-col overflow-hidden rounded-2xl bg-white/[0.022] transition-colors duration-500 group-hover:bg-white/[0.045]">
         {/*

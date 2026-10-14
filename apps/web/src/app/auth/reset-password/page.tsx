@@ -21,6 +21,11 @@ import {
   FORM_SPACING,
 } from '@/components/auth/auth-shell';
 
+import {
+  grafanaTextMuted,
+  productAccent,
+} from '@wideo11/ui/design-system';
+
 export default function ResetPasswordPage() {
   // ---- Form field states ----
   const [email, setEmail] = useState('');
@@ -134,7 +139,7 @@ export default function ResetPasswordPage() {
 
         {/* Back to login */}
         <div className="flex items-center justify-end pt-4">
-          <Link href="/auth/login" className="text-xs text-[#9fa7b3] hover:text-[#ff6500]">
+          <Link href="/auth/login" className={`text-xs ${grafanaTextMuted} hover:${productAccent}`}>
             ← Back to login
           </Link>
         </div>

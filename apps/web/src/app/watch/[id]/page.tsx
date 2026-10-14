@@ -33,15 +33,14 @@ import {
   MoreHorizontal,
   ThumbsUp,
   ThumbsDown,
-  MessageSquare,
   UserPlus,
+  Trash2,
   Bell,
   ChevronDown,
   ChevronUp,
   Clock,
   Users,
   User,
-  ExternalLink,
   Film,
   Music,
   Video as VideoIcon,
@@ -50,6 +49,21 @@ import {
 import type { MediaAsset } from '@/lib/media-upload';
 import { formatDuration, formatBytes } from '@/lib/media-upload';
 import { DeleteConfirmDialog } from '@/components/ConfirmDialog';
+import { Comments } from '@/components/studio/Comments';
+
+import {
+  grafanaPrimary,
+  productAccent,
+  productAccentBg,
+  productAccentControl,
+  productAccentHoverBg,
+  productPanel,
+  productRingBg,
+  productSeparation,
+  productSeparationStrong,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
 
 interface WatchPageProps {
   params: { id: string };
@@ -200,10 +214,10 @@ export default function WatchPage({ params }: WatchPageProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0d0f11] text-white flex items-center justify-center">
+      <div className={`min-h-screen ${productSunken} text-white flex items-center justify-center`}>
         <div className="flex flex-col items-center gap-4">
-          <div className="w-64 h-36 bg-[#16181d] rounded-lg animate-pulse" />
-          <Loader2 className="h-8 w-8 animate-spin text-[#5794f2]" />
+          <div className={`w-64 h-36 ${productPanel} rounded-lg animate-pulse`} />
+          <Loader2 className={`h-8 w-8 animate-spin ${grafanaPrimary}`} />
         </div>
       </div>
     );
@@ -211,11 +225,11 @@ export default function WatchPage({ params }: WatchPageProps) {
 
   if (error || !asset) {
     return (
-      <div className="min-h-screen bg-[#0d0f11] text-white flex items-center justify-center">
+      <div className={`min-h-screen ${productSunken} text-white flex items-center justify-center`}>
         <div className="text-center">
           <h1 className="text-2xl font-semibold mb-2">Video not found</h1>
-          <p className="text-[#8b949e] mb-4">{error || 'This video does not exist or has been removed.'}</p>
-          <Link href="/videos" className="text-[#ff6500] hover:underline">
+          <p className={`${productTextMuted} mb-4`}>{error || 'This video does not exist or has been removed.'}</p>
+          <Link href="/videos" className={`${productAccent} hover:underline`}>
             Browse videos
           </Link>
         </div>
@@ -227,7 +241,7 @@ export default function WatchPage({ params }: WatchPageProps) {
   const isAudio = asset.kind === 'audio';
 
   return (
-    <div className="min-h-screen bg-[#0d0f11] text-white">
+    <div className={`min-h-screen ${productSunken} text-white`}>
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid lg:grid-cols-12 gap-6">
           {/* Main Video Area - 8 columns */}
@@ -237,9 +251,9 @@ export default function WatchPage({ params }: WatchPageProps) {
               {isAudio ? (
                 <div className="aspect-video flex items-center justify-center">
                   <div className="text-center p-8">
-                    <Music className="h-20 w-20 text-[#ff6500] mx-auto mb-4" />
+                    <Music className={`h-20 w-20 ${productAccent} mx-auto mb-4`} />
                     <h3 className="text-xl font-medium">{asset.filename}</h3>
-                    <p className="text-[#8b949e] mt-2">Audio track - {formatDuration(asset.duration_seconds || 0)}</p>
+                    <p className={`${productTextMuted} mt-2`}>Audio track - {formatDuration(asset.duration_seconds || 0)}</p>
                   </div>
                 </div>
               ) : (
@@ -261,7 +275,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                     <div className="absolute inset-0 flex items-center justify-center bg-black/50">
                       <button
                         onClick={() => videoRef.current?.play()}
-                        className="w-20 h-20 rounded-full bg-[#ff6500] flex items-center justify-center hover:bg-[#e05500] transition-colors"
+                        className={`w-20 h-20 rounded-full ${productAccentBg} flex items-center justify-center ${productAccentHoverBg} transition-colors`}
                         aria-label="Play"
                       >
                         <Play className="h-10 w-10 text-white ml-1" />
@@ -316,10 +330,10 @@ export default function WatchPage({ params }: WatchPageProps) {
                         step="0.1"
                         value={isMuted ? 0 : volume}
                         onChange={(e) => videoRef.current && (videoRef.current.volume = parseFloat(e.target.value))}
-                        className="w-24 h-1 appearance-none bg-[#3a4045] rounded accent-[#ff6500]"
+                        className={`w-24 h-1 appearance-none ${productSeparationStrong} rounded ${productAccentControl}`}
                       />
 
-                      <span className="text-sm text-[#8b949e] font-mono w-20 text-right">
+                      <span className={`text-sm ${productTextMuted} font-mono w-20 text-right`}>
                         {formatDuration(currentTime)} / {formatDuration(duration)}
                       </span>
                     </div>
@@ -334,7 +348,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                           {playbackRate}x
                         </button>
                         {showSpeedMenu && (
-                          <div className="absolute bottom-full right-0 mb-2 bg-[#16181d] rounded-lg border border-[#2c3235] py-1 shadow-lg">
+                          <div className={`absolute bottom-full right-0 mb-2 ${productPanel} rounded-lg border ${productSeparation} py-1 shadow-lg`}>
                             {[0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((rate) => (
                               <button
                                 key={rate}
@@ -343,7 +357,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                                   setPlaybackRate(rate);
                                   setShowSpeedMenu(false);
                                 }}
-                                className={`block w-full px-4 py-2 text-left text-sm ${playbackRate === rate ? 'text-[#ff6500]' : 'text-white'}`}
+                                className={`block w-full px-4 py-2 text-left text-sm ${playbackRate === rate ? `${productAccent}` : 'text-white'}`}
                               >
                                 {rate}x
                               </button>
@@ -361,7 +375,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                           {quality}
                         </button>
                         {showQualityMenu && hlsRef.current && (
-                          <div className="absolute bottom-full right-0 mb-2 bg-[#16181d] rounded-lg border border-[#2c3235] py-1 shadow-lg">
+                          <div className={`absolute bottom-full right-0 mb-2 ${productPanel} rounded-lg border ${productSeparation} py-1 shadow-lg`}>
                             <button
                               onClick={() => {
                                 const hls = hlsRef.current;
@@ -369,7 +383,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                                 setQuality('auto');
                                 setShowQualityMenu(false);
                               }}
-                              className={`block w-full px-4 py-2 text-left text-sm ${quality === 'auto' ? 'text-[#ff6500]' : 'text-white'}`}
+                              className={`block w-full px-4 py-2 text-left text-sm ${quality === `auto` ? `${productAccent}` : `text-white`}`}
                             >
                               Auto
                             </button>
@@ -382,7 +396,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                                   setQuality(`${level.height}p`);
                                   setShowQualityMenu(false);
                                 }}
-                                className={`block w-full px-4 py-2 text-left text-sm ${quality === `${level.height}p` ? 'text-[#ff6500]' : 'text-white'}`}
+                                className={`block w-full px-4 py-2 text-left text-sm ${quality === `${level.height}p` ? `${productAccent}` : 'text-white'}`}
                               >
                                 {level.height}p
                               </button>
@@ -426,7 +440,7 @@ export default function WatchPage({ params }: WatchPageProps) {
             <div className="space-y-4">
               <h1 className="text-xl font-semibold">{asset.filename}</h1>
 
-              <div className="flex flex-wrap items-center gap-4 text-sm text-[#8b949e]">
+              <div className={`flex flex-wrap items-center gap-4 text-sm ${productTextMuted}`}>
                 <span>{formatBytes(asset.bytes || 0)}</span>
                 <span>·</span>
                 <span>{formatDuration(asset.duration_seconds || 0)}</span>
@@ -440,30 +454,30 @@ export default function WatchPage({ params }: WatchPageProps) {
 
               {/* Channel Info */}
               {channel && (
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-[#16181d] border border-[#2c3235]">
+                <div className={`flex items-center gap-4 p-4 rounded-lg ${productPanel} border ${productSeparation}`}>
                   <Link
                     href={`/channel/@${channel.handle}`}
-                    className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-[#0d0f11] bg-[#2c3235] flex-shrink-0"
+                    className={`w-12 h-12 rounded-full overflow-hidden ring-2 ${productRingBg} ${productSeparation} flex-shrink-0`}
                   >
                     {channel.avatar_url ? (
                       <img src={channel.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <User className="h-6 w-6 text-[#8b949e]" />
+                        <User className={`h-6 w-6 ${productTextMuted}`} />
                       </div>
                     )}
                   </Link>
                   <div className="flex-1 min-w-0">
                     <Link
                       href={`/channel/@${channel.handle}`}
-                      className="font-medium text-white hover:text-[#ff6500] transition-colors truncate block"
+                      className={`font-medium text-white hover:${productAccent} transition-colors truncate block`}
                     >
                       {channel.display_name}
                     </Link>
-                    <p className="text-sm text-[#8b949e] truncate">@{channel.handle} · {channel.subscriber_count.toLocaleString()} subscribers</p>
+                    <p className={`text-sm ${productTextMuted} truncate`}>@{channel.handle} · {channel.subscriber_count.toLocaleString()} subscribers</p>
                   </div>
                   {!channel.is_own && (
-                    <button className={`px-4 py-2 rounded-full font-semibold text-sm transition-all ${channel.is_subscribed ? 'bg-transparent border border-[#3a4045] text-[#8b949e] hover:border-[#ff6500] hover:text-[#ff6500]' : 'bg-[#ff6500] text-white hover:bg-[#e05500]'}`}
+                    <button className={`px-4 py-2 rounded-full font-semibold text-sm transition-all ${channel.is_subscribed ? `bg-transparent border border ${productTextMuted} hover:border hover:${productAccent}` : `${productAccentBg} text-white ${productAccentHoverBg}`}`}
                     >
                       {channel.is_subscribed ? (
                         <>
@@ -484,34 +498,38 @@ export default function WatchPage({ params }: WatchPageProps) {
               )}
 
               {/* Actions */}
-              <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-[#2c3235]">
-                <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2c3235] hover:bg-[#3a4045] transition-colors text-sm font-medium">
+              <div className={`flex flex-wrap items-center gap-3 pt-4 border-t ${productSeparation}`}>
+                <button className={`flex items-center gap-2 px-4 py-2 rounded-full ${productSeparation} hover:${productSeparationStrong} transition-colors text-sm font-medium`}>
                   <ThumbsUp className="h-5 w-5" />
                   Like
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2c3235] hover:bg-[#3a4045] transition-colors text-sm font-medium">
+                <button className={`flex items-center gap-2 px-4 py-2 rounded-full ${productSeparation} hover:${productSeparationStrong} transition-colors text-sm font-medium`}>
                   <ThumbsDown className="h-5 w-5" />
                   Dislike
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2c3235] hover:bg-[#3a4045] transition-colors text-sm font-medium">
+                <button className={`flex items-center gap-2 px-4 py-2 rounded-full ${productSeparation} hover:${productSeparationStrong} transition-colors text-sm font-medium`}>
                   <Share2 className="h-5 w-5" />
                   Share
-                </button>
-                <button className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#2c3235] hover:bg-[#3a4045] transition-colors text-sm font-medium">
-                  <MessageSquare className="h-5 w-5" />
-                  Comments
                 </button>
                 {channel?.is_own && (
                   <button
                     onClick={() => setShowDeleteDialog(true)}
                     className="flex items-center gap-2 px-4 py-2 rounded-full bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors text-sm font-medium"
                   >
-                    <ExternalLink className="h-5 w-5" />
+                    <Trash2 className="h-5 w-5" />
                     Delete
                   </button>
                 )}
               </div>
             </div>
+
+            {/* ---- Comments ----
+                The real thread. The dead "Comments" button that used to sit in the
+                actions row is gone: a button labelled Comments that did nothing
+                was worse than no button, because it promised the one thing the
+                page was missing. This component owns its fetch, post, like and
+                delete, and it enforces the link ban client-side as well as server-side. */}
+            <Comments assetId={asset.id} assetOwnerId={asset.user_id} />
 
             {/* Delete Confirm Dialog */}
             {showDeleteDialog && (
@@ -528,10 +546,10 @@ export default function WatchPage({ params }: WatchPageProps) {
           {/* Sidebar - 4 columns */}
           <aside className="lg:col-span-4 space-y-6">
             {/* Up Next / Related Videos */}
-            <div className="bg-[#16181d] rounded-lg border border-[#2c3235] p-4">
+            <div className={`${productPanel} rounded-lg border ${productSeparation} p-4`}>
               <h2 className="font-semibold mb-4">Up Next</h2>
               {relatedVideos.length === 0 ? (
-                <p className="text-[#8b949e] text-sm">No related videos</p>
+                <p className={`${productTextMuted} text-sm`}>No related videos</p>
               ) : (
                 <div className="space-y-3">
                   {relatedVideos.map((video) => (
@@ -541,7 +559,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                       className="block group"
                     >
                       <div className="flex gap-3">
-                        <div className="relative w-40 h-22 flex-shrink-0 rounded bg-[#2c3235] overflow-hidden">
+                        <div className={`relative w-40 h-22 flex-shrink-0 rounded ${productSeparation} overflow-hidden`}>
                           {(video as any).poster_url ? (
                             <img
                               src={(video as any).poster_url}
@@ -550,7 +568,7 @@ export default function WatchPage({ params }: WatchPageProps) {
                             />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <VideoIcon className="h-6 w-6 text-[#8b949e]" />
+                              <VideoIcon className={`h-6 w-6 ${productTextMuted}`} />
                             </div>
                           )}
                           <span className="absolute bottom-1 right-1 bg-black/80 text-white text-xs px-1.5 rounded">
@@ -558,10 +576,10 @@ export default function WatchPage({ params }: WatchPageProps) {
                           </span>
                         </div>
                         <div className="min-w-0 flex-1">
-                          <h3 className="font-medium text-sm truncate group-hover:text-[#ff6500] transition-colors">
+                          <h3 className={`font-medium text-sm truncate group-hover:${productAccent} transition-colors`}>
                             {(video as any).filename}
                           </h3>
-                          <p className="text-xs text-[#8b949e] truncate">
+                          <p className={`text-xs ${productTextMuted} truncate`}>
                             {(video as any).channel_name || 'Unknown Channel'}
                           </p>
                         </div>

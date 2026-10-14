@@ -98,6 +98,22 @@ const (
 	// earn. A trial grants 0, so a trial can upload but cannot earn - which is
 	// the honest version of "try it free, pay when you want the money".
 	CapMonetization = "monetization"
+
+	// CapMaxFps - the highest TIMELINE FRAME RATE the plan may edit at.
+	//
+	// This is the editor's frame-rate ceiling, and it is deliberately a plan
+	// capability rather than a build flag: 120fps and 240fps are AURA-plan
+	// features, and every other plan (trial, monthly, and the non-AURA lifetime
+	// tiers) is capped at 60.
+	//
+	// It is a CEILING, not a grant. A plan that says 60 does not force 60 - it
+	// refuses 120 and 240. The editor's own list of rates is the master set and
+	// this number filters it, which is why a plan that granted nothing could not
+	// express "no editing at all": that is not a thing the product sells.
+	//
+	// The value is the fps number itself (60, 240) rather than a level index, so
+	// an operator reading `PLANS_PRO_MAX_FPS=60` reads exactly what the user gets.
+	CapMaxFps = "max_fps"
 )
 
 // Unlimited is the sentinel for "no cap".
@@ -131,13 +147,14 @@ type PlanConfig struct {
 //
 // Ordered by the plan progression, which is also the order a pricing page shows.
 var DefaultPlanNames = map[string]string{
-	"trial":      "Free Trial (3 days)",
-	"starter":    "Starter",
-	"pro":        "Pro",
-	"studio":     "Studio",
-	"lifetime1":  "Lifetime 1",
-	"lifetime5":  "Lifetime 5",
-	"lifetime10": "Lifetime 10",
+	"trial":        "Free Trial (3 days)",
+	"starter":      "Starter",
+	"pro":          "Pro",
+	"studio":       "Studio",
+	"lifetime1":    "Lifetime 1",
+	"lifetime5":    "Lifetime 5",
+	"lifetime10":   "Lifetime 10",
+	"lifetime_aura": "Lifetime AURA",
 }
 
 // PlanDisplayName returns the human-readable label for a plan code.
@@ -295,6 +312,8 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 1, CapExportHeight: 720,
 				CapAdsCampaigns: 0, CapSeats: 1, CapLifetimeDevices: U,
 				CapMaxChannels: 3, CapMinBalance: 0, CapMonetization: 0,
+				// A trial edits at 60fps. High frame rates are an AURA feature.
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -304,6 +323,7 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 1, CapExportHeight: 1080,
 				CapAdsCampaigns: 0, CapSeats: 1, CapLifetimeDevices: U,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -313,6 +333,7 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 2, CapExportHeight: 2160,
 				CapAdsCampaigns: 3, CapSeats: 1, CapLifetimeDevices: U,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -322,6 +343,7 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 4, CapExportHeight: 2160,
 				CapAdsCampaigns: 10, CapSeats: 5, CapLifetimeDevices: U,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -335,6 +357,7 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 2, CapExportHeight: 2160,
 				CapAdsCampaigns: 3, CapSeats: 1, CapLifetimeDevices: 1,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -344,6 +367,7 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 4, CapExportHeight: 2160,
 				CapAdsCampaigns: 10, CapSeats: 5, CapLifetimeDevices: 5,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
 			},
 		},
 		{
@@ -353,6 +377,32 @@ func LoadPlans() PlansConfig {
 				CapConcurrentTranscodes: 8, CapExportHeight: 2160,
 				CapAdsCampaigns: U, CapSeats: 10, CapLifetimeDevices: 10,
 				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 60,
+			},
+		},
+		{
+			// LIFETIME AURA — the ONE plan that unlocks high frame rates.
+			//
+			// 120fps and 240fps edit timeline rates, and the micro-step playback
+			// speeds that go with them, belong to this plan and to no other. The
+			// number below is what the editor reads to build its frame-rate list:
+			// 240 means the whole master list is offered, and a `max_fps` of 60 on
+			// every other plan means the same list is filtered down to
+			// 24/25/30/50/60.
+			//
+			// Single-user, like `lifetime1`, because the AURA tooling is per-seat
+			// work: a group tier would have five people sharing one high-frame-rate
+			// ceiling, which is not a limitation anybody can be sold.
+			//
+			// `save_projects` is Unlimited, so this plan wins the generosity fold
+			// against `lifetime1` - correct, because it is strictly more.
+			code: "lifetime_aura", priceMinor: 29900, currency: "USD", cycle: "lifetime",
+			defs: map[string]int64{
+				CapSaveProjects: U, CapMediaAssets: U, CapReelAssets: U,
+				CapConcurrentTranscodes: 4, CapExportHeight: 2160,
+				CapAdsCampaigns: 10, CapSeats: 1, CapLifetimeDevices: 1,
+				CapMaxChannels: 3, CapMinBalance: 100000, CapMonetization: 1,
+				CapMaxFps: 240,
 			},
 		},
 	}

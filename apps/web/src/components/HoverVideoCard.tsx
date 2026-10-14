@@ -39,6 +39,13 @@ import Hls from 'hls.js';
 import { Play, Pause, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
 
+import {
+  productAccentBg,
+  productOnLight,
+  productPanel,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 interface HoverVideoCardProps {
   /** HLS playlist URL (m3u8) */
   src: string;
@@ -180,7 +187,7 @@ export function HoverVideoCard({
 
   return (
     <article
-      className={`relative group cursor-pointer rounded-md overflow-hidden bg-[#16181d] transition-colors hover:bg-[#1f2227] ${aspectClass}`}
+      className={`relative group cursor-pointer rounded-md overflow-hidden ${productPanel} transition-colors ${productPanelHover} ${aspectClass}`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
@@ -206,7 +213,7 @@ export function HoverVideoCard({
 
       {/* Error state */}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#16181d] p-4">
+        <div className={`absolute inset-0 flex items-center justify-center ${productPanel} p-4`}>
           <p className="text-xs text-red-400 text-center">{error}</p>
         </div>
       )}
@@ -222,7 +229,7 @@ export function HoverVideoCard({
             e.stopPropagation();
             isPlaying ? pause() : play();
           }}
-          className="rounded-full bg-white/90 p-3 text-[#0d0f11] transition-transform hover:scale-110"
+          className={`rounded-full bg-white/90 p-3 ${productOnLight} transition-transform hover:scale-110`}
           aria-label={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -248,7 +255,7 @@ export function HoverVideoCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 px-2 py-1 rounded bg-[#ff6500]/90 text-white text-[11px] font-medium hover:bg-[#ff6500] transition-colors"
+                  className={`flex items-center gap-1 px-2 py-1 rounded ${productAccentBg}/90 text-white text-[11px] font-medium hover:${productAccentBg} transition-colors`}
                 >
                   <ExternalLink className="h-2.5 w-2.5" />
                   Edit in Wideocut Pro

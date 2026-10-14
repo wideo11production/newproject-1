@@ -785,6 +785,38 @@ func (s *MediaService) DeleteFailed(ctx context.Context, assetID, userID uuid.UU
 	return &asset, nil
 }
 
+// DeleteAsset removes an asset and returns the row so the caller can
+// clean up its stored bytes.
+//
+// Owner-scoped. Only allows deletion of assets that are NOT currently
+// being processed by the pipeline. In-progress states (initiated,
+// uploaded, scanning, transcoding) are locked to prevent race conditions
+// where a transcode callback resurrects a deleted asset.
+// Safe states: ready, failed, and any terminal state.
+func (s *MediaService) DeleteAsset(ctx context.Context, assetID, userID uuid.UUID) (*model.MediaAsset, error) {
+	// First fetch the asset to check its status
+	var asset model.MediaAsset
+	if err := s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", assetID, userID).
+		First(&asset).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrMediaNotFound
+		}
+		return nil, err
+	}
+
+	// Prevent deletion of in-progress assets
+	switch asset.Status {
+	case model.MediaStatusInitiated, model.MediaStatusUploaded, model.MediaStatusScanning, model.MediaStatusTranscoding:
+		return nil, fmt.Errorf("%w: cannot delete asset in %s state", ErrInvalidStateTransition, asset.Status)
+	}
+
+	if err := s.db.WithContext(ctx).Delete(&asset).Error; err != nil {
+		return nil, err
+	}
+	return &asset, nil
+}
+
 func (s *MediaService) transition(ctx context.Context, assetID, userID uuid.UUID, from, to string) error {
 	res := s.db.WithContext(ctx).Model(&model.MediaAsset{}).
 		Where("id = ? AND user_id = ? AND status = ?", assetID, userID, from).

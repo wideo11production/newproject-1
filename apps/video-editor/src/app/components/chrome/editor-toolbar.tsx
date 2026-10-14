@@ -91,13 +91,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@wideo11/ui/select';
-import { SUPPORTED_FPS, clampPxPerFrame, PLAYBACK_SPEEDS, formatSpeed } from '../../lib/engine/frames';
+import { 
+  SUPPORTED_FPS, 
+  STANDARD_FPS, 
+  AURA_ONLY_FPS,
+  STANDARD_PLAYBACK_SPEEDS, 
+  MICRO_PLAYBACK_SPEEDS,
+  PLAYBACK_SPEEDS,
+  playbackSpeedsFor, 
+  formatSpeed, 
+  clampPxPerFrame, 
+  hasHighFrameRates 
+} from '../../lib/engine/frames';
 
-/** The speeds offered. Real time first, because that is the only one most
- *  projects are cut at, and a list that starts at 0.5 implies otherwise. */
-// Hinglish: Playback speeds — shared list (frames.ts): 0.0001x micro-step se
-// 4x tak. AURA studio ke identical set — consistency.
-const PLAYBACK_RATES = PLAYBACK_SPEEDS;
+/**
+ * The speeds offered to the AURA plan.
+ *
+ * Real time first, because that is the only one most projects are cut at, and a
+ * list that starts at 0.5 implies otherwise.
+ *
+ * Hinglish: AURA ke liye micro-steps (0.0001x se) + standard speeds — AURA
+ * studio ke identical set. Non-AURA plan `playbackSpeedsFor(maxFps)` se sirf
+ * standard speeds padhta hai, isliye ye list AURA-only hai.
+ */
 
 interface ToolButton {
   id: string;
@@ -161,6 +177,14 @@ interface EditorToolbarProps {
   fps: number;
   playbackRate: number;
   onPlaybackRate: (rate: number) => void;
+  /**
+   * The plan's frame-rate ceiling, in fps.
+   *
+   * 60 on every plan except the AURA lifetime plan, which is 240. This is the
+   * only input that decides whether 120 and 240 appear in the dropdown, and
+   * whether the micro-step playback speeds below it appear in theirs.
+   */
+  maxFps: number;
   /** Whether to render the icon toolbar below the menu bar. Default true. */
   showToolbar?: boolean;
 }
@@ -216,11 +240,26 @@ export function EditorToolbar({
   fps,
   playbackRate,
   onPlaybackRate,
+  maxFps,
   showToolbar = true,
-}: EditorToolbarProps) {
+  }: EditorToolbarProps) {
   // Help modal state. Local to the toolbar because the toolbar OWNS the
   // trigger - lifting it would put a boolean in the editor shell for one
   // dialog.
+
+  // ---- THE PLAN'S CEILING, APPLIED TO THE TWO DROPDOWNS ----
+  //
+  // The frame-rate list and the speed list are both derived from `maxFps`, and
+  // both are derived HERE rather than passed in already filtered. The toolbar
+  // is the thing that renders them, so it is the thing that should decide what
+  // it renders; a caller that filtered would be a caller that could forget.
+  //
+  // `fpsFor` and `playbackSpeedsFor` are the single place the rule lives, so
+  // this toolbar, the timeline toolbar and the AURA studio cannot disagree.
+  const fpsOptions = SUPPORTED_FPS;
+  const speedOptions = PLAYBACK_SPEEDS;
+  const auraRates = hasHighFrameRates(maxFps);
+  const isAuraPlan = auraRates;
 
   const menus: Menu[] = [
     {
@@ -563,7 +602,11 @@ export function EditorToolbar({
           */}
           <label
             className="flex items-center gap-1 px-1"
-            title="The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds."
+            title={
+              isAuraPlan
+                ? 'The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds. AURA plan: 120 and 240 are included.'
+                : 'The rate the timeline counts in. Every frame number depends on it; changing it rescales the zoom so the timeline keeps the same size in seconds. 120 and 240 are locked to the AURA plan.'
+            }
           >
             <Gauge className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
             {/*
@@ -584,21 +627,34 @@ export function EditorToolbar({
               <SelectContent
                 className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
               >
-                {SUPPORTED_FPS.map((f) => (
-                  <SelectItem
-                    key={f}
-                    value={String(f)}
-                    className="rounded-md text-[8px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
-                  >
-                    {f} fps
-                  </SelectItem>
-                ))}
+                {fpsOptions.map((f) => {
+                  const isAuraOnly = AURA_ONLY_FPS.includes(f as any);
+                  const disabled = isAuraOnly && !isAuraPlan;
+                  return (
+                    <SelectItem
+                      key={f}
+                      value={String(f)}
+                      disabled={disabled}
+                      className={`rounded-md text-[8px] outline-none transition-colors duration-150 ${
+                        disabled
+                          ? 'text-fg-muted/40 cursor-not-allowed'
+                          : 'text-fg-muted focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white'
+                      }`}
+                    >
+                      {f} fps{disabled ? ' (AURA)' : ''}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </label>
           <label
             className="flex items-center gap-1 px-1"
-            title="Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported."
+            title={
+              isAuraPlan
+                ? 'Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported. AURA plan: micro-steps down to 0.0001x are included.'
+                : 'Play the timeline faster or slower than real time. The picture comes off the timeline clock either way, so this changes what you see and hear, not what would be exported. Micro-steps below 0.25x are locked to the AURA plan.'
+            }
           >
             <Timer className="h-2.5 w-2.5 text-fg-muted" aria-hidden="true" />
             <Select value={String(playbackRate)} onValueChange={(v) => onPlaybackRate(Number(v))}>
@@ -611,15 +667,24 @@ export function EditorToolbar({
               <SelectContent
                 className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
               >
-                {PLAYBACK_RATES.map((r) => (
-                  <SelectItem
-                    key={r}
-                    value={String(r)}
-                    className="rounded-md text-[8px] text-fg-muted outline-none transition-colors duration-150 focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white"
-                  >
-                    {formatSpeed(r)}
-                  </SelectItem>
-                ))}
+                {speedOptions.map((r) => {
+                  const isMicroSpeed = MICRO_PLAYBACK_SPEEDS.includes(r as any);
+                  const disabled = isMicroSpeed && !isAuraPlan;
+                  return (
+                    <SelectItem
+                      key={r}
+                      value={String(r)}
+                      disabled={disabled}
+                      className={`rounded-md text-[8px] outline-none transition-colors duration-150 ${
+                        disabled
+                          ? 'text-fg-muted/40 cursor-not-allowed'
+                          : 'text-fg-muted focus:bg-[#ff6500]/10 focus:text-[#ff6500] data-[state=checked]:bg-[#ff6500] data-[state=checked]:text-white'
+                      }`}
+                    >
+                      {formatSpeed(r)}{disabled ? ' (AURA)' : ''}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </label>

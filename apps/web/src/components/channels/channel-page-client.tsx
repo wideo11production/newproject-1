@@ -39,6 +39,15 @@ import {
 } from '@/components/InlinePlayerProvider';
 import { hlsStreamUrl, posterStreamUrl, previewStreamUrl, relativeObjectPath } from '@/lib/playback';
 
+import {
+  productAccentBg,
+  productAccentHoverBg,
+  productPanel,
+  productPanelHover,
+  productSunken,
+  productTextMuted,
+} from '@wideo11/ui/design-system';
+
 
 
 type Media = {
@@ -179,13 +188,13 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0d0f11] p-6">
-        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-[#16181d] p-6 text-center">
+      <div className={`min-h-screen ${productSunken} p-6`}>
+        <div className={`mx-auto mt-16 max-w-md rounded-2xl ${productPanel} p-6 text-center`}>
           <AlertCircle className="mx-auto mb-3 h-7 w-7 text-red-400" aria-hidden="true" />
           <p className="text-sm font-medium text-white">{error}</p>
           <Link
             href="/channels"
-            className="mt-4 inline-block rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#e05500]"
+            className={`mt-4 inline-block rounded-lg ${productAccentBg} px-4 py-2 text-xs font-medium text-white transition-colors ${productAccentHoverBg}`}
           >
             Browse channels
           </Link>
@@ -215,13 +224,13 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0d0f11] p-6">
-        <div className="mx-auto mt-16 max-w-md rounded-2xl bg-[#16181d] p-6 text-center">
+      <div className={`min-h-screen ${productSunken} p-6`}>
+        <div className={`mx-auto mt-16 max-w-md rounded-2xl ${productPanel} p-6 text-center`}>
           <AlertCircle className="mx-auto mb-3 h-7 w-7 text-red-400" aria-hidden="true" />
           <p className="text-sm font-medium text-white">{error}</p>
           <Link
             href="/channels"
-            className="mt-4 inline-block rounded-lg bg-[#ff6500] px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-[#e05500]"
+            className={`mt-4 inline-block rounded-lg ${productAccentBg} px-4 py-2 text-xs font-medium text-white transition-colors ${productAccentHoverBg}`}
           >
             Browse channels
           </Link>
@@ -231,7 +240,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#0d0f11] text-white">
+    <div className={`flex min-h-screen ${productSunken} text-white`}>
       {/* ============ SIDEBAR: media categories ============ */}
       <StudioSidebar active={category} onSelect={setCategory} counts={categoryCounts} />
 
@@ -255,8 +264,8 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
                   aria-pressed={is_subscribed}
                   className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
                     is_subscribed
-                      ? 'bg-[#0d0f11] text-[#8b949e] hover:bg-[#1f2227] hover:text-white'
-                      : 'bg-[#ff6500] text-white hover:bg-[#e05500]'
+                      ? `${productSunken} ${productTextMuted} ${productPanelHover} hover:text-white`
+                      : `${productAccentBg} text-white ${productAccentHoverBg}`
                   }`}
                 >
                   {is_subscribed ? (
@@ -272,21 +281,21 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
                   )}
                 </button>
                 <button
-                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  className={`rounded-full ${productSunken} p-2 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                   aria-label="Notifications"
                   title="Notifications"
                 >
                   <Bell className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  className={`rounded-full ${productSunken} p-2 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                   aria-label="Share channel"
                   title="Share"
                 >
                   <Share2 className="h-3.5 w-3.5" />
                 </button>
                 <button
-                  className="rounded-full bg-[#0d0f11] p-2 text-[#8b949e] transition-colors hover:bg-[#1f2227] hover:text-white"
+                  className={`rounded-full ${productSunken} p-2 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
                   aria-label="More"
                   title="More"
                 >
@@ -297,7 +306,7 @@ export default function ChannelPageClient({ handle }: { handle: string }) {
           />
 
           {channel?.description ? (
-            <p className="max-w-3xl whitespace-pre-wrap px-1 text-xs leading-relaxed text-[#8b949e]">
+            <p className={`max-w-3xl whitespace-pre-wrap px-1 text-xs leading-relaxed ${productTextMuted}`}>
               {channel.description}
             </p>
           ) : null}

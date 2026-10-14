@@ -36,6 +36,18 @@ import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { CoverUploader } from '@/components/channels/cover-uploader';
 
+import {
+  grafanaBg,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+  productTextNeutral,
+} from '@wideo11/ui/design-system';
+
 export type ManagedChannel = {
   id: string;
   handle: string;
@@ -181,10 +193,10 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
   };
 
   return (
-    <li className="rounded-md bg-[#0d0f11] p-4">
+    <li className={`rounded-md ${productSunken} p-4`}>
       <div className="flex flex-wrap items-start gap-3">
         {/* 16:9 cover thumbnail */}
-        <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-md bg-[#111217]">
+        <div className={`aspect-video w-40 shrink-0 overflow-hidden rounded-md ${grafanaBg}`}>
           {channel.cover_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -193,7 +205,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-[10px] text-[#9fa7b3]">
+            <div className={`flex h-full w-full items-center justify-center text-[10px] ${grafanaTextMuted}`}>
               No cover
             </div>
           )}
@@ -201,14 +213,14 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="truncate text-sm font-semibold text-[#d8d9da]">
+            <h3 className={`truncate text-sm font-semibold ${grafanaText}`}>
               {channel.display_name}
             </h3>
             <span
               className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
                 channel.is_public
                   ? 'bg-emerald-500/15 text-emerald-400'
-                  : 'bg-[#2c3235] text-[#9fa7b3]'
+                  : `${productSeparation} ${grafanaTextMuted}`
               }`}
             >
               {channel.is_public ? 'Public' : 'Private'}
@@ -216,13 +228,13 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
           </div>
 
           {/* Handle is read-only on purpose - see the file header. */}
-          <p className="mt-0.5 text-[11px] text-[#9fa7b3]">
+          <p className={`mt-0.5 text-[11px] ${grafanaTextMuted}`}>
             @{channel.handle}
-            <span className="ml-1 text-[#6f7783]">(permanent URL)</span>
+            <span className={`ml-1 ${productTextNeutral}`}>(permanent URL)</span>
           </p>
 
           {channel.description ? (
-            <p className="mt-1 line-clamp-2 text-xs text-[#9fa7b3]">
+            <p className={`mt-1 line-clamp-2 text-xs ${grafanaTextMuted}`}>
               {channel.description}
             </p>
           ) : null}
@@ -231,7 +243,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
             <Button
               type="button"
               onClick={() => setOpen((v) => !v)}
-              className="h-8 bg-[#1f2227] px-2.5 text-xs text-[#d8d9da] hover:bg-[#2c3235]"
+              className={`h-8 ${productPanelHover} px-2.5 text-xs ${grafanaText} hover:${productSeparation}`}
             >
               {open ? (
                 <X className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
@@ -245,7 +257,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               type="button"
               onClick={toggleVisibility}
               disabled={busy}
-              className="h-8 bg-[#1f2227] px-2.5 text-xs text-[#d8d9da] hover:bg-[#2c3235]"
+              className={`h-8 ${productPanelHover} px-2.5 text-xs ${grafanaText} hover:${productSeparation}`}
             >
               {channel.is_public ? (
                 <EyeOff className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
@@ -259,14 +271,14 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
               <Button
                 type="button"
                 onClick={() => setConfirmingDelete(true)}
-                className="h-8 bg-[#1f2227] px-2.5 text-xs text-red-400 hover:bg-[#2c3235]"
+                className={`h-8 ${productPanelHover} px-2.5 text-xs text-red-400 hover:${productSeparation}`}
               >
                 <Trash2 className="mr-1 h-2.5 w-2.5" aria-hidden="true" />
                 Delete
               </Button>
             ) : (
               <span className="flex items-center gap-1.5">
-                <span className="text-[11px] text-[#9fa7b3]">Sure?</span>
+                <span className={`text-[11px] ${grafanaTextMuted}`}>Sure?</span>
                 <Button
                   type="button"
                   onClick={remove}
@@ -282,7 +294,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 <Button
                   type="button"
                   onClick={() => setConfirmingDelete(false)}
-                  className="h-8 bg-[#1f2227] px-2.5 text-xs text-[#d8d9da] hover:bg-[#2c3235]"
+                  className={`h-8 ${productPanelHover} px-2.5 text-xs ${grafanaText} hover:${productSeparation}`}
                 >
                   Cancel
                 </Button>
@@ -294,7 +306,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
 
       {/* ---- Inline editor (no modal) - matches the create-form pattern ---- */}
       {open ? (
-        <div className="mt-4 space-y-4-[#2c3235] pt-4">
+        <div className="mt-4 space-y-4 pt-4">
           {error ? (
             <p className="flex items-start gap-1.5 text-[11px] text-red-400">
               <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
@@ -312,7 +324,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
             <div>
               <label
                 htmlFor={`display-name-${channel.id}`}
-                className="mb-1 block text-[11px] font-medium text-[#9fa7b3]"
+                className={`mb-1 block text-[11px] font-medium ${grafanaTextMuted}`}
               >
                 Display name
               </label>
@@ -321,14 +333,14 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 value={displayName}
                 maxLength={DISPLAY_NAME_MAX}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="h-9-[#2c3235] bg-[#111217] text-[#d8d9da]"
+                className={`h-9 ${grafanaBg} ${grafanaText}`}
               />
             </div>
 
             <div>
               <label
                 htmlFor={`description-${channel.id}`}
-                className="mb-1 block text-[11px] font-medium text-[#9fa7b3]"
+                className={`mb-1 block text-[11px] font-medium ${grafanaTextMuted}`}
               >
                 Description
               </label>
@@ -338,9 +350,9 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
                 maxLength={DESCRIPTION_MAX}
                 rows={3}
                 onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-md bg-[#111217] p-2 text-sm text-[#d8d9da] outline-none focus:border-[#5794f2] focus:ring-2 focus:ring-[#5794f2]/30"
+                className={`w-full rounded-md ${grafanaBg} p-2 text-sm ${grafanaText} outline-none focus:${grafanaPrimary} focus:ring-2 focus:ring-[#5794f2]/30`}
               />
-              <p className="mt-0.5 text-[10px] text-[#6f7783]">
+              <p className={`mt-0.5 text-[10px] ${productTextNeutral}`}>
                 {description.length}/{DESCRIPTION_MAX}
               </p>
             </div>
@@ -348,7 +360,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
             <Button
               type="submit"
               disabled={busy}
-              className="h-9 w-full bg-[#5794f2] text-sm text-white hover:bg-[#5794f2]/85"
+              className={`h-9 w-full ${grafanaPrimaryBg} text-sm text-white ${grafanaPrimaryBg}/85`}
             >
               {busy ? (
                 <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" aria-hidden="true" />
@@ -359,7 +371,7 @@ export function ChannelManager({ channel, onChanged, onDeleted }: Props) {
           </form>
 
           <div>
-            <p className="mb-2 text-[11px] font-medium text-[#9fa7b3]">
+            <p className={`mb-2 text-[11px] font-medium ${grafanaTextMuted}`}>
               Cover image
             </p>
             <CoverUploader

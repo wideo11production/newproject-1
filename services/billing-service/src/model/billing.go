@@ -32,6 +32,7 @@ const (
 	BillingCycleAnnually  BillingCycle = "annually"
 	BillingCycleWeekly    BillingCycle = "weekly"
 	BillingCycleDaily     BillingCycle = "daily"
+	BillingCycleLifetime  BillingCycle = "lifetime" // one-time, no recurring
 )
 
 // TaxType represents the type of tax for calculation purposes

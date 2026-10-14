@@ -29,6 +29,9 @@ func TestValidateCommentBodyRefusesLinks(t *testing.T) {
 		{"middle dot", "example·com"},
 		{"unicode fullwidth dot", "example．com"},
 		{"spaced dots", "e x a m p l e . c o m"},
+		{"padded domain", "example . com"},
+		{"dotted inside prose", "please visit example.com for more"},
+		{"dotted bracketed inside prose", "example[.]com is the site"},
 		{"zero width space", "exa​mple.com"},
 		{"javascript scheme", "javascript:alert(1)"},
 		{"mailto", "mail me at mailto:someone@example.com"},
@@ -148,17 +151,20 @@ func TestDetectLinkFindsTheRightKind(t *testing.T) {
 }
 
 func TestNormaliseForLinkDetectionFlattensObfuscation(t *testing.T) {
-	// The normaliser is what makes ONE detector cover eight encodings, so it is
-	// worth proving directly rather than only through the outcomes.
+	// The normaliser destroys obfuscations, and now KEEPS ordinary spaces - see
+	// `normaliseForLinkDetection`: deleting them is what let "visit example.com for
+	// more" through as prose, because the words fused and no TLD boundary was left.
 	cases := []struct {
 		in, want string
 	}{
 		{"example[.]com", "example.com"},
 		{"example(.)com", "example.com"},
-		{"e x a m p l e", "example"},
 		{"exa​mple", "example"},
 		{"a·b", "a.b"},
 		{"plain", "plain"},
+		// ordinary space survives
+		{"e x a m p l e", "e x a m p l e"},
+		{"visit example.com for more", "visit example.com for more"},
 	}
 	for _, tc := range cases {
 		got := normaliseForLinkDetection(tc.in)

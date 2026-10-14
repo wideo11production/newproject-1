@@ -43,6 +43,15 @@
 
 import { LayoutGrid, Video, Film, Smartphone, Monitor, Music, Clapperboard } from 'lucide-react';
 
+import {
+  productAccent,
+  productBrandGradient,
+  productPanel,
+  productPanelHover,
+  productTextMuted,
+  productTextSubtle,
+} from '@wideo11/ui/design-system';
+
 export type DiscoverTab =
   | 'all'
   | 'videos'
@@ -135,21 +144,21 @@ export function DiscoverSidebar({ active, onSelect, counts }: DiscoverSidebarPro
             <span
               className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
                 on
-                  ? 'bg-gradient-to-br from-[#ff6500] to-[#c2410c] text-white shadow-lg shadow-[#ff6500]/25'
-                  : 'bg-[#16181d] text-[#8b949e] group-hover:bg-[#1f2227] group-hover:text-white'
+                  ? `${productBrandGradient}`
+                  : `${productPanel} ${productTextMuted} group-${productPanelHover} group-hover:text-white`
               }`}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
             </span>
             <span
               className={`text-[9px] font-medium leading-none ${
-                on ? 'text-[#ff6500]' : 'text-[#8b949e] group-hover:text-white'
+                on ? `${productAccent}` : `${productTextMuted} group-hover:text-white`
               }`}
             >
               {label}
             </span>
             {typeof count === 'number' ? (
-              <span className="text-[8px] tabular-nums text-[#5a6066]">{count}</span>
+              <span className={`text-[8px] tabular-nums ${productTextSubtle}`}>{count}</span>
             ) : null}
           </button>
         );

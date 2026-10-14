@@ -1,30 +1,35 @@
 {
   "name": "eslint-config-wideo11",
-  "version": "1.0.0",
-  "description": "Shared ESLint configuration for Wideo11 microservices",
+  "version": "0.0.0",
+  "private": true,
   "main": "index.js",
-  "scripts": {
-    "lint": "eslint 'packages/**/*.js' --ext .js,.jsx",
-    "fix": "eslint 'packages/**/*.js' --ext .js,.jsx --fix"
+  "//": "exports map: subpath imports ke liye ZAROORI hai. Bina iske `require('eslint-config-wideo11/nextjs.js')` fail hota hai, aur saari shared rules sirf ek file se hi reachable hoti hain.",
+  "exports": {
+    ".": "./index.js",
+    "./nextjs.js": "./nextjs.js",
+    "./nextjs": "./nextjs.js",
+    "./react.js": "./react.js",
+    "./node.js": "./node.js",
+    "./library.js": "./library.js",
+    "./hex-literal-allowed.js": "./hex-literal-allowed.js",
+    "./hex-literal-allowed": "./hex-literal-allowed.js",
+    "./package.json": "./package.json"
   },
+  "//deps": "YE DEPENDENCIES PEHLE KHAALI THIN — aur isi wajah se ye config kabhi chala hi nahi. Package import karta hai typescript-eslint, @typescript-eslint/*, aur paanch plugins, par kuch bhi declare nahi tha. Kisi app ne ise import karne ki koshish ki to 'Cannot find module typescript-eslint' aata. Rules likhe the, enforce koi nahi.",
   "dependencies": {
-    "eslint": "^8.57.0",
+    "typescript-eslint": "^7.18.0",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-native": "^5.0.0"
+    "eslint-plugin-react-hooks": "^4.6.2",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unused-imports": "^3.0.0"
   },
-  "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "tailwindcss": "^3.4.0",
-    "postcss": "^8.4.0"
+  "peerDependencies": {
+    "eslint": ">=8"
   },
-  "override": {
-    "extensions": [
-      ".js",
-      ".jsx",
-      ".ts",
-      ".tsx"
-    ]
+  "scripts": {
+    "lint": "echo 'eslint-config: nothing to lint'"
   }
 }

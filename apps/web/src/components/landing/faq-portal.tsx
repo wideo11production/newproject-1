@@ -43,6 +43,13 @@ import { HelpCircle, ShieldCheck, Receipt, Cpu, PiggyBank } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 
+import {
+  grafanaBg,
+  grafanaPrimary,
+  grafanaText,
+  grafanaTextMuted,
+} from '@wideo11/ui/design-system';
+
 /**
  * FAQ ENTRIES - static data.
  *
@@ -98,22 +105,22 @@ const FAQ_ENTRIES: ReadonlyArray<{
 export function FaqPortal({ className }: { className?: string }) {
   return (
     <section
-      className={cn('w-full bg-[#111217] py-16 sm:py-20', className)}
+      className={cn(`w-full ${grafanaBg} py-16 sm:py-20`, className)}
       aria-labelledby="faq-heading"
     >
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         {/* ---- SECTION HEADER ---- */}
         <div className="flex items-start gap-3">
           {/* FAQ icon - decorative, heading text already labels the section */}
-          <HelpCircle className="mt-1 h-7 w-7 shrink-0 text-[#5794f2]" aria-hidden="true" />
+          <HelpCircle className={`mt-1 h-7 w-7 shrink-0 ${grafanaPrimary}`} aria-hidden="true" />
           <div>
             <h2
               id="faq-heading"
-              className="text-2xl font-bold tracking-tight text-[#d8d9da] sm:text-3xl"
+              className={`text-2xl font-bold tracking-tight ${grafanaText} sm:text-3xl`}
             >
               Frequently asked questions
             </h2>
-            <p className="mt-2 text-sm leading-relaxed text-[#9fa7b3] sm:text-base">
+            <p className={`mt-2 text-sm leading-relaxed ${grafanaTextMuted} sm:text-base`}>
               The rules that actually govern your account, stated plainly - including the
               parts that are still sandbox on our side.
             </p>
@@ -131,14 +138,14 @@ export function FaqPortal({ className }: { className?: string }) {
               <AccordionItem
                 key={entry.id}
                 value={entry.id}
-                className="border-b-[#2c3235]"
+                className="border-b"
               >
                 {/* ---- TRIGGER (the question) ----
                     Radix Trigger already has `aria-expanded` + keyboard.
                     Hum styling customize karte hain: no underline on hover
                     (default Radix behaviour underline deta hai jo ugly lagta
                     hai), focus ring visible. */}
-                <AccordionTrigger className="gap-3 py-5 text-left text-base font-medium text-[#d8d9da] hover:bg-transparent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60">
+                <AccordionTrigger className={`gap-3 py-5 text-left text-base font-medium ${grafanaText} hover:bg-transparent hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/60`}>
                   {/* Category icon - accent colored, decorative */}
                   <Icon
                     className="h-4.5 w-4.5 shrink-0"
@@ -151,7 +158,7 @@ export function FaqPortal({ className }: { className?: string }) {
                 {/* ---- CONTENT (the answer) ----
                     Radix Content already has `role="region"` + aria-controls.
                     Text full (no clamp) - answers important hain. */}
-                <AccordionContent className="pb-5 pr-8 text-sm leading-relaxed text-[#9fa7b3]">
+                <AccordionContent className={`pb-5 pr-8 text-sm leading-relaxed ${grafanaTextMuted}`}>
                   {entry.answer}
                 </AccordionContent>
               </AccordionItem>

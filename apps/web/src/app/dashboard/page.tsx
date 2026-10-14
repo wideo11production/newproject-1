@@ -235,6 +235,29 @@ export default function CreatorDashboard() {
   const [description, setDescription] = useState('');
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelErr, setChannelErr] = useState('');
+  const [showFixPermissions, setShowFixPermissions] = useState(false);
+
+  // ======================================================================
+  // THE TWO TABS
+  // ======================================================================
+  //
+  // The dashboard used to be one long scroll: trial countdown, an upload row,
+  // profile, channels, devices. Three of those five are a creator's account
+  // settings, and only two are the reason they came here.
+  //
+  // So the page is split on the one axis that matters:
+  //
+  //   Channel  - the things you DO here: upload, create a channel, manage channels
+  //   Account  - the things about YOU: profile avatar, signed-in devices
+  //
+  // Channel is the default. A creator who opens the dashboard wants to publish,
+  // and the old order put their own avatar above the button that lets them do it.
+  //
+  // Not persisted to storage, and deliberately so: this is a navigation choice,
+  // not a workspace setting, and reopening the dashboard on the channel tab is
+  // the answer to "let me in and let me work" rather than a trap that keeps
+  // hiding the account settings.
+  const [activeTab, setActiveTab] = useState<'channel' | 'account'>('channel');
 
   // ---- T&C gate state ----
   //
@@ -458,45 +481,167 @@ export default function CreatorDashboard() {
     void submitChannelWithTerms();
   }
 
+  /**
+   * Is this a "you do not hold the capability" failure, as opposed to a validation
+   * failure?
+   *
+   * Three shapes arrive and all three mean the same thing to the caller: the
+   * account was created before the auto-appointment fix and holds no live role.
+   *
+   *   "You do not have the 'channel.create' capability."  rbac.Can -> false
+   *   "missing required capability"                       the same, phrased differently
+   *   "forbidden_by_policy"                               the caller's ROLE is barred
+   *
+   * The third is the one that used to defeat the self-heal: it is what the
+   * superadmin got while `SuperadminDeniedPermissions` carried the creator
+   * capabilities, and it looked unfixable from the dashboard.
+   */
+  function isCapabilityFailure(msg: string): boolean {
+    return (
+      msg.includes("channel.create") ||
+      msg.includes("You do not have the") ||
+      msg.includes("missing required capability") ||
+      msg.includes("forbidden")
+    );
+  }
+
+  /**
+   * Make sure the caller is a plan-holding creator before the channel goes in.
+   *
+   * Two independent things, both of which have to be true for a channel to
+   * exist, and neither of which is the user's fault when it is not:
+   *
+   *   1. A PLAN. Uploads are free and unlimited, but an account with no plan row
+   *      at all is not on the free tier — it is on nothing, and the server's
+   *      `max_channels` check has no number to compare against.
+   *   2. A ROLE. `channel.create` is a capability the `creator` role holds.
+   *
+   * Registration grants both now, so this is a no-op for every new account. It
+   * exists for the two populations that never got either: accounts created
+   * before the auto-appointment fix, and accounts whose browser had already used
+   * a trial so registration refused the plan.
+   *
+   * Both calls are idempotent and cheap, so this runs on every create rather
+   * than being gated behind a button the user has to find. That is the whole
+   * point: the failure is invisible to them and unactionable from their side.
+   */
+  async function ensureCreatorReadiness(): Promise<boolean> {
+    let ready = true;
+
+    // The free plan. A failure here is not fatal — the create is still attempted,
+    // and the server is the authority on whether the plan allows a channel.
+    try {
+      await fetch('/api/auth/me/free-plan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).then((r) => r.json().catch(() => null));
+    } catch {
+      /* the create below is the real test */
+    }
+
+    // The creator role.
+    try {
+      const heal = await fetch('/api/auth/me/fix-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }).then((r) => r.json().catch(() => null));
+      if (heal && heal.fixed !== true && heal.has_creator === false) ready = false;
+    } catch {
+      /* leave `ready` alone; a network error is not a missing role */
+    }
+
+    return ready;
+  }
+
   /** The API call, separated so the T&C dialog can call it on accept. */
   async function submitChannelWithTerms() {
     setChannelBusy(true);
-    try {
+    setChannelErr('');
+    setShowFixPermissions(false);
+
+    // ---- Make the account a plan-holding creator FIRST ----
+    //
+    // Awaited, not fired alongside the create: running it in parallel would race
+    // the very row the create needs, and the create would fail for the reason
+    // this call exists to remove.
+    await ensureCreatorReadiness();
+
+    const payload = {
+      handle: handle.trim().toLowerCase(),
+      display_name: displayName.trim(),
+      description: description.trim(),
+      channel_type: wizard.channelType,
+      mature_content: wizard.matureContent,
+      // Sent as null when unanswered, never as a bare `false`. An omitted
+      // boolean would decode to false, which is an assertion about somebody's
+      // content that nobody made.
+      made_for_kids: wizard.madeForKids,
+      contact_email: wizard.contactEmail.trim(),
+      country: wizard.country.trim(),
+      primary_language: wizard.primaryLanguage.trim(),
+      keywords: wizard.keywords.trim(),
+      // Only sent when an upload actually finished. Sending an empty string
+      // would be a different instruction from sending nothing - "no cover"
+      // versus "leave whatever is there" - and the create path has no
+      // previous value to leave.
+      ...(wizard.coverUrl ? { cover_url: wizard.coverUrl } : {}),
+      // ---- MANDATORY T&C acceptance ----
+      //
+      // The backend refuses a channel without these two (`ErrTCNotAccepted`),
+      // so they are not optional. The version travels with the acceptance so
+      // the stored record says WHICH text was agreed to, which is what makes
+      // the acceptance auditable after the terms change.
+      tc_accepted: true,
+      tc_accepted_version: TC_VERSION,
+    };
+
+    const createChannel = async () => {
       const res = await fetch('/api/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          handle: handle.trim().toLowerCase(),
-          display_name: displayName.trim(),
-          description: description.trim(),
-          channel_type: wizard.channelType,
-          mature_content: wizard.matureContent,
-          // Sent as null when unanswered, never as a bare `false`. An omitted
-          // boolean would decode to false, which is an assertion about somebody's
-          // content that nobody made.
-          made_for_kids: wizard.madeForKids,
-          contact_email: wizard.contactEmail.trim(),
-          country: wizard.country.trim(),
-          primary_language: wizard.primaryLanguage.trim(),
-          keywords: wizard.keywords.trim(),
-          // Only sent when an upload actually finished. Sending an empty string
-          // would be a different instruction from sending nothing - "no cover"
-          // versus "leave whatever is there" - and the create path has no
-          // previous value to leave.
-          ...(wizard.coverUrl ? { cover_url: wizard.coverUrl } : {}),
-          // ---- MANDATORY T&C acceptance ----
-          //
-          // The backend refuses a channel without these two (`ErrTCNotAccepted`),
-          // so they are not optional. The version travels with the acceptance so
-          // the stored record says WHICH text was agreed to, which is what makes
-          // the acceptance auditable after the terms change.
-          tc_accepted: true,
-          tc_accepted_version: TC_VERSION,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setChannelErr(data.message ?? data.error ?? 'Could not create channel.');
+      return { ok: res.ok, data };
+    };
+
+    try {
+      let { ok, data } = await createChannel();
+
+      // ---- SELF-HEAL, THEN RETRY ONCE ----
+      //
+      // The failure this covers is a missing `creator` appointment: every
+      // registration writes one now, but accounts created before that fix never
+      // got one. Showing a "Fix permissions" button and waiting for a click made
+      // this a repeated annoyance - the user has to understand their account is
+      // missing a role, find a button, press Create again. So the heal happens
+      // first, silently, and the create is replayed.
+      //
+      // One retry, not a loop: if the account still cannot create a channel after
+      // being granted the role, the cause is not the role.
+      if (!ok && isCapabilityFailure(String(data.message ?? data.error ?? ''))) {
+        const heal = await fetch('/api/auth/me/fix-permissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+          .then((r) => r.json().catch(() => null))
+          .catch(() => null);
+
+        if (heal?.fixed === true) {
+          ({ ok, data } = await createChannel());
+          if (ok) setChannelErr('');
+        }
+      }
+
+      if (!ok) {
+        const msg = String(data.message ?? data.error ?? 'Could not create channel.');
+        // The REAL message. The old code replaced anything containing
+        // "channel.create" with a generic sentence, which hid the server's actual
+        // answer - including the case where the refusal was a policy about the
+        // caller's role, which no button can fix.
+        setChannelErr(msg);
+        // Only offer the button when the heal has not already run.
+        if (isCapabilityFailure(msg) && !data.policy) setShowFixPermissions(true);
         return;
       }
       // Success - form reset + list refresh
@@ -526,6 +671,36 @@ export default function CreatorDashboard() {
       if (data.channel?.id) {
         skipGateBriefly();
         router.replace(`/dashboard/channels/setup?channel=${encodeURIComponent(data.channel.id)}`);
+      }
+    } catch {
+      setChannelErr('Network error. Please try again.');
+    } finally {
+      setChannelBusy(false);
+    }
+  }
+
+  /** Self-healing: grant creator role if missing. */
+  async function fixPermissions() {
+    setChannelBusy(true);
+    setChannelErr('');
+    try {
+      const res = await fetch('/api/auth/me/fix-permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setChannelErr(data.message ?? data.error ?? 'Could not fix permissions. Please try again.');
+        return;
+      }
+      if (data.fixed) {
+        setChannelErr('Permissions fixed! You can now create channels.');
+        setShowFixPermissions(false);
+        // Refresh channel list to show the create form works
+        await loadAll();
+      } else {
+        setChannelErr(data.message ?? 'Permissions are already correct.');
+        setShowFixPermissions(false);
       }
     } catch {
       setChannelErr('Network error. Please try again.');
@@ -713,6 +888,57 @@ export default function CreatorDashboard() {
         ) : (
         <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
 
+        {/* ==================================================================
+            TAB BAR
+            ==================================================================
+            Two tabs, not five sections. `role="tablist"` and `aria-selected`
+            because a row of buttons that switches content is a tab strip, and
+            a screen reader user is otherwise told nothing when the page
+            changes underneath them.
+
+            The counts are live: the Channel tab carries the channel count so a
+            creator with three channels can see it without switching away. */}
+        <div
+          role="tablist"
+          aria-label="Dashboard sections"
+          className="flex gap-1 rounded-md bg-[#181b1f] p-1"
+        >
+          {(
+            [
+              { id: 'channel', label: 'Channel', Icon: Youtube, count: channels.length },
+              { id: 'account', label: 'Account', Icon: User, count: devices.length },
+            ] as const
+          ).map((t) => {
+            const selected = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                id={`dashboard-tab-${t.id}`}
+                aria-selected={selected}
+                aria-controls={`dashboard-panel-${t.id}`}
+                onClick={() => setActiveTab(t.id)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded px-3 py-2 text-xs font-medium transition-colors ${
+                  selected
+                    ? 'bg-[#5794f2] text-white'
+                    : 'text-[#9fa7b3] hover:bg-[#0d0f11] hover:text-[#d8d9da]'
+                }`}
+              >
+                <t.Icon className="h-2.5 w-2.5" />
+                {t.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-normal ${
+                    selected ? 'bg-black/20 text-white' : 'bg-[#1f2227] text-[#9fa7b3]'
+                  }`}
+                >
+                  {t.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* ---- PLAN / TRIAL COUNTDOWN ----
             Above everything, because it is the one thing on this page with a
             deadline attached. Under an hour it becomes a live amber timer; over an
@@ -721,6 +947,8 @@ export default function CreatorDashboard() {
             threshold - see `trial-countdown.tsx` for why. */}
         <TrialCountdown />
 
+        {activeTab === 'channel' ? (
+        <div id="dashboard-panel-channel" role="tabpanel" aria-labelledby="dashboard-tab-channel" className="space-y-6">
         {/* ==================================================================
             UPLOAD ENTRY POINT
             ==================================================================
@@ -757,6 +985,9 @@ export default function CreatorDashboard() {
           </Link>
         </section>
 
+        </div>
+        ) : (
+        <div id="dashboard-panel-account" role="tabpanel" aria-labelledby="dashboard-tab-account" className="space-y-6">
         {/* ==================================================================
             PANEL 1: PROFILE  (avatar + change image)
             ================================================================== */}
@@ -849,6 +1080,11 @@ export default function CreatorDashboard() {
           </div>
         </section>
 
+        </div>
+        )}
+
+        {activeTab === 'channel' ? (
+        <div id="dashboard-panel-channel-channels" className="space-y-6">
         {/* ==================================================================
             PANEL 2: CHANNELS  (+ create form)
             ================================================================== */}
@@ -965,6 +1201,18 @@ export default function CreatorDashboard() {
                 <p className="text-[11px] text-red-400">{channelErr}</p>
               ) : null}
 
+              {showFixPermissions ? (
+                <Button
+                  type="button"
+                  onClick={fixPermissions}
+                  disabled={channelBusy}
+                  variant="outline"
+                  className="h-10 w-full mt-2"
+                >
+                  {channelBusy ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : 'Fix Permissions (Grant Creator Role)'}
+                </Button>
+              ) : null}
+
               <Button
                 type="submit"
                 disabled={channelBusy}
@@ -1016,6 +1264,11 @@ export default function CreatorDashboard() {
           </div>
         </section>
 
+        </div>
+        ) : null}
+
+        {activeTab === 'account' ? (
+        <div className="space-y-6">
         {/* ==================================================================
             PANEL 3: DEVICES  (kis device par login hai)
             ================================================================== */}
@@ -1063,6 +1316,8 @@ export default function CreatorDashboard() {
           </ul>
         </section>
         </div>
+        ) : null}
+</div>
         )}
       </main>
       </div>

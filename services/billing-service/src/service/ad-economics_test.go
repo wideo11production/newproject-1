@@ -138,16 +138,20 @@ func TestCampaignEconomics(t *testing.T) {
 // Plans
 // ---------------------------------------------------------------------------
 
-// TestPlanPricingIndia - India plans
+// TestPlanPricingIndia - India plans (VIDEO EDITOR pricing)
 func TestPlanPricingIndia(t *testing.T) {
 	tests := []struct {
 		tier      PlanTier
 		price     string
 		minBalan  string
 	}{
-		{TierQuarterly, "300", "1000"},
-		{TierBiannual, "500", "1000"},
-		{TierAnnual, "1000", "1000"},
+		{TierQuarterly, "999", "1000"},
+		{TierBiannual, "1799", "1000"},
+		{TierAnnual, "2999", "1000"},
+		{TierLifetime, "7999", "1000"},
+		{TierLifetimeGroup5, "19999", "1000"},
+		{TierLifetimeGroup10, "34999", "1000"},
+		{TierLifetimeAURA, "12999", "1000"},
 	}
 
 	for _, tc := range tests {
@@ -165,16 +169,20 @@ func TestPlanPricingIndia(t *testing.T) {
 	}
 }
 
-// TestPlanPricingHighCurrency - USD plans
+// TestPlanPricingHighCurrency - USD plans (VIDEO EDITOR pricing)
 func TestPlanPricingHighCurrency(t *testing.T) {
 	tests := []struct {
 		tier     PlanTier
 		price    string
 		minBalan string
 	}{
-		{TierQuarterly, "150", "1000"},
-		{TierBiannual, "250", "1000"},
-		{TierAnnual, "500", "1000"},
+		{TierQuarterly, "29", "1000"},
+		{TierBiannual, "49", "1000"},
+		{TierAnnual, "79", "1000"},
+		{TierLifetime, "199", "1000"},
+		{TierLifetimeGroup5, "499", "1000"},
+		{TierLifetimeGroup10, "899", "1000"},
+		{TierLifetimeAURA, "299", "1000"},
 	}
 
 	for _, tc := range tests {
@@ -195,16 +203,20 @@ func TestPlanPricingHighCurrency(t *testing.T) {
 	}
 }
 
-// TestPlanPricingLowCurrency - low currency plans
+// TestPlanPricingLowCurrency - low currency plans (VIDEO EDITOR pricing)
 func TestPlanPricingLowCurrency(t *testing.T) {
 	tests := []struct {
 		tier     PlanTier
 		price    string
 		minBalan string
 	}{
-		{TierQuarterly, "450", "3000"},
-		{TierBiannual, "750", "3000"},
-		{TierAnnual, "1500", "3000"},
+		{TierQuarterly, "1499", "3000"},
+		{TierBiannual, "2699", "3000"},
+		{TierAnnual, "4499", "3000"},
+		{TierLifetime, "11999", "3000"},
+		{TierLifetimeGroup5, "29999", "3000"},
+		{TierLifetimeGroup10, "52999", "3000"},
+		{TierLifetimeAURA, "18999", "3000"},
 	}
 
 	for _, tc := range tests {
@@ -236,8 +248,8 @@ func TestCreatorPlansAreViewerPlans(t *testing.T) {
 	if plan.DiscountPercent != 0 {
 		t.Errorf("creator (no matrix): expected 0%% discount, got %d%%", plan.DiscountPercent)
 	}
-	if !plan.Price.Equal(decimal.NewFromInt(300)) {
-		t.Errorf("creator (no matrix): expected full ₹300, got %s", plan.Price.String())
+	if !plan.Price.Equal(decimal.NewFromInt(999)) {
+		t.Errorf("creator (no matrix): expected full ₹999, got %s", plan.Price.String())
 	}
 }
 
@@ -252,9 +264,9 @@ func TestStudentDiscountMatrix(t *testing.T) {
 	if plan.DiscountPercent != DiscountPercent {
 		t.Errorf("student matrix: expected %d%%, got %d%%", DiscountPercent, plan.DiscountPercent)
 	}
-	// 300 ka 25% discount = 225
-	if !plan.Price.Equal(decimal.NewFromInt(225)) {
-		t.Errorf("student matrix: expected ₹225, got %s", plan.Price.String())
+	// 999 ka 25% discount = 749.25
+	if !plan.Price.Equal(decimal.RequireFromString("749.25")) {
+		t.Errorf("student matrix: expected ₹749.25, got %s", plan.Price.String())
 	}
 }
 
@@ -269,9 +281,9 @@ func TestTwelveMonthDiscountMatrix(t *testing.T) {
 	if plan.DiscountPercent != DiscountPercent {
 		t.Errorf("twelve-month matrix: expected %d%%, got %d%%", DiscountPercent, plan.DiscountPercent)
 	}
-	// 1000 ka 25% discount = 750
-	if !plan.Price.Equal(decimal.NewFromInt(750)) {
-		t.Errorf("twelve-month matrix: expected ₹750, got %s", plan.Price.String())
+	// 2999 ka 25% discount = 2249.25
+	if !plan.Price.Equal(decimal.RequireFromString("2249.25")) {
+		t.Errorf("twelve-month matrix: expected ₹2249.25, got %s", plan.Price.String())
 	}
 }
 
@@ -288,9 +300,9 @@ func TestDiscountNoStacking(t *testing.T) {
 		t.Errorf("dual-eligible: expected exactly %d%% (one matrix), got %d%%",
 			DiscountPercent, plan.DiscountPercent)
 	}
-	// 1000 ka 25% = 750 — 50% (₹500) NAHI
-	if !plan.Price.Equal(decimal.NewFromInt(750)) {
-		t.Errorf("dual-eligible: expected ₹750 (one 25%% matrix), got %s", plan.Price.String())
+	// 2999 ka 25% = 2249.25 — 50% (₹1499.5) NAHI
+	if !plan.Price.Equal(decimal.RequireFromString("2249.25")) {
+		t.Errorf("dual-eligible: expected ₹2249.25 (one 25%% matrix), got %s", plan.Price.String())
 	}
 }
 
@@ -321,7 +333,7 @@ func TestUnknownRegionAndTier(t *testing.T) {
 	if _, err := GetPlan("mars", TierAnnual); err == nil {
 		t.Error("unknown region should return error")
 	}
-	if _, err := GetPlan(RegionIndia, "lifetime"); err == nil {
+	if _, err := GetPlan(RegionIndia, "unknown_tier"); err == nil {
 		t.Error("tier not in table should return error")
 	}
 }

@@ -37,8 +37,8 @@
 //
 // Hinglish comments: har block ka arth
 //
-// BORDERLESS DESIGN: Auth card uses bg-[#181b1f] surface with no hard.
-// Visual separation from page bg-[#111217] comes from background contrast,
+// BORDERLESS DESIGN: Auth card uses ${grafanaPanel} surface with no hard.
+// Visual separation from page ${grafanaBg} comes from background contrast,
 // not lines. All interactive inputs use rounded-md geometry and 150ms
 // color transitions. Active/hover states use orange-red (#ff6500) accent.
 
@@ -61,6 +61,20 @@ import { BrandLockup } from '@wideo11/ui/brand/characters';
 // unused import rakhna lint noise deta hai.
 import { Card, CardContent, CardHeader, CardTitle } from '@wideo11/ui/card';
 import type { ReactNode } from 'react';
+
+import {
+  grafanaBg,
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+  productAccentBg,
+  productAccentRing,
+  productInvalidRing,
+  productSeparation,
+  productSunken,
+  surface,
+  surfaceRaised,
+} from '@wideo11/ui/design-system';
 
 /**
  * AuthShellProps - shell ke props
@@ -152,7 +166,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
     //
     // Hinglish: card 600px fixed, padding 20px - total 640px, zyada tar
     //   bina scroll ke fit ho jata hai
-    <div className="relative mx-auto box-border flex min-h-screen w-full min-w-0 items-center justify-center overflow-x-hidden bg-[#111217] px-[10%] py-5">
+    <div className={`relative mx-auto box-border flex min-h-screen w-full min-w-0 items-center justify-center overflow-x-hidden ${grafanaBg} px-[10%] py-5`}>
       {/* Decorative background glow - purely visual, screen readers se hidden */}
       <div aria-hidden="true" className="pointer-events-none absolute inset-0">
         <div className="absolute left-1/2 top-0 h-[28rem] w-[28rem] -translate-x-1/2 rounded-full bg-blue-600/10 blur-3xl" />
@@ -218,7 +232,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
         // `overflow-hidden` rakha hai - future me koi bahut lamba field
         // add ho to overflow card se bahar na nikle.
         // Hinglish: height apne aap content ke hisaab se - khaali jagah nahi
-         className="relative box-border flex h-auto w-full min-w-0 max-w-[450px] flex-col overflow-hidden rounded-md bg-[#1a1a1a] shadow-2xl shadow-black/40 backdrop-blur-sm"
+         className={`relative box-border flex h-auto w-full min-w-0 max-w-[450px] flex-col overflow-hidden rounded-md ${surfaceRaised} shadow-2xl shadow-black/40 backdrop-blur-sm`}
       >
         {/* ---- COMPACT HEADER ----
             600px budget me header ko ~230px se ~90px par laaya gaya:
@@ -259,7 +273,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
                 nahi hoga; truncate sirf right side (title) pe lagega. */}
             <div className="flex shrink-0 items-center gap-2">
               <BrandLockup size={26} />
-              <span className="text-sm font-semibold tracking-tight text-[#d8d9da]">
+              <span className={`text-sm font-semibold tracking-tight ${grafanaText}`}>
                 Wideo11
               </span>
             </div>
@@ -268,7 +282,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
                 to ellipsis lag jaye (login page ka "Welcome back" short hai,
                 register ka "Create your account" thoda lamba). */}
           <div className="min-w-0 text-right">
-            <CardTitle className="truncate text-base font-semibold tracking-tight text-[#d8d9da]">
+            <CardTitle className={`truncate text-base font-semibold tracking-tight ${grafanaText}`}>
               {title}
             </CardTitle>
             {/* `description` pehle REMOVED tha - wo tab jab card par FIXED
@@ -280,7 +294,7 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
                 behtar hai yahan - `truncate` overflow:hidden use karta hai
                 jo flex row me height collapse kar sakta tha. `line-clamp-1`
                 height ko line-height tak hi rakhta hai. */}
-            <p className="mt-0.5 line-clamp-1 text-[11px] leading-none text-[#9fa7b3]">
+            <p className={`mt-0.5 line-clamp-1 text-[11px] leading-none ${grafanaTextMuted}`}>
               {description}
             </p>
           </div>
@@ -375,7 +389,7 @@ function LabelHtml({
   return (
     <label
       htmlFor={htmlFor}
-      className="block text-xs font-medium leading-none tracking-tight text-[#d8d9da]"
+      className={`block text-xs font-medium leading-none tracking-tight ${grafanaText}`}
     >
       {children}
     </label>
@@ -399,11 +413,11 @@ function LabelHtml({
  */
 export const INPUT_CLASS =
   // `h-11` = 44px - EXACTLY `design-system.ts` ke `input` token ke saath match.
-  // `bg-[#0d0f11]` = grafana `surface.sunken` shade (input ka andar ka beech
+  // `${productSunken}` = grafana `surface.sunken` shade (input ka andar ka beech
   // slightly darker hota hai panel se, taaki field "recessed" lage - ye
   // standard enterprise form pattern hai, Tailwind `gray-950/60` ki jagah
   // exact Grafana value).
-  // `border-[#2c3235]` = grafanaBorderHex.
+  // `${productSeparation}` = grafanaBorderHex.
   // NOTE: input TEXT left-aligned hai (text-left), centered NAHI. Centered
   // input text ek genuine UX anti-pattern hai - user ko typed value ka
   // start/end offset dikhta hai, cursor position kaandha lagta hai, aur
@@ -415,10 +429,10 @@ export const INPUT_CLASS =
   // NOTE: 40px abhi bhi WCAG 2.5.8 (Target Size Minimum = 24px) se kahin
   // upar hai, to accessibility compromise nahi hai - sirf 2 column grid
   // wale dense layout se zyada compact ho gaya.
-   'h-10 w-full min-w-0 rounded-md border-0 bg-[#0a0a0a] px-3.5 text-sm text-[#d8d9da] ' +
-   'placeholder:text-[#9fa7b3]/60 transition-colors duration-150 ' +
-   'focus-visible:ring-2 focus-visible:ring-[#ff6500]/30 focus-visible:outline-none ' +
-   'aria-[invalid=true]:ring-[#f2495c]/25 aria-[invalid=true]:focus-visible:ring-[#f2495c]/25 disabled:opacity-60';
+   `h-10 w-full min-w-0 rounded-md border-0 ${surface} px-3.5 text-sm ${grafanaText} ` +
+   `placeholder:${grafanaTextMuted}/60 transition-colors duration-150 ` +
+   `focus-visible:ring-2 focus-visible:${productAccentRing}/30 focus-visible:outline-none ` +
+   `${productInvalidRing} disabled:opacity-60`;
 
 /**
  * PRIMARY_BUTTON_CLASS - primary CTA styling (dono forms me identical)
@@ -430,8 +444,8 @@ export const INPUT_CLASS =
  * hai. `inline-flex` se dono cases me sahi full-width button banta hai.
  */
 export const PRIMARY_BUTTON_CLASS =
-  'inline-flex h-10 w-full min-w-0 items-center justify-center rounded-md bg-[#ff6500] font-medium text-sm text-white shadow-sm transition-colors duration-150 ' +
-  'hover:bg-[#ff6500]/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/60 ' +
+  `inline-flex h-10 w-full min-w-0 items-center justify-center rounded-md ${productAccentBg} font-medium text-sm text-white shadow-sm transition-colors duration-150 ` +
+  `hover:${productAccentBg}/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:${productAccentRing}/60 ` +
   'disabled:cursor-not-allowed disabled:opacity-50';
 
 /**

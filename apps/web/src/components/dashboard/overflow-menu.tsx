@@ -31,6 +31,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { MoreVertical } from 'lucide-react';
 import { cn } from '@wideo11/ui/lib/utils';
 
+import {
+  grafanaDanger,
+  grafanaDangerBg,
+  grafanaFocusRingVisible,
+  grafanaPanel,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+} from '@wideo11/ui/design-system';
+
 export type MenuItem = {
   id: string;
   label: string;
@@ -160,8 +170,8 @@ export function OverflowMenu({
         aria-label={label}
         className={cn(
           'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
-          'text-[#9fa7b3] hover:bg-[#1f2227] hover:text-[#d8d9da]',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5794f2]/50'
+          `${grafanaTextMuted} ${productPanelHover} hover:${grafanaText}`,
+          `${grafanaFocusRingVisible}`
         )}
       >
         <MoreVertical className="h-2.5 w-2.5" aria-hidden="true" />
@@ -184,7 +194,7 @@ export function OverflowMenu({
             aria-label={label}
             className={cn(
               'absolute z-50 mt-2 w-72 overflow-hidden rounded-md',
-              'bg-[#181b1f] shadow-2xl shadow-black/60',
+              `${grafanaPanel} shadow-2xl shadow-black/60`,
               align === 'right' ? 'right-0' : 'left-0'
             )}
           >
@@ -203,11 +213,11 @@ export function OverflowMenu({
                 }}
                 className={cn(
                   'flex w-full items-start gap-3 px-4 py-2.5 text-left transition-colors',
-                  'focus-visible:outline-none focus-visible:bg-[#1f2227]',
+                  `focus-visible:outline-none focus-visible:${productPanelHover}`,
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   item.danger
-                    ? 'text-[#f2495c] hover:bg-[#f2495c]/10'
-                    : 'text-[#d8d9da] hover:bg-[#1f2227]'
+                    ? `${grafanaDanger} hover:${grafanaDangerBg}/10`
+                    : `${grafanaText} ${productPanelHover}`
                 )}
               >
                 {item.icon ? (
@@ -218,7 +228,7 @@ export function OverflowMenu({
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{item.label}</span>
                   {item.hint ? (
-                    <span className="mt-0.5 block text-[11px] leading-snug text-[#9fa7b3]">
+                    <span className={`mt-0.5 block text-[11px] leading-snug ${grafanaTextMuted}`}>
                       {item.hint}
                     </span>
                   ) : null}

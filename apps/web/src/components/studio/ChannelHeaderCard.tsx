@@ -38,6 +38,14 @@
 import { Users } from 'lucide-react';
 import { brandHsl } from '@/lib/channel-brand';
 
+import {
+  productCoverFade,
+  productPanel,
+  productSunken,
+  productTextMuted,
+  productTextSubtle,
+} from '@wideo11/ui/design-system';
+
 export interface ChannelHeaderCardProps {
   /** Channel display name, shown as the Channel value. */
   displayName?: string;
@@ -64,6 +72,19 @@ export interface ChannelHeaderCardProps {
 /** A missing fact, said plainly. */
 const UNKNOWN = 'Unknown';
 
+/**
+ * The one locale and one timezone every date in the product renders in.
+ *
+ * Server and client MUST agree, or React throws a hydration mismatch (#300) and
+ * unmounts the whole tree. Pinned to UTC so the value does not depend on where
+ * the code happens to run, and to en-US so month names do not vary by browser.
+ *
+ * Any component that formats a date for display uses these two, never
+ * `undefined`. That is the bug this file exists to prevent.
+ */
+const FIXED_LOCALE = 'en-US';
+const FIXED_TIMEZONE = 'UTC';
+
 export function ChannelHeaderCard({
   displayName,
   handle,
@@ -85,7 +106,7 @@ export function ChannelHeaderCard({
 
   return (
     <section
-      className="relative overflow-hidden rounded-2xl bg-[#16181d] shadow-lg shadow-black/30"
+      className={`relative overflow-hidden rounded-2xl ${productPanel} shadow-lg shadow-black/30`}
       data-channel-header=""
     >
       {/* cover - a shorter band than a banner, because it sits inside a card that
@@ -103,18 +124,18 @@ export function ChannelHeaderCard({
           />
         )}
         {/* Fades the cover into the card so the identity row is not a hard seam */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#16181d] via-[#16181d]/20 to-transparent" />
+        <div className={`absolute inset-0 ${productCoverFade}`} />
       </div>
 
       {/* identity row */}
       <div className="relative -mt-10 flex flex-wrap items-end gap-4 px-4 pb-4 sm:-mt-12 sm:px-5">
         {/* avatar, overlapping the cover */}
-        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-[#0d0f11] ring-4 ring-[#16181d] sm:h-20 sm:w-20">
+        <div className={`h-16 w-16 shrink-0 overflow-hidden rounded-2xl ${productSunken} ring-4 ring-[#16181d] sm:h-20 sm:w-20`}>
           {avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-xl font-semibold text-[#5a6066] sm:text-2xl">
+            <div className={`flex h-full w-full items-center justify-center text-xl font-semibold ${productTextSubtle} sm:text-2xl`}>
               {(displayName ?? '?').slice(0, 1).toUpperCase()}
             </div>
           )}
@@ -125,7 +146,7 @@ export function ChannelHeaderCard({
         <dl className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           {stats.map((s) => (
             <div key={s.label} className="min-w-0">
-              <dt className="text-[9px] font-semibold uppercase tracking-wider text-[#8b949e]">
+              <dt className={`text-[9px] font-semibold uppercase tracking-wider ${productTextMuted}`}>
                 {s.label}
               </dt>
               <dd className="mt-0.5 truncate text-xs font-medium text-white sm:text-sm" title={s.value}>
@@ -136,7 +157,7 @@ export function ChannelHeaderCard({
         </dl>
 
         {handle ? (
-          <span className="hidden text-[11px] text-[#8b949e] lg:inline">@{handle}</span>
+          <span className={`hidden text-[11px] ${productTextMuted} lg:inline`}>@{handle}</span>
         ) : null}
 
         {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
@@ -153,12 +174,29 @@ export function formatSubscribers(count: number): string {
   return String(count);
 }
 
-/** "Jan 2024" - the mockup's own granularity, without a day nobody needs. */
+/**
+ * "Jan 2024" - the mockup's own granularity, without a day nobody needs.
+ *
+ * ---- YE HYDRATION MATCH HOTA THA ----
+ *
+ * `toLocaleDateString(undefined, ...)` lets each side pick its OWN locale, and
+ * the server (a UTC container) and the client (a viewer's local timezone) can
+ * then disagree about which month a date falls in. React reports that as error
+ * #300 and tears down the whole tree - so a date in a header took the entire
+ * upload page's client runtime with it.
+ *
+ * Fixed by pinning the locale and the timezone. The month/year pair is now
+ * computed identically everywhere, so server and client agree byte for byte.
+ */
 export function formatJoined(date: string | Date | null | undefined): string {
   if (!date) return UNKNOWN;
   const d = typeof date === 'string' ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return UNKNOWN;
-  return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+  return d.toLocaleDateString(FIXED_LOCALE, {
+    month: 'short',
+    year: 'numeric',
+    timeZone: FIXED_TIMEZONE,
+  });
 }
 
 /** The subscribers cell's icon, exported so a caller can render it beside the row. */

@@ -831,6 +831,69 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	})
 }
 
+// FixPermissions - self-healing endpoint for users missing the creator role.
+// This addresses users who registered before the auto-appointment fix was deployed.
+// The creator role is required for channel.create, channel.edit, media.upload, etc.
+// It's safe to call repeatedly - idempotent.
+func (h *AuthHandler) FixPermissions(c *gin.Context) {
+	uid, ok := userIDFromToken(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	userID := uuidFromString(uid)
+
+	if h.rbac == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "rbac_unavailable",
+			"message": "Authorization is not configured on this server.",
+		})
+		return
+	}
+
+	// Check if user already has creator role
+	hasCreator, err := h.rbac.HasRole(c.Request.Context(), userID, "creator")
+	if err != nil {
+		log.Printf("[FIX_PERMISSIONS] HasRole check failed for %s: %v", uid, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not check permissions"})
+		return
+	}
+
+	if hasCreator {
+		c.JSON(http.StatusOK, gin.H{
+			"fixed":       false,
+			"message":     "Permissions are already correct. You have the creator role.",
+			"has_creator": true,
+		})
+		return
+	}
+
+	// Grant creator role
+	roleID, lookupErr := h.rbac.RoleIDByName(c.Request.Context(), "creator")
+	if lookupErr != nil {
+		log.Printf("[FIX_PERMISSIONS] creator role lookup failed: %v", lookupErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "creator role not found"})
+		return
+	}
+
+	_, appointErr := h.rbac.Appoint(
+		c.Request.Context(), userID, userID, roleID,
+		"self-healing: granted creator role via /me/fix-permissions",
+		nil,
+	)
+	if appointErr != nil {
+		log.Printf("[FIX_PERMISSIONS] appoint failed for %s: %v", uid, appointErr)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "could not grant creator role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"fixed":       true,
+		"message":     "Creator role granted. You can now create channels and upload content.",
+		"has_creator": true,
+	})
+}
+
 func (h *AuthHandler) SetupPIN(c *gin.Context) {
 	userIDRaw := c.GetString("user_id")
 	if userIDRaw == "" {

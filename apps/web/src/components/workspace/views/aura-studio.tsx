@@ -21,6 +21,20 @@ import { Button } from '@wideo11/ui/button';
 import { Input } from '@wideo11/ui/input';
 import { Label } from '@wideo11/ui/label';
 
+import {
+  grafanaDanger,
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaSuccess,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productSunken,
+  productWarning,
+} from '@wideo11/ui/design-system';
+
 type VerificationStatus = 'pending' | 'verified_by_domain' | 'pending_document' | 'verified' | 'rejected' | 'expired';
 
 type VerificationRecord = {
@@ -86,18 +100,18 @@ export function AuraStudioView() {
   if (loading && !status) {
     return (
       <div className="p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-[#1f2227]" />
+        <div className={`h-6 w-48 animate-pulse rounded ${productPanelHover}`} />
       </div>
     );
   }
 
   const statusColor: Record<VerificationStatus, string> = {
-    pending: 'text-[#9fa7b3]',
-    verified_by_domain: 'text-[#73bf69]',
-    pending_document: 'text-[#f7c548]',
-    verified: 'text-[#73bf69]',
-    rejected: 'text-[#f2495c]',
-    expired: 'text-[#f2495c]',
+    pending: `${grafanaTextMuted}`,
+    verified_by_domain: `${grafanaSuccess}`,
+    pending_document: `${productWarning}`,
+    verified: `${grafanaSuccess}`,
+    rejected: `${grafanaDanger}`,
+    expired: `${grafanaDanger}`,
   };
 
   const statusIcon: Record<VerificationStatus, React.ReactNode> = {
@@ -112,27 +126,27 @@ export function AuraStudioView() {
   return (
     <div className="p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-[#d8d9da]">
+        <h1 className={`text-2xl font-bold ${grafanaText}`}>
           AURA Studio — Student Verification
         </h1>
       </div>
 
-      <div className="mb-6 rounded-md bg-[#181b1f] p-5">
+      <div className={`mb-6 rounded-md ${grafanaPanel} p-5`}>
         <div className="flex items-center gap-3">
           <span className={statusColor[status?.status || 'pending']}>
             {statusIcon[status?.status || 'pending']}
           </span>
           <div>
-            <p className="font-medium text-[#d8d9da]">
+            <p className={`font-medium ${grafanaText}`}>
               Status: {status?.status || 'pending'}
             </p>
             {status?.email_domain ? (
-              <p className="text-sm text-[#9fa7b3]">
+              <p className={`text-sm ${grafanaTextMuted}`}>
                 Domain: {status.email_domain} ({status.verified ? '✓ Verified' : '✗ Not verified'})
               </p>
             ) : null}
             {status?.token_expires_at ? (
-              <p className="text-sm text-[#9fa7b3]">
+              <p className={`text-sm ${grafanaTextMuted}`}>
                 Token expires: {new Date(status.token_expires_at).toLocaleDateString()}
               </p>
             ) : null}
@@ -141,30 +155,30 @@ export function AuraStudioView() {
       </div>
 
       <div className="space-y-4">
-        <div className="rounded-md bg-[#0d0f11] p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#d8d9da]">
-            <GraduationCap className="h-2.5 w-2.5 text-[#5794f2]" />
+        <div className={`rounded-md ${productSunken} p-4`}>
+          <h3 className={`flex items-center gap-2 text-sm font-semibold ${grafanaText}`}>
+            <GraduationCap className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
             Gate A — Instant Domain Verification
           </h3>
-          <p className="mt-1 text-xs text-[#9fa7b3]">
+          <p className={`mt-1 text-xs ${grafanaTextMuted}`}>
             Agar aapka email academic institution (e.g. iitd.ac.in, iiitb.ac.in)
             par hai to ek click me automatically verified ho jaoenge.
           </p>
           <Button
             size="sm"
-            className="mt-3 bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+            className={`mt-3 ${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
             onClick={handleGateA}
           >
             Verify via academic email
           </Button>
         </div>
 
-        <div className="rounded-md bg-[#0d0f11] p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#d8d9da]">
-            <Upload className="h-2.5 w-2.5 text-[#5794f2]" />
+        <div className={`rounded-md ${productSunken} p-4`}>
+          <h3 className={`flex items-center gap-2 text-sm font-semibold ${grafanaText}`}>
+            <Upload className={`h-2.5 w-2.5 ${grafanaPrimary}`} />
             Gate B — ID Card Document Upload
           </h3>
-          <p className="mt-1 text-xs text-[#9fa7b3]">
+          <p className={`mt-1 text-xs ${grafanaTextMuted}`}>
             Agar domain match nahi hota, to college ID card upload karo.
             Manual review ke baad 365-day token mil jayega.
           </p>
@@ -172,7 +186,7 @@ export function AuraStudioView() {
           {showDocForm ? (
             <form onSubmit={handleDocSubmit} className="mt-3 space-y-3">
               <div>
-                <Label htmlFor="doc-url" className="text-xs text-[#9fa7b3]">
+                <Label htmlFor="doc-url" className={`text-xs ${grafanaTextMuted}`}>
                   Document URL (MinIO/S3 path)
                 </Label>
                 <Input
@@ -180,7 +194,7 @@ export function AuraStudioView() {
                   value={docUrl}
                   onChange={(e) => setDocUrl(e.target.value)}
                   placeholder="minio://id-card-xyz.jpg"
-                  className="border-[#2c3235] bg-[#181b1f] text-sm"
+                  className={`${productSeparation} ${grafanaPanel} text-sm`}
                   required
                 />
               </div>
@@ -189,7 +203,7 @@ export function AuraStudioView() {
                   type="submit"
                   size="sm"
                   disabled={submitting}
-                  className="bg-[#5794f2] text-white hover:bg-[#5794f2]/85"
+                  className={`${grafanaPrimaryBg} text-white ${grafanaPrimaryBg}/85`}
                 >
                   {submitting ? 'Submitting...' : 'Submit for review'}
                 </Button>
@@ -207,7 +221,7 @@ export function AuraStudioView() {
             <Button
               size="sm"
               variant="ghost"
-              className="mt-3 text-[#9fa7b3]"
+              className={`mt-3 ${grafanaTextMuted}`}
               onClick={() => setShowDocForm(true)}
             >
               Upload ID card

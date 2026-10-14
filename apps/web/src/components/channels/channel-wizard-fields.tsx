@@ -38,6 +38,17 @@ import { Input } from '@wideo11/ui/input';
 import { COVER_ACCEPTED, uploadChannelCover } from '@/lib/channel-cover-upload';
 import { CATEGORY_GROUPS as _CATEGORY_GROUPS } from '@/lib/channel-types';
 
+import {
+  grafanaPanel,
+  grafanaPrimary,
+  grafanaPrimaryBg,
+  grafanaText,
+  grafanaTextMuted,
+  productPanelHover,
+  productSeparation,
+  productTextLight,
+} from '@wideo11/ui/design-system';
+
 // The category list moved to `@/lib/channel-types`, because step 2 needs it too.
 //
 // A closed set enforced in three places (Go's `model.ValidChannelType`, migration
@@ -165,27 +176,27 @@ function Option({
       data-track={testId}
       className={`flex w-full items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
         selected
-          ? 'border-[#5794f2] bg-[#5794f2]/10'
-          : 'border-[#2c3235] hover:border-[#3d434a]'
+          ? `${grafanaPrimary} ${grafanaPrimaryBg}/10`
+          : `${productSeparation} hover:border`
       }`}
     >
       <span
         aria-hidden="true"
         className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full transition-colors ${
-          selected ? 'border-[#5794f2]' : 'border-[#4b5158]'
+          selected ? `${grafanaPrimary}` : 'border'
         }`}
       >
-        {selected ? <span className="h-1.5 w-1.5 rounded-full bg-[#5794f2]" /> : null}
+        {selected ? <span className={`h-1.5 w-1.5 rounded-full ${grafanaPrimaryBg}`} /> : null}
       </span>
       <span className="min-w-0">
         <span
           className={`block text-[12px] font-medium ${
-            selected ? 'text-[#d8d9da]' : 'text-[#b6bcc4]'
+            selected ? `${grafanaText}` : `${productTextLight}`
           }`}
         >
           {label}
         </span>
-        {hint ? <span className="block text-[10px] text-[#6b7280]">{hint}</span> : null}
+        {hint ? <span className="block text-[10px] text-gray-500">{hint}</span> : null}
       </span>
     </button>
   );
@@ -221,17 +232,17 @@ export function ChannelWizardFields({
     <div className="space-y-4">
       {/* ---- 1. Channel type: REQUIRED ---- */}
       <div className="space-y-1.5">
-        <Label className="text-xs text-[#9fa7b3]">
-          What kind of channel is this? <span className="text-[#5794f2]">*</span>
+        <Label className={`text-xs ${grafanaTextMuted}`}>
+          What kind of channel is this? <span className={`${grafanaPrimary}`}>*</span>
         </Label>
-        <p className="text-[11px] text-[#6b7280]">
+        <p className="text-[11px] text-gray-500">
           This picks your upload defaults and which features appear. You can change it
           later.
         </p>
-        <div className="mt-2 max-h-56 space-y-3 overflow-y-auto rounded-md bg-[#181b1f] p-3 custom-scrollbar">
+        <div className={`mt-2 max-h-56 space-y-3 overflow-y-auto rounded-md ${grafanaPanel} p-3 custom-scrollbar`}>
           {CATEGORY_GROUPS.map((g) => (
             <div key={g.group}>
-              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#6b7280]">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                 {g.group}
               </p>
               <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
@@ -246,8 +257,8 @@ export function ChannelWizardFields({
                       data-track={`type-${it.value}`}
                       className={`flex items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors ${
                         selected
-                          ? 'border-[#5794f2] bg-[#5794f2]/10'
-                          : 'border-[#2c3235] hover:border-[#3d434a]'
+                          ? `${grafanaPrimary} ${grafanaPrimaryBg}/10`
+                          : `${productSeparation} hover:border`
                       }`}
                     >
                       {/*
@@ -259,7 +270,7 @@ export function ChannelWizardFields({
                       <span
                         aria-hidden="true"
                         className={`mt-0.5 flex h-2.5 w-2.5 shrink-0 items-center justify-center rounded-full transition-colors ${
-                          selected ? 'border-[#5794f2] bg-[#5794f2]' : 'border-[#4b5158]'
+                          selected ? `${grafanaPrimary} ${grafanaPrimaryBg}` : 'border'
                         }`}
                       >
                         {selected ? (
@@ -278,12 +289,12 @@ export function ChannelWizardFields({
                       <span className="min-w-0">
                         <span
                           className={`block text-[12px] font-medium ${
-                            selected ? 'text-[#d8d9da]' : 'text-[#b6bcc4]'
+                            selected ? `${grafanaText}` : `${productTextLight}`
                           }`}
                         >
                           {it.label}
                         </span>
-                        <span className="block text-[10px] text-[#6b7280]">{it.hint}</span>
+                        <span className="block text-[10px] text-gray-500">{it.hint}</span>
                       </span>
                     </button>
                   );
@@ -296,7 +307,7 @@ export function ChannelWizardFields({
           <button
             type="button"
             onClick={() => set('channelType', '')}
-            className="text-[10px] text-[#6b7280] underline underline-offset-2 hover:text-[#9fa7b3]"
+            className={`text-[10px] text-gray-500 underline underline-offset-2 hover:${grafanaTextMuted}`}
           >
             Clear selection
           </button>
@@ -306,8 +317,8 @@ export function ChannelWizardFields({
       {/* ---- 2. The two audience questions, asked separately ---- */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <fieldset className="space-y-1.5">
-          <legend className="text-xs text-[#9fa7b3]">
-            Does this channel contain mature content? <span className="text-[#5794f2]">*</span>
+          <legend className={`text-xs ${grafanaTextMuted}`}>
+            Does this channel contain mature content? <span className={`${grafanaPrimary}`}>*</span>
           </legend>
         <div className="space-y-1.5">
           {MATURE_OPTIONS.map((o) => (
@@ -324,10 +335,10 @@ export function ChannelWizardFields({
       </fieldset>
 
         <fieldset className="space-y-1.5">
-          <legend className="text-xs text-[#9fa7b3]">
-            Is this channel made for kids? <span className="text-[#5794f2]">*</span>
+          <legend className={`text-xs ${grafanaTextMuted}`}>
+            Is this channel made for kids? <span className={`${grafanaPrimary}`}>*</span>
           </legend>
-          <p className="text-[11px] text-[#6b7280]">
+          <p className="text-[11px] text-gray-500">
             A separate question from the content rating, and a legal one. If you are
             unsure, choose the more protective answer.
           </p>
@@ -349,7 +360,7 @@ export function ChannelWizardFields({
             ))}
           </div>
           {value.madeForKids === null ? (
-            <p className="text-[10px] text-[#6b7280]">Not answered yet.</p>
+            <p className="text-[10px] text-gray-500">Not answered yet.</p>
           ) : null}
         </fieldset>
       </div>
@@ -357,7 +368,7 @@ export function ChannelWizardFields({
       {/* ---- 3. Recommended ---- */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="ch-contact" className="text-xs text-[#9fa7b3]">
+          <Label htmlFor="ch-contact" className={`text-xs ${grafanaTextMuted}`}>
             Contact email (private)
           </Label>
           <Input
@@ -366,16 +377,16 @@ export function ChannelWizardFields({
             value={value.contactEmail}
             onChange={(e) => set('contactEmail', e.target.value)}
             placeholder="you@example.com"
-            className="h-10-[#2c3235] bg-[#181b1f] text-sm"
+            className={`h-10 ${grafanaPanel} text-sm`}
           />
-          <p className="text-[10px] text-[#6b7280]">
+          <p className="text-[10px] text-gray-500">
             Never shown on your public channel. It decides which regional rules apply.
           </p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <Label htmlFor="ch-country" className="text-xs text-[#9fa7b3]">
+            <Label htmlFor="ch-country" className={`text-xs ${grafanaTextMuted}`}>
               Country
             </Label>
             <Input
@@ -384,11 +395,11 @@ export function ChannelWizardFields({
               onChange={(e) => set('country', e.target.value.toUpperCase().slice(0, 2))}
               placeholder="IN"
               maxLength={2}
-              className="h-10-[#2c3235] bg-[#181b1f] text-sm uppercase"
+              className={`h-10 ${grafanaPanel} text-sm uppercase`}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="ch-lang" className="text-xs text-[#9fa7b3]">
+            <Label htmlFor="ch-lang" className={`text-xs ${grafanaTextMuted}`}>
               Language
             </Label>
             <Input
@@ -397,14 +408,14 @@ export function ChannelWizardFields({
               onChange={(e) => set('primaryLanguage', e.target.value.slice(0, 16))}
               placeholder="en"
               maxLength={16}
-              className="h-10-[#2c3235] bg-[#181b1f] text-sm"
+              className={`h-10 ${grafanaPanel} text-sm`}
             />
           </div>
         </div>
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="ch-keywords" className="text-xs text-[#9fa7b3]">
+        <Label htmlFor="ch-keywords" className={`text-xs ${grafanaTextMuted}`}>
           Search keywords
         </Label>
         <Input
@@ -412,9 +423,9 @@ export function ChannelWizardFields({
           value={value.keywords}
           onChange={(e) => set('keywords', e.target.value)}
           placeholder="cooking, thali, vegetarian, quick recipes"
-          className="h-10-[#2c3235] bg-[#181b1f] text-sm"
+          className={`h-10 ${grafanaPanel} text-sm`}
         />
-        <p className="text-[10px] text-[#6b7280]">
+        <p className="text-[10px] text-gray-500">
           Comma separated. These are how people find you - the description is not
           searched the same way.
         </p>
@@ -502,7 +513,20 @@ function CoverField({
       onChange(publicUrl);
       setMsg('Cover set.');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Upload failed. You can add a cover later.');
+      // The server's OWN message, unaltered.
+      //
+      // This used to replace anything mentioning `channel.create` with "Channel
+      // creation requires a creator account. Please contact support or try
+      // logging out and back in." — which is exactly the sentence that sent
+      // people in circles, because it was true of a missing role and false of
+      // the reason they actually hit it (a role policy refusal), and "contact
+      // support" is not an action this product offers.
+      //
+      // The real answer is almost always either a capability the account is
+      // missing — healed automatically on Create — or a file problem, and the
+      // server says which. Saying what the server said is the whole fix.
+      const msg = e instanceof Error ? e.message : 'Upload failed. You can add a cover later.';
+      setErr(msg);
     } finally {
       setBusy(false);
     }
@@ -510,9 +534,9 @@ function CoverField({
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-[#9fa7b3]">Channel cover (optional)</Label>
+      <Label className={`text-xs ${grafanaTextMuted}`}>Channel cover (optional)</Label>
       <div className="flex items-start gap-3">
-        <div className="relative h-[68px] w-40 shrink-0 overflow-hidden rounded-md-dashed-[#2c3235] bg-[#181b1f]">
+        <div className={`relative h-[68px] w-40 shrink-0 overflow-hidden rounded-md border-dashed-[#2c3235] ${grafanaPanel}`}>
           {coverUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={coverUrl} alt="" className="h-full w-full object-cover" />
@@ -538,22 +562,22 @@ function CoverField({
           />
           <label
             htmlFor="ch-cover"
-            className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[10px] text-[#d8d9da] transition-colors hover:bg-[#1f2227] ${
+            className={`inline-flex h-8 cursor-pointer items-center rounded-md px-2.5 text-[10px] ${grafanaText} transition-colors ${productPanelHover} ${
               busy ? 'pointer-events-none opacity-50' : ''
             }`}
           >
             {busy ? `Uploading ${progress}%…` : coverUrl ? 'Replace' : 'Upload'}
           </label>
-          <p className="text-[10px] text-[#6b7280]">PNG, JPEG or WebP. Under 4 MB.</p>
+          <p className="text-[10px] text-gray-500">PNG, JPEG or WebP. Under 4 MB.</p>
           {busy ? (
-            <div className="h-1 w-40 overflow-hidden rounded-full bg-[#1f2227]">
+            <div className={`h-1 w-40 overflow-hidden rounded-full ${productPanelHover}`}>
               <div
-                className="h-full rounded-full bg-[#5794f2] transition-all"
+                className={`h-full rounded-full ${grafanaPrimaryBg} transition-all`}
                 style={{ width: `${progress}%` }}
               />
             </div>
           ) : null}
-          {msg ? <p className="text-[10px] text-[#9fa7b3]">{msg}</p> : null}
+          {msg ? <p className={`text-[10px] ${grafanaTextMuted}`}>{msg}</p> : null}
           {err ? <p className="text-[10px] text-red-400">{err}</p> : null}
         </div>
       </div>
