@@ -84,6 +84,11 @@ import { DeletedClip } from './recover-dialog';
 import { ConfirmationDialog } from './confirmation-dialog';
 import { RecoverDialog } from './recover-dialog';
 import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
+import { AuraFpsGate } from './chrome/AuraFpsGate';
+import { FrameTemplateNodes } from './timeline/FrameTemplateNodes';
+import { MediaPlayerCanvasOverlay } from './preview/MediaPlayerCanvasOverlay';
+import { AURA_MAX_FPS } from '../lib/plan';
+import { stereoLevels } from '../lib/engine/audio-graph';
 import { Compositor } from '../lib/engine/compositor';
 import { extractPeaks } from '../lib/engine/waveform';
 import { useMediaStore, type MediaItem, type MediaKind } from '../lib/engine/media-store';
@@ -222,6 +227,8 @@ export function VideoEditor() {
   const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [previewClip, setPreviewClip] = useState<TimelineClip | null>(null);
+  const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
+  const [hoveredFrameIndex, setHoveredFrameIndex] = useState<number | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -2053,6 +2060,15 @@ if (!mod) {
         playbackRate={settings.playbackRate}
         onPlaybackRate={(v) => patch({ playbackRate: v })}
       />
+          <AuraFpsGate
+            maxFps={maxFps}
+            currentFps={fps}
+            onFpsChange={(fps) => patch({ fps })}
+            isAura={maxFps >= AURA_MAX_FPS}
+            isSuperadmin={session.isSuperadmin}
+            session={{ email: session.email, maxFps: session.maxFps, plan: session.plan }}
+            audioLevels={stereoLevels}
+          />
 
       {/* ---- Top row ---- */}
       <div className="flex min-h-0 flex-1">
@@ -2334,28 +2350,43 @@ if (!mod) {
             status strip off the screen. */}
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <div data-preview-pane className="min-h-0 flex-1 overflow-hidden bg-[#0a0a0a]">
-            <PreviewCanvas
-              tracks={tracks}
-              transitions={transitions}
-              settings={{ name: projectName, width: resolution.width, height: resolution.height, fps, background }}
-              currentFrame={playheadFrame}
-              fps={fps}
-              playing={playing}
-              playbackRate={settings.playbackRate}
-              masterVolume={settings.masterVolume}
-              viewerZoom={settings.viewerZoom}
-              viewerLayout={settings.viewerLayout}
-              showBadge={settings.viewerBadge}
-              previewClip={previewClip}
-              seekTo={seekTo}
-              onFrame={setPlayheadFrame}
-              onEnded={() => {
-                setPlaying(false);
-                if (settings.loopEnabled) setPlayhead(settings.loopStartFrame);
+            <MediaPlayerCanvasOverlay
+              isActive={true}
+              videoWidth={resolution.width}
+              videoHeight={resolution.height}
+              onSelectRegion={(x, y, width, height) => {
+                // Handle region selection
               }}
-              onCanvasReady={onCanvasReady}
-              onNeedPeaks={needPeaks}
-            />
+              onCoordinatesChange={(x, y) => {
+                // Handle coordinate change
+              }}
+              scale={settings.viewerZoom}
+              offsetX={0}
+              offsetY={0}
+            >
+              <PreviewCanvas
+                tracks={tracks}
+                transitions={transitions}
+                settings={{ name: projectName, width: resolution.width, height: resolution.height, fps, background }}
+                currentFrame={playheadFrame}
+                fps={fps}
+                playing={playing}
+                playbackRate={settings.playbackRate}
+                masterVolume={settings.masterVolume}
+                viewerZoom={settings.viewerZoom}
+                viewerLayout={settings.viewerLayout}
+                showBadge={settings.viewerBadge}
+                previewClip={previewClip}
+                seekTo={seekTo}
+                onFrame={setPlayheadFrame}
+                onEnded={() => {
+                  setPlaying(false);
+                  if (settings.loopEnabled) setPlayhead(settings.loopStartFrame);
+                }}
+                onCanvasReady={onCanvasReady}
+                onNeedPeaks={needPeaks}
+              />
+            </MediaPlayerCanvasOverlay>
           </div>
           <PlayerBar
             currentFrame={playheadFrame}
@@ -2657,6 +2688,34 @@ if (!mod) {
                     }
                   }}
                 />
+                {inspecting && (() => {
+                  const clip = clipById.get(inspecting)?.clip;
+                  if (clip) {
+                    const track = clipById.get(inspecting)?.track;
+                    const trackHeight = track ? settings.trackHeights[track.id] ?? 80 : 80;
+                    return (
+                      <FrameTemplateNodes
+                        key={clip.id}
+                        clipId={clip.id}
+                        clipStartFrame={Math.round(clip.startTime * fps)}
+                        clipDurationFrames={Math.round(clip.duration * fps)}
+                        fps={fps}
+                        pxPerFrame={pxPerFrame}
+                        trackHeight={trackHeight}
+                        onFrameSelect={setSelectedFrameIndex}
+                        onFrameEdit={(frameIndex, action) => {
+                          // Handle frame edit actions
+                        }}
+                        onFrameHover={setHoveredFrameIndex}
+                        selectedFrameIndex={selectedFrameIndex}
+                        hoveredFrameIndex={hoveredFrameIndex}
+                        isAura={session.maxFps >= AURA_MAX_FPS}
+                        isSuperadmin={session.isSuperadmin}
+                      />
+                    );
+                  }
+                  return null;
+                })()}
                 {/*
                   Playhead for tracks area ONLY. The ruler has its own playhead
                   inside TimelineRuler (orange-red bar + triangle). This one lives
@@ -2952,3 +3011,21 @@ if (!mod) {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

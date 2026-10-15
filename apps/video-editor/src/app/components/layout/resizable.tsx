@@ -208,31 +208,41 @@ export function ResizableHandle({
       title={`${label} - drag to resize, arrow keys, double-click to toggle`}
       className={[
         'group relative z-30 shrink-0 outline-none',
-        vertical ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize',
+        // Hinglish: pehle `w-1.5` / `h-1.5` = 6px tha. Baaki sab UI borderless
+        // hai (root bg #0a0a0a), aur ye 6px transparent hone ke baad bhi root ka
+        // BLACK background dikha raha tha — bin (#1a1a1a) aur preview (#0a0a0a)
+        // ke beech 6px ka black gap. Ab: sirf 1px hairline (w-px / h-px), bilkul
+        // waisa jaise AURA 50/50 separator pehle se use karta hai. Resize ka
+        // kaam nahi ruka — neeche invisible hit area hai jo 17px tak pakadti hai.
+        vertical ? 'w-px cursor-col-resize' : 'h-px cursor-row-resize',
         dragging ? 'bg-[#ff6500]' : 'bg-transparent hover:bg-[#ff6500]/40',
         'focus-visible:bg-[#ff6500]',
         'transition-colors duration-150',
       ].join(' ')}
     >
-      {/* A wider INVISIBLE hit area. The visible rule is 1-2px, but a 1px-wide
-          drag target is close to unusable with a mouse. This widens the hit
-          box without widening the visual. */}
+      {/* Wider INVISIBLE hit area. Visible rule ab 1px hai, aur 1px ka drag
+          target mouse se pakadna mushkil hai — isliye hit box 17px chauda
+          rakha hai BINA visual 1px se badle. Ye negative insets parent ke
+          overflow-hidden ko cross karte hain, isliye clip nahi hota. */}
       <div
         className={[
           'absolute',
           vertical
-            ? '-inset-y-0 -left-1 -right-1'
-            : '-inset-x-0 -top-1 -bottom-1',
+            ? '-inset-y-0 -left-2 -right-2'
+            : '-inset-x-0 -top-2 -bottom-2',
         ].join(' ')}
       />
-      {/* Grip dot, the affordance that says "this is draggable". Without a
-          visible cue a 1px line reads as a rendering seam. */}
+      {/* Grip dot — affordance ki "ye draggable hai". Bina iske 1px line ek
+          rendering seam jaisa lagta hai. Dot ko 1px line ke centre pe rakhne
+          ke liye 50% + -translate-x-1/2. */}
       {!dragging && (
         <div
           className={[
             'pointer-events-none absolute rounded-full bg-slate-500 opacity-0 transition-opacity',
             'group-hover:opacity-100 group-focus-visible:opacity-100',
-            vertical ? 'inset-y-1 left-0.5 w-0.5' : 'inset-x-1 top-0.5 h-0.5',
+            vertical
+              ? 'inset-y-1 left-1/2 w-0.5 -translate-x-1/2'
+              : 'inset-x-1 top-1/2 h-0.5 -translate-y-1/2',
           ].join(' ')}
         />
       )}

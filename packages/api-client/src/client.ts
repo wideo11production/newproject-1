@@ -4,7 +4,10 @@ import { getToken, setToken, clearToken } from "./auth-storage";
 const API_BASE_URL =
   (globalThis as typeof globalThis & {
     process?: { env?: Record<string, string | undefined> };
-  }).process?.env?.["NEXT_PUBLIC_API_URL"] || "https://api.wideo11.com";
+  }).process?.env?.["NEXT_PUBLIC_API_URL"] || "https://wideo11.com";
+
+// Helper utility to introduce asynchronous delays for retry logic
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 class ApiClient {
   private client: AxiosInstance;
@@ -29,6 +32,18 @@ class ApiClient {
         if (token && config.headers) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        
+        // ContextOverflowError Middleware Fix: Inject middle-out compression configuration transforms 
+        // and safely scale down the token reservation limits whenever intercepting local chat completion requests
+        if (config.url?.includes("/chat/completions") || config.url?.includes("/ai/stream")) {
+          if (config.data && typeof config.data === "object") {
+            config.data = {
+              ...config.data,
+              max_tokens: 16000,
+              transforms: ["middle-out"]
+            };
+          }
+        }
         return config;
       },
       (error) => Promise.reject(error)
@@ -37,8 +52,29 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response: AxiosResponse) => response,
       async (error: AxiosError) => {
-        const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+        const originalRequest = error.config as InternalAxiosRequestConfig & { 
+          _retry?: boolean; 
+          _retryCount?: number; 
+        };
 
+        // 1. HTTP 429 RATE LIMIT INTERCEPTOR OVERRIDE (Upstream Provider Crash Protection)
+        if (error.response?.status === 429) {
+          originalRequest._retryCount = originalRequest._retryCount ?? 0;
+          const maxRetries = 5; // Hard-clamped retry loop ceiling
+          
+          if (originalRequest._retryCount < maxRetries) {
+            originalRequest._retryCount++;
+            
+            // Exponential backoff duration calculation (e.g., 1.5s, 3s, 6s, 12s) to bypass upstream blocks
+            const backoffWaitTime = Math.pow(2, originalRequest._retryCount) * 750; 
+            console.warn(`[ApiClient] Upstream rate limit encountered (429). Retrying execution loop attempt #${originalRequest._retryCount} after ${backoffWaitTime}ms...`);
+            
+            await delay(backoffWaitTime);
+            return this.client(originalRequest); // Re-execute the request sequence smoothly
+          }
+        }
+
+        // 2. HTTP 401 AUTHENTICATION EXPIRED INTERCEPTOR
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 

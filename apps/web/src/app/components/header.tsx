@@ -6,6 +6,7 @@ import { useTheme } from 'next-themes';
 import type { ReactNode } from 'react';
 // The one real user menu in this monorepo. See the comment on `UserMenu`.
 import { SessionUserMenu } from '@wideo11/ui/session-user-menu';
+import WarningCirclePanel from '@/components/dashboard/warning-circle-panel';
 
 type DropdownProps = {
   children: ReactNode;
@@ -64,6 +65,10 @@ export function ThemeToggle() {
 // =============================================================================
 export function UserMenu() {
   return <SessionUserMenu dashboardUrl="/dashboard" className="" />;
+}
+
+export function SystemAlerts() {
+  return <WarningCirclePanel showSystem="restricted" />;
 }
 
 export function Loading() {

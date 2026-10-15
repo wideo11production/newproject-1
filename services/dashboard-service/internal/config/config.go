@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -10,13 +11,16 @@ import (
 )
 
 type Config struct {
-	Port          int
-	Database      DatabaseConfig
-	Redis         RedisConfig
-	PrometheusURL string
-	NATSURL       string
-	LogLevel      string
-	Environment   string
+	Port               int
+	Database           DatabaseConfig
+	Redis              RedisConfig
+	PrometheusURL      string
+	NATSURL            string
+	LogLevel           string
+	Environment        string
+	// InternalServiceSecret gates the service-to-service alert-forwarding
+	// endpoint. Read only server-side from env; validated at boot.
+	InternalServiceSecret string
 }
 
 type DatabaseConfig struct {
@@ -64,6 +68,20 @@ func Load() (*Config, error) {
 			Password: getEnv("REDIS_PASSWORD", ""),
 			DB:       getEnvAsInt("REDIS_DB", 0),
 		},
+		InternalServiceSecret: getEnv("INTERNAL_SERVICE_SECRET", ""),
+	}
+
+	// Fail closed: the internal alert-forwarding endpoint is the only way the
+	// alert pipeline becomes real-time. A missing secret means the endpoint would
+	// either (a) reject every legitimate forward, killing the pipeline, or (b)
+	// have to run unguarded to stay "working" - which lets anyone on the network
+	// inject fake alerts into every dashboard. Refuse to boot in production
+	// without it; warn otherwise.
+	if cfg.Environment == "production" && cfg.InternalServiceSecret == "" {
+		return nil, fmt.Errorf("INTERNAL_SERVICE_SECRET must be set when ENVIRONMENT=production")
+	}
+	if cfg.InternalServiceSecret == "" {
+		cfg.InternalServiceSecret = getEnv("INTERNAL_SERVICE_SECRET", "dev-insecure-change-me")
 	}
 
 	return cfg, nil

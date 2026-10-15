@@ -198,6 +198,12 @@ services:
       # required" - ek galti, ek message. Baaki 8 services pehle se `:?`
       # use kar rahe the; ye do aakhri fail-open entries the.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - dashboard-service validates auth-service tokens with it}
+      # Shared secret that gates the service-to-service alert-forward endpoint
+      # (POST /api/v1/internal/alerts/broadcast). Same value is bound to
+      # webhook-receiver below so a persisted alert fans out to browser WS clients.
+      # Dev default keeps `docker compose up` bootable; production must set it
+      # (config.Load fails closed in production without it).
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-dev-alert-forward-secret-change-me}
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:
@@ -1055,6 +1061,9 @@ services:
       # ENVIRONMENT=production me missing secret par
       # fail-fast karti hai.
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY is required - webhook-receiver validates auth-service tokens with it}
+      # Same shared secret bound to dashboard-service. webhook-receiver sends this
+      # in X-Internal-Secret when POSTing each alert to /api/v1/internal/alerts/broadcast.
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-dev-alert-forward-secret-change-me}
       LOG_LEVEL: debug
       ENVIRONMENT: development
     depends_on:
@@ -1499,6 +1508,9 @@ services:
       BOT_SERVICE_URL: http://dashboard-service:8080
       DASHBOARD_SERVICE_URL: http://dashboard-service:8080
       RECOMMENDATION_SERVICE_URL: http://billing-service:8082
+      # webhook-receiver backs the /api/alerts proxy (real-time warning panel).
+      # Server-side only (compose-internal DNS); the browser never sees it.
+      WEBHOOK_RECEIVER_URL: http://webhook-receiver:8081
       # Client-side (`NEXT_PUBLIC_*`): ye BROWSER me chalti hain, isliye
       # inhe host-mapped `localhost` hi rakhna padta hai - `auth-service` naam
       # browser resolve nahi kar sakta.
@@ -1638,6 +1650,17 @@ services:
       ANALYTICS_INTERNAL_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:?ANALYTICS_INTERNAL_TOKEN is required}
       # Audit proxy ke liye auth-service ka internal URL (activity tracking)
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # ---- Auto-subtitles: subtitle-service ----
+      #
+      # Hinglish: AURA ka auto-subtitles. Editor apni `/api/subtitles/generate`
+      # route se yahan audio forward karta hai aur timed segments wapas aate
+      # hain. Route PEHLE auth-service se plan check karta hai (`lifetime_aura`),
+      # isliye bina AURA plan ke request 402 leti hai.
+      #
+      # Ye jaan-boojh kar `:?` fail-fast NAHI hai: auto-subtitles OPTIONAL feature
+      # hai. Compose na ho to baaki editor ko chalte rehna chahiye, aur service
+      # ka `Ping` saaf "not configured" batata hai.
+      SUBTITLE_INTERNAL_URL: ${SUBTITLE_INTERNAL_URL:-http://subtitle-service:8090}
       # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
       # cookie's signature with this SAME secret auth-service signs with. Without it
       # the gate fails CLOSED and every route on this app returns 401 - the correct
@@ -1722,6 +1745,31 @@ services:
       # browser never sees this value and a container resolves
       # service names, not localhost.
       AUTH_INTERNAL_URL: http://auth-service:8085
+      # ---- Payment provider webhook secrets ----
+      #
+      # The only gate on `POST /webhooks/:provider`. That route is deliberately
+      # NOT behind `AuthRequired` - a provider holds no session for us - so the
+      # HMAC over the raw body is what stands between an unauthenticated POST and
+      # a granted plan.
+      #
+      # Unset by default and DELIBERATELY so. An unset secret makes
+      # `VerifyWebhookSignature` refuse every webhook, which fails CLOSED: the
+      # endpoint activates nothing, and a confirmed payment routes to manual
+      # reconciliation instead of silently granting a plan to anyone who POSTs
+      # to the URL. Shipping a real secret in the repo would make the endpoint
+      # forgeable by anyone who can read it.
+      #
+      # Set these from the provider dashboards, or in an untracked .env, before
+      # enabling a provider integration.
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      RAZORPAY_WEBHOOK_SECRET: ${RAZORPAY_WEBHOOK_SECRET:-}
+      # ---- Stripe Checkout Sessions API ----
+      #
+      # Used by `CreateCheckoutSession` to create a real Checkout Session
+      # (cs_...) that the Stripe webhook echoes back in `checkout.session.completed`.
+      # Falls back to a placeholder generator if unset, so dev/test environments
+      # without a Stripe key still work end-to-end through the test fixtures.
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       # KYC provider: local = zero-cost deterministic bank validation
       KYC_PROVIDER: ${KYC_PROVIDER:-local}
       DATABASE_HOST: postgres
@@ -1919,6 +1967,130 @@ services:
         limits:
           memory: 512M
 
+  # ==========================================================================
+  # WHISPER — asli speech-to-text (auto-subtitles ke liye)
+  # ==========================================================================
+  #
+  # Hinglish: ye ek STANDARD upstream image hai — koi custom code nahi.
+  # `faster-whisper-server`, CTranslate2 backend.
+  #
+  # Kaun model, aur kitna bada:
+  #
+#   WHISPER__MODEL=tiny          ~40MB   sabse fast, sabse kam accurate
+    #   WHISPER__MODEL=base          ~150MB  accha balance (DEFAULT)
+    #   WHISPER__MODEL=small         ~250MB  achhi accuracy, dheema
+    #   WHISPER__MODEL=medium        ~800MB  best, CPU pe bahut dheema
+    #
+    # NOTE: the `-int8` quantised variants do NOT exist in this image —
+    # `base-int8` is rejected with `ValueError: Invalid model size`. The
+    # upstream ships tiny/base/small/medium/large only. Defaulting to `base`
+    # (non-quantised, ~150MB) so the container actually starts.
+    #
+    # `-int8` = quantised: memory ~4x kam, aur accuracy mein farq chhota.
+  # CPU-only image (`-cpu` tag) use kar rahe hain kyunki is project me koi GPU
+  # node nahi hai. Pehli baar model download hoga (~1-2 min), phir cache me.
+  whisper:
+    image: fedirz/faster-whisper-server:latest-cpu
+    container_name: wideo11-whisper
+    # NOTE: no `command:` override here. The image ships its own CMD
+    # `uv run uvicorn --factory faster_whisper_server.main:create_app`, and
+    # it already exports UVICORN_HOST=0.0.0.0 / UVICORN_PORT=8000 in its
+    # own Env. Overriding with bare `--host`/`--port` args made docker
+    # exec `--host` as the binary and the container never started:
+    # `exec: "--host": executable file not found in $PATH`.
+    environment:
+      WHISPER__MODEL: ${WHISPER_MODEL:-base}
+    volumes:
+      # Model cache volume me, taaki container restart pe dobara download na ho.
+      - whisper_cache:/root/.cache/huggingface
+    restart: unless-stopped
+    # Local dev only: publish so the host can hit the ASR endpoint directly
+    # while debugging. NOT for production — this is an internal model server.
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      # faster-whisper-server ka health endpoint. Model load me time leta hai
+      # (~30-60s first run), isliye start_period generous hai.
+      #
+      # NOTE: this image is Alpine with NO wget/curl — the original
+      # `wget -q -O /dev/null ...` healthcheck could never succeed, so the
+      # container was permanently "health: starting" while uvicorn was
+      # actually serving. Python is on the image (uvicorn runs under it).
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health').status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      # Model load me time leta hai (~30-60s first run), isliye start_period generous hai.
+      start_period: 180s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # ==========================================================================
+  # SUBTITLE-SERVICE — AURA auto-subtitles
+  # ==========================================================================
+  #
+  # Hinglish: ye service repo mein PEHLE SE thi lekin docker-compose mein NAHI
+  # thi — yaani code likha tha, deploy kabhi hua hi nahi. Aur uska
+  # `AutoGenerate()` FFmpeg arguments use kar raha tha jo transcription ka kaam
+  # karte hi nahi (`-c:a:0 -disposition`), phir DB mein `Source: "whisper"`
+  # likh deta tha. Yaani ye service "subtitles ban gayi" claim karti thi jabki
+  # kuch bhi nahi banta tha.
+  #
+  # Ab: asli HTTP client (`whisper_client.go`) whisper ko hit karta hai, aur
+  # route `/subtitles/transcribe` audio bytes leta hai aur timed segments
+  # deta hai. Fail hone par error aata hai, fake row nahi banti.
+  #
+  # Port: sirf compose network mein (`expose`), host pe publish NAHI —
+  # ismein koi public surface nahi hona chahiye. Editor ke proxy route ke
+# through hi aana chahiye, jahan AURA plan check hota hai.
+  subtitle-service:
+    build:
+      context: ./services/subtitle-service
+      dockerfile: Dockerfile
+    container_name: wideo11-subtitle-service
+    environment:
+      SERVER_PORT: 8090
+      SERVER_MODE: release
+      # ---- Whisper ----
+      #
+      # `whisper:8000` = compose network ke andar service ka naam. Localhost
+      # kaam nahi karta, kyunki `localhost` container KHUD hai, whisper nahi.
+      WHISPER_URL: http://whisper:8000
+      # 10 minute. 1 min audio CPU pe 10-60s leta hai, aur lamba video zyada.
+      WHISPER_TIMEOUT_SECONDS: 600
+      # ---- Database ----
+      #
+      # Ye service subtitle rows store karta hai (manual upload + auto wale).
+      # Wahi postgres jo baaki sab use karte hain.
+      DATABASE_HOST: ${DATABASE_HOST:-postgres}
+      DATABASE_PORT: ${DATABASE_PORT:-5432}
+      DATABASE_USER: ${DATABASE_USER:-postgres}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required - subtitle-service stores subtitle rows in postgres}
+      DATABASE_DBNAME: ${DATABASE_DBNAME:-subtitle_service}
+      DATABASE_SSLMODE: ${DATABASE_SSLMODE:-disable}
+      DATABASE_TIMEZONE: UTC
+    expose:
+      - "8090"
+    ports:
+      # Local dev only: publish so the host can drive the editor proxy /
+      # transcription flow directly. NOT for production — this service has
+      # no public surface by design (see the comment above the service block).
+      - "127.0.0.1:8090:8090"
+    depends_on:
+      postgres:
+        condition: service_started
+      whisper:
+        condition: service_started
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8090/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
 volumes:
   minio_data:
   postgres_data:
@@ -1928,3 +2100,7 @@ volumes:
   grafana_data:
   alertmanager_data:
   billing_data:
+  # Whisper ka model cache. Iske bina har container restart pe model dobara
+  # download hota (~1-2 min), aur `restart: unless-stopped` ke saath ye
+  # baar-baar hota.
+  whisper_cache:

@@ -1,7 +1,7 @@
-@import '@wideo11/ui/src/styles/scrollbar.css';
+﻿@import '@wideo11/ui/src/styles/scrollbar.css';
 
 /* ============================================================================
- * BORDERLESS UI OVERRIDES — Zero Wireframe Lines
+ * BORDERLESS UI OVERRIDES â€” Zero Wireframe Lines
  * ============================================================================
  *
  * Hinglish: Ye file saare `border-*`, `divide-*` classes ko globally override
@@ -22,7 +22,7 @@
 @import './lib/engine/timeline-shimmer.css';
 
 /* Project-wide scrollbar thickness, colour and hover behaviour:
-   `packages/ui/src/styles/scrollbar.css` — 4px, transparent track, Grafana
+   `packages/ui/src/styles/scrollbar.css` â€” 4px, transparent track, Grafana
    neutral-4 thumb. Ek jagah fix = sab jagah fix.
 
    Isi file me app-scoped rules bhi hain, neeche dekho. */
@@ -119,12 +119,37 @@
        tell video from audio from text at a single glance. Video = orange-red
        (#ff6500), audio = purple (#a855f7), text = amber (#fbbf24),
        image = emerald (#10b981), branding = pink (#ec4899). */
-     --ve-clip-video: rgb(255 101 0);
-     --ve-clip-audio: rgb(168 85 247);
-     --ve-clip-text: rgb(251 191 36);
-     --ve-clip-image: rgb(16 185 129);
-     --ve-clip-branding: rgb(236 72 153);
-  }
+       --ve-clip-video: rgb(255 101 0 / 0.5);
+       --ve-clip-audio: rgb(168 85 247 / 0.5);
+       --ve-clip-text: rgb(251 191 36 / 0.5);
+       --ve-clip-image: rgb(16 185 129 / 0.5);
+       --ve-clip-branding: rgb(236 72 153 / 0.5);
+
+       /* ---- Lane tiles: DARK, per-track-type tint (borderless) ----
+
+          Hinglish: pehle SAARI lanes ek hi grey `#2a2a2a` thi. Matlab 5 lanes
+          kholo to sirf is baat se pata chalta tha ki kaunsi lane kaunsi hai ki
+          clip usme hain â€” warna sab ek jaisi dhundhli grey. Clips ke paas
+          apna colour tha, lane ke paas kuch nahi.
+
+          Ab har lane ko apni HUE ka BOHT halka dark tint mila hai â€” wahi hues
+          jo `--ve-clip-*` use karte hain, taaki clip aur uski lane ek family ki
+          lage. Values bilkul dark rakhe hain (base #2a2a2a se thoda alag),
+          kyunki lane CLIP ka background hai â€” agar lane chamakti to foreground
+          se ladti.
+
+          Ye BORDERLESS combination hai: koi border nahi, koi ring nahi. Farq
+          sirf colour karata hai â€” bilkul Movavi ki lanestrips ki tarah, jahan
+          ek lane ki apni pehchaan hoti hai bina koi line ka.
+
+          `.light` me bhi NAHI badalte â€” lanes dono themes me dark rehti hain,
+          bilkul clips ki tarah (neeche wale rationale). */
+       --ve-lane-video: #2a2523;
+       --ve-lane-audio: #25242e;
+       --ve-lane-text: #2a2720;
+       --ve-lane-image: #1e2623;
+       --ve-lane-branding: #2a2126;
+   }
 
   /* ==========================================================================
    * LIGHT THEME
@@ -376,7 +401,7 @@
   }
   
   .ve-select-dropdown::after {
-    content: '▼';
+    content: 'â–¼';
     position: absolute;
     right: 4px;
     top: 50%;
@@ -442,3 +467,195 @@
     background-color: #ff6500 !important;
     color: #ffffff !important;
   }
+
+/* ============================================================================
+ * FRAME TEMPLATE NODES ANIMATIONS
+ * ============================================================================
+ * Keyframe pulse animations for keyframe and effect indicators
+ * ========================================================================== */
+@keyframes pulse-keyframe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+@keyframes pulse-effect {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+/* ============================================================================
+ * AURA INDICATOR ANIMATIONS
+ * ============================================================================
+ * Green pulse animation for AURA indicator
+ * ========================================================================== */
+@keyframes pulse-aura-green {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 4px #22c55e, 0 0 8px #22c55e80; }
+  50% { opacity: 0.7; transform: scale(1.1); box-shadow: 0 0 8px #22c55e, 0 0 16px #22c55eaa; }
+}
+
+/* ============================================================================
+ * VU METER ANIMATIONS
+ * ============================================================================
+ * Keyframe animations for VU meter bars and peak hold indicators
+ * ========================================================================== */
+@keyframes vu-meter-rise {
+  0% { transform: scaleY(0); opacity: 0; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes vu-meter-fall {
+  0% { transform: scaleY(1); opacity: 1; }
+  100% { transform: scaleY(0.3); opacity: 0.5; }
+}
+@keyframes vu-peak-hold {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+/* ============================================================================
+ * UTILITY CLASSES
+ * ============================================================================
+ * Frame template nodes, media player overlay, AURA FPS gate, and VU meters
+ * ========================================================================== */
+
+/* Frame template nodes */
+.ve-frame-template-node {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  pointer-events: none;
+}
+
+.ve-frame-template-node.keyframe {
+  background: #ff6500;
+  animation: pulse-keyframe 1.5s ease-in-out infinite;
+}
+
+.ve-frame-template-node.effect {
+  background: #a855f7;
+  animation: pulse-effect 1.5s ease-in-out infinite;
+}
+
+/* Media player overlay */
+.ve-media-player-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.ve-media-player-overlay .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #374151;
+  border-top-color: #ff6500;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* AURA FPS gate indicator */
+.ve-aura-fps-gate {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6b7280;
+  transition: background 200ms ease, box-shadow 200ms ease;
+}
+
+.ve-aura-fps-gate.active {
+  background: #22c55e;
+  animation: pulse-aura-green 2s ease-in-out infinite;
+}
+
+.ve-aura-fps-gate.warning {
+  background: #fbbf24;
+  box-shadow: 0 0 8px #fbbf24, 0 0 16px #fbbf2480;
+}
+
+.ve-aura-fps-gate.error {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444, 0 0 16px #ef444480;
+}
+
+/* VU Meter bars */
+.ve-vu-meter {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 60px;
+  width: 100%;
+}
+
+.ve-vu-meter-bar {
+  flex: 1;
+  background: linear-gradient(to top, #22c55e, #84cc16);
+  border-radius: 2px 2px 0 0;
+  transform-origin: bottom;
+  transform: scaleY(0);
+  opacity: 0;
+}
+
+.ve-vu-meter-bar.rising {
+  animation: vu-meter-rise 100ms ease-out forwards;
+}
+
+.ve-vu-meter-bar.falling {
+  animation: vu-meter-fall 200ms ease-out forwards;
+}
+
+.ve-vu-meter-peak {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #fbbf24;
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ve-vu-meter-peak.hold {
+  opacity: 1;
+  animation: vu-peak-hold 1s ease-in-out infinite;
+}
+
+/* VU Meter container with labels */
+.ve-vu-meter-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.ve-vu-meter-container.horizontal {
+  flex-direction: row;
+  align-items: flex-end;
+  height: auto;
+  min-width: 120px;
+}
+
+.ve-vu-meter-label {
+  font-size: 10px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ve-vu-meter-value {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #e5e7eb;
+  font-weight: 500;
+}

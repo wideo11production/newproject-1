@@ -383,10 +383,37 @@ export async function pollAssetStatus(
     }
 
     const res = await fetch(`/api/media/${assetId}`, { signal, cache: 'no-store' });
-    const body = (await res.json().catch(() => ({}))) as { asset?: MediaAsset };
+    const body = (await res.json().catch(() => ({}))) as {
+      asset?: MediaAsset;
+      message?: string;
+      error?: string;
+    };
     const asset = body.asset;
     if (!res.ok || !asset) {
-      throw new MediaUploadError('Could not read the upload status.', res.status);
+      // Name what actually happened. This used to throw the same sentence for
+      // every status code, which is why an unauthenticated poll, a missing
+      // route and an unreadable body were indistinguishable from each other in
+      // the UI — and why the one line a user could see told them nothing about
+      // whether their upload was safe.
+      //
+      // A 401 is the important one to separate: it means the SESSION ended,
+      // not that anything is wrong with the file. The bytes are in MinIO and
+      // the asset row exists, so the correct advice is to sign in again, not
+      // to re-upload.
+      const server = body.message ?? body.error;
+      if (res.status === 401) {
+        throw new MediaUploadError(
+          'Your session ended while the video was processing. Sign in again to see it — the upload is safe.',
+          401,
+        );
+      }
+      if (res.status === 404) {
+        throw new MediaUploadError('That upload could not be found any more.', 404);
+      }
+      throw new MediaUploadError(
+        server ?? 'Could not read the upload status. Please check back in a moment.',
+        res.status,
+      );
     }
 
     onStatus?.(asset.status);

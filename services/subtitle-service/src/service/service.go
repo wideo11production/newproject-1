@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -19,11 +20,21 @@ type SubtitleService struct {
 	styleRepo  repository.StyleRepository
 	ffmpegPath string
 	whisperURL string
+	// whisper — asli speech-to-text client.
+	//
+	// Pehle `whisperURL` store hota tha aur kabhi use nahi hota tha (default
+	// `http://localhost:9000` tha, jo waqai MinIO hai). Ab ye client us URL ko
+	// sach me hit karta hai. Agar URL khaali ho toh client "not configured"
+	// report karta hai, aur `TranscribeAudio` saaf error deta hai bajaye
+	// chup-chaap fake subtitle banane ke.
+	whisper *WhisperClient
 }
 
 type SubtitleConfig struct {
 	FFmpegPath string
 	WhisperURL string
+	// WhisperTimeoutSeconds — 0 = client apna default (10 min) use kare.
+	WhisperTimeoutSeconds int
 }
 
 func NewSubtitleService(cfg SubtitleConfig, subRepo repository.SubtitleRepository, styleRepo repository.StyleRepository) *SubtitleService {
@@ -32,7 +43,26 @@ func NewSubtitleService(cfg SubtitleConfig, subRepo repository.SubtitleRepositor
 		styleRepo:  styleRepo,
 		ffmpegPath: cfg.FFmpegPath,
 		whisperURL: cfg.WhisperURL,
+		whisper:    NewWhisperClient(WhisperConfig{BaseURL: cfg.WhisperURL, Timeout: time.Duration(cfg.WhisperTimeoutSeconds) * time.Second}),
 	}
+}
+
+// WhisperAvailable — kya transcription chal sakti hai?
+//
+// Isko proxy route `isAvailable` ke through UI call karti hai, taaki user
+// "Generate" dabane se PEHLE hi jaan le ki ye kaam karega ya nahi.
+func (s *SubtitleService) WhisperAvailable(ctx context.Context) error {
+	return s.whisper.Ping(ctx)
+}
+
+// TranscribeAudio — audio bytes do, timed segments lo. DB ko haath nahi lagta.
+//
+// Ye woh method hai jo editor ka proxy route call karta hai: browser timeline
+// audio (16kHz mono WAV) bhejta hai, aur seedha segments wapas aate hain —
+// video_id, MinIO, koi persistence nahi. Editor khud cues ko text clips bana
+// leta hai, isliye ise koi subtitle row banane ki zaroorat nahi.
+func (s *SubtitleService) TranscribeAudio(ctx context.Context, audio []byte, filename, language string) ([]Segment, string, error) {
+	return s.whisper.Transcribe(ctx, audio, filename, language)
 }
 
 func (s *SubtitleService) CreateSubtitle(ctx context.Context, videoID uint, language, label, fileType string, content io.Reader, contentType string) (*model.Subtitle, error) {
@@ -144,25 +174,65 @@ func (s *SubtitleService) GetStyle(ctx context.Context, subtitleID uint) (*model
 	return s.styleRepo.GetBySubtitleID(ctx, subtitleID)
 }
 
+// AutoGenerate — asli transcription.
+//
+// Hinglish: pehle ye function FFmpeg chalata tha jisme transcription ka koi
+// argument hi nahi tha (`-c:a:0 -disposition <output>` — ye audio disposition
+// flag hai, speech-to-text ka argument nahi), aur phir DB me
+// `Source: "whisper"` likh deta tha. Matlab client ko ek subtitle row milti
+// thi jo kisi asli file ki taraf point nahi karti thi. Claim aur reality me
+// poori khayi thi.
+//
+// Ab: file padho → whisper se transcribe karo → VTT likho → DB row banao jo
+// us VTT ki taraf point karti hai. Agar transcription fail ho, ERROR return
+// hota hai — row nahi banti. Ye jaan-boojh kar: ek "successful" response jo
+// kaam nahi karti wo client ko lagta hai feature kaam kar raha hai, jhooth
+// bolne se behtar hai saaf fail hona.
+//
+// `outputDir` pehle se banta maana jata hai (Docker me `/app/output`).
 func (s *SubtitleService) AutoGenerate(ctx context.Context, videoID uint, language string, mediaPath string) (*model.Subtitle, error) {
-	outputPath := fmt.Sprintf("/tmp/subtitles/%d_%s.vtt", videoID, language)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
-	cmd := exec.Command(s.ffmpegPath,
-		"-i", mediaPath,
-		"-map", "0:a:0",
-		"-c:a:0", "-disposition",
-		outputPath,
-	)
-	_ = cmd.Run()
+	data, err := os.ReadFile(mediaPath)
+	if err != nil {
+		return nil, fmt.Errorf("reading media for transcription: %w", err)
+	}
+
+	segments, detectedLang, err := s.whisper.Transcribe(ctx, data, filepath.Base(mediaPath), language)
+	if err != nil {
+		// Koi row nahi banti. Caller ko error milta hai.
+		return nil, err
+	}
+
+	// Detected language ka fayda: agar user ne 'auto' bheja tha, to DB me asli
+	// language likhi jaaye — warna "auto" naam ki koi language hoti hi nahi.
+	storedLang := language
+	if storedLang == "" || storedLang == "auto" {
+		storedLang = detectedLang
+		if storedLang == "" {
+			storedLang = "und" // undetermined
+		}
+	}
+
+	outputPath := fmt.Sprintf("/tmp/subtitles/%d_%s.vtt", videoID, storedLang)
+	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+		return nil, fmt.Errorf("creating subtitle output directory: %w", err)
+	}
+	if err := os.WriteFile(outputPath, []byte(VTT(segments)), 0o644); err != nil {
+		return nil, fmt.Errorf("writing VTT: %w", err)
+	}
 
 	sub := &model.Subtitle{
-		VideoID:      videoID,
-		Language:     language,
-		Label:        fmt.Sprintf("%s (Auto)", language),
-		FileType:     "vtt",
-		IsDefault:    false,
-		IsForced:     false,
-		Source:       "whisper",
+		VideoID:     videoID,
+		Language:    storedLang,
+		Label:       fmt.Sprintf("%s (Auto)", storedLang),
+		MinioPath:   outputPath,
+		FileType:    "vtt",
+		IsDefault:   false,
+		IsForced:    false,
+		Source:      "whisper",
 		AutoGenerated: true,
 	}
 
@@ -171,16 +241,16 @@ func (s *SubtitleService) AutoGenerate(ctx context.Context, videoID uint, langua
 	}
 
 	style := &model.SubtitleStyle{
-		SubtitleID:      sub.ID,
-		FontFamily:      "Arial",
-		FontSize:        "100%",
-		FontColor:       "white",
-		Outline:         "black",
-		OutlineSize:     "1px",
-		Shadow:          "transparent",
+		SubtitleID:  sub.ID,
+		FontFamily:  "Arial",
+		FontSize:    "100%",
+		FontColor:   "white",
+		Outline:     "black",
+		OutlineSize: "1px",
+		Shadow:      "transparent",
 		BackgroundColor: "rgba(0,0,0,0.5)",
-		Alignment:       2,
-		Position:        "bottom",
+		Alignment:   2,
+		Position:    "bottom",
 	}
 	_ = s.styleRepo.Create(ctx, style)
 

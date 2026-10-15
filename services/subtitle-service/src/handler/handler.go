@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -17,7 +19,27 @@ func NewHandler(svc *service.SubtitleService) *Handler {
 	return &Handler{svc: svc}
 }
 
+// RootHealth — "is this process alive".
+//
+// Ye compose ke healthcheck ke liye hai. Ye jaan-boojh kar whisper ke baare me
+// kuch nahi batata: container zinda rehna chahiye chahe transcription available
+// ho ya na ho, aur healthcheck ko fail karke restart loop daalna (jab asli
+// problem sirf config thi) se kuch solve nahi hota.
+//
+// "Feature chalega ya nahi" ka jawab `/subtitles/transcribe/health` deta hai.
+func (h *Handler) RootHealth(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "service": "subtitle-service"})
+}
+
 func (h *Handler) RegisterRoutes(r *gin.Engine) {
+	// Root health. Container healthcheck isi ko hit karta hai, aur ye
+	// deliberately `FullDownstreamHealth` se ALAG hai: container zinda hai
+	// ya nahi, aur feature chalega ya nahi — do alag sawaal hain.
+	//
+	// `/health` = process zinda hai (DB connected). Ye compose ke liye.
+	// `/subtitles/transcribe/health` = whisper reachable hai. Ye UI ke liye,
+	// taaki "Generate" dabane se pehle pata chale.
+	r.GET("/health", h.RootHealth)
 	subs := r.Group("/subtitles")
 	{
 		subs.POST("", h.CreateSubtitle)
@@ -35,6 +57,11 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		subs.POST("/parse/srt", h.ParseSRT)
 		subs.POST("/parse/vtt", h.ParseVTT)
 		subs.POST("/convert/srt-to-vtt", h.ConvertSRTToVTT)
+		// Audio upload -> timed segments. Ye editor ke liye hai: browser timeline
+		// ka audio (16kHz mono WAV) bhejta hai aur cues wapas aate hain.
+		subs.POST("/transcribe", h.Transcribe)
+		// Kya transcription chal sakti hai? UI "Generate" se pehle poochti hai.
+		subs.GET("/transcribe/health", h.TranscribeHealth)
 	}
 }
 
@@ -210,10 +237,87 @@ func (h *Handler) AutoGenerate(c *gin.Context) {
 	}
 	sub, err := h.svc.AutoGenerate(c.Request.Context(), req.VideoID, req.Language, req.MediaPath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		// Hinglish: 503 jab whisper server reachable nahi (feature off hai),
+		// 502 jab reachable hai par transcription fail hui. Client UI in dono
+		// ko alag message dikhati hai: "not configured" vs "try again".
+		if errors.Is(err, service.ErrWhisperUnavailable) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"subtitle": sub})
+}
+
+// ---- Transcribe: audio upload -> timed segments ----
+//
+// Ye route DB se poori tarah azaad hai. Editor khud cues ko text clips bana
+// leta hai, isliye yahan koi subtitle row nahi banti — bas segments wapas.
+//
+// Body: multipart/form-data
+//   audio:   file (16kHz mono WAV recommended; server khud decode karta hai)
+//   language: 'auto' | ISO code (optional)
+func (h *Handler) Transcribe(c *gin.Context) {
+	fileHeader, err := c.FormFile("audio")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'audio' file in multipart form"})
+		return
+	}
+
+	// 100MB cap. 20 minute ka 16kHz mono WAV ≈ 38MB, to yeh generous hai lekin
+	// unbounded nahi — bina iske ek accidental request server ko RAM kha jata.
+	if fileHeader.Size > 100<<20 {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "audio too large (max 100MB)"})
+		return
+	}
+
+	f, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot read uploaded file"})
+		return
+	}
+	defer func() { _ = f.Close() }()
+
+	// Poora file memory me. 100MB cap ke saath ye theek hai, aur whisper ko
+	// ek hi baar me chahiye — streaming karne ka koi fayda nahi.
+	data, err := io.ReadAll(f)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot read uploaded file"})
+		return
+	}
+
+	language := c.PostForm("language")
+	if language == "" {
+		language = c.Query("language")
+	}
+
+	segments, detected, err := h.svc.TranscribeAudio(c.Request.Context(), data, fileHeader.Filename, language)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrWhisperUnavailable):
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": err.Error()})
+		case errors.Is(err, service.ErrNoSpeech):
+			// Ye error NAHI hai — audio me sach me koi speech nahi thi. Client
+			// ko ye pata hona chahiye taaki "0 cues" na dikhaye.
+			c.JSON(http.StatusOK, gin.H{"segments": []service.Segment{}, "language": detected})
+		default:
+			c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		}
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"segments": segments, "language": detected})
+}
+
+// TranscribeHealth — UI "Generate" se PEHLE poochti hai ki transcription chalegi
+// ya nahi, taaki user 10 minute ka hang na dekhe.
+func (h *Handler) TranscribeHealth(c *gin.Context) {
+	if err := h.svc.WhisperAvailable(c.Request.Context()); err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"ok": false, "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 func (h *Handler) ParseSRT(c *gin.Context) {

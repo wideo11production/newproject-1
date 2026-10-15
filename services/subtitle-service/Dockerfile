@@ -21,9 +21,13 @@ WORKDIR /app
 
 COPY --from=builder /app/subtitle-service .
 
-EXPOSE 8080
+EXPOSE 8090
 
-ENV PORT=8080
+ENV PORT=8090
 ENV ENVIRONMENT=production
 
-ENTRYPOINT ["/subtitle-service"]
+# NOTE: was `["/subtitle-service"]` — the binary is copied into /app by the
+# line above, so the absolute root path never existed. Same bug that hit
+# analytics-service first (see SERVICE-TRIAGE.md): a Dockerfile that has
+# never been built hides this completely.
+ENTRYPOINT ["/app/subtitle-service"]

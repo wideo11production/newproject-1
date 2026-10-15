@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,6 +83,16 @@ type PaymentRepository interface {
 	Create(ctx context.Context, payment *model.Payment) error
 	GetByID(ctx context.Context, id uint) (*model.Payment, error)
 	GetByUUID(ctx context.Context, uuid string) (*model.Payment, error)
+	// GetByTransactionID looks a payment up by the PROVIDER's own id.
+	//
+	// Added for the webhook path. A provider names its payment `pi_...` and tells
+	// us that; our row calls the same thing `transaction_id`. Without this lookup
+	// a confirmed provider payment could not be traced back to the local row it
+	// settles, so a paying subscriber could never be activated.
+	//
+	// A provider id is globally unique per provider, so the lookup is exact and
+	// returns at most one row.
+	GetByTransactionID(ctx context.Context, transactionID string) (*model.Payment, error)
 	GetByPaymentNumber(ctx context.Context, number string) (*model.Payment, error)
 	ListByInvoiceID(ctx context.Context, invoiceID uint) ([]*model.Payment, error)
 	ListByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*model.Payment, error)
@@ -481,6 +492,33 @@ func (r *paymentRepository) GetByID(ctx context.Context, id uint) (*model.Paymen
 func (r *paymentRepository) GetByUUID(ctx context.Context, uuidStr string) (*model.Payment, error) {
 	var payment model.Payment
 	err := r.db.WithContext(ctx).Preload("Invoice").Where("uuid = ?", uuidStr).First(&payment).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrPaymentNotFound
+		}
+		return nil, err
+	}
+	return &payment, nil
+}
+
+// GetByTransactionID finds a payment by the PROVIDER's own id.
+//
+// The `Preload("Invoice")` matters and is not decoration: the caller is a webhook
+// handler that walks provider id -> payment -> invoice -> subscription, and
+// loading that chain in one query rather than three is what keeps a redelivered
+// webhook from taking three round trips to answer the same question.
+//
+// A blank id is refused rather than matched. An empty string is not a provider
+// id, and a `WHERE transaction_id = ''` happily matches any row that was stored
+// without one - which would activate a stranger's subscription.
+func (r *paymentRepository) GetByTransactionID(ctx context.Context, transactionID string) (*model.Payment, error) {
+	if strings.TrimSpace(transactionID) == "" {
+		return nil, ErrPaymentNotFound
+	}
+
+	var payment model.Payment
+	err := r.db.WithContext(ctx).Preload("Invoice").
+		Where("transaction_id = ?", transactionID).First(&payment).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrPaymentNotFound

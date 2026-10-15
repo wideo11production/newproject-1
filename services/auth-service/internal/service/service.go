@@ -1044,3 +1044,8 @@ func (s *AuthService) VerifyPIN(ctx context.Context, userID uuid.UUID, req *mode
 
 	return nil
 }
+
+// IssueSession is a public wrapper around issueSession to allow session creation after MFA verification.
+func (s *AuthService) IssueSession(ctx context.Context, user *model.User, device *model.Device) (*model.User, *model.TokenPair, error) {
+	return s.issueSession(ctx, user, device)
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/wideo11/auth-service/internal/model"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
+	"github.com/wideo11/auth-service/src/redis"
 )
 
 type AuthHandler struct {
@@ -93,6 +94,9 @@ type AuthHandler struct {
 	// have no auth semantics, and the derived count has to be the only path to a
 	// subscriber number. Nil is tolerated - reads fall back to the database.
 	subscriptions *service.ChannelSubscriptionService
+
+	// mfaChallengeStore holds short-lived MFA challenges for PIN-as-2FA at login
+	mfaChallengeStore *redis.MFAChallengeStore
 }
 
 // SetStorageService storage service inject karta hai (constructor dependency
@@ -146,6 +150,11 @@ func (h *AuthHandler) SetEntitlementService(e *service.EntitlementService) {
 // some free trials, and the alternative is an outage.
 func (h *AuthHandler) SetTrialDeviceService(s *service.TrialDeviceService) {
 	h.trialDevices = s
+}
+
+// SetMFAChallengeStore wires the MFA challenge store for PIN-as-2FA at login
+func (h *AuthHandler) SetMFAChallengeStore(s *redis.MFAChallengeStore) {
+	h.mfaChallengeStore = s
 }
 
 // SetTranscodeClient wires the transcoding handoff.
@@ -685,6 +694,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
 		}
 		return
+	}
+
+	// ---- MFA CHECK: if user has PIN configured, require MFA at login (2FA) ----
+	// Only proceed to issue tokens if PIN is NOT configured. If PIN is configured,
+	// return a challenge and wait for PIN verification via /mfa/verify.
+	if h.mfaChallengeStore != nil && h.securitySvc != nil {
+		hasPIN, _ := h.securitySvc.HasPIN(ctx, user.ID)
+		if hasPIN {
+			ch, err := h.mfaChallengeStore.Create(ctx, user.ID, user.Email)
+			if err == nil {
+				c.JSON(http.StatusOK, gin.H{
+					"mfa_required":  true,
+					"challenge_id":  ch.ChallengeID,
+					"expires_at":    ch.ExpiresAt,
+					"message":       "Verify your 6-digit security PIN to complete login",
+				})
+				return
+			}
+			// If challenge creation fails, log and fall through to normal login
+			log.Printf("[MFA] challenge creation failed for %s: %v - proceeding without MFA", user.Email, err)
+		}
 	}
 
 	// ---- SUCCESS: counters clear + setup gate check ----
@@ -1244,4 +1274,74 @@ func getenvStr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func (h *AuthHandler) VerifyMFA(c *gin.Context) {
+	var req model.MFAVerifyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	if h.mfaChallengeStore == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "mfa not available"})
+		return
+	}
+
+	ch, err := h.mfaChallengeStore.Get(c.Request.Context(), req.ChallengeID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired challenge"})
+		return
+	}
+	_ = h.mfaChallengeStore.Delete(c.Request.Context(), req.ChallengeID)
+
+	ip, ua := clientIP(c.Request), c.Request.UserAgent()
+	loginCtx := service.WithClientInfo(c.Request.Context(), ip, ua)
+
+	// Verify PIN
+	if h.authService != nil {
+		// For simplicity, verify PIN via auth service's PIN verification logic
+		// We can reuse existing PIN verification
+		pinReq := &model.PINVerifyRequest{PIN: req.PIN}
+		if err := h.authService.VerifyPIN(loginCtx, ch.UserID, pinReq); err != nil {
+			switch err {
+			case service.ErrPINLocked:
+				c.JSON(http.StatusLocked, gin.H{"error": "PIN is locked due to too many attempts"})
+			case service.ErrInvalidPIN:
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid PIN"})
+			case service.ErrTooManyAttempts:
+				c.JSON(http.StatusLocked, gin.H{"error": "too many PIN attempts, account locked"})
+			default:
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid PIN"})
+			}
+			return
+		}
+	}
+
+	// Get user and issue session via IssueSession
+	user, err := h.authService.GetUserByID(loginCtx, ch.UserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
+		return
+	}
+
+	userOut, tokenPair, err := h.authService.IssueSession(loginCtx, user, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "login failed"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":          userOut.ID,
+			"email":       userOut.Email,
+			"username":    userOut.Username,
+			"full_name":   userOut.FullName,
+			"is_active":   userOut.IsActive,
+			"is_verified": userOut.IsVerified,
+			"last_login_at": userOut.LastLoginAt,
+			"role":        userOut.Role,
+		},
+		"tokens": tokenPair,
+	})
 }

@@ -66,6 +66,29 @@ function AnalyticsMetrics() {
 }
 
 function TrafficChart() {
+  const { data: clicks, isLoading } = useQuery({
+    queryKey: ['analytics-clicks-recent'],
+    queryFn: async () => {
+      const res = await fetch('/api/ui-clicks?limit=30&offset=0', { cache: 'no-store' });
+      if (!res.ok) return [];
+      const data = await res.json().catch(() => ({}));
+      return Array.isArray(data.ui_clicks) ? data.ui_clicks : Array.isArray(data.clicks) ? data.clicks : Array.isArray(data.items) ? data.items : [];
+    },
+    refetchInterval: 5000,
+  });
+
+  const values = Array.isArray(clicks) ? clicks.slice(-30).map((_: any, idx: number) => {
+    // try to derive a numeric value; if none, show a small deterministic ramp
+    const c = _ as any;
+    const v = c.count ?? c.hits ?? c.value ?? c.score ?? 0;
+    return typeof v === 'number' ? v : 0;
+  }) : [];
+
+  // if no values, render flat bars to indicate no data rather than random
+  const dataToShow = values.length > 0 ? values : Array(30).fill(0);
+
+  if (isLoading) return <ChartSkeleton />;
+
   return (
     <Card className="bg-gray-900/50-700">
       <CardHeader>
@@ -73,13 +96,16 @@ function TrafficChart() {
       </CardHeader>
       <CardContent>
         <div className="h-32 flex items-end justify-between gap-1">
-          {Array.from({ length: 30 }).map((_, i) => (
-            <div 
-              key={i} 
-              className="bg-blue-500/80 hover:bg-blue-400 rounded-t transition-all flex-1"
-              style={{ height: `${Math.random() * 80 + 20}%` }}
-            />
-          ))}
+          {dataToShow.map((val: number, i: number) => {
+            const h = Math.max(10, Math.min(90, val % 100)); // clamp to 10-90%
+            return (
+              <div
+                key={i}
+                className="bg-blue-500/80 hover:bg-blue-400 rounded-t transition-all flex-1"
+                style={{ height: `${h}%` }}
+              />
+            );
+          })}
         </div>
       </CardContent>
     </Card>
@@ -87,11 +113,16 @@ function TrafficChart() {
 }
 
 async function fetchAnalytics() {
+  const res = await fetch('/api/analytics/summary', { cache: 'no-store' });
+  if (!res.ok) {
+    return { views: 0, watchTime: 0, revenue: 0, subscribers: 0 };
+  }
+  const data = await res.json().catch(() => ({}));
   return {
-    views: 12543,
-    watchTime: 4567,
-    revenue: 45200,
-    subscribers: 892,
+    views: Number(data.views) || 0,
+    watchTime: Number(data.watchTime) || 0,
+    revenue: Number(data.revenue) || 0,
+    subscribers: Number(data.subscribers) || 0,
   };
 }
 

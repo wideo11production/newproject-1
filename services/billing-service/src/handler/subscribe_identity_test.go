@@ -12,6 +12,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,6 +93,14 @@ type uuidIdentityRepo struct{ billing uint }
 
 func (r *uuidIdentityRepo) Resolve(_ context.Context, _ uuid.UUID) (uint, error) {
 	return r.billing, nil
+}
+
+// Lookup is the reverse mapping, added with the activation hook. Erroring by
+// default means a subscription written by the LEGACY `Subscribe` path - which
+// never recorded an auth UUID - fails loudly at activation rather than granting
+// an entitlement for a user that cannot be identified.
+func (r *uuidIdentityRepo) Lookup(_ context.Context, billingID uint) (uuid.UUID, error) {
+	return uuid.Nil, fmt.Errorf("billing user %d has no identity row", billingID)
 }
 
 type recordingFirer struct {

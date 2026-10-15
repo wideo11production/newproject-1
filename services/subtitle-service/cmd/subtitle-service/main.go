@@ -39,8 +39,9 @@ func main() {
 	styleRepo := repository.NewStyleRepository(db)
 
 	subSvc := service.NewSubtitleService(service.SubtitleConfig{
-		FFmpegPath: cfg.FFmpeg.Path,
-		WhisperURL: cfg.Whisper.URL,
+		FFmpegPath:           cfg.FFmpeg.Path,
+		WhisperURL:           cfg.Whisper.URL,
+		WhisperTimeoutSeconds: cfg.Whisper.TimeoutSeconds,
 	}, subRepo, styleRepo)
 
 	h := handler.NewHandler(subSvc)

@@ -13,6 +13,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -25,6 +26,26 @@ type UserIdentityRepository interface {
 	// Resolve returns the billing id for an auth UUID, allocating
 	// one if this is the first time billing sees that user.
 	Resolve(ctx context.Context, authUUID uuid.UUID) (uint, error)
+
+	// Lookup returns the auth UUID for a billing id.
+	//
+	// THE REVERSE, AND WHY IT WAS NOT THERE BEFORE
+	//
+	// `Resolve` exists because a JWT arrives with a UUID and every billing row
+	// wants a uint. The reverse is needed because an ACTIVATION happens from a
+	// subscription id - a payment confirms money, the payment names an invoice,
+	// the invoice names a subscription, and the subscription stores only the
+	// billing-side uint. To grant the plan, the entitlement client needs the
+	// UUID the token carries, and the only place that mapping exists is this
+	// table.
+	//
+	// It is an ERROR, not an empty string, when there is no row. A subscription
+	// whose billing id has no identity row was created by the pre-adapter code
+	// path (the model comment records that those rows "were never reconcilable"),
+	// and silently returning an empty UUID would make the caller fire an
+	// entitlement for a user that does not exist. That failure would be
+	// indistinguishable from a successful grant of nothing.
+	Lookup(ctx context.Context, billingID uint) (uuid.UUID, error)
 }
 
 type userIdentityRepository struct {
@@ -63,4 +84,29 @@ func (r *userIdentityRepository) Resolve(ctx context.Context, authUUID uuid.UUID
 		return 0, err
 	}
 	return ident.ID, nil
+}
+
+// Lookup maps the billing-side uint back to auth's UUID.
+//
+// The primary key IS the billing id, so this is a `First(&ident, billingID)`
+// rather than a `Where` - and a not-found is genuinely absent, not ambiguous.
+func (r *userIdentityRepository) Lookup(ctx context.Context, billingID uint) (uuid.UUID, error) {
+	if billingID == 0 {
+		// 0 is the zero value and is never a real row. Returning it as a
+		// "not found" instead of an error would let a caller treat an
+		// unpopulated struct field as a user identity, which is the kind of
+		// thing that grants an entitlement to nobody and looks like it worked.
+		return uuid.Nil, fmt.Errorf("billing user id 0 is not a real identity")
+	}
+
+	var ident model.UserIdentity
+	err := r.db.WithContext(ctx).First(&ident, billingID).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return uuid.Nil, fmt.Errorf("billing user %d has no identity row - "+
+				"created before the identity adapter and not reconcilable", billingID)
+		}
+		return uuid.Nil, err
+	}
+	return ident.AuthUUID, nil
 }

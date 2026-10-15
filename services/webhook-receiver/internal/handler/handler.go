@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -18,13 +21,17 @@ type WebhookHandler struct {
 	db                   *gorm.DB
 	logger               *zap.Logger
 	dashboardServiceURL  string
+	dashboardSecret      string
+	httpClient           *http.Client
 }
 
-func NewWebhookHandler(db *gorm.DB, logger *zap.Logger, dashboardServiceURL string) *WebhookHandler {
+func NewWebhookHandler(db *gorm.DB, logger *zap.Logger, dashboardServiceURL, dashboardSecret string) *WebhookHandler {
 	return &WebhookHandler{
 		db:                  db,
 		logger:              logger,
-		dashboardServiceURL: dashboardServiceURL,
+		dashboardServiceURL: strings.TrimRight(dashboardServiceURL, "/"),
+		dashboardSecret:     dashboardSecret,
+		httpClient:          &http.Client{Timeout: 3 * time.Second},
 	}
 }
 
@@ -196,9 +203,52 @@ func (h *WebhookHandler) processAlert(ctx context.Context, alert *model.AlertMan
 }
 
 func (h *WebhookHandler) forwardToDashboardService(alert model.Alert) {
-	// In a real implementation, this would call the dashboard-service API
-	// or publish to NATS for real-time WebSocket updates
-	h.logger.Debug("Forwarding alert to dashboard service", zap.String("alertName", alert.Name))
+	// Real-time fan-out: push the persisted alert to dashboard-service so it
+	// broadcasts it to every connected browser over the WebSocket bus as an
+	// `alert_update` message. Best-effort: a forward failure must NOT fail the
+	// webhook that already committed the alert to Postgres - the store is the
+	// source of truth; the WS broadcast is a live cache. The alert is still
+	// queryable via GET /api/v1/alerts (seeded by the REST proxy in Phase 1).
+	//
+	// Guards: shared INTERNAL_SERVICE_SECRET; 3s timeout (Prometheus scrape
+	// load must not pile up behind a slow dashboard); error logged, never
+	// retried (Alertmanager redeliveries handle durability).
+
+	if h.dashboardServiceURL == "" || h.dashboardSecret == "" {
+		// Undeployed/legacy config without the secret binding: do not attempt the
+		// forward rather than sending an unauthenticated request.
+		h.logger.Debug("alert forward skipped: dashboard service or secret not configured",
+			zap.String("name", alert.Name))
+		return
+	}
+
+	body, err := json.Marshal(alert)
+	if err != nil {
+		h.logger.Error("failed to marshal alert for forward", zap.Error(err), zap.String("fingerprint", alert.Fingerprint))
+		return
+	}
+
+	url := h.dashboardServiceURL + "/api/v1/internal/alerts/broadcast"
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		h.logger.Error("failed to build alert forward request", zap.Error(err))
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Secret", h.dashboardSecret)
+
+	resp, err := h.httpClient.Do(req)
+	if err != nil {
+		h.logger.Warn("alert forward to dashboard-service failed", zap.Error(err), zap.String("name", alert.Name))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		h.logger.Warn("alert forward to dashboard-service non-2xx",
+			zap.Int("status", resp.StatusCode), zap.String("name", alert.Name))
+		return
+	}
+	h.logger.Debug("alert forwarded to dashboard-service", zap.String("name", alert.Name))
 }
 
 func (h *WebhookHandler) ListAlerts(c *gin.Context) {

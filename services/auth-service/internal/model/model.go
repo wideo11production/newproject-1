@@ -260,3 +260,9 @@ type PINSetupRequest struct {
 type PINVerifyRequest struct {
 	PIN string `json:"pin" validate:"required,len=6,numeric"`
 }
+
+type MFAVerifyRequest struct {
+	ChallengeID string     `json:"challenge_id" validate:"required"`
+	PIN         string     `json:"pin" validate:"required,len=6,numeric"`
+	Device      DeviceInfo `json:"device"`
+}

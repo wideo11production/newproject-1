@@ -77,6 +77,29 @@ type SelectablePlan = {
   monetization?: number | 'unlimited';
 };
 
+/** A priced plan entry from billing-service's /pricing endpoint. */
+type PricedPlan = {
+  code: string;
+  name: string;
+  kind: string;
+  seats: number;
+  aura: boolean;
+  amount: string;
+  currency: string;
+  zone: string;
+  zone_source: string;
+  country: string;
+};
+
+/** A pricing response from billing-service. */
+type PricingResponse = {
+  plans: PricedPlan[];
+  display_currency: string;
+  priced_for_country: string;
+  mismatch?: boolean;
+  mismatch_note?: string;
+};
+
 /** 29000 USD -> "$290.00". Minor units, so the division is by 100. */
 function formatPrice(minor: number, currency: string): string {
   const major = minor / 100;
@@ -110,18 +133,52 @@ export function PlanPicker({
     let alive = true;
     (async () => {
       try {
-        const res = await fetch('/api/plans', { cache: 'no-store' });
-        const body = (await res.json().catch(() => ({}))) as {
+        // Fetch both the plan catalogue (auth-service) and the geo-priced
+        // catalogue (billing-service). The catalogue has the plan metadata
+        // and capabilities; the pricing has the correct currency and price
+        // per the buyer's country. We merge them so the picker shows the
+        // right price WITHOUT relying on auth-service's hardcoded USD.
+        const [catalogRes, pricingRes] = await Promise.all([
+          fetch('/api/plans', { cache: 'no-store' }),
+          fetch('/api/pricing', { cache: 'no-store' }),
+        ]);
+
+        if (!alive) return;
+
+        const catalogBody = (await catalogRes.json().catch(() => ({}))) as {
           plans?: SelectablePlan[];
           message?: string;
         };
-        if (!alive) return;
-        if (res.ok) {
-          setPlans(body.plans ?? []);
-          setLoadError(null);
-        } else {
+        const pricingBody = (await pricingRes.json().catch(() => ({}))) as PricingResponse;
+
+        if (!catalogRes.ok) {
           setLoadError('Could not load available plans. Your current plan is unchanged.');
+          return;
         }
+
+        // Build a map of priced plans keyed by code for fast lookup.
+        const pricedMap = new Map<string, PricedPlan>();
+        for (const p of pricingBody.plans ?? []) {
+          pricedMap.set(p.code, p);
+        }
+
+        // Merge: take the catalogue's metadata + capabilities, and
+        // overlay the geo-priced amount and currency from billing.
+        const merged = (catalogBody.plans ?? []).map((plan): SelectablePlan => {
+          const priced = pricedMap.get(plan.code);
+          if (priced) {
+            return {
+              ...plan,
+              // Use the geo-priced amount (in minor units) and currency.
+              price_minor: Math.round(parseFloat(priced.amount) * 100),
+              currency: priced.currency,
+            };
+          }
+          return plan;
+        });
+
+        setPlans(merged);
+        setLoadError(null);
       } catch {
         if (alive) setLoadError('Could not load available plans. Your current plan is unchanged.');
       }

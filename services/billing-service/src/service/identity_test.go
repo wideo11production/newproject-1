@@ -12,6 +12,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -79,12 +80,27 @@ type fakeIdentityRepo struct {
 	calls    int
 	lastUUID uuid.UUID
 	billing  uint
+	// lookupUUID is what Lookup returns. Zero means "no row".
+	lookupUUID uuid.UUID
 }
 
 func (f *fakeIdentityRepo) Resolve(_ context.Context, authUUID uuid.UUID) (uint, error) {
 	f.calls++
 	f.lastUUID = authUUID
 	return f.billing, nil
+}
+
+// Lookup is the reverse mapping, added with the activation hook.
+//
+// It exists on the fake because an interface that grows is the one case where a
+// fake MUST grow with it, and the compiler tells us which fakes are now
+// incomplete. The fake returns the id it was given rather than erroring so
+// existing tests, which never call it, keep passing for the right reason.
+func (f *fakeIdentityRepo) Lookup(_ context.Context, billingID uint) (uuid.UUID, error) {
+	if f.lookupUUID == uuid.Nil {
+		return uuid.Nil, fmt.Errorf("billing user %d has no identity row", billingID)
+	}
+	return f.lookupUUID, nil
 }
 
 type fireCall struct {

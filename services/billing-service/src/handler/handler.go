@@ -122,9 +122,48 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		plans.PUT("/:id", middleware.AuthRequired(), middleware.RequireAdmin(), h.UpdatePlan)
 	}
 
+	// ---- PUBLIC: the priced catalogue ----
+	//
+	// The seven tiers with each buyer's own price applied, which is the only
+	// number a pricing page may show. It is public because it has to render for a
+	// signed-out visitor, and it contains no PII - the two countries are supplied
+	// BY THE CALLER as query parameters, so nothing about the buyer is stored or
+	// returned that was not already in the request.
+	//
+	// This is a READ. It prices, it does not sell, and it activates nothing.
+	geo := r.Group("/pricing")
+	{
+		geo.GET("", h.PricedCatalogue)
+	}
+
+	// ---- PUBLIC: provider webhooks ----
+	//
+	// Deliberately NOT behind `AuthRequired`, and deliberately not behind
+	// `RequireAdmin` either. A provider does not hold a session for us - it holds
+	// a shared secret and signs its payload. The gate is the HMAC over the raw
+	// body in `VerifyWebhookSignature`, checked before anything is parsed.
+	//
+	// A signature-less or misconfigured endpoint here is worse than an open admin
+	// route: it activates subscriptions. So the handler refuses when the secret is
+	// absent from configuration rather than falling back to "unverified but
+	// trusted", and that refusal is tested in `activation_test.go`.
+	webhooks := r.Group("/webhooks")
+	{
+		webhooks.POST("/:provider", h.ProviderWebhook)
+	}
+
 	// ---- PERSONAL: the caller's own subscription ----
 	subs := r.Group("/subscriptions", middleware.AuthRequired())
 	{
+		// PENDING is the paid-checkout entry point. `Subscribe` remains for the
+		// legacy zero-payment path and is NOT reachable from a priced checkout:
+		// a subscription created here is `pending`, grants nothing, and becomes
+		// active only when a payment is confirmed.
+		subs.POST("/pending", h.SubscribePending)
+		// Checkout session creation: the paid path. Creates a pending
+		// subscription + invoice + payment row with `transaction_id`
+		// so the webhook can resolve the sale.
+		subs.POST("/checkout/session", h.CreateCheckoutSession)
 		subs.POST("", h.Subscribe)
 		subs.GET("/:id", h.GetSubscription)
 		// `user_id` in the path is retained for backwards compatibility with
@@ -135,6 +174,9 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		// Expiry reporting is operational data across all accounts, not a personal
 		// view - an admin-only route.
 		subs.GET("/expiring", middleware.RequireAdmin(), h.GetExpiringSubscriptions)
+		// Admin-only activation, for an offline or corrected sale that the
+		// provider webhook never reported. Same code path as the webhook.
+		subs.POST("/:id/activate", middleware.RequireAdmin(), h.ActivateSubscription)
 	}
 
 	// ---- TAX RATES: read public, write admin ----
@@ -317,6 +359,68 @@ func (h *Handler) Subscribe(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"subscription": sub})
+}
+
+// CreateCheckoutSession creates a pending subscription + invoice + payment row
+// with the provider's transaction_id so the webhook can resolve the sale.
+//
+// This is the entry point for a priced checkout. The buyer is resolved from
+// the VERIFIED token, never from the request body.
+func (h *Handler) CreateCheckoutSession(c *gin.Context) {
+	verified, ok := selfUserID(c)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		PlanCode   string `json:"plan_code" binding:"required"`
+		Country    string `json:"country"`
+		SuccessURL string `json:"success_url"`
+		CancelURL  string `json:"cancel_url"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.svc.CreateCheckoutSession(c.Request.Context(), verified, service.CheckoutSessionRequest{
+		PlanCode:   req.PlanCode,
+		Country:    req.Country,
+		SuccessURL: req.SuccessURL,
+		CancelURL:  req.CancelURL,
+	})
+	if err != nil {
+		if errors.Is(err, service.ErrUnknownTier) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "plan_not_purchasable",
+				"message": "That plan cannot be bought.",
+				"code":    req.PlanCode,
+			})
+			return
+		}
+		if errors.Is(err, service.ErrIdentityNotResolvable) {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "user_id_not_resolvable",
+				"message": "The verified token does not name a resolvable user id.",
+			})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"checkout_url":         result.CheckoutURL,
+		"checkout_session_id":  result.CheckoutSessionID,
+		"subscription_id":      result.SubscriptionID,
+		"invoice_id":           result.InvoiceID,
+		"payment_id":           result.PaymentID,
+		"amount":               result.Amount.String(),
+		"currency":             result.Currency,
+		"granted":              false,
+		"state":                "pending",
+		"message":              "Checkout session created. Subscription activates when payment is confirmed.",
+	})
 }
 
 func (h *Handler) GetSubscription(c *gin.Context) {
@@ -574,17 +678,18 @@ func (h *Handler) IssueInvoice(c *gin.Context) {
 
 func (h *Handler) RecordPayment(c *gin.Context) {
 	var req struct {
-		InvoiceID uint   `json:"invoice_id" binding:"required"`
-		UserID    uint   `json:"user_id" binding:"required"`
-		Amount    string `json:"amount" binding:"required"`
-		Method    string `json:"method" binding:"required"`
-		Provider  string `json:"provider"`
+		InvoiceID     uint   `json:"invoice_id" binding:"required"`
+		UserID        uint   `json:"user_id" binding:"required"`
+		Amount        string `json:"amount" binding:"required"`
+		Method        string `json:"method" binding:"required"`
+		Provider      string `json:"provider"`
+		TransactionID string `json:"transaction_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	payment, err := h.svc.RecordPayment(c.Request.Context(), req.InvoiceID, req.UserID, req.Amount, req.Method, req.Provider)
+	payment, err := h.svc.RecordPayment(c.Request.Context(), req.InvoiceID, req.UserID, req.Amount, req.Method, req.Provider, req.TransactionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -6,6 +6,14 @@ import { Badge } from '@wideo11/ui/badge';
 import { WebSocketClient } from '@/lib/websocket-client';
 import { useQuery } from '@tanstack/react-query';
 
+interface Alert {
+  id: string;
+  name: string;
+  state: 'firing' | 'resolved';
+  severity: 'critical' | 'warning' | 'info';
+  startsAt: string;
+}
+
 function Skeleton({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-md ${className}`} />;
 }
@@ -94,7 +102,27 @@ type Metric = {
 function LiveMetrics() {
   const ws = WebSocketClient.getInstance();
   const [metrics, setMetrics] = useState<Metric[]>([]);
-  
+  const [fallback, setFallback] = useState<Metric[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // fetch-based fallback in case WS never emits metric_update
+    void fetch('/api/analytics/summary', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((d) => {
+        if (cancelled) return;
+        const fb: Metric[] = [];
+        const data = d as Record<string, unknown>;
+        if (typeof data.views === 'number') fb.push({ name: 'views', value: data.views });
+        if (typeof data.revenue === 'number') fb.push({ name: 'revenue', value: data.revenue });
+        if (typeof data.subscribers === 'number') fb.push({ name: 'subscribers', value: data.subscribers });
+        if (typeof data.watchTime === 'number') fb.push({ name: 'watchTime', value: data.watchTime });
+        setFallback(fb);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     ws.on('metric_update', (data) => {
       setMetrics(prev => {
@@ -108,11 +136,13 @@ function LiveMetrics() {
         return newMetrics;
       });
     });
-    
-    ws.connect('ws://localhost:8080/api/v1/ws');
-    
+
+    ws.connect(process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080/api/v1/ws');
+
     return () => ws.disconnect();
   }, [ws]);
+
+  const display = metrics.length > 0 ? metrics : fallback;
 
   return (
     <Card className="bg-gray-900/50-800">
@@ -121,12 +151,12 @@ function LiveMetrics() {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {metrics.slice(0, 5).map((metric) => (
+          {display.slice(0, 5).map((metric) => (
             <div key={metric.name} className="flex items-center justify-between">
               <span className="text-sm text-gray-300">{metric.name}</span>
               <div className="flex items-center space-x-2">
                 <div className="w-24 bg-gray-700 rounded-full h-2 overflow-hidden">
-                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${metric.value}%` }} />
+                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${Math.max(5, Math.min(100, metric.value))}%` }} />
                 </div>
                 <span className="text-xs text-gray-400 w-12 text-right">{metric.value}</span>
               </div>
@@ -138,14 +168,39 @@ function LiveMetrics() {
   );
 }
 
+// RecentAlerts now also listens for real-time `alert_update` WebSocket events
+// so the dashboard's alert list stays live, matching the WarningCirclePanel.
 function RecentAlerts() {
-  const { data: alerts, isLoading } = useQuery({
+  const ws = WebSocketClient.getInstance();
+  const [socketAlerts, setSocketAlerts] = useState<Alert[]>([]);
+  const { data: fetchedAlerts, isLoading } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => fetchAlerts(),
     refetchInterval: 30000,
   });
 
-  if (isLoading) return <AlertsSkeleton />;
+  useEffect(() => {
+    return ws.on('alert_update', (data: any) => {
+      if (!data?.id || !data?.name) return;
+      const liveAlert: Alert = {
+        id: data.id,
+        name: data.name,
+        state: data.state,
+        severity: data.severity,
+        startsAt: data.startsAt || new Date().toISOString(),
+      };
+      setSocketAlerts((prev) => {
+        if (liveAlert.state === 'resolved') return prev.filter((a) => a.id !== liveAlert.id);
+        const without = prev.filter((a) => a.id !== liveAlert.id);
+        return [liveAlert, ...without];
+      });
+    });
+  }, [ws]);
+
+  const showFetched = fetchedAlerts && fetchedAlerts.length > 0 && socketAlerts.length === 0;
+  const displayAlerts = showFetched ? fetchedAlerts : socketAlerts;
+
+  if (isLoading && socketAlerts.length === 0) return <AlertsSkeleton />;
 
   return (
     <Card className="bg-gray-900/50-800">
@@ -155,7 +210,7 @@ function RecentAlerts() {
       <CardContent>
         <div className="h-48 overflow-y-auto">
           <div className="space-y-2">
-            {alerts?.slice(0, 10).map((alert) => (
+            {displayAlerts?.slice(0, 10).map((alert) => (
               <div key={alert.id} className="flex items-start space-x-2 text-sm">
                 <div className={`mt-0.5 flex-shrink-0 w-2 h-2 rounded-full ${
                   alert.state === 'firing' ? 'bg-red-400' : 'bg-green-400'
@@ -176,15 +231,47 @@ function RecentAlerts() {
 }
 
 async function fetchHealth() {
-  return { api: 'healthy', auth: 'healthy', video: 'healthy', wallet: 'degraded', push: 'healthy', redis: 'healthy' };
+  // Real, session-gated dependency read through the SHARED health handler
+  // (`packages/ui/src/health-handler.ts`). Returns { status, checkedAt, services:[{service,status,latencyMs,code}] }.
+  // The old version returned a hardcoded object with "wallet: degraded" and
+  // "push: healthy" - pure fiction. We now map the real service statuses to the
+  // card set this panel shows, and report anything the handler does not probe as
+  // `unreachable` rather than inventing a state.
+  const res = await fetch('/api/health-check', { cache: 'no-store' });
+  if (!res.ok) {
+    // A transient 503 from the relay (upstream unreachable) - surface every
+    // service as unreachable so the panel stays truthful instead of green-washing.
+    return { api: 'unreachable', auth: 'unreachable', video: 'unreachable', wallet: 'unreachable', push: 'unreachable', redis: 'unreachable' };
+  }
+  const data: { services?: Array<{ service: string; status: string }> } = await res.json().catch(() => ({}));
+  const byService: Record<string, string> = {};
+  for (const s of data.services ?? []) byService[s.service] = s.status;
+  // Map the real probed services to the card labels. `video` = transcoding-service,
+  // which this handler does not probe, so it stays unreachable until a probe entry
+  // is added to health-handler.ts (see roadmap Phase 4).
+  return {
+    api: byService['auth'] ?? 'unreachable',
+    auth: byService['auth'] ?? 'unreachable',
+    video: byService['video'] ?? 'unreachable',
+    wallet: byService['wallet'] ?? 'unreachable',
+    push: byService['push'] ?? 'unreachable',
+    redis: byService['redis'] ?? 'unreachable',
+  };
 }
 
-async function fetchAlerts() {
-  return [
-    { id: '1', name: 'HighMemoryUsage', state: 'firing', severity: 'critical' },
-    { id: '2', name: 'APIHighLatency', state: 'firing', severity: 'warning' },
-    { id: '3', name: 'LowDiskSpace', state: 'resolved', severity: 'warning' },
-  ];
+async function fetchAlerts(): Promise<Alert[]> {
+  // Real alert stream from webhook-receiver (AlertManager/Prometheus), proxied
+  // through the session-gated /api/alerts relay. Replaces the hardcoded sample.
+  const res = await fetch('/api/alerts', { cache: 'no-store' });
+  if (!res.ok) return [];
+  const data: { alerts?: any[] } = await res.json().catch(() => ({}));
+  return (data.alerts ?? []).map((a) => ({
+    id: String(a.id ?? a.fingerprint ?? ''),
+    name: a.name ?? a.labels?.alertname ?? 'Unnamed',
+    state: (a.state ?? 'firing') as 'firing' | 'resolved',
+    severity: (a.severity ?? 'warning') as 'critical' | 'warning' | 'info',
+    startsAt: a.startsAt ?? a.startsAt ?? new Date().toISOString(),
+  }));
 }
 
 function HealthSkeleton() {

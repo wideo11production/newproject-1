@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -21,6 +22,7 @@ type Config struct {
 	JWTSecretKey         string
 	LogLevel             string
 	Environment          string
+	InternalServiceSecret string
 }
 
 type DatabaseConfig struct {
@@ -44,6 +46,7 @@ func Load() (*Config, error) {
 		JWTSecretKey:        getEnv("JWT_SECRET_KEY", ""),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 		Environment:         getEnv("ENVIRONMENT", "development"),
+		InternalServiceSecret: getEnv("INTERNAL_SERVICE_SECRET", ""),
 		Database: DatabaseConfig{
 			Host:            getEnv("DB_HOST", "localhost"),
 			Port:            getEnvAsInt("DB_PORT", 5432),
@@ -67,6 +70,20 @@ func Load() (*Config, error) {
 	// config chupke se live na jaye.
 	if cfg.Environment == "production" && cfg.JWTSecretKey == "" {
 		return nil, fmt.Errorf("JWT_SECRET_KEY must be set when ENVIRONMENT=production")
+	}
+	// The internal alert-forward path is only live when BOTH the dashboard URL
+	// and the shared secret are present. In production a missing pair silently
+	// disables real-time alerts (fail-open into "silently broken") - refuse to
+	// boot rather than ship a dead pipeline.
+	if cfg.Environment == "production" && (cfg.DashboardServiceURL == "" || cfg.InternalServiceSecret == "") {
+		missing := []string{}
+		if cfg.DashboardServiceURL == "" {
+			missing = append(missing, "DASHBOARD_SERVICE_URL")
+		}
+		if cfg.InternalServiceSecret == "" {
+			missing = append(missing, "INTERNAL_SERVICE_SECRET")
+		}
+		return nil, fmt.Errorf("production alert-forward is unconfigured (%s) - refusin to start", strings.Join(missing, ", "))
 	}
 
 	return cfg, nil

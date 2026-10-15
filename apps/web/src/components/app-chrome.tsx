@@ -16,9 +16,11 @@
 // console hain. Baaki pages apna layout khud dete hain (landing/browse/
 // channels/ads apna header rakhte hain, auth AuthShell use karta hai).
 //
-// NOTE: parallel route slots (@dashboard / @analytics / @alerts) root layout
-// me destructure to hote hain par JSX me use NAHI hote - wo pehle se dead
-// thay. Isliye unhe yahan nahi laaya gaya, aur koi routing structure nahi badla.
+// NOTE: parallel route slots (@dashboard / @analytics / @alerts / @settings) are
+// destructured in the root layout and passed in here so the real console panels
+// mount inside this shell instead of the empty <div/> segment stubs.
+// On any route only the slot matching that route is non-null (the rest resolve to
+// their default.tsx -> null), so rendering all four in <main> is safe.
 //
 // Hinglish comments: har block ka arth
 
@@ -31,6 +33,7 @@ import {
   ThemeToggle,
   UserMenu,
   Loading,
+  SystemAlerts,
 } from '@/app/components/header';
 import { BarChart3, Activity, Bell, Settings, HelpCircle, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
@@ -71,7 +74,19 @@ function isConsoleRoute(pathname: string | null): boolean {
   );
 }
 
-export function AppChrome({ children }: { children: ReactNode }) {
+export function AppChrome({
+  children,
+  dashboard,
+  analytics,
+  alerts,
+  settings,
+}: {
+  children: ReactNode;
+  dashboard?: ReactNode;
+  analytics?: ReactNode;
+  alerts?: ReactNode;
+  settings?: ReactNode;
+}) {
   const pathname = usePathname();
 
   // Public / marketing / auth page: page apna layout khud handle karta hai.
@@ -117,6 +132,10 @@ export function AppChrome({ children }: { children: ReactNode }) {
             </nav>
           </div>
           <div className="flex items-center space-x-2">
+            {/* System Alerts - Warning Circle Panel for restricted system alerts */}
+            <Suspense fallback={null}>
+              <SystemAlerts />
+            </Suspense>
             {/* Help Dropdown */}
             <details className="relative">
               <summary className="list-none cursor-pointer flex items-center gap-2 px-3 py-1.5 text-sm text-gray-300 transition-colors hover:text-ink rounded-md">
@@ -189,7 +208,17 @@ export function AppChrome({ children }: { children: ReactNode }) {
         </aside>
 
         <main className="container mx-auto h-full overflow-auto px-4 py-6 md:ml-64">
-          <Suspense fallback={<Loading />}>{children}</Suspense>
+          {/* Console segment stubs (app/{alerts,analytics,settings}/page.tsx) are
+              empty <div/> by design; the real panel lives in the matching @-slot,
+              which is rendered here so the console pages actually show content.
+              Only the slot for the active route is non-null. */}
+          <Suspense fallback={<Loading />}>
+            {children}
+            {dashboard}
+            {analytics}
+            {alerts}
+            {settings}
+          </Suspense>
         </main>
       </div>
     </div>

@@ -103,6 +103,12 @@ func main() {
 
 		// WebSocket for real-time updates
 		v1.GET("/ws", websocketHandler.HandleWebSocket)
+		// Service-to-service alert forwarder (guarded by INTERNAL_SERVICE_SECRET).
+		// `webhook-receiver` POSTs each AlertManager/Prometheus alert here so it
+		// fans out to every browser over the WS bus as `alert_update`.
+		v1.POST("/internal/alerts/broadcast", func(c *gin.Context) {
+			websocketHandler.BroadcastAlert(c, cfg.InternalServiceSecret)
+		})
 
 		// Dashboard preferences
 		v1.GET("/preferences", dashboardHandler.GetPreferences)

@@ -52,6 +52,30 @@ func main() {
 
 	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo)
 
+	// ---- THE PLAN CATALOGUE, SEEDED BEFORE ANY REQUEST IS ANSWERED ----
+	//
+	// Seven tiers are declared in `service.Tiers()` and `subscription_plans` had
+	// ZERO ROWS. `GET /pricing` answered 500 and `POST /subscriptions/pending`
+	// refused every checkout, because the registry describes plans that exist
+	// only in Go memory and nothing had ever written them to the database.
+	//
+	// This is the "correct code with no writer" pattern this repository records
+	// repeatedly, and the fix is the same every time: find the code that assumes
+	// the row exists and write it. It runs before the server starts so the first
+	// request finds the catalogue ready, rather than finding a 500 that is
+	// actually a startup ordering problem.
+	//
+	// A failure here is FATAL and deliberately so. A service that boots with an
+	// empty catalogue serves a pricing page that 500s and refuses every
+	// checkout - which looks like a working product that rejects every customer,
+	// rather than like a service that failed to start.
+	seedCtx, seedCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := service.SeedPlans(seedCtx, planRepo); err != nil {
+		seedCancel()
+		log.Fatalf("plan catalogue seed failed: %v - refusing to serve an empty catalogue", err)
+	}
+	seedCancel()
+
 	// ---- Payment-success auto-fire (P0.3) ----
 	//
 	// When a subscription is recorded, the subscriber must be
@@ -81,6 +105,18 @@ func main() {
 			strings.Join(missing, ", "))
 	}
 	billingSvc.SetEntitlementFirer(entitlement.NewClient(authInternalURL, []byte(jwtSecret)))
+
+	// ---- Stripe Checkout API wiring ----
+	//
+	// `CreateCheckoutSession` calls the real Stripe Checkout Sessions API
+	// to create a `cs_...` id that the webhook will echo back. If
+	// `STRIPE_SECRET_KEY` is unset, the service falls back to a placeholder
+	// generator so the rest of the chain still works in dev/test.
+	stripeKey := strings.TrimSpace(os.Getenv("STRIPE_SECRET_KEY"))
+	if stripeKey != "" {
+		billingSvc.SetStripeClient(service.NewStripeClient(stripeKey))
+		log.Printf("[billing] Stripe Checkout Sessions API wired with key prefix %s", stripeKey[:8])
+	}
 
 	h := handler.NewHandler(billingSvc)
 	r := gin.New()

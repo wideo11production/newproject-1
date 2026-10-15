@@ -28,11 +28,13 @@ export default function RootLayout({
   dashboard,
   analytics,
   alerts,
+  settings,
 }: {
   children: ReactNode;
   dashboard: ReactNode;
   analytics: ReactNode;
   alerts: ReactNode;
+  settings: ReactNode;
 }) {
   // Log config for verification (server side)
   console.log("Config loaded:", { appUrl: process.env.NEXT_PUBLIC_APP_URL, buffer: process.env.MINIMUM_MAINTENANCE_BUFFER_INR, sisterShare: process.env.SISTER_SHARE_PERCENTAGE });
@@ -87,12 +89,24 @@ export default function RootLayout({
 
               Public pages (login/register) par user authenticated nahi hota
               -> `_isAuthenticated` false, consumers apna fallback dikhate hain. */}
-          <IdentityProvider>
-            {/* Header + sidebar + main scroll container yahan se aata hai.
-                Auth routes (/auth/*) pe ye khud render NAHI hota, warna dashboard
-                chrome full-screen auth card ko cover kar deta tha. */}
-            <AppChrome>{children}</AppChrome>
-          </IdentityProvider>
+            <IdentityProvider>
+             {/* Header + sidebar + main scroll container yahan se aata hai.
+                 Auth routes (/auth/*) pe ye khud render NAHI hota, warna dashboard
+                 chrome full-screen auth card ko cover kar deta tha. */}
+             {/* Parallel-route slots (@dashboard/@analytics/@alerts/@settings) pass
+                 through AppChrome so the real console panels mount on their routes
+                 instead of the empty <div/> stubs in app/{analytics,alerts,settings}/page.tsx.
+                 On any route only the matching slot is non-null (the rest resolve to
+                 their default.tsx -> null), so rendering all four is safe. */}
+             <AppChrome
+               dashboard={dashboard}
+               analytics={analytics}
+               alerts={alerts}
+               settings={settings}
+             >
+               {children}
+             </AppChrome>
+           </IdentityProvider>
         </Providers>
       </body>
     </html>

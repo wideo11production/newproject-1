@@ -44,6 +44,73 @@ type State = 'idle' | 'requesting' | 'ready' | 'recording' | 'review';
  */
 const AUTO_CLOSE_MS = 3000;
 
+/**
+ * WHAT ACTUALLY WENT WRONG, IN WORDS THE USER CAN ACT ON.
+ *
+ * The previous handler bucketed only two names and handed the browser's raw
+ * string to everything else, which is where the reported symptom came from.
+ * Chrome reports a hardware that cannot start as
+ *
+ *     NotReadableError: Could not start video source
+ *
+ * and that string was being shown verbatim. "Video source" is a W3C term, not
+ * a thing anybody has, and the message says nothing about WHY or WHAT NEXT.
+ *
+ * `NotReadableError` has two very different causes that need two different
+ * answers, and the constraint tells them apart:
+ *
+ *   - the request was video-only or video+audio and was refused  -> the CAMERA
+ *     is in use. Zoom, Teams, OBS, another browser tab, or a previous tab of
+ *     this editor that never released it. The fix is closing something, not
+ *     reloading.
+ *   - the request was audio-only and was refused                       -> the
+ *     microphone is in use, which is rare but real.
+ *
+ * That distinction is the whole value of this function: "camera in use" sends
+ * the user to close an application, while a generic error sends them to
+ * reload the page, which does nothing for either case.
+ *
+ * Everything else keeps a plain-language sentence. The raw `message` is
+ * deliberately NOT used as the fallback any more: it is developer-speak,
+ * sometimes in a language other than the user's, and it never says what to do.
+ */
+function describeMediaError(
+  err: DOMException,
+  useCam: boolean,
+  useMic: boolean,
+): string {
+  switch (err?.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Permission denied. Allow camera and microphone access in the browser address bar, then try again.';
+
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return useCam
+        ? 'No camera found on this machine. Turn the camera off to record audio only.'
+        : 'No microphone found on this machine.';
+
+    case 'NotReadableError':
+    case 'TrackStartError':
+      // The device exists but cannot be opened. Almost always already in use.
+      return useCam
+        ? 'The camera could not start — it is probably in use by another app (Zoom, Teams, OBS or another browser tab). Close that app and try again.'
+        : 'The microphone could not start — it is probably in use by another app. Close that app and try again.';
+
+    case 'OverconstrainedError':
+      // Device selection is exact, so a chosen-but-vanished device lands here.
+      return 'The selected device is no longer available. Choose a different camera or microphone, or leave it on the default.';
+
+    case 'AbortError':
+      return 'The device was interrupted. Unplugging or sleeping the device does this — try again.';
+
+    default:
+      return useCam
+        ? 'Could not open the camera. Check that nothing else is using it, then try again.'
+        : 'Could not open the microphone. Check that nothing else is using it, then try again.';
+  }
+}
+
 export function RecorderDialog({
   open,
   onClose,
@@ -324,6 +391,62 @@ export function RecorderDialog({
   );
 
   // ============================================================================
+  // BIND THE OPEN STREAM TO THE PREVIEW ELEMENT
+  // ============================================================================
+  //
+  // ---- WHY THIS IS AN EFFECT AND WAS NOT ----
+  //
+  // The assignment used to live inside `arm`, immediately after the
+  // `getUserMedia` promise resolved, guarded by `if (camPreviewRef.current)`.
+  //
+  // The guard is what made it fail. `arm` sets `setState('requesting')` before
+  // awaiting, and React commits that render asynchronously — so at the moment
+  // the `await` resumes, the `<video>` that carries `camPreviewRef` has very
+  // often not been created yet. The ref is `null`, the guard is false, and the
+  // stream is stored but never shown. Nothing errors, nothing logs, and the
+  // user stares at a black box.
+  //
+  // Moving it here makes the binding a function of what is rendered rather than
+  // of when a promise happened to resolve. The effect runs after every commit,
+  // so it fires the moment the element exists — and it re-fires if the element
+  // is remounted, which happens whenever `state` changes.
+  //
+  // It also fixes a second case the original could not reach at all: a stream
+  // opened by a path that does not render a preview at the time (the audio-only
+  // case, or a re-arm after `Change devices`) now binds correctly on the next
+  // commit without any imperative bookkeeping.
+  //
+  // WHAT THE CONDITIONS MEAN
+  //
+  //   useCam              there is a picture to show; with the camera off the
+  //                       element is deliberately not rendered
+  //   state               the element only exists in these three states, so
+  //                       binding in any other state would attach a stream to
+  //                       a node that React is about to remove
+  //   srcObject !==      re-assigning the same MediaStream is harmless, but it
+  //                       the stream      restarts playback in some browsers,
+  //                                      which flickers a live preview
+  //
+  // `play()` is called and deliberately not awaited or surfaced: a rejected
+  // play() (camera held elsewhere, autoplay policy) must not surface as an
+  // error on a page where the recording itself still works.
+  useEffect(() => {
+    const el = camPreviewRef.current;
+    if (!el) return;
+    if (!useCam) return;
+    if (state !== 'requesting' && state !== 'ready' && state !== 'recording') return;
+    if (!streamRef.current) return;
+
+    if (el.srcObject !== streamRef.current) {
+      el.srcObject = streamRef.current;
+    }
+    // `play()` returns a promise that rejects when the browser blocks
+    // autoplay or the track is unavailable. Neither is the user's problem to
+    // read a stack trace about, and the recording path does not depend on it.
+    void el.play().catch(() => {});
+  }, [useCam, state]);
+
+  // ============================================================================
   // RELEASING WHAT THIS DIALOG HOLDS
   // ============================================================================
   //
@@ -454,6 +577,37 @@ export function RecorderDialog({
     setSavedTo(null);
     setKeptNote(null);
 
+    // ---- IS THE API EVEN AVAILABLE? ----
+    //
+    // `navigator.mediaDevices` is `undefined` in every insecure context —
+    // plain `http://` on a hostname or IP that is not `localhost`. The page
+    // loads, the editor works, and only this feature is dark, because
+    // `getUserMedia` is one of the APIs the browser removes entirely rather
+    // than blocking with a permission prompt.
+    //
+    // Without this check the failure is a TypeError inside the try block,
+    // which is NOT a DOMException, so the error handler below falls through to
+    // its generic branch and reports a device problem — sending the user to
+    // close other applications for a fault that is the page's own origin.
+    //
+    // `window.isSecureContext` is the precise test and is available where this
+    // matters. Checking both keeps a browser that defines one but not the
+    // other from falling into the same wrong answer.
+    if (
+      typeof navigator === 'undefined' ||
+      !navigator.mediaDevices ||
+      typeof navigator.mediaDevices.getUserMedia !== 'function' ||
+      window.isSecureContext === false
+    ) {
+      setError(
+        window.isSecureContext === false
+          ? 'The camera and microphone need a secure connection. Open this editor at http://localhost:3002 rather than over a plain network address.'
+          : 'This browser cannot record. Chrome, Edge, Firefox and Safari 14.1 and later can.',
+      );
+      setState('idle');
+      return;
+    }
+
     // ---- Check BEFORE asking for the stream, not after ----
     //
     // The old order was:
@@ -485,6 +639,32 @@ export function RecorderDialog({
     }
 
     setState('requesting');
+
+    // ---- RELEASE ANYTHING ALREADY OPEN BEFORE ASKING AGAIN ----
+    //
+    // This is the leak that produced the reported symptom. `arm` used to go
+    // straight to `getUserMedia` and then overwrite `streamRef.current` with the
+    // result, so a stream opened by a PREVIOUS call was never stopped: its tracks
+    // stayed live, and the OS still considered the camera in use.
+    //
+    // `streamRef.current = stream` does not stop the old stream. It drops the
+    // only reference the page has to it, and a MediaStream whose tracks were
+    // never `stop()`ped keeps the hardware open until the tab is closed. The
+    // browser will not hand the same camera to a second `getUserMedia`, so the
+    // retry fails with
+    //
+    //     NotReadableError: Could not start video source
+    //
+    // which is the exact string this dialog was showing, and which reads as
+    // "the camera is broken" when it means "the page already has the camera".
+    //
+    // Every path that reaches here has already released the hardware through
+    // `discardClips`, so in the common case this stops nothing. It is here for
+    // the two paths that do not: a second `arm` before `state` has re-rendered
+    // past `requesting` (the button is still on screen and still clickable), and
+    // React's development-mode double-invocation of async event handlers.
+    releaseHardware();
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: useCam
@@ -526,27 +706,89 @@ export function RecorderDialog({
       // muted is visible instead of silent.
       startMeter(stream);
 
-      if (camPreviewRef.current) {
-        camPreviewRef.current.srcObject = stream;
-        await camPreviewRef.current.play().catch(() => {});
-      }
+      // The stream is STORED HERE AND BOUND BY AN EFFECT.
+      //
+      // This used to assign `camPreviewRef.current.srcObject = stream`
+      // right here, guarded by `if (camPreviewRef.current)`. That guard is the
+      // bug: at this point the component has not re-rendered, so the `<video>`
+      // element this dialog needs has not been created yet and the ref is null.
+      // The guard swallows that, and the preview stays black for the rest of
+      // the armed session — no picture, no error, nothing the user can act on.
+      //
+      // It worked only when a re-render had happened to land between the
+      // `await getUserMedia` below and this line, which is timing nobody
+      // controls. The effect that follows runs after every commit, so the
+      // binding happens as soon as the element exists and re-happens if it is
+      // ever remounted.
+      streamRef.current = stream;
 
       // Armed, not recording. The user now verifies the picture and the levels,
       // and presses the button that actually starts the take.
       setState('ready');
     } catch (e) {
       const err = e as DOMException;
-      setError(
-        err.name === 'NotAllowedError'
-          ? 'Permission denied. Allow camera and microphone in the browser address bar, then try again.'
-          : err.name === 'NotFoundError'
-            ? 'No camera or microphone found on this machine.'
-            : err.message || 'Could not open the camera or microphone.'
-      );
+
+      // ---- RETRY ONCE WITH THE DEFAULT DEVICE ----
+      //
+      // A pinned `deviceId: { exact: id }` is right when the device EXISTS: it
+      // stops the browser silently substituting a different camera. But the id
+      // comes from `enumerateDevices`, and that list is a snapshot. A device
+      // unplugged between opening this dialog and pressing the button leaves the
+      // page holding an id the OS no longer recognises, and `exact` then makes
+      // the request unsatisfiable rather than fallible.
+      //
+      // The result was a dead end: the dropdown still showed the chosen device,
+      // the user pressed the button again, and it failed identically forever.
+      //
+      // So for the two failures where the CONSTRAINT is what is wrong (not the
+      // hardware, not the permission), the choice is cleared and the open is
+      // retried once with the browser's own default. The user keeps what they
+      // wanted — a working preview — and a device that has genuinely gone
+      // cannot be re-pinned, because it will not appear in the dropdown again
+      // after the next enumeration.
+      const constraintFailed =
+        err?.name === 'OverconstrainedError' ||
+        err?.name === 'NotFoundError' ||
+        err?.name === 'DevicesNotFoundError' ||
+        err?.name === 'NotReadableError';
+
+      if (constraintFailed && (camId !== '' || micId !== '')) {
+        setCamId('');
+        setMicId('');
+        try {
+          const fallback = await navigator.mediaDevices.getUserMedia({
+            video: useCam
+              ? { width: { ideal: 1280 }, height: { ideal: 720 } }
+              : false,
+            audio: useMic
+              ? { echoCancellation: true, noiseSuppression: true }
+              : false,
+          });
+          streamRef.current = fallback;
+          startMeter(fallback);
+          // Bound by the effect, not here — see the note in `arm` above for why
+          // `camPreviewRef.current` is null at this point.
+          // Say what happened. Silently swapping devices is the same class of
+          // problem as the bug being fixed here — the user should know the
+          // choice they made was not honoured and why.
+          setError('The device you picked is no longer available. Showing the default device instead.');
+          setState('ready');
+          return;
+        } catch (fallbackErr) {
+          // The default does not work either, so the hardware really is the
+          // problem, not the constraint. Report that, accurately.
+          setError(describeMediaError(fallbackErr as DOMException, useCam, useMic));
+          setState('idle');
+          discardClips();
+          return;
+        }
+      }
+
+      setError(describeMediaError(err, useCam, useMic));
       setState('idle');
       discardClips();
     }
-  }, [useCam, useMic, camId, micId, pickMime, startMeter, discardClips]);
+  }, [useCam, useMic, camId, micId, pickMime, startMeter, discardClips, releaseHardware]);
 
   /**
    * Put the device pickers away and open the preview, discarding the armed stream
@@ -700,7 +942,16 @@ export function RecorderDialog({
       setElapsed(0);
       setState('recording');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not start recording.');
+      // Plain language, not the browser's string. `changeDevices` releases the
+      // hardware this attempt opened, so a failed construction cannot leave the
+      // camera light on — which is the state that makes the NEXT attempt fail
+      // with "camera in use" and makes the feature look permanently broken.
+      const name = (e as DOMException)?.name;
+      setError(
+        name === 'NotSupportedError'
+          ? 'This browser cannot record in that format. Try Chrome, Edge or Firefox.'
+          : 'Could not start the recording. Close anything else using the camera, then try again.',
+      );
       changeDevices();
     }
   }, [useCam, useMic, pickMime, changeDevices, discardClips]);

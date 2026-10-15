@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -233,11 +234,23 @@ func (h *WebSocketHandler) BroadcastPanelUpdate(dashboardID uuid.UUID, panelID s
 
 // BroadcastAlertUpdate sends an alert update to all clients
 func (h *WebSocketHandler) BroadcastAlertUpdate(alert *model.Alert) {
-	msg := model.WebSocketMessage{
-		Type: model.WSMsgTypeAlertUpdate,
-		Data: alert,
+	h.BroadcastMessage(model.WSMsgTypeAlertUpdate, alert)
+}
+
+// BroadcastMessage emits an arbitrary WebSocketMessage to ALL connected clients
+// (regardless of dashboard_id, including unassigned ones with dashboard_id == uuid.Nil).
+// It is the fan-out target for service-to-service forwarders such as the
+// webhook-receiver's alert-forward endpoint.
+//
+// Accepts the message type plus an arbitrary data payload (a struct pointer, a
+// map, or nil). The caller's data is sent verbatim as `WebSocketMessage.Data`,
+// keeping the on-wire shape exactly what existing consumers already expect
+// (`type` + `data`), so no client schema change is needed to adopt it.
+func (h *WebSocketHandler) BroadcastMessage(msgType string, data any) {
+	h.broadcast <- model.WebSocketMessage{
+		Type: msgType,
+		Data: data,
 	}
-	h.broadcast <- msg
 }
 
 func (h *WebSocketHandler) broadcastToDashboard(dashboardID uuid.UUID, msg model.WebSocketMessage) {
@@ -264,4 +277,41 @@ func (h *WebSocketHandler) GetConnectedClients() int {
 // GetClientCount returns the number of connected clients
 func (h *WebSocketHandler) GetClientCount() int {
 	return h.GetConnectedClients()
+}
+
+// BroadcastAlert is the HTTP entry point for service-to-service alert
+// forwarding. `webhook-receiver` POSTs each AlertManager/Prometheus alert here
+// after persisting it, and this handler fans it out to every connected browser
+// over the WebSocket bus as a `alert_update` message.
+//
+// Security: gated by `X-Internal-Secret` (the shared INTERNAL_SERVICE_SECRET),
+// checked here rather than in middleware so this handler stays self-contained
+// and testable. Fail-closed: missing or wrong secret -> 403, no broadcast.
+func (h *WebSocketHandler) BroadcastAlert(c *gin.Context, secret string) {
+	if c.GetHeader("X-Internal-Secret") != secret {
+		c.JSON(http.StatusForbidden, gin.H{"error": "invalid_internal_secret"})
+		return
+	}
+	var payload map[string]any
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_json: " + err.Error()})
+		return
+	}
+	if payload["id"] == nil {
+		// Minimum viable invariant: a broadcastable alert must be addressable
+		// from the client (WarningCirclePanel dedupes by id). Without it the
+		// message is noise that cannot be reconciled.
+		c.JSON(http.StatusBadRequest, gin.H{"error": "missing id"})
+		return
+	}
+	// Echo back the exact shape consumers already parse (alert_update with
+	// id/name/severity/state/startsAt/labels/annotations/generatorURL). If a
+	// forwarder sent extra fields (fingerprint, status, endsAt), they pass
+	// through unchanged.
+	h.BroadcastMessage(model.WSMsgTypeAlertUpdate, payload)
+	h.logger.Debug("alert broadcast",
+		zap.String("id", fmt.Sprintf("%v", payload["id"])),
+		zap.String("name", fmt.Sprintf("%v", payload["name"])),
+	)
+	c.JSON(http.StatusOK, gin.H{"status": "broadcast", "type": model.WSMsgTypeAlertUpdate})
 }

@@ -42,12 +42,17 @@ import {
   Scissors,
   Type,
   Settings,
+  Film,
+  Grid3x3,
 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Slider } from '@wideo11/ui/slider';
 import { cn } from '@wideo11/ui/lib/utils';
 // Hinglish: shared playback speed list + formatter (0.0001x micro-step se 4x).
 import { PLAYBACK_SPEEDS, formatSpeed } from '../lib/engine/frames';
+// Hinglish: AURA ka apna pixel editor — full-screen overlay, editor ke sabse
+// ooper. Ye AURA ME HI banta hai, kahin aur nahi.
+import { AuraPixelEditor } from './aura/pixel-editor';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,6 +92,10 @@ export interface AuraMicroFrameStudioProps {
   isSuperadmin?: boolean;
   // ---- Zero-Duplication sync hook (existing timeline storage) ----
   onTimelineSync?: (payload: AuraTimelineSyncPayload) => void;
+  // ---- Pixel editor ka source frame (clip poster) ----
+  // Hinglish: pixel editor open hone par yahi image grid me load hoti hai.
+  // Naya data flow nahi — `clipUnderPlayhead` ka existing poster, pass-through.
+  sourceImageUrl?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -105,9 +114,10 @@ const MAX_DURATION_MS = 3000;
 // Hinglish: 3 seconds = 120fps * 3 = 360 frames maximum (user spec).
 const MAX_SECONDS = 3;
 
-// Hinglish: Micro-16px dimension constants — 16px block, 10px glyph.
-const BLOCK_16 = 'h-4 w-4';
-const GLYPH_10 = 'h-2.5 w-2.5';
+// Hinglish: Industry-grade sizing. Movavi/Premiere/DaVinci sab 16px icons aur
+// 11-13px labels pe chalte hain — 10px glyph "desi" lagta hai aur Retina pe
+// blurry. Glyph = 16px (industry standard), click target = 32px (TOOL_BUTTON_CLASS).
+const GLYPH_16 = 'h-4 w-4';
 
 // ---------------------------------------------------------------------------
 // Utility Functions
@@ -162,11 +172,12 @@ function usToTimestamp(totalUs: number): string {
 // toolbar ke identical set — consistency.
 // ---------------------------------------------------------------------------
 
-// Hinglish: shared 16px tool-button class — borderless, no ring, 150ms
-// transition, active/hover #ff6500. "Zero outer boundary framing" ke liye
-// ring-0 + border-0 + bg-transparent.
+// Hinglish: shared tool-button — tactile 32px target, 16px glyph, borderless.
+// Hover pe faint white wash + accent color (industry editors plain color
+// change se zyada ek subtle surface dena pasand karte hain — button "pakda"
+// ja sakta hai). Focus-visible pe soft accent ring (keyboard a11y ke liye).
 const TOOL_BUTTON_CLASS =
-  'flex h-4 w-4 items-center justify-center rounded-md border-0 bg-transparent p-0 text-[#9fa7b3] shadow-none ring-0 transition-colors duration-150 hover:bg-transparent hover:text-[#ff6500] focus:ring-0 focus:ring-offset-0 focus-visible:ring-0';
+  'flex h-8 w-8 items-center justify-center rounded-md border-0 bg-transparent p-0 text-[#9fa7b3] shadow-none outline-none transition-colors duration-150 hover:bg-white/[0.06] hover:text-[#ff6500] focus-visible:ring-1 focus-visible:ring-[#ff6500]/40 focus-visible:ring-offset-0';
 
 // ---------------------------------------------------------------------------
 // Main Inline Panel Component
@@ -188,6 +199,7 @@ export function AuraMicroFrameStudio({
   userEmail,
   isSuperadmin,
   onTimelineSync,
+  sourceImageUrl,
 }: AuraMicroFrameStudioProps) {
   // -------------------------------------------------------------------------
   // SUPERADMIN + ENV SECURITY GATE (RBAC Enforcer)
@@ -212,6 +224,9 @@ export function AuraMicroFrameStudio({
   const [threeFrameBuffer, setThreeFrameBuffer] = useState<number[]>([]);
   const animationRef = useRef<number | null>(null);
   const lastUpdateRef = useRef<number>(0);
+  // Hinglish: pixel editor overlay ka state. Ye AURA me hi rehta hai — band
+  // hone par poora unmount, panel apna 50/50 layout wapas le leta hai.
+  const [pixelEditorOpen, setPixelEditorOpen] = useState(false);
 
   // ---------------------------------------------------------------------------
   // 3-Frame Strict Buffer Ring — hard-clamped, koi drift nahi.
@@ -287,13 +302,15 @@ export function AuraMicroFrameStudio({
       data-aura-panel=""
       className="flex h-full w-full flex-col overflow-y-auto rounded-md border-0 bg-[#161616] shadow-none outline-none ring-0"
     >
-      {/* ---- Header — title + minimize/close (X) ---- */}
-      <div className="flex shrink-0 items-center justify-between px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Layers className="h-2.5 w-2.5 text-[#ff6500]" />
-          <span className="text-xs font-semibold text-[#d8d9da]">AURA Micro-Frame Studio</span>
-          {/* Superadmin badge — RBAC context visible */}
-          <span className="rounded-md bg-[#ff6500]/10 px-1.5 py-0.5 text-[8px] font-medium text-[#ff6500]">
+      {/* ---- Header — identity + minimize ---- */}
+      <div className="flex shrink-0 items-center justify-between px-4 pb-2.5 pt-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-[#ff6500]/12">
+            <Layers className="h-4 w-4 text-[#ff6500]" />
+          </span>
+          <span className="text-[13px] font-semibold tracking-tight text-[#e8e9ea]">AURA Micro-Frame Studio</span>
+          {/* RBAC badge — sirf authorized session ko hi ye panel dikhta hai */}
+          <span className="rounded-md bg-[#ff6500]/12 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#ff6500]">
             SUPERADMIN
           </span>
         </div>
@@ -305,13 +322,15 @@ export function AuraMicroFrameStudio({
           title="Minimize — timeline full width"
           className={TOOL_BUTTON_CLASS}
         >
-          <X className={GLYPH_10} />
+          <X className={GLYPH_16} />
         </button>
       </div>
+      {/* Structural divider — borderless design: solid bg line, wireframe border nahi */}
+      <div className="h-px w-full shrink-0 bg-white/[0.06]" />
 
-      {/* ---- Microsecond-Precision Scrubber + Player ---- */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 px-3 py-2">
-        {/* Playback Controls — 16px blocks, 10px glyphs */}
+      {/* ---- Transport: prev/play/next · speed · scrubber · microsecond timecode ---- */}
+      <div className="flex shrink-0 flex-wrap items-center gap-2.5 px-4 py-3">
+        {/* Playback Controls — 32px targets, 16px glyphs */}
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -324,7 +343,7 @@ export function AuraMicroFrameStudio({
             aria-label="Decrease speed (0.01x granularity)"
             title="Decrease speed"
           >
-            <SkipBack className={GLYPH_10} />
+            <SkipBack className={GLYPH_16} />
           </button>
 
           <button
@@ -334,7 +353,7 @@ export function AuraMicroFrameStudio({
             aria-label={isPlaying ? 'Pause' : 'Play'}
             title={isPlaying ? 'Pause' : 'Play'}
           >
-            {isPlaying ? <Pause className={GLYPH_10} /> : <Play className={GLYPH_10} />}
+            {isPlaying ? <Pause className={GLYPH_16} /> : <Play className={GLYPH_16} />}
           </button>
 
           <button
@@ -348,15 +367,15 @@ export function AuraMicroFrameStudio({
             aria-label="Increase speed (0.01x granularity)"
             title="Increase speed"
           >
-            <SkipForward className={GLYPH_10} />
+            <SkipForward className={GLYPH_16} />
           </button>
         </div>
 
-        {/* Speed Selector — flat #0d0f0d block, borderless */}
+        {/* Speed Selector — flat sunken block, borderless, readable 11px mono */}
         <select
           value={playbackSpeed}
           onChange={(e) => onPlaybackSpeedChange?.(parseFloat(e.target.value))}
-          className="h-4 w-16 shrink-0 rounded-md border-0 bg-[#0d0f0d] px-1 text-[9px] font-mono text-[#d8d9da] outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500]"
+          className="h-8 w-[78px] shrink-0 rounded-md border-0 bg-[#0d0d0f] px-2 text-[11px] font-mono text-[#e8e9ea] outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500]"
           aria-label="Playback speed"
         >
           {PLAYBACK_SPEEDS.map((speed) => (
@@ -367,7 +386,7 @@ export function AuraMicroFrameStudio({
         </select>
 
         {/* Scrubber — step 0.001ms = 1 microsecond granularity */}
-        <div className="relative min-w-[80px] flex-1">
+        <div className="relative min-w-[90px] flex-1">
           <Slider
             value={[Math.min(currentTimeMs, effectiveDurationMs)]}
             max={effectiveDurationMs}
@@ -384,19 +403,20 @@ export function AuraMicroFrameStudio({
           />
         </div>
 
-        {/* Timestamp Display — MICROSECOND precision `HH:MM:SS.mmmuuu` */}
-        <div className="shrink-0 font-mono text-[9px] text-[#d8d9da]">
+        {/* Timestamp Display — MICROSECOND precision `HH:MM:SS.mmmuuu`, tabular */}
+        <div className="shrink-0 font-mono text-[11px] tabular-nums text-[#d8d9da]">
           <span className="text-[#ff6500]">{usToTimestamp(currentTimeMs * 1000)}</span>
-          <span className="mx-0.5 text-[#5a5f66]">/</span>
+          <span className="mx-1 text-[#5f6771]">/</span>
           <span className="text-[#9fa7b3]">{usToTimestamp(effectiveDurationMs * 1000)}</span>
         </div>
       </div>
 
-      {/* ---- 3-Frame Buffer Ring Visualization ----
-          Hinglish: ZERO lines/rings — tiles sirf FLAT COLOR se differentiate
-          hote hain: active = #ff6500 tint + orange text, baaki = #0d0f0d
-          flat dark block + muted text. Hover par orange tint. rounded-md. */}
-      <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 px-3 py-3">
+      {/* ---- 3-Frame Buffer Ring — frame-precise preview cards ----
+          Hinglish: har tile ek real PREVIEW CARD hai (Movavi-style) — gradient
+          depth se flat-slab feel nahi, rounded-md, frame timecode center me saksham.
+          ACTIVE tile top accent bar + accent ring se instantly focal hota hai —
+          "kaunsa frame chal raha hai" turant dikh jata hai. PREV/NEXT muted. */}
+      <div className="grid shrink-0 grid-cols-3 gap-2 px-4 py-2">
         {threeFrameBuffer.map((frame, idx) => {
           const isActive = frame === activeFrame;
           const isPrev = idx === 0;
@@ -404,70 +424,125 @@ export function AuraMicroFrameStudio({
           const label = frameToTimestamp(frame, fps);
 
           return (
-            <div
+            <button
+              type="button"
               key={frame}
               onClick={() => handleFrameClick(frame)}
               className={cn(
-                'relative flex h-16 w-24 cursor-pointer items-center justify-center rounded-md border-0 shadow-none outline-none ring-0 transition-colors duration-150',
+                'group relative flex h-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-md border-0 shadow-none outline-none ring-0 transition-colors duration-150',
                 isActive
-                  ? 'bg-[#ff6500]/15 text-[#ff6500]'
-                  : 'bg-[#0d0f0d] hover:bg-[#ff6500]/5 hover:text-[#ff6500]',
+                  ? 'bg-gradient-to-b from-[#1c1e22] to-[#0a0b0c] ring-1 ring-inset ring-[#ff6500]/60'
+                  : 'bg-gradient-to-b from-[#16171b] to-[#0a0b0c] hover:ring-1 hover:ring-inset hover:ring-[#ff6500]/40',
               )}
               aria-label={`Frame ${frame} ${label}`}
               title={`Frame ${frame} — ${label}`}
             >
-              <span className={cn('relative z-10 font-mono text-[10px]', isActive ? 'text-[#ff6500]' : 'text-[#9fa7b3]')}>{label}</span>
-              <span className={cn('relative z-10 mt-1 text-[8px] uppercase tracking-wider', isActive ? 'text-[#ff6500]/70' : 'text-[#5a5f66]')}>
-                {isPrev ? 'PREV' : isActive ? 'ACTIVE' : isNext ? 'NEXT' : 'BUF'}
+              {/* Active focal cue — 2px accent bar top pe */}
+              <span
+                className={cn(
+                  'absolute inset-x-0 top-0 h-0.5 transition-colors duration-150',
+                  isActive ? 'bg-[#ff6500]' : 'bg-transparent group-hover:bg-[#ff6500]/40',
+                )}
+              />
+              {/* Film water-mark — tile ko "real frame" jaisa read karaata hai */}
+              <Film
+                aria-hidden="true"
+                className={cn(
+                  'pointer-events-none absolute -bottom-2 -right-2 h-12 w-12',
+                  isActive ? 'text-[#ff6500]/10' : 'text-white/[0.03]',
+                )}
+              />
+              <span
+                className={cn(
+                  'font-mono text-[12px] tabular-nums',
+                  isActive ? 'text-[#ff6500]' : 'text-[#c3c7cd] group-hover:text-[#ff6500]',
+                )}
+              >
+                {label}
               </span>
               <span
                 className={cn(
-                  'relative z-10 mt-0.5 text-[11px] font-medium',
-                  isActive ? 'text-[#ff6500]' : 'text-[#5a5f66]',
+                  'text-[10px] font-semibold uppercase tracking-wider',
+                  isActive ? 'text-[#ff6500]/80' : 'text-[#5f6771]',
+                )}
+              >
+                {isPrev ? 'Prev' : isActive ? 'Active' : isNext ? 'Next' : 'Buf'}
+              </span>
+              <span
+                className={cn(
+                  'rounded-md px-1 font-mono text-[10px] tabular-nums',
+                  isActive ? 'bg-[#ff6500]/12 text-[#e8e9ea]' : 'text-[#5f6771]',
                 )}
               >
                 F{frame}
               </span>
-            </div>
+            </button>
           );
         })}
       </div>
 
-      {/* ---- Core Integration Toolbar — 16px blocks, 10px glyphs, no frames ---- */}
-      <div className="mt-auto flex shrink-0 items-center justify-end gap-1 px-3 py-2">
-        <button
-          type="button"
-          className={TOOL_BUTTON_CLASS}
-          aria-label="Slice clip (saves to WideoCut Pro core)"
-          title="Slice clip — saves to core hooks"
-        >
-          <Scissors className={GLYPH_10} />
-        </button>
-        <button
-          type="button"
-          className={TOOL_BUTTON_CLASS}
-          aria-label="Overlay adjustments (saves to core storage)"
-          title="Overlay adjustments — saves to core storage"
-        >
-          <Layers className={GLYPH_10} />
-        </button>
-        <button
-          type="button"
-          className={TOOL_BUTTON_CLASS}
-          aria-label="Text expressions (saves to core variables)"
-          title="Text expressions — saves to core variables DB"
-        >
-          <Type className={GLYPH_10} />
-        </button>
-        <button
-          type="button"
-          className={TOOL_BUTTON_CLASS}
-          aria-label="Settings"
-          title="Settings"
-        >
-          <Settings className={GLYPH_10} />
-        </button>
+      {/* ---- Core Integration Toolbar — tactile 32px tools, 16px glyphs ---- */}
+      <div className="mt-auto flex shrink-0 flex-col">
+        <div className="h-px w-full bg-white/[0.06]" />
+        <div className="flex items-center justify-between px-4 py-2.5">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-[#5f6771]">
+            Core Integration
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              className={TOOL_BUTTON_CLASS}
+              onClick={() => setPixelEditorOpen(true)}
+              aria-label="Open pixel editor"
+              title="Pixel Editor — har ek pixel badlo (editor ke sabse upar)"
+            >
+              <Grid3x3 className={GLYPH_16} />
+            </button>
+            <button
+              type="button"
+              className={TOOL_BUTTON_CLASS}
+              aria-label="Slice clip (saves to WideoCut Pro core)"
+              title="Slice clip — saves to core hooks"
+            >
+              <Scissors className={GLYPH_16} />
+            </button>
+            <button
+              type="button"
+              className={TOOL_BUTTON_CLASS}
+              aria-label="Overlay adjustments (saves to core storage)"
+              title="Overlay adjustments — saves to core storage"
+            >
+              <Layers className={GLYPH_16} />
+            </button>
+            <button
+              type="button"
+              className={TOOL_BUTTON_CLASS}
+              aria-label="Text expressions (saves to core variables)"
+              title="Text expressions — saves to core variables DB"
+            >
+              <Type className={GLYPH_16} />
+            </button>
+            <button
+              type="button"
+              className={TOOL_BUTTON_CLASS}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings className={GLYPH_16} />
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* ---- AURA Pixel Editor overlay ----
+          Hinglish: Ye khud document.body me portal hota hai (z-[10000]), isliye
+          yahan render karna bhi safe hai — kahin bhi ho, sabse upar baithta hai.
+          Portal ke andar seedha rehta hai taaki Escape/close state sahi rahe. */}
+      <AuraPixelEditor
+        open={pixelEditorOpen}
+        onOpenChange={setPixelEditorOpen}
+        sourceImageUrl={sourceImageUrl}
+      />
     </div>
   );
 }

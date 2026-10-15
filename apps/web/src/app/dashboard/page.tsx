@@ -67,6 +67,7 @@ import { Label } from '@wideo11/ui/label';
 import { useSessionIdentity } from '@/lib/identity-context';
 import { AvatarUploader } from '@/components/dashboard/avatar-uploader';
 import { ChannelManager } from '@/components/channels/channel-manager';
+import WarningCirclePanel from '@/components/dashboard/warning-circle-panel';
 import { DashboardSidebar } from '@/components/dashboard/dashboard-sidebar';
 import { OverflowMenu, type MenuItem } from '@/components/dashboard/overflow-menu';
 import { InstallPanel } from '@/components/dashboard/install-panel';
@@ -236,6 +237,22 @@ export default function CreatorDashboard() {
   const [channelBusy, setChannelBusy] = useState(false);
   const [channelErr, setChannelErr] = useState('');
   const [showFixPermissions, setShowFixPermissions] = useState(false);
+
+  // ---- WHAT THE SELF-HEAL DID, SAID OUT LOUD ----
+  //
+  // The heal runs before every channel create and is deliberately silent on
+  // success: a creator filling in a form should not be told the machinery is
+  // being repaired unless they ask. But silence has a cost that was being paid
+  // here — with nothing rendered, there was no way to tell "the heal ran and
+  // fixed it" from "the heal never ran", and a user looking for the button
+  // could not find a control that no longer existed by that name.
+  //
+  // So this carries a short line that is SHOWN when a heal actually changed
+  // something, and stays empty the rest of the time. It is the honest version
+  // of a visible button: the action is automatic, and the record of it is not.
+  //
+  // `null` means "nothing to say". A string means "say this".
+  const [healNote, setHealNote] = useState<string | null>(null);
 
   // ======================================================================
   // THE TWO TABS
@@ -527,14 +544,32 @@ export default function CreatorDashboard() {
    */
   async function ensureCreatorReadiness(): Promise<boolean> {
     let ready = true;
+    // What changed, so the UI can show it. Two independent things may be
+    // repaired and either, both or neither is worth a line.
+    const notes: string[] = [];
 
     // The free plan. A failure here is not fatal — the create is still attempted,
     // and the server is the authority on whether the plan allows a channel.
     try {
-      await fetch('/api/auth/me/free-plan', {
+      const plan = await fetch('/api/auth/me/free-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       }).then((r) => r.json().catch(() => null));
+
+      // `granted` is the only claim this UI acts on. An idempotent call that
+      // answered "you already had the plan" reports the same field as false,
+      // and that is NOT a repair — saying "your free plan was set up" to
+      // somebody who has always had one is a lie about their account.
+      if (plan && plan.granted === true) {
+        const ends = plan.ends_at
+          ? new Date(plan.ends_at).toLocaleDateString()
+          : '';
+        notes.push(
+          ends
+            ? `Your free plan was activated — it runs until ${ends}.`
+            : 'Your free plan was activated.',
+        );
+      }
     } catch {
       /* the create below is the real test */
     }
@@ -545,10 +580,19 @@ export default function CreatorDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       }).then((r) => r.json().catch(() => null));
+
+      if (heal && heal.fixed === true) {
+        notes.push('The creator role was added to your account.');
+      }
       if (heal && heal.fixed !== true && heal.has_creator === false) ready = false;
     } catch {
       /* leave `ready` alone; a network error is not a missing role */
     }
+
+    // Show the repair, or clear a previous one. Clearing matters: a note from
+    // the last create left on screen during the next one would describe a
+    // change that happened before this attempt.
+    setHealNote(notes.length > 0 ? notes.join(' ') : null);
 
     return ready;
   }
@@ -558,6 +602,10 @@ export default function CreatorDashboard() {
     setChannelBusy(true);
     setChannelErr('');
     setShowFixPermissions(false);
+    // Cleared here and set again by `ensureCreatorReadiness` if a repair
+    // actually happened, so a stale line from the previous create never
+    // outlives the submit it belongs to.
+    setHealNote(null);
 
     // ---- Make the account a plan-holding creator FIRST ----
     //
@@ -628,8 +676,17 @@ export default function CreatorDashboard() {
           .catch(() => null);
 
         if (heal?.fixed === true) {
+          // The repair is real, so it is reported even though this path only
+          // runs because something had already gone wrong once. Two notes
+          // rather than one: the account is now a creator, and the channel
+          // still has to be re-created by pressing the button again if the
+          // replay below also fails.
+          setHealNote('The creator role was added to your account.');
           ({ ok, data } = await createChannel());
-          if (ok) setChannelErr('');
+          if (ok) {
+            setChannelErr('');
+            setHealNote(null);
+          }
         }
       }
 
@@ -696,6 +753,7 @@ export default function CreatorDashboard() {
       if (data.fixed) {
         setChannelErr('Permissions fixed! You can now create channels.');
         setShowFixPermissions(false);
+        setHealNote('The creator role was added to your account.');
         // Refresh channel list to show the create form works
         await loadAll();
       } else {
@@ -939,13 +997,19 @@ export default function CreatorDashboard() {
           })}
         </div>
 
-        {/* ---- PLAN / TRIAL COUNTDOWN ----
+        {/* ---- PLAN / TRIAL COUNTDOWN + SYSTEM ALERTS ----
             Above everything, because it is the one thing on this page with a
             deadline attached. Under an hour it becomes a live amber timer; over an
             hour it is one quiet line. The component owns that decision and reads
             `trial_expiring_soon` from the SERVER rather than picking its own
-            threshold - see `trial-countdown.tsx` for why. */}
-        <TrialCountdown />
+            threshold - see `trial-countdown.tsx` for why.
+
+            System alerts (Warning Circle Panel) sit beside it so the creator
+            sees restricted-system warnings in the same row as their plan status. */}
+        <div className="flex items-center justify-between">
+          <TrialCountdown />
+          <WarningCirclePanel showSystem="restricted" />
+        </div>
 
         {activeTab === 'channel' ? (
         <div id="dashboard-panel-channel" role="tabpanel" aria-labelledby="dashboard-tab-channel" className="space-y-6">
@@ -1127,7 +1191,7 @@ export default function CreatorDashboard() {
 
           {/* ---- Create form (collapsible) ---- */}
           {showChannelForm ? (
-            <form onSubmit={createChannel} className="mt-4 space-y-3 rounded-md bg-[#0d0f11] p-4">
+            <form onSubmit={createChannel} className="mt-4 max-h-[60vh] overflow-y-auto custom-scrollbar space-y-3 rounded-md bg-[#0d0f11] p-4 sm:max-h-none sm:overflow-visible">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-medium text-[#d8d9da]">New channel</p>
                 <button
@@ -1196,6 +1260,16 @@ export default function CreatorDashboard() {
                   // in the same tick overwrite each other.
                   onChange={(updater) => setWizard(updater)}
                 />
+
+              {healNote ? (
+                <p
+                  role="status"
+                  className="flex items-start gap-1.5 rounded-md bg-[#181b1f] px-2.5 py-1.5 text-[11px] text-emerald-400"
+                >
+                  <ShieldCheck className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span>{healNote}</span>
+                </p>
+              ) : null}
 
               {channelErr ? (
                 <p className="text-[11px] text-red-400">{channelErr}</p>

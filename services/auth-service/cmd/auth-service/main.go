@@ -24,6 +24,7 @@ import (
 	"github.com/wideo11/auth-service/internal/repository"
 	"github.com/wideo11/auth-service/internal/service"
 	"github.com/wideo11/auth-service/internal/token"
+	authredis "github.com/wideo11/auth-service/src/redis"
 )
 
 func main() {
@@ -438,6 +439,12 @@ func main() {
 	// prevent. See internal/service/trial_device.go.
 	authHandler.SetTrialDeviceService(service.NewTrialDeviceService(db))
 
+	// MFA challenge store for PIN-as-2FA at login
+	if redisClient != nil {
+		mfaStore := authredis.NewMFAChallengeStore(redisClient.Keys(), 5*time.Minute)
+		authHandler.SetMFAChallengeStore(mfaStore)
+	}
+
 	// ---- Give the SUPERADMIN handler the same entitlement service ----
 	//
 	// Without this, `POST /admin/entitlements` has nothing to grant with: `Grant`
@@ -613,14 +620,19 @@ func main() {
 			middleware.RateLimit(redisClient, middleware.LimitVerify),
 			authHandler.ResendVerification)
 
-		// Refresh: token exchange. Generous - legitimate clients refresh
-		// routinely, aur is route par tight limit refresh loop me user ko
-		// logout kar sakta hai.
-		auth.POST("/refresh",
-			middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
-			authHandler.RefreshToken)
+// Refresh: token exchange. Generous - legitimate clients refresh
+	// routinely, aur is route par tight limit refresh loop me user ko
+	// logout kar sakta hai.
+	auth.POST("/refresh",
+		middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
+		authHandler.RefreshToken)
 
-		// PIN verify PUBLIC hai (login ke andar, lockout recovery) - isiliye
+	// MFA verify - PIN-as-2FA at login. Rate limited like PIN verify.
+	auth.POST("/mfa/verify",
+		middleware.RateLimit(redisClient, middleware.LimitLoginSustained),
+		authHandler.VerifyMFA)
+
+	// PIN verify PUBLIC hai (login ke andar, lockout recovery) - isiliye
 		// ye PIN brute-force ka ek aur darwaza hai. Isko rate limit karna
 		// zaroori hai, warna 4-digit PIN guess karna possible ho jayega.
 		// NOTE: ye route neeche `secGroup` me bhi hai; wahi registration

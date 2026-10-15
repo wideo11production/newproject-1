@@ -146,48 +146,24 @@ function AlertHistory({ filter, search }: AlertHistoryProps) {
 }
 
 async function fetchAlerts(filter: string, search: string): Promise<Alert[]> {
-  return [
-    {
-      id: '1',
-      name: 'HighMemoryUsage',
-      state: 'firing',
-      severity: 'critical',
-      description: 'Memory usage > 90% on node-3 for 2+ minutes',
-      startsAt: '2026-09-20T10:30:00Z',
-    },
-    {
-      id: '2',
-      name: 'APIHighLatency',
-      state: 'firing',
-      severity: 'warning',
-      description: 'API 99th percentile latency > 1s for 5+ minutes',
-      startsAt: '2026-09-20T09:15:00Z',
-    },
-    {
-      id: '3',
-      name: 'DatabaseSlowQueries',
-      state: 'resolved',
-      severity: 'warning',
-      description: 'Database slow queries > 500ms, resolved 15m ago',
-      startsAt: '2026-09-20T08:00:00Z',
-    },
-    {
-      id: '4',
-      name: 'DiskSpaceLow',
-      state: 'firing',
-      severity: 'warning',
-      description: 'Disk space < 10% on node-1',
-      startsAt: '2026-09-20T07:45:00Z',
-    },
-    {
-      id: '5',
-      name: 'LowActiveUsers',
-      state: 'resolved',
-      severity: 'info',
-      description: 'Active user count below expected threshold',
-      startsAt: '2026-09-20T06:30:00Z',
-    },
-  ];
+  // Real alert history from webhook-receiver, proxied through /api/alerts.
+  // `filter` (all|firing|resolved) and `search` (by name) are applied client-side
+  // after the server page/severity params are passed through where useful; the
+  // upstream returns the full set and the UI narrows it.
+  const qs = new URLSearchParams();
+  if (filter && filter !== 'all') qs.set('state', filter);
+  qs.set('limit', '100');
+  const res = await fetch(`/api/alerts?${qs.toString()}`, { cache: 'no-store' });
+  if (!res.ok) return [];
+  const data: { alerts?: any[] } = await res.json().catch(() => ({}));
+  return (data.alerts ?? []).map((a) => ({
+    id: String(a.id ?? a.fingerprint ?? ''),
+    name: a.name ?? a.labels?.alertname ?? 'Unnamed',
+    state: (a.state ?? 'firing') as 'firing' | 'resolved',
+    severity: (a.severity ?? 'warning') as 'critical' | 'warning' | 'info',
+    description: a.annotations?.description ?? a.annotations?.summary ?? '',
+    startsAt: a.startsAt ?? new Date().toISOString(),
+  }));
 }
 
 function AlertsSkeleton() {

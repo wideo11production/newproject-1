@@ -40,7 +40,7 @@ func main() {
 		logger.Fatal("Failed to run migrations", zap.Error(err))
 	}
 
-	webhookHandler := handler.NewWebhookHandler(db, logger, cfg.DashboardServiceURL)
+	webhookHandler := handler.NewWebhookHandler(db, logger, cfg.DashboardServiceURL, cfg.InternalServiceSecret)
 
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.New()

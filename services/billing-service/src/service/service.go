@@ -34,6 +34,10 @@ type BillingService struct {
 	// is briefly unreachable. Set via SetEntitlementFirer.
 	entitlement   EntitlementFirer
 	pushAllocRepo repository.PushAllocationRepository
+	// stripeClient creates real Stripe Checkout Sessions. Optional
+	// (nil = checkout uses the placeholder generator for tests/dev).
+	// Set via SetStripeClient.
+	stripeClient  StripeCheckoutClient
 }
 
 // EntitlementFirer records a sale as a plan grant in auth-service.
@@ -78,6 +82,15 @@ func NewBillingService(
 // a test, and a state main.go never actually enters.
 func (s *BillingService) SetEntitlementFirer(f EntitlementFirer) {
 	s.entitlement = f
+}
+
+// SetStripeClient wires the Stripe Checkout Sessions API.
+//
+// Called from `main.go` when STRIPE_SECRET_KEY is configured. Passing nil
+// leaves the placeholder generator in place, which is the correct state
+// for tests and dev environments without real Stripe credentials.
+func (s *BillingService) SetStripeClient(c StripeCheckoutClient) {
+	s.stripeClient = c
 }
 
 // InvoiceItemRequest represents a request to create an invoice item
@@ -437,33 +450,50 @@ func (s *BillingService) IssueInvoice(ctx context.Context, id uint) (*model.Invo
 }
 
 // RecordPayment records a payment against an invoice.
-func (s *BillingService) RecordPayment(ctx context.Context, invoiceID uint, userID uint, amount, provider, method string) (*model.Payment, error) {
+//
+// This is the admin/manual payment path. The checkout path goes through
+// CreateCheckoutSession -> webhook -> ActivateByProviderPayment, but an
+// operator may also record an offline payment here. When a transaction_id
+// is provided it is stored, and the subscription is activated via the
+// same idempotent chain as the webhook path.
+func (s *BillingService) RecordPayment(ctx context.Context, invoiceID uint, userID uint, amount, provider, method, transactionID string) (*model.Payment, error) {
 	amountDec, err := decimal.NewFromString(amount)
 	if err != nil {
 		return nil, fmt.Errorf("invalid amount format: %w", err)
 	}
-	
+
 	paymentNumber := generatePaymentNumber()
-	
+
 	payment := &model.Payment{
-		UUID:          uuid.New(),
-		PaymentNumber: paymentNumber,
-		InvoiceID:     invoiceID,
-		CustomerID:    fmt.Sprintf("user-%d", userID),
-		Amount:        amountDec,
-		AmountPaid:    amountDec,
-		Status:        "completed",
-		Method:        model.PaymentMethod(method),
-		Provider:      model.PaymentProvider(provider),
-		ProcessedAt:   time.Now(),
-		CreatedAt:     time.Now(),
-		UpdatedAt:     time.Now(),
+		UUID:            uuid.New(),
+		PaymentNumber:   paymentNumber,
+		InvoiceID:       invoiceID,
+		CustomerID:      fmt.Sprintf("user-%d", userID),
+		Amount:          amountDec,
+		AmountPaid:      amountDec,
+		Status:          "completed",
+		Method:          model.PaymentMethod(method),
+		Provider:        model.PaymentProvider(provider),
+		TransactionID:   transactionID,
+		ProcessedAt:     time.Now(),
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
-	
+
 	if err := s.paymentRepo.Create(ctx, payment); err != nil {
 		return nil, err
 	}
-	
+
+	// Activate the subscription if this payment is tied to one.
+	// This reuses the same idempotent chain as the webhook path.
+	if s.invoiceRepo != nil {
+		go func() {
+			if err := s.RecordPaymentConfirmed(context.Background(), payment.ID); err != nil {
+				log.Printf("[billing] failed to activate subscription for manual payment %d: %v", payment.ID, err)
+			}
+		}()
+	}
+
 	return payment, nil
 }
 

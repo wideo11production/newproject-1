@@ -36,7 +36,11 @@ type FFmpegConfig struct {
 }
 
 type WhisperConfig struct {
+	// BaseURL of a faster-whisper-server. Empty = not configured, and the
+	// service reports transcription as unavailable rather than pretending.
 	URL string
+	// TimeoutSeconds for ONE transcription request. 0 = 10 minutes.
+	TimeoutSeconds int
 }
 
 func LoadConfig() (*Config, error) {
@@ -96,7 +100,18 @@ func setDefaults() {
 
 	viper.SetDefault("ffmpeg.path", "ffmpeg")
 
-	viper.SetDefault("whisper.url", "http://localhost:9000")
+	// Hinglish: pehle default `http://localhost:9000` tha. Port 9000 is project
+	// me MINIO ka hai — yaani ye service bina soch-samjhe MinIO ko "whisper
+	// server" maan ke hit karti thi. Ab default khaali hai: `Configured()`
+	// false hoga aur `TranscribeAudio` saaf "not configured" error dega, bajaye
+	// MinIO ke S3 XML response ko JSON parse karne ki koshish ke.
+	//
+	// Docker compose me aaye `whisper:8000` (faster-whisper-server) set hota hai.
+	viper.SetDefault("whisper.url", "")
+	// Ek transcription request ka timeout. 10 minute — 1 min audio CPU pe 10-60s
+	// leta hai, aur lamba video usse zyada. Bina iske ek stuck request handler
+	// ko hang kar deta hai.
+	viper.SetDefault("whisper.timeout_seconds", 600)
 }
 
 func (c *DatabaseConfig) DSN() string {
