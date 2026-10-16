@@ -114,7 +114,7 @@ export async function GET(request: Request) {
   });
 
   // Sort by earnings descending (top earners first)
-  report.sort((a, b) => (b.total_earnings_inr as number) - (a.total_earnings_inr as number));
+  report.sort((a: any, b: any) => (b.total_earnings_inr as number) - (a.total_earnings_inr as number));
 
   return NextResponse.json({
     users: report,

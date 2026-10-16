@@ -701,3 +701,200 @@ export function projectDuration(tracks: TimelineTrack[], min = 5): number {
   for (const t of tracks) for (const c of t.clips) end = Math.max(end, clipEnd(c));
   return Math.max(end, min);
 }
+
+// ============================================================================
+// PER-FRAME TEMPLATE SYSTEM - Frame-by-frame editable template data model
+// ============================================================================
+//
+// Each clip on the timeline can own a FrameTemplate: a stack of frames,
+// each frame carrying up to 5 layers (Image, Text, Shape, Video, Mask).
+// Frames share a synced size (default 3x normal). Clicking a layer opens
+// an isolated editor box for that element. Templates are reusable and
+// savable as .wido-template JSON.
+//
+// Default frame size = 3x normal editor size for premium look.
+// Max layers per frame = 5.
+// Resize handles: min 100px, max 500px width per frame thumbnail.
+// ============================================================================
+
+export type LayerType = 'image' | 'text' | 'shape' | 'video' | 'mask';
+
+export interface FrameSize {
+  width: number;   // pixels
+  height: number;  // pixels
+}
+
+export interface FrameTransform {
+  x: number;   // 0..1 center fraction
+  y: number;   // 0..1 center fraction
+  scale: number; // 1 = 100%
+  rotation: number; // degrees
+}
+
+export interface FrameMask {
+  id: string;
+  /** Bezier path points as [{x, y}, ...] in normalized 0..1 coords. */
+  points: Array<{ x: number; y: number }>;
+  feather: number; // 0..100 px
+  invert: boolean; // invert mask (reveal outside instead of inside)
+  opacity: number; // 0..1 mask opacity
+}
+
+export interface FrameLayer {
+  id: string;
+  type: LayerType;
+  /** Element content: image URL, text string, or shape data. */
+  content: string;
+  /** Position/scale on the frame. */
+  transform: FrameTransform;
+  /** Layer opacity 0..1. */
+  opacity: number;
+  /** Z-order: higher = drawn on top. */
+  zIndex: number;
+  /** Visible toggle. */
+  visible: boolean;
+  /** Locked - cannot be edited. */
+  locked: boolean;
+  /** Optional mask applied to this layer. */
+  maskId?: string | null;
+  /** When true, this layer is being edited in isolated box. */
+  isolated: boolean;
+}
+
+export interface Frame {
+  /** Frame index within the template. */
+  index: number;
+  /** Start time in seconds (derived from index / fps). */
+  startTime: number;
+  /** Duration - always exactly one frame. */
+  duration: number;
+  /** Layers on this frame (max 5 enforced at UI level). */
+  layers: FrameLayer[];
+  /** Masks available to layers on this frame. */
+  masks: FrameMask[];
+  /** Frame-specific size override (if sizeLocked is false). */
+  size?: FrameSize;
+}
+
+export interface FrameTemplate {
+  id: string;
+  name: string;
+  /** Thumbnail data URL for the template tile. */
+  thumbnail?: string;
+  /** Shared size across all frames when sizeLocked is true. */
+  frameSize: FrameSize;
+  /** When true, resizing one frame resizes all frames. */
+  sizeLocked: boolean;
+  /** All frames in the template. */
+  frames: Frame[];
+  /** Currently active frame index for editing. */
+  activeFrameIndex: number;
+  /** Created timestamp. */
+  createdAt: number;
+  /** Last modified timestamp. */
+  updatedAt: number;
+  /** Usage count across projects. */
+  usageCount: number;
+  /** Source clip this template was generated from. */
+  sourceClipId?: string | null;
+}
+
+export interface TemplateStoreState {
+  templates: FrameTemplate[];
+  activeTemplateId: string | null;
+  addTemplate: (template: Omit<FrameTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>) => string;
+  getTemplate: (id: string) => FrameTemplate | null;
+  getAllTemplates: () => FrameTemplate[];
+  deleteTemplate: (id: string) => boolean;
+  setActiveTemplate: (id: string | null) => void;
+  setActiveFrame: (templateId: string, frameIndex: number) => void;
+  addLayer: (templateId: string, frameIndex: number, layer: Omit<FrameLayer, 'id' | 'isolated'>) => void;
+  removeLayer: (templateId: string, frameIndex: number, layerId: string) => void;
+  updateLayer: (templateId: string, frameIndex: number, layerId: string, updates: Partial<FrameLayer>) => void;
+  addMask: (templateId: string, frameIndex: number, mask: Omit<FrameMask, 'id'>) => void;
+  updateMask: (templateId: string, frameIndex: number, maskId: string, updates: Partial<FrameMask>) => void;
+  resizeFrameSize: (templateId: string, size: FrameSize) => void;
+  toggleSizeLock: (templateId: string) => void;
+  toggleLayerIsolated: (templateId: string, frameIndex: number, layerId: string) => void;
+  exportTemplate: (id: string) => string;
+  importTemplate: (json: string) => string | null;
+}
+
+/** Default frame size - 3x normal (premium look per user request). */
+export const DEFAULT_FRAME_SIZE: FrameSize = { width: 1920 * 3, height: 1080 * 3 };
+
+/** Minimum frame thumbnail resize width. */
+export const MIN_FRAME_WIDTH = 100;
+/** Maximum frame thumbnail resize width. */
+export const MAX_FRAME_WIDTH = 500;
+/** Maximum layers per frame. */
+export const MAX_LAYERS_PER_FRAME = 5;
+
+export const DEFAULT_FRAME_TRANSFORM: FrameTransform = {
+  x: 0.5,
+  y: 0.5,
+  scale: 1,
+  rotation: 0,
+};
+
+export const DEFAULT_FRAME_LAYER: Omit<FrameLayer, 'id' | 'isolated'> = {
+  type: 'image',
+  content: '',
+  transform: { ...DEFAULT_FRAME_TRANSFORM },
+  opacity: 1,
+  zIndex: 0,
+  visible: true,
+  locked: false,
+  maskId: null,
+};
+
+/** Create a blank frame template for a given clip duration and fps. */
+export function createBlankFrameTemplate(
+  name: string,
+  clipDurationSeconds: number,
+  fps: number,
+  sourceClipId?: string | null
+): Omit<FrameTemplate, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'> {
+  const totalFrames = Math.max(1, Math.ceil(clipDurationSeconds * fps));
+  const frames: Frame[] = [];
+  for (let i = 0; i < totalFrames; i++) {
+    frames.push({
+      index: i,
+      startTime: i / fps,
+      duration: 1 / fps,
+      layers: [],
+      masks: [],
+      size: { ...DEFAULT_FRAME_SIZE },
+    });
+  }
+  return {
+    name,
+    frameSize: { ...DEFAULT_FRAME_SIZE },
+    sizeLocked: true,
+    frames,
+    activeFrameIndex: 0,
+    sourceClipId,
+  };
+}
+
+/** Get the active frame from a template. */
+export function getActiveFrame(template: FrameTemplate): Frame | null {
+  return template.frames[template.activeFrameIndex] ?? null;
+}
+
+/** Get layers of the active frame. */
+export function getActiveFrameLayers(template: FrameTemplate): FrameLayer[] {
+  const frame = getActiveFrame(template);
+  return frame ? frame.layers : [];
+}
+
+/** Get masks of the active frame. */
+export function getActiveFrameMasks(template: FrameTemplate): FrameMask[] {
+  const frame = getActiveFrame(template);
+  return frame ? frame.masks : [];
+}
+
+/** Validate layer count does not exceed max. */
+export function canAddLayer(frame: Frame): boolean {
+  return frame.layers.length < MAX_LAYERS_PER_FRAME;
+}
