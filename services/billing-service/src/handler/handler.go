@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"newproject/services/billing-service/src/middleware"
 	"newproject/services/billing-service/src/model"
 	"newproject/services/billing-service/src/repository"
@@ -177,6 +178,16 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		// Admin-only activation, for an offline or corrected sale that the
 		// provider webhook never reported. Same code path as the webhook.
 		subs.POST("/:id/activate", middleware.RequireAdmin(), h.ActivateSubscription)
+	}
+
+	// ---- PERSONAL: ad revenue recording ----
+	//
+	// The video player (via the editor's /api/export-ad proxy) calls this
+	// whenever an ad impression occurs. AuthRequired - the user_id comes from
+	// the verified token, never from the body.
+	adRev := r.Group("/ads", middleware.AuthRequired())
+	{
+		adRev.POST("/revenue", h.RecordAdRevenue)
 	}
 
 	// ---- TAX RATES: read public, write admin ----
@@ -754,4 +765,71 @@ func (h *Handler) RefundPayment(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"payment": payment})
+}
+
+// RecordAdRevenue records an ad impression's revenue.
+//
+// Called by the video player (via proxy) whenever an ad impression occurs.
+// Requires AuthRequired - the user_id comes from the verified token, never
+// from the request body.
+//
+// Body:
+//   {
+//     "gross": "1.00",           // gross revenue for this impression
+//     "creator_subscribed": true, // whether the content creator has an active subscription
+//     "asset_id": "uuid",         // optional: the content asset
+//     "channel_id": "uuid",       // optional: the channel
+//     "ad_slot": "pre_roll",      // pre_roll | mid_roll | post_roll
+//     "campaign_id": "uuid"       // optional: linked ad campaign
+//   }
+func (h *Handler) RecordAdRevenue(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		Gross             string     `json:"gross" binding:"required"`
+		CreatorSubscribed bool       `json:"creator_subscribed"`
+		AssetID           *uuid.UUID `json:"asset_id"`
+		ChannelID         *uuid.UUID `json:"channel_id"`
+		AdSlot            string     `json:"ad_slot" binding:"required,oneof=pre_roll mid_roll post_roll"`
+		CampaignID        *uuid.UUID `json:"campaign_id"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Convert billing uint back to auth UUID for the service call
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.svc.RecordAdRevenue(
+		c.Request.Context(),
+		authUserID,
+		req.Gross,
+		req.CreatorSubscribed,
+		req.AssetID,
+		req.ChannelID,
+		req.AdSlot,
+		req.CampaignID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"record_id":          result.RecordID,
+		"gross":              result.Gross.String(),
+		"viewer_share":       result.ViewerShare.String(),
+		"creator_share":      result.CreatorShare.String(),
+		"platform_share":     result.PlatformShare.String(),
+		"creator_subscribed": result.CreatorSubscribed,
+	})
 }

@@ -34,6 +34,7 @@ type BillingService struct {
 	// is briefly unreachable. Set via SetEntitlementFirer.
 	entitlement   EntitlementFirer
 	pushAllocRepo repository.PushAllocationRepository
+	contentRevRepo repository.ContentRevenueRepository
 	// stripeClient creates real Stripe Checkout Sessions. Optional
 	// (nil = checkout uses the placeholder generator for tests/dev).
 	// Set via SetStripeClient.
@@ -61,6 +62,7 @@ func NewBillingService(
 	expenseRepo repository.ManualExpenseRepository,
 	identityRepo repository.UserIdentityRepository,
 	pushAllocRepo repository.PushAllocationRepository,
+	contentRevRepo repository.ContentRevenueRepository,
 ) *BillingService {
 	return &BillingService{
 		planRepo:      planRepo,
@@ -72,6 +74,7 @@ func NewBillingService(
 		expenseRepo:   expenseRepo,
 		identityRepo:  identityRepo,
 		pushAllocRepo: pushAllocRepo,
+		contentRevRepo: contentRevRepo,
 	}
 }
 
@@ -1233,6 +1236,83 @@ func (s *BillingService) grantPushAllocation(ctx context.Context, userID uint, p
 		return
 	}
 	log.Printf("[push] granted 1000 push notifications to user %d (source=lifetime_aura, expires in 3m)", userID)
+}
+
+// RecordAdRevenue records an ad impression's revenue using CalculateRevenueSplit.
+//
+// This is THE impression-recording path. Called by the video player (via the
+// editor's /api/export-ad or a dedicated ads endpoint) whenever an ad is shown.
+// It:
+//
+//   1. Validates the gross amount string
+//   2. Calls service.CalculateRevenueSplit (gross, creatorSubscribed)
+//   3. Persists the split row to content_revenue
+//   4. Returns the split so the player/dashboard can show it
+//
+// Fail closed: any error returns 500 and no revenue is recorded. Better to
+// lose an impression than to misattribute revenue.
+func (s *BillingService) RecordAdRevenue(
+	ctx context.Context,
+	authUserID uuid.UUID,
+	gross string,
+	creatorSubscribed bool,
+	assetID *uuid.UUID,
+	channelID *uuid.UUID,
+	adSlot string,
+	campaignID *uuid.UUID,
+) (*serviceAdRevenueResult, error) {
+	grossDec, err := decimal.NewFromString(gross)
+	if err != nil {
+		return nil, fmt.Errorf("invalid gross amount: %w", err)
+	}
+
+	// Calculate the split using the shared engine
+	split := CalculateRevenueSplit(grossDec, creatorSubscribed)
+
+	record := &model.ContentRevenue{
+		UUID:               uuid.New(),
+		AssetID:            assetID,
+		ChannelID:          channelID,
+		UserID:             &authUserID,
+		AdSlot:             adSlot,
+		GrossRevenue:       split.Gross,
+		ViewerShare:        split.Viewer,
+		CreatorShare:       split.Creator,
+		PlatformShare:      split.Platform,
+		CreatorSubscribed:  split.CreatorSubscribed,
+		CampaignID:         campaignID,
+		RecordedAt:         time.Now(),
+	}
+
+	if err := s.contentRevRepo.Create(ctx, record); err != nil {
+		return nil, fmt.Errorf("failed to persist content revenue: %w", err)
+	}
+
+	log.Printf(
+		"[ad-revenue] impression recorded: asset=%v channel=%v user=%s slot=%s gross=%s creator=%s platform=%s subscribed=%v",
+		assetID, channelID, authUserID, adSlot,
+		split.Gross.String(), split.Creator.String(), split.Platform.String(),
+		split.CreatorSubscribed,
+	)
+
+	return &serviceAdRevenueResult{
+		Gross:             split.Gross,
+		ViewerShare:       split.Viewer,
+		CreatorShare:      split.Creator,
+		PlatformShare:     split.Platform,
+		CreatorSubscribed: split.CreatorSubscribed,
+		RecordID:          record.ID,
+	}, nil
+}
+
+// serviceAdRevenueResult is the return type for RecordAdRevenue.
+type serviceAdRevenueResult struct {
+	Gross             decimal.Decimal
+	ViewerShare       decimal.Decimal
+	CreatorShare      decimal.Decimal
+	PlatformShare     decimal.Decimal
+	CreatorSubscribed bool
+	RecordID          uint
 }
 
 

@@ -49,8 +49,9 @@ func main() {
 	// `Subscribe` cannot resolve a caller without it.
 	identityRepo := repository.NewUserIdentityRepository(db)
 	pushAllocRepo := repository.NewPushAllocationRepository(db)
+	contentRevRepo := repository.NewContentRevenueRepository(db)
 
-	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo)
+	billingSvc := service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo)
 
 	// ---- THE PLAN CATALOGUE, SEEDED BEFORE ANY REQUEST IS ANSWERED ----
 	//

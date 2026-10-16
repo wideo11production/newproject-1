@@ -64,6 +64,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.PayoutIdentity{},
 		// DeviceRevenueLink: device se linked accounts ka analytics
 		&model.DeviceRevenueLink{},
+		// ContentRevenue: ad impression revenue linked to asset/channel/user
+		&model.ContentRevenue{},
 	)
 }
 

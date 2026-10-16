@@ -36,3 +36,16 @@ func (s *BillingService) ResolveBillingUserID(ctx context.Context, authUserID st
 	}
 	return s.identityRepo.Resolve(ctx, parsed)
 }
+
+// ResolveAuthUserID maps a billing-side uint back onto the auth-service
+// UUID string. Used when a handler has the billing id (from resolveBillingUser)
+// and needs the auth UUID for cross-service calls.
+//
+// Returns ErrIdentityNotResolvable when no auth UUID is linked to the billing id.
+func (s *BillingService) ResolveAuthUserID(ctx context.Context, billingUserID uint) (uuid.UUID, error) {
+	parsed, err := s.identityRepo.Lookup(ctx, billingUserID)
+	if err != nil {
+		return uuid.Nil, ErrIdentityNotResolvable
+	}
+	return parsed, nil
+}

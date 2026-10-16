@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"newproject/services/billing-service/src/model"
@@ -110,6 +111,17 @@ type ManualExpenseRepository interface {
 	Update(ctx context.Context, expense *model.ManualExpense) error
 	Delete(ctx context.Context, id uint) error
 }
+
+// ContentRevenueRepository defines the interface for content revenue storage
+type ContentRevenueRepository interface {
+	Create(ctx context.Context, record *model.ContentRevenue) error
+	ListByAsset(ctx context.Context, assetID uuid.UUID, limit int, offset int) ([]model.ContentRevenue, int64, error)
+	ListByChannel(ctx context.Context, channelID uuid.UUID, limit int, offset int) ([]model.ContentRevenue, int64, error)
+	ListByUser(ctx context.Context, userID uuid.UUID, limit int, offset int) ([]model.ContentRevenue, int64, error)
+	TotalByUser(ctx context.Context, userID uuid.UUID) (decimal.Decimal, error)
+}
+
+var ErrContentRevenueNotFound = errors.New("content revenue not found")
 
 // SubscriptionPlanRepository implementation
 type subscriptionPlanRepository struct {
@@ -649,4 +661,69 @@ func generateInvoiceNumber() string {
 // generatePaymentNumber creates a unique payment number for tracking
 func generatePaymentNumber() string {
 	return "PAY-" + time.Now().Format("20060102") + "-" + uuid.New().String()[:8]
+}
+
+// ContentRevenueRepository implementation
+type contentRevenueRepository struct {
+	db *gorm.DB
+}
+
+func NewContentRevenueRepository(db *gorm.DB) ContentRevenueRepository {
+	return &contentRevenueRepository{db: db}
+}
+
+func (r *contentRevenueRepository) Create(ctx context.Context, record *model.ContentRevenue) error {
+	record.UUID = uuid.New()
+	return r.db.WithContext(ctx).Create(record).Error
+}
+
+func (r *contentRevenueRepository) ListByAsset(
+	ctx context.Context, assetID uuid.UUID, limit int, offset int,
+) ([]model.ContentRevenue, int64, error) {
+	var records []model.ContentRevenue
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.ContentRevenue{}).Where("asset_id = ?", assetID)
+	query.Count(&total)
+	query = query.Order("created_at DESC").Limit(limit).Offset(offset)
+	err := query.Find(&records).Error
+	return records, total, err
+}
+
+func (r *contentRevenueRepository) ListByChannel(
+	ctx context.Context, channelID uuid.UUID, limit int, offset int,
+) ([]model.ContentRevenue, int64, error) {
+	var records []model.ContentRevenue
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.ContentRevenue{}).Where("channel_id = ?", channelID)
+	query.Count(&total)
+	query = query.Order("created_at DESC").Limit(limit).Offset(offset)
+	err := query.Find(&records).Error
+	return records, total, err
+}
+
+func (r *contentRevenueRepository) ListByUser(
+	ctx context.Context, userID uuid.UUID, limit int, offset int,
+) ([]model.ContentRevenue, int64, error) {
+	var records []model.ContentRevenue
+	var total int64
+
+	query := r.db.WithContext(ctx).Model(&model.ContentRevenue{}).Where("user_id = ?", userID)
+	query.Count(&total)
+	query = query.Order("created_at DESC").Limit(limit).Offset(offset)
+	err := query.Find(&records).Error
+	return records, total, err
+}
+
+func (r *contentRevenueRepository) TotalByUser(
+	ctx context.Context, userID uuid.UUID,
+) (decimal.Decimal, error) {
+	var total decimal.Decimal
+	err := r.db.WithContext(ctx).
+		Model(&model.ContentRevenue{}).
+		Where("user_id = ?", userID).
+		Select("COALESCE(SUM(creator_share), 0)").
+		Scan(&total).Error
+	return total, err
 }
