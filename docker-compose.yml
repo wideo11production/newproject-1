@@ -2144,10 +2144,13 @@ services:
     image: ollama/ollama:latest
     container_name: wideo11-local-ai-engine
     volumes:
-      # Model weights persist across container restarts. Is volume ko
-      # `docker compose down -v` NAHIN karo — warna saare downloaded
-      # models delete ho jayenge (see db_volume_down_v_pitfall constraint).
-      - ./infrastructure/ollama_data:/root/.ollama
+      # Model weights persist across container restarts. Named volume
+      # (ollama_data) is used INSTEAD of a Windows bind mount because NTFS
+      # reparse-point symlinks inside ./infrastructure/ollama_data cause
+      # "too many levels of symbolic links" (ELOOP) when the Linux container
+      # reads them. Is volume ko `docker compose down -v` NAHIN karo — warna
+      # saare downloaded models delete ho jayenge (see db_volume_down_v_pitfall constraint).
+      - ollama_data:/root/.ollama
     ports:
       # Local dev only: host can hit 11434 directly for model pulls/debugging.
       # Production me ye port publish mat karo — internal compose network hi kaam karega.
