@@ -5,12 +5,8 @@ import {
   slide,
   slip,
   extendBranding,
-  type TimelineClip,
-  type TimelineTrack,
-  NEUTRAL_FILTER,
-  DEFAULT_TRANSFORM,
 } from './edits';
-import { nextId } from './types';
+import { nextId, NEUTRAL_FILTER, DEFAULT_TRANSFORM, type TimelineClip, type TimelineTrack } from './types';
 
 const FPS = 30;
 

@@ -5,12 +5,9 @@ import {
   slide,
   slip,
   extendBranding,
-  type TimelineClip,
-  type TimelineTrack,
-  type TrackType,
   MIN_CLIP_FRAMES,
 } from './edits';
-import { nextId, NEUTRAL_FILTER, DEFAULT_TRANSFORM } from './types';
+import { nextId, NEUTRAL_FILTER, DEFAULT_TRANSFORM, type TimelineClip, type TimelineTrack, type TrackType } from './types';
 
 const FPS = 30;
 
@@ -114,7 +111,7 @@ describe('Scale tests — 1000+ clips', () => {
     const shiftedClips = updatedTrack.clips.filter((c) => c.startTime > newEndSeconds);
     if (shiftedClips.length > 0) {
       const firstShifted = shiftedClips[0];
-      const originalClip = track.clips.find((c) => c.id === firstShifted.id)!;
+      const originalClip = track.clips.find((c: TimelineClip) => c.id === firstShifted.id)!;
       expect(Math.round(firstShifted.startTime * FPS)).toBe(
         Math.round(originalClip.startTime * FPS) + 30,
       );
