@@ -1,0 +1,1 @@
+width: ${Math.max(0, Math.min(1, audioLevels[channel as 'left' | 'right'])) * 100}%,

@@ -4,6 +4,33 @@ const nextConfig = {
   // Standalone output - minimal server bundle for Docker runner stage
   output: 'standalone',
 
+  // ---- MONOREPO TRANSPILE BOUNDARY ----
+  //
+  // Hinglish: Ye teen shared packages RAW TypeScript/TSX ship karte hain
+  // (unke `main` field `src/index.ts` ya `src/index.tsx` point karte hain,
+  // koi build step nahi). Next.js node_modules ka code by default transpile
+  // NAHI karta - isliye bina transpilePackages ke ye packages ke .tsx files
+  // directly Webpack ke saath aate hain jisme TypeScript syntax handle nahi
+  // hoti, aur build fail hota hai:
+  //
+  //   ModuleParseError: Unexpected token 'export'
+  //   Cannot find module 'next/server'
+  //
+  // @wideo11/ui       - contains next/server imports (audit-handler.ts,
+  //                      auth-gate.ts, health-handler.ts, presence-handler.ts)
+  //                      and raw .tsx component source (barrel exports)
+  // @wideo11/config   - raw .ts config loader; used by admin/monitor layout
+  // @wideo11/utils    - raw .ts utility functions (cn, formatBytes, etc.)
+  //
+  // Ye list ensure karti hai ki Webpack in packages ko transpile kare SAASTE
+  // source se, jisse TypeScript syntax aur ESM exports sahi se JS me convert
+  // hote hain. Har package ka `main`/`types` field src/ point karta hai (no dist/
+  // build), isliye ye ZAROORI hai.
+  //
+  // NOTE: Package name @wideo11/utils (pehle wideo11-utils tha) - rename karke
+  // transpilePackages se bhi match kar gaya.
+  transpilePackages: ['@wideo11/ui', '@wideo11/config', '@wideo11/utils'],
+
   // Security headers including CSP for superadmin app
   async headers() {
     const isDev = process.env.NODE_ENV !== 'production';

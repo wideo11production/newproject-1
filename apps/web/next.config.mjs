@@ -235,8 +235,21 @@ const nextConfig = {
       }
     ]
   },
-  
-  transpilePackages: ['@wideo11/ui'],
+  // ---- MONOREPO TRANSPILE BOUNDARY ----
+  //
+  // Hinglish: Ye teen shared packages RAW TypeScript/TSX ship karte hain
+  // (unke `main` field src/index.ts point karte hain, koi build step nahi).
+  // Next.js node_modules ka code by default transpile nahi karta, isliye
+  // bina ye setting ke @wideo11/ui ke .tsx files direct Webpack me aate hain
+  // jisme TypeScript syntax handle nahi hoti - build fail hota hai:
+  //   ModuleParseError: Unexpected token 'export'
+  //
+  // @wideo11/ui      - component library (raw .tsx, next/server imports)
+  // @wideo11/config  - config loader (raw .ts)
+  // @wideo11/utils   - utility functions (raw .ts)
+  //
+  // Webpack symlinks boundary mechanism safe and untouched hai
+  transpilePackages: ['@wideo11/ui', '@wideo11/config', '@wideo11/utils'],
   
   // Hamaara main Webpack symlinks boundary mechanism safe and untouched hai
   webpack: (config) => {

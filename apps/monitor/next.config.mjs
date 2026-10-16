@@ -11,11 +11,11 @@ const nextConfig = {
 
   // ---- `transpilePackages` ZAROORI HAI ----
   //
+  // Hinglish: Ye shared packages RAW TypeScript/TSX ship karte hain.
   // `wideo11-charts` (ECharts wrappers) raw TypeScript source ship karta hai -
   // uska `main` field `src/index.ts` hai, koi build step nahi. Next.js
   // node_modules ke code ko by default transpile NAHI karta, isliye bina is
   // setting ke build fail hota hai:
-  //
   //   Module not found: Can't resolve 'wideo11-charts'
   //
   // (Ye error misleading hai - package maujood hai, node_modules me linked
@@ -31,7 +31,10 @@ const nextConfig = {
   // NOTE: `@wideo11/ui` bhi list me hai - wo bhi raw TSX ship karta hai. Wo
   // pehle bhi import hota tha aur chalta tha, ye list usko bhi cover karti
   // hai taaki wo pehle se kabhi fail na ho.
-  transpilePackages: ['wideo11-charts', '@wideo11/ui'],
+  //
+  // @wideo11/config aur @wideo11/utils bhi naye se add kiye gaye hain taaki
+  // sabhi apps ek hi transpile boundary follow karein.
+  transpilePackages: ['@wideo11/ui', '@wideo11/config', '@wideo11/utils', 'wideo11-charts'],
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**.unsplash.com' },

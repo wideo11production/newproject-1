@@ -24,9 +24,41 @@ COPY pnpm-lock.yaml ./
 # Ye INLINE set hain (ENV se nahi) kyunki pnpm install scripts child process
 # me chalti hain jahan ENV block propagate nahi hota.
 RUN apk add --no-cache python3 make g++ libc6-compat
+# COPY packages/ui ./packages/ui
+# COPY apps/superadmin/package.json ./apps/superadmin/package.json
+# ---- MONOREPO TRANSPILE BOUNDARY: ALL SHARED PACKAGES ----
+#
+# Hinglish: Pehle sirf packages/ui ka source hi copy kiya gaya tha, aur
+# `COPY packages/*/package.json` se sirf package.json files aaye the
+# (source nahi). Jab transpilePackages mein @wideo11/config aur
+# @wideo11/utils shamil kiye gaye hain, to unki source files bhi chahiye
+# hain - warna pnpm install workspace symlinks banata hai lekin source
+# files missing rehti hain, aur Next.js build fail karta hai
+# 'Cannot find module' ya 'Unexpected token export' errors ke saath.
+#
+# web aur video-editor Dockerfiles already copy ALL packages source -
+# same pattern yahan bhi apply kiya gaya hai taaki sabhi apps consistent
+# shared package boundaries follow karein.
+#
+# NOTE: @wideo11/ui has next in its dependencies (for next/server imports
+# in audit-handler.ts, auth-gate.ts, etc.) - isliye next automatically
+# install hota hai jab pnpm install chalta hai.
+COPY packages/api-client ./packages/api-client
+COPY packages/charts ./packages/charts
+COPY packages/config ./packages/config
+COPY packages/constants ./packages/constants
+COPY packages/dnd-dashboard ./packages/dnd-dashboard
+COPY packages/editor-core ./packages/editor-core
+COPY packages/eslint-config ./packages/eslint-config
+COPY packages/forms ./packages/forms
+COPY packages/i18n ./packages/i18n
+COPY packages/push-client ./packages/push-client
+COPY packages/tailwind-config ./packages/tailwind-config
+COPY packages/tsconfig ./packages/tsconfig
 COPY packages/ui ./packages/ui
+COPY packages/utils ./packages/utils
+COPY packages/video-player ./packages/video-player
 COPY apps/superadmin/package.json ./apps/superadmin/package.json
-COPY packages/*/package.json ./packages/
 RUN PYTHON=/usr/bin/python3 npm_config_build_from_source=true \
     pnpm config set shamefully-hoist true && \
     pnpm install --frozen-lockfile --prefer-offline

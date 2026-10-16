@@ -145,3 +145,6 @@ infrastructure/backups/*.dump
 
 # Rotation backups of .env (tools/rotate-secrets.mjs) — secret copies
 .env.pre-rotation-*
+
+# Scripts
+scripts/

@@ -1511,6 +1511,12 @@ services:
       # webhook-receiver backs the /api/alerts proxy (real-time warning panel).
       # Server-side only (compose-internal DNS); the browser never sees it.
       WEBHOOK_RECEIVER_URL: http://webhook-receiver:8081
+      # ---- Local AI engine: Ollama (self-hosted, zero-cost inference) ----
+      #
+      # Hinglish: web app ka proxy route Ollama ko forward karta hai for
+      # any server-side AI requests. `ollama:11434` = compose-internal DNS.
+      # Optional feature — default http://ollama:11434, khali/missing par skip.
+      OLLAMA_API_URL: ${OLLAMA_API_URL:-http://ollama:11434}
       # Client-side (`NEXT_PUBLIC_*`): ye BROWSER me chalti hain, isliye
       # inhe host-mapped `localhost` hi rakhna padta hai - `auth-service` naam
       # browser resolve nahi kar sakta.
@@ -1574,6 +1580,8 @@ services:
     depends_on:
       auth-service:
         condition: service_healthy
+      ollama:
+        condition: service_started
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:3000/auth/login || exit 1"]
@@ -1661,6 +1669,16 @@ services:
       # hai. Compose na ho to baaki editor ko chalte rehna chahiye, aur service
       # ka `Ping` saaf "not configured" batata hai.
       SUBTITLE_INTERNAL_URL: ${SUBTITLE_INTERNAL_URL:-http://subtitle-service:8090}
+      # ---- Local AI engine: Ollama (self-hosted, zero-cost inference) ----
+      #
+      # Hinglish: AURA Micro-Frame Studio ke frame-by-frame generative fill
+      # ke liye. `ollama:11434` = compose-internal DNS (browser use resolve
+      # nahi karta, isliye ye SERVER-side var hai, NEXT_PUBLIC_ nahi).
+      #
+      # Optional feature: Khali/missing hone par editor ise silently skip
+      # karta hai — isliye `:?` fail-fast nahi, `:-` default hai taaki
+      # compose bina Ollama ke bhi up aur chalti rahe.
+      OLLAMA_API_URL: ${OLLAMA_API_URL:-http://ollama:11434}
       # The shared session gate (@wideo11/ui/gate) verifies the `wideo11_session`
       # cookie's signature with this SAME secret auth-service signs with. Without it
       # the gate fails CLOSED and every route on this app returns 401 - the correct
@@ -1695,6 +1713,8 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+      ollama:
+        condition: service_started
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
@@ -1899,6 +1919,8 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+      ollama:
+        condition: service_started
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
@@ -1954,6 +1976,8 @@ services:
     depends_on:
       dashboard-service:
         condition: service_healthy
+      ollama:
+        condition: service_started
     # ---- Container health (see the note on `monitor` above for why) ----
     restart: unless-stopped
     healthcheck:
@@ -2091,6 +2115,60 @@ services:
       retries: 3
       start_period: 40s
 
+# ==========================================================================
+  # OLLAMA — Self-hosted local AI engine (frame-by-frame generative fill,
+  # template orchestration — NO third-party inference provider)
+  # ==========================================================================
+  #
+  # Hinglish: ye ek LOCAL AI inference server hai — `ollama/ollama:latest`
+  # image. Isse microservices koi third-party (OpenAI, Anthropic, Google)
+  # par call nahi karti; pure local Docker network me `ollama:11434` pe
+  # baat karti hai. Model weights disk par cache hote hain
+  # (`./infrastructure/ollama_data`), isliye container restart ya image
+  # rebuild ke baad bhi downloaded models lose nahi hoti.
+  #
+  # Network matrix:
+  #   - compose-internal `http://ollama:11434` → apps talk to this
+  #   - optional `127.0.0.1:11434` publish → local dev/debug only
+  #     (NOT exposed in production — see port_access_policy constraint)
+  #
+  # Connection hooks:
+  #   - video-editor: OLLAMA_API_URL env (set below in its environment block)
+  #   - web: OLLAMA_API_URL env (set below in its environment block)
+  #   - Both apps gate local inference behind AURA_MICRO_FRAME_STUDIO_ENABLED
+  #
+  # Resource note: Ollama CPU-only chal sakta hai, lekin VRAM/GPU preferred
+  # for generative fill frame-by-frame workload. `--gpus all` is OPTIONAL
+  # and commented out for dev environments without GPU.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: wideo11-local-ai-engine
+    volumes:
+      # Model weights persist across container restarts. Is volume ko
+      # `docker compose down -v` NAHIN karo — warna saare downloaded
+      # models delete ho jayenge (see db_volume_down_v_pitfall constraint).
+      - ./infrastructure/ollama_data:/root/.ollama
+    ports:
+      # Local dev only: host can hit 11434 directly for model pulls/debugging.
+      # Production me ye port publish mat karo — internal compose network hi kaam karega.
+      - "127.0.0.1:11434:11434"
+    restart: unless-stopped
+    # ---- GPU passthrough (OPTIONAL) ----
+    # Uncomment for GPU-enabled environments (generative fill needs CUDA):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      # Ollama ka /api/tags endpoint (default model list). HTTP 200 = ready.
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:11434/api/tags || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 volumes:
   minio_data:
   postgres_data:
@@ -2104,3 +2182,6 @@ volumes:
   # download hota (~1-2 min), aur `restart: unless-stopped` ke saath ye
   # baar-baar hota.
   whisper_cache:
+  # Ollama model cache volume. Isko `docker compose down -v` se MAT DESTROY
+  # karo — models dobara download honge ~1-2GB time lagega.
+  ollama_data:

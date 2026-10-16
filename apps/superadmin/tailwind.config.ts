@@ -9,7 +9,7 @@ import { enterpriseTheme } from '@wideo11/ui/enterprise-theme';
 const config: Config = {
   darkMode: 'class',
   content: [
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
   theme: enterpriseTheme,
   plugins: [],

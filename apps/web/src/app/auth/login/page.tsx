@@ -91,6 +91,9 @@ export default function LoginPage() {
   // Hinglish: token store karte hain taaki security gate use kar sake
   const [accessToken, setAccessToken] = useState('');
   const [securityRequired, setSecurityRequired] = useState(false);
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaChallengeId, setMfaChallengeId] = useState('');
+  const [loginUserRole, setLoginUserRole] = useState('');
 
   // ---- Lockout / blocked state (Chakravyuh defense) ----
   // 3 galat password -> pin_required; galat PIN -> 3 min countdown
@@ -140,6 +143,18 @@ export default function LoginPage() {
 
       if (response.ok) {
         // Login successful
+
+        // ---- MFA REQUIRED: user has PIN configured, need 6-digit PIN verify ----
+        if (payload.mfa_required) {
+          setMfaRequired(true);
+          setMfaChallengeId(payload.challenge_id ?? '');
+          setMessage(payload.message ?? 'Verify your 6-digit security PIN to complete login');
+          return;
+        }
+
+        // Store role for post-security-setup redirect
+        const loginRole = String(payload.user?.role ?? '');
+        setLoginUserRole(loginRole);
 
         // CHAKRAVYUH: mandatory security setup gate check
         // Agar setup complete nahi hai to token save karke gate render karo -
@@ -324,6 +339,110 @@ export default function LoginPage() {
     );
   }
 
+  // ---- MFA required: verify 6-digit PIN to complete login ----
+  if (mfaRequired) {
+    return (
+      <AuthShell
+          title="Security verification required"
+          description={message || 'Verify your 6-digit security PIN to complete login'}
+          footer={
+            <button
+              onClick={() => {
+                setMfaRequired(false);
+                setStatus('idle');
+                setMessage('');
+              }}
+              className="block w-full text-center text-sm text-blue-400 transition-colors hover:text-blue-300"
+            >
+              Back to sign in
+            </button>
+          }
+        >
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setStatus('submitting');
+            try {
+              const res = await fetch('/api/auth/security/pin/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, pin: pinInput, challenge_id: mfaChallengeId }),
+              });
+              if (res.ok) {
+                // MFA verified - re-login to get tokens
+                const loginResp = await fetch('/api/auth/login', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email, password }),
+                });
+                const loginPayload = await loginResp.json();
+                if (loginResp.ok) {
+                  setAccessToken(loginPayload.tokens?.access_token ?? '');
+                  if (loginPayload.security_setup_required) {
+                    setSecurityRequired(true);
+                    setMfaRequired(false);
+                  } else {
+                    const role = String(loginPayload.user?.role ?? '');
+                    const isSuperadmin =
+                      role === 'superadmin' || role === 'superadmin_recovery';
+                    const destination = nextFromLocation();
+                    if (isSuperadmin) {
+                      window.location.replace(
+                        `http://localhost:3008/?next=${encodeURIComponent(destination)}`
+                      );
+                    } else {
+                      window.location.href = destination;
+                    }
+                  }
+                } else {
+                  setStatus('error');
+                  setMessage(loginPayload.error ?? 'Login failed after MFA verification.');
+                }
+              } else {
+                const err = await res.json().catch(() => ({}));
+                if (err.blocked) {
+                  setBlocked(true);
+                  setCountdown(err.seconds_remaining ?? 180);
+                  setMfaRequired(false);
+                }
+                setStatus('error');
+                setMessage(err.message ?? 'Invalid PIN.');
+              }
+            } catch {
+              setStatus('error');
+              setMessage('Network error. Please try again.');
+            }
+          }}
+          className="space-y-4"
+        >
+          <Field id="mfa-pin" label="6-digit security PIN">
+            <Input
+              id="mfa-pin"
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              value={pinInput}
+              onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ''))}
+              placeholder="******"
+              className={`${INPUT_CLASS} tracking-widest`}
+            />
+          </Field>
+          <Button
+            type="submit"
+            disabled={status === 'submitting' || pinInput.length !== 6}
+            className={PRIMARY_BUTTON_CLASS}
+          >
+            {status === 'submitting' ? (
+              <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" />
+            ) : (
+              'Verify PIN'
+            )}
+          </Button>
+        </form>
+      </AuthShell>
+    );
+  }
+
   // ---- 3-minute blocked countdown card ----
   if (blocked) {
     const mins = Math.floor(countdown / 60);
@@ -374,11 +493,16 @@ export default function LoginPage() {
         accessToken={accessToken}
         onComplete={() => {
           setSecurityRequired(false);
-          // Same `next` handling as the normal login path above. Ye path tab
-          // chalti hai jab setup abhi poora hua hai - user login ke baad yahin
-          // pause karta hai, isliye yahan bhi destination drop karna usko
-          // editor/dashboard se door le jaata.
-          window.location.href = nextFromLocation();
+          const destination = nextFromLocation();
+          const isSuperadmin =
+            loginUserRole === 'superadmin' || loginUserRole === 'superadmin_recovery';
+          if (isSuperadmin) {
+            window.location.replace(
+              `http://localhost:3008/?next=${encodeURIComponent(destination)}`
+            );
+          } else {
+            window.location.href = destination;
+          }
         }}
       />
     );

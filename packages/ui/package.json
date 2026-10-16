@@ -26,6 +26,7 @@
     "./dropdown-menu": "./src/dropdown-menu.tsx",
     "./enterprise-theme": "./src/enterprise-theme.ts",
     "./font": "./src/font.ts",
+    "./field": "./src/field.tsx",
     "./gate": "./src/auth-gate.ts",
     "./health-handler": "./src/health-handler.ts",
     "./theme": "./src/theme.ts",
@@ -55,6 +56,7 @@
     "./tabs": "./src/tabs.tsx",
     "./toast": "./src/toast.tsx",
     "./toggle": "./src/toggle.tsx",
+    "./textarea": "./src/textarea.tsx",
     "./toggle-group": "./src/toggle-group.tsx",
     "./tooltip": "./src/tooltip.tsx"
   },
@@ -97,6 +99,11 @@
     "lucide-react": "catalog:",
     "next": "^14.2.0",
     "tailwind-merge": "catalog:"
+  },
+"peerDependencies": {
+    "next": "14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "catalog:",

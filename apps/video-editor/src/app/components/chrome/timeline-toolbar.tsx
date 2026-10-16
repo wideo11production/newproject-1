@@ -1,3 +1,15 @@
+// ============================================================================
+// TIMELINE TOOLBAR - Video Editor Chrome Component
+// ============================================================================
+//
+// Hinglish: Ye timeline toolbar MOVAVI-style UI match karta hai — dual ruler
+// (left+right), volume button right side, equalizer, 10px icon sizing.
+// Superadmin (advchashampalup@gmail.com) ke liye FPS gating via AuraFpsGate.
+//
+// NOTE: Interface props were deduplicated (canUndo/canRedo/onCopy/onPaste/isPromptStudioOpen
+// had duplicate declarations causing TS2300/TS2717 errors).
+//
+// ============================================================================
 'use client';
 
 import {
@@ -24,6 +36,7 @@ import {
   ChevronRight,
   ScanLine,
   Video,
+  MessageSquare,
 } from 'lucide-react';
 import { ToolbarGroup } from './menu-bar';
 import {
@@ -53,6 +66,7 @@ interface TimelineToolbarProps {
   ripple: boolean;
   pxPerFrame: number;
   fps: number;
+  isPromptStudioOpen: boolean;
   onSplit: () => void;
   onDelete: () => void;
   onUndo: () => void;
@@ -73,17 +87,11 @@ interface TimelineToolbarProps {
   playbackRate: number;
   onPlaybackRate: (rate: number) => void;
   onEdgeEdit: (kind: 'ripple' | 'slide' | 'slip', delta: number) => void;
-  /**
-   * The plan's frame-rate ceiling, in fps.
-   *
-   * 60 on every plan except the AURA lifetime plan, which is 240. Both
-   * dropdowns below are filtered from this one number, so the second toolbar on
-   * screen cannot offer a rate the first one refuses.
-   */
   maxFps: number;
   /** Recorder kholta hai (RecorderDialog). Hinglish: timeline toolbar me
    *  recording icon — same 10px glyph + muted->#ff6500 hover pattern. */
   onRecord?: () => void;
+  onTogglePromptStudio: () => void;
 }
 
 export function TimelineToolbar({
@@ -118,6 +126,8 @@ export function TimelineToolbar({
   onEdgeEdit,
   maxFps,
   onRecord,
+  isPromptStudioOpen,
+  onTogglePromptStudio,
 }: TimelineToolbarProps) {
   const zoomPct = Math.round((pxPerFrame / 3) * 100);
 
@@ -291,6 +301,15 @@ export function TimelineToolbar({
         Icon: Move,
         onClick: onToggleLoop,
         active: loopOn,
+      },
+      {
+        id: 'aiprompt',
+        label: 'AI Prompt Studio',
+        hint: 'Open AI Prompt Studio for local AI commands and timeline operations',
+        shortcut: 'Ctrl+P',
+        Icon: MessageSquare,
+        onClick: onTogglePromptStudio,
+        active: isPromptStudioOpen,
       },
     ],
     [

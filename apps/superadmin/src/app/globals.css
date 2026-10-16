@@ -92,11 +92,11 @@
  * Dark - the default, on :root
  * ------------------------------------------------------------------------- */
 :root {
-  --app-bg: 3 7 18;
-  --app-surface: 17 24 39;
-  --app-surface-raised: 31 41 55;
-  --app-border: 31 41 55;
-  --app-border-strong: 55 65 81;
+  --app-bg: 22 22 22;
+  --app-surface: 30 30 30;
+  --app-surface-raised: 30 30 30;
+  --app-border: 30 30 30;
+  --app-border-strong: 30 30 30;
   --app-ink: 255 255 255;
   --app-fg-strong: 209 213 219;
   --app-fg-muted: 156 163 175;
@@ -113,10 +113,10 @@
  * ------------------------------------------------------------------------- */
 .light {
   --app-bg: 255 255 255;
-  --app-surface: 249 250 251;
-  --app-surface-raised: 243 244 246;
-  --app-border: 229 231 235;
-  --app-border-strong: 209 213 219;
+  --app-surface: 250 250 250;
+  --app-surface-raised: 250 250 250;
+  --app-border: 250 250 250;
+  --app-border-strong: 250 250 250;
   --app-ink: 17 24 39;
   --app-fg-strong: 55 65 81;
   --app-fg-muted: 107 114 128;

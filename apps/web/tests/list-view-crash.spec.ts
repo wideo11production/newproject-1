@@ -45,7 +45,7 @@ async function loginAndGoto(page: Page, request: { post: Function; storageState:
 
   const state = await request.storageState();
   await page.context().addCookies(
-    state.cookies.filter((c) => c.domain.includes('localhost'))
+    state.cookies.filter((c: { domain: string }) => c.domain.includes('localhost'))
   );
 
   await page.goto('http://localhost:3000/dashboard/upload');

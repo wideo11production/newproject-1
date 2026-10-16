@@ -1,5 +1,5 @@
 {
-  "name": "wideo11-utils",
+  "name": "@wideo11/utils",
   "version": "1.0.0",
   "description": "Shared utility functions for Wideo11 (date, validation, formatting, etc.)",
   "main": "src/index.ts",

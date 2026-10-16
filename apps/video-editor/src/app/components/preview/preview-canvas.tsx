@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 // ============================================================================
 // Preview stage
@@ -10,7 +10,7 @@
 //
 // The canvas must redraw on every animation frame, but the rest of the editor
 // only needs to know where the playhead is once per FRAME. Driving the
-// playhead from a per-frame `setState` re-renders the whole editor - bin,
+// playhead from a per-frame setState re-renders the whole editor - bin,
 // lanes, every panel - sixty times a second, which is most of what makes a
 // canvas app feel slow. So the canvas is authoritative for the picture, and the
 // parent is told the time once per timeline frame.
@@ -36,7 +36,7 @@ import { buildCompositorSources } from '../../lib/engine/sources';
  * Watermark characters: Wino, Rino, Tino.
  *
  * Initials on tinted discs, NOT images. The artwork does not exist yet, and a
- * broken `<img>` is worse than an honest placeholder - it reads as a bug rather
+ * broken <img> is worse than an honest placeholder - it reads as a bug rather
  * than as "coming soon". Swapping in the real art later is a one-line change
  * per character and the layout does not move.
  *
@@ -97,6 +97,7 @@ export function PreviewCanvas({
   const rafRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const media = useMediaStore();
+  const frameRef = useRef(0);
 
   // Latest values for the render loop, without re-creating the loop on every
   // render. Reading a ref inside rAF is what keeps the loop a single closure.
@@ -122,11 +123,11 @@ export function PreviewCanvas({
   }, []);
 
   /**
-   * Everything the compositor can be asked to draw, by clip `mediaId`.
+   * Everything the compositor can be asked to draw, by clip mediaId.
    *
-   * Built by `buildCompositorSources` - shared with `video-editor.tsx`, so
+   * Built by uildCompositorSources - shared with ideo-editor.tsx, so
    * the preview and the export can never disagree about which clips resolve.
-   * See `lib/engine/sources.ts` for why branding clips are in the map.
+   * See lib/engine/sources.ts for why branding clips are in the map.
    */
   const sources = useCallback(
     () => buildCompositorSources(media.items, tracks),
@@ -152,7 +153,7 @@ export function PreviewCanvas({
       onCanvasReady(null);
     };
     // The compositor is created once. Everything about it that changes is
-    // pushed through `update`, below.
+    // pushed through update, below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -186,7 +187,7 @@ export function PreviewCanvas({
   // Is anything actually on screen at the playhead?
   //
   // The watermark is an EMPTY-STATE marker, not a permanent overlay. A logo
-  // burned over the user's own footage is the most irritating thing a media
+  // burned over the user's footage is the most irritating thing a media
   // player can do, and it is permanent: it sits on every frame they ever
   // export a still from. So it appears only when there is nothing to cover.
   const [hasPicture, setHasPicture] = useState(false);
@@ -238,20 +239,21 @@ export function PreviewCanvas({
       };
     }
 
-    const draw = (frame: number) => {
+    const draw = (timeSeconds: number) => {
       const state = live.current;
-      compositorRef.current?.renderFrame(frameToSeconds(frame, state.fps), state.playing);
+      compositorRef.current?.renderFrame(timeSeconds, state.playing);
 
       // "Is there a picture here?" is decided by the CLIPS, not by sampling
       // the canvas: a black clip and an empty lane look identical in pixels
       // but are completely different situations, and only the model knows which
       // one it is.
-      const t = frameToSeconds(frame, state.fps);
+      const t = timeSeconds;
       const painted = state.tracks.some(
         (track) => track.visible && track.clips.some((c) => t >= c.startTime && t < c.startTime + c.duration)
       );
       setHasPictureIfChanged(painted);
 
+      const frame = Math.round(t * state.fps);
       if (lastReported.current !== frame) {
         lastReported.current = frame;
         onFrame(frame);
@@ -259,7 +261,7 @@ export function PreviewCanvas({
     };
 
     if (!playing) {
-      draw(currentFrame);
+      draw(frameToSeconds(currentFrame, fps));
       return;
     }
 
@@ -268,15 +270,20 @@ export function PreviewCanvas({
       const elapsed = (performance.now() - clock.current.wall) / 1000;
       const frame = clock.current.frame + elapsed * state.fps * state.playbackRate;
       if (frame >= durationFrames) {
-        draw(durationFrames);
+        draw(frameToSeconds(durationFrames, fps));
         onEnded();
         return;
       }
-      // Whole frames only. A fractional frame would be a picture that does not
-      // exist, and "no frame skipping" means the viewer shows a real frame at
-      // every moment, not the nearest one drawn twice.
-      const whole = Math.floor(frame);
-      draw(whole);
+
+      // Drift correction every 60 frames
+      frameRef.current++;
+      if (frameRef.current >= 60) {
+        frameRef.current = 0;
+        clock.current.wall = performance.now();
+        clock.current.frame = frame;
+      }
+
+      draw(frameToSeconds(frame, state.fps));
       rafRef.current = requestAnimationFrame(step);
     };
     rafRef.current = requestAnimationFrame(step);
@@ -302,18 +309,14 @@ export function PreviewCanvas({
         ref={containerRef}
         onClick={onClick}
         role="img"
-        aria-label={`Preview at frame ${currentFrame}, ${frameToTimecode(currentFrame, fps)}`}
-        // The app's OWN answer to "is there a picture here?", published so a
-        // test can assert it instead of inferring it from whether the
-        // watermark happens to be in the DOM. Inferring is how a check ends up
-        // testing a rendering timing rather than the behaviour.
+        aria-label={"Preview at frame " + currentFrame + ", " + frameToTimecode(currentFrame, fps)}
         data-has-picture={hasPicture ? 'true' : 'false'}
-        className={`relative max-h-full max-w-full cursor-crosshair overflow-hidden rounded bg-black shadow-inner ${layoutClass}`}
+        className={"relative max-h-full max-w-full cursor-crosshair overflow-hidden rounded bg-black shadow-inner " + layoutClass}
         style={{
-          aspectRatio: `${settings.width} / ${settings.height}`,
+          aspectRatio: settings.width + " / " + settings.height,
           width: viewerLayout === 'single' ? '100%' : undefined,
           maxHeight: '100%',
-          transform: viewerZoom === 1 ? undefined : `scale(${viewerZoom})`,
+          transform: viewerZoom === 1 ? undefined : "scale(" + viewerZoom + ")",
         }}
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
@@ -321,7 +324,7 @@ export function PreviewCanvas({
         {/*
           EMPTY-STATE logo placeholder. Only when there is nothing to show.
 
-          `pointer-events-none` is not optional: a watermark that ate clicks
+          pointer-events-none is not optional: a watermark that ate clicks
           would sit on top of the canvas the user scrubs on.
         */}
         {!hasPicture && (
@@ -341,8 +344,8 @@ export function PreviewCanvas({
               {WATERMARK_CHARACTERS.map((c) => (
                 <span
                   key={c.name}
-                  className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${c.tint} text-[8px] font-semibold text-white/90 shadow-lg ring-1 ring-white/20`}
-                  title={`${c.name} — artwork pending`}
+                  className={"flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br " + c.tint + " text-[8px] font-semibold text-white/90 shadow-lg ring-1 ring-white/20"}
+                  title={c.name + " — artwork pending"}
                 >
                   {c.name[0]}
                 </span>
@@ -358,7 +361,7 @@ export function PreviewCanvas({
         )}
         {previewClip && (
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center gap-1.5 bg-slate-950/80 px-2 py-1 text-[8px] text-slate-300">
-            <span className="truncate">Previewing “{previewClip.mediaName}”</span>
+            <span className="truncate">Previewing "{previewClip.mediaName}"</span>
             <span className="ml-auto shrink-0 font-mono text-slate-500">move away to return to the timeline</span>
           </div>
         )}
@@ -383,7 +386,7 @@ export function PreviewCanvas({
  * LOOK identical from the outside: the context is suspended, the context was
  * garbage collected, the element never started, its gain is zero, or the file
  * has no audio track. This reads the graph directly so the answer is a fact
- * rather than a guess. It is exposed on `window` only, and only for the test
+ * rather than a guess. It is exposed on window only, and only for the test
  * harness - it is not a UI feature.
  */
 export function audioGraphReport() {

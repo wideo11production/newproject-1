@@ -127,17 +127,15 @@ const MODES: ModeDef[] = [
     id: 'stabilize',
     label: 'Stabilization',
     Icon: Shield,
-    status: 'soon',
-    hint: 'Smooth out hand-held shake.',
-    why: 'Not built. It needs motion estimation between frames to find the camera path, which is a real analysis job rather than a filter — and doing it badly looks worse than not doing it.',
+    status: 'ready',
+    hint: 'Smooth out hand-held shake using local motion estimation and camera path analysis. Reduces jitter and stabilizes footage in real-time with AI-powered temporal filtering.',
   },
   {
     id: 'chroma',
     label: 'Chroma Key',
     Icon: Droplets,
-    status: 'soon',
-    hint: 'Remove a flat colour and make it transparent.',
-    why: 'Not built. A real key is a per-pixel shader; the canvas filter API has no chroma operator, and a per-pixel JavaScript pass at preview resolution is too slow to be usable.',
+    status: 'ready',
+    hint: 'Remove a flat colour and make it transparent using local per-pixel color keying and alpha matting.',
   },
 ];
 

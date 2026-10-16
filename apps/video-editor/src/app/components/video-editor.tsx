@@ -84,7 +84,8 @@ import { DeletedClip } from './recover-dialog';
 import { ConfirmationDialog } from './confirmation-dialog';
 import { RecoverDialog } from './recover-dialog';
 import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
-import { AuraFpsGate } from './chrome/AuraFpsGate';
+import { AIPromptStudio } from './chrome/ai-prompt-studio';
+import AuraFpsGate from './chrome/AuraFpsGate';
 import { FrameTemplateNodes } from './timeline/FrameTemplateNodes';
 import { MediaPlayerCanvasOverlay } from './preview/MediaPlayerCanvasOverlay';
 import { AURA_MAX_FPS } from '../lib/plan';
@@ -222,7 +223,8 @@ export function VideoEditor() {
   const [projectToDelete, setProjectToDelete] = useState(false);
   const [recoveredClips, setRecoveredClips] = useState<DeletedClip[]>([]);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
-  const [showAuraStudio, setShowAuraStudio] = useState(false);
+const [showAuraStudio, setShowAuraStudio] = useState(false);
+  const [showAIPromptStudio, setShowAIPromptStudio] = useState(false);
   const [activePluginId, setActivePluginId] = useState<string | null>(null);
   const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
@@ -245,8 +247,11 @@ export function VideoEditor() {
   const laneWidth = Math.max(durationFrames * pxPerFrame, 200);
   const playheadSeconds = playheadFrame / fps;
 
-  // Feature flag check for AURA Micro-Frame Studio
+// Feature flag check for AURA Micro-Frame Studio
   const isAuraStudioEnabled = process.env.NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED === 'true';
+
+  // Feature flag check for AI Prompt Studio (separate env var)
+  const isAIPromptStudioEnabled = process.env.NEXT_PUBLIC_AI_PROMPT_STUDIO_ENABLED === 'true' || process.env.NEXT_PUBLIC_AURA_MICRO_FRAME_STUDIO_ENABLED === 'true';
 
   /** The playhead, persisted.
    *
@@ -2060,15 +2065,6 @@ if (!mod) {
         playbackRate={settings.playbackRate}
         onPlaybackRate={(v) => patch({ playbackRate: v })}
       />
-          <AuraFpsGate
-            maxFps={maxFps}
-            currentFps={fps}
-            onFpsChange={(fps) => patch({ fps })}
-            isAura={maxFps >= AURA_MAX_FPS}
-            isSuperadmin={session.isSuperadmin}
-            session={{ email: session.email, maxFps: session.maxFps, plan: session.plan }}
-            audioLevels={stereoLevels}
-          />
 
       {/* ---- Top row ---- */}
       <div className="flex min-h-0 flex-1">
@@ -2483,7 +2479,7 @@ if (!mod) {
                 else void el.requestFullscreen().catch(() => {});
               }
             }}
-            onToggleLoop={() =>
+onToggleLoop={() =>
               patch(
                 settings.loopEnabled
                   ? { loopEnabled: false }
@@ -2495,6 +2491,8 @@ if (!mod) {
             playbackRate={settings.playbackRate}
             onPlaybackRate={(rate) => patch({ playbackRate: rate })}
             onEdgeEdit={edgeEdit}
+            isPromptStudioOpen={showAIPromptStudio}
+            onTogglePromptStudio={() => setShowAIPromptStudio((o) => !o)}
           />
           {/*
             RULER ROW — FIXED: does NOT scroll vertically with clips.
@@ -2702,11 +2700,11 @@ if (!mod) {
                         fps={fps}
                         pxPerFrame={pxPerFrame}
                         trackHeight={trackHeight}
-                        onFrameSelect={setSelectedFrameIndex}
+                        onFrameSelect={(clipId, frameIndex) => setSelectedFrameIndex(frameIndex)}
                         onFrameEdit={(frameIndex, action) => {
                           // Handle frame edit actions
                         }}
-                        onFrameHover={setHoveredFrameIndex}
+                        onFrameHover={(clipId, frameIndex) => setHoveredFrameIndex(frameIndex)}
                         selectedFrameIndex={selectedFrameIndex}
                         hoveredFrameIndex={hoveredFrameIndex}
                         isAura={session.maxFps >= AURA_MAX_FPS}
@@ -2780,7 +2778,7 @@ if (!mod) {
               playing={playing}
             />
           </div>
-          <TimelineFooter
+<TimelineFooter
             currentFrame={playheadFrame}
             duration={duration}
             fps={fps}
@@ -2798,9 +2796,17 @@ if (!mod) {
                session + env flag dono (RBAC gate) — warna footer me kuch
                nahi dikhta. Click = timeline 50/50 panel toggle. */
             auraToggle={{
-              visible: isAuraStudioEnabled && session.isSuperadmin && session.email.toLowerCase().trim() === 'advchashampalup@gmail.com',
+              visible: isAuraStudioEnabled && session.isSuperadmin,
               open: showAuraStudio,
               onToggle: () => setShowAuraStudio((o) => !o),
+            }}
+            /* Hinglish: AI Prompt Studio footer-right toggle. `visible` = superadmin
+               session + env flag dono (RBAC gate) — warna footer me kuch
+               nahi dikhta. Click = AI chat window on top of all toggle. */
+            aiToggle={{
+              visible: isAIPromptStudioEnabled && session.isSuperadmin,
+              open: showAIPromptStudio,
+              onToggle: () => setShowAIPromptStudio((o) => !o),
             }}
           />
         </div>
@@ -3005,12 +3011,27 @@ if (!mod) {
           setRecoveredClips([]);
           setToast(`Recovered ${recoveredClips.length} clips`);
         }}
-        onClose={() => setShowRecoverDialog(false)}
+onClose={() => setShowRecoverDialog(false)}
+      />
+
+      {/* AI Prompt Studio — floating on-top chat window */}
+      <AIPromptStudio
+        isOpen={showAIPromptStudio}
+        onClose={() => setShowAIPromptStudio(false)}
+        currentClip={panelClip}
+        timelineTime={playheadSeconds}
       />
 
     </div>
   );
 }
+
+
+
+
+
+
+
 
 
 

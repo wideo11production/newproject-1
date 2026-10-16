@@ -128,6 +128,7 @@ export {
 } from "./table";
 export { Badge, badgeVariants } from "./badge";
 export { Skeleton } from "./skeleton";
+export { Textarea } from "./textarea";
 export {
   ToastProvider,
   ToastViewport,
@@ -138,3 +139,4 @@ export {
   ToastAction,
 } from "./toast";
 export { cn } from "./lib/utils";
+export { Field } from "./field";

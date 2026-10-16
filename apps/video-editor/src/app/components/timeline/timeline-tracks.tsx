@@ -87,6 +87,7 @@ import {
   ChevronDown,
   Flag,
   Badge,
+  MessageSquare,
 } from 'lucide-react';
 import { frameToTimecode, timecodeCompact } from '../../lib/engine/frames';
 import { clipEnd, type TimelineClip, type TimelineTrack, type TrackType, type Transition } from '../../lib/engine/types';
@@ -1844,6 +1845,7 @@ export function TimelineFooter({
   measure,
   playbackRate,
   auraToggle,
+  aiToggle,
 }: {
   currentFrame: number;
   duration: number;
@@ -1871,6 +1873,14 @@ export function TimelineFooter({
    * to 1.6s ka calm green pulse. Ek click = timeline 50/50 split toggle.
    */
   auraToggle?: { visible: boolean; open: boolean; onToggle: () => void };
+  /**
+   * AI Prompt Studio footer toggle (footer ke RIGHT side me render hota hai).
+   *
+   * Hinglish: `visible` sirf superadmin session + env flag ke saath true hota
+   * hai (RBAC gate) — warna footer me kuch nahi dikhta. `open` batata hai
+   * AI chat window khula hai ya nahi. Ek click = AI Prompt Studio toggle.
+   */
+  aiToggle?: { visible: boolean; open: boolean; onToggle: () => void };
 }) {
   const total = tracks.reduce((n, t) => n + t.clips.length, 0);
   const totalFrames = Math.max(1, Math.round(duration * fps));
@@ -1923,6 +1933,22 @@ export function TimelineFooter({
       <div className="flex items-center gap-3 text-fg-muted">
         {hasAudio && (
           <AudioEqualizer tracks={audioTracks} />
+        )}
+        {/* AI Prompt Studio toggle — superadmin only */}
+        {aiToggle?.visible && (
+          <button
+            type="button"
+            onClick={aiToggle.onToggle}
+            aria-label="Toggle AI Prompt Studio"
+            aria-pressed={aiToggle.open}
+            title={aiToggle.open ? 'AI Prompt Studio open — click to close' : 'AI Prompt Studio — click to open chat window'}
+            className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[8px] font-mono transition-colors duration-150 hover:bg-[#2a2a2a] ${
+              aiToggle.open ? 'text-[#ff6500] bg-[#2a2a2a]' : 'text-fg-muted hover:text-[#ff6500]'
+            }`}
+          >
+            <MessageSquare className="h-2.5 w-2.5" aria-hidden="true" />
+            <span>AI</span>
+          </button>
         )}
         <button
           type="button"

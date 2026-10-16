@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
 
@@ -232,7 +232,7 @@ export default function AuraFpsGate({
             >
               <div
                 style={{
-                  width: ${Math.max(0, Math.min(1, audioLevels[channel as 'left' | 'right'])) * 100}%,
+                  width: `${Math.max(0, Math.min(1, audioLevels[channel as 'left' | 'right']) * 100)}%`,
                   height: '100%',
                   background: vuGradient,
                   borderRadius: '0.25rem',

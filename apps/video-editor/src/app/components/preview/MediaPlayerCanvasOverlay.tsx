@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useState, MouseEvent, CSSProperties } from "react";
+import React, { useRef, useEffect, useState, CSSProperties } from "react";
+import type { MouseEvent } from "react";
 
 interface MediaPlayerCanvasOverlayProps {
   isActive: boolean;
@@ -9,6 +10,7 @@ interface MediaPlayerCanvasOverlayProps {
   scale: number;
   offsetX: number;
   offsetY: number;
+  children?: React.ReactNode;
 }
 
 interface SelectionBox {
@@ -83,6 +85,7 @@ export const MediaPlayerCanvasOverlay: React.FC<MediaPlayerCanvasOverlayProps> =
   scale,
   offsetX,
   offsetY,
+  children,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -272,6 +275,7 @@ export const MediaPlayerCanvasOverlay: React.FC<MediaPlayerCanvasOverlayProps> =
           {Math.round(currentSelection.width)} \u00d7 {Math.round(currentSelection.height)}
         </div>
       )}
+      {children}
     </div>
   );
 };

@@ -43,17 +43,18 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Grafana-like dark theme colors
+        // Grafana-like dark theme colors - aligned to mandated palette
+        // Dark Charcoal (#161616) and Grayish-Black Slate (#1e1e1e)
         grafana: {
-          bg: "#1f1f1f",
-          panel: "#2d2d2d",
-          border: "#3a3a3a",
-          text: "#e0e0e0",
-          textMuted: "#9ca3af",
-          primary: "#268bd2",
-          success: "#2ecc71",
-          warning: "#f39c12",
-          danger: "#e74c3c",
+          bg: "#161616",
+          panel: "#1e1e1e",
+          border: "#2a2a2a",
+          text: "#e8eaed",
+          textMuted: "#9aa0aa",
+          primary: "#ff6500",
+          success: "#22c55e",
+          warning: "#fbbf24",
+          danger: "#ef4444",
         },
       },
       borderRadius: {
