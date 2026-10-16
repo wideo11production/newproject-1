@@ -70,6 +70,8 @@ import { ExpressionsPanel } from './panels/expressions-panel';
 import { trackClick, startClickTracking } from '@/lib/click-tracker';
 import { PluginsPanel } from './panels/plugins-panel';
 import { ProjectPanel } from './panels/project-panel';
+import { FrameTemplateEditor } from './frame-template/FrameTemplateEditor';
+import type { FrameTemplate } from '../lib/engine/types';
 import {
   SamplesPanel,
   BackgroundsPanel,
@@ -226,6 +228,10 @@ export function VideoEditor() {
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
 const [showAuraStudio, setShowAuraStudio] = useState(false);
   const [showAIPromptStudio, setShowAIPromptStudio] = useState(false);
+  const [showFrameTemplateEditor, setShowFrameTemplateEditor] = useState(false);
+  const [frameTemplateClipId, setFrameTemplateClipId] = useState<string | null>(null);
+  const [activeFrameTemplate, setActiveFrameTemplate] = useState<FrameTemplate | null>(null);
+  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [activePluginId, setActivePluginId] = useState<string | null>(null);
   const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
@@ -1935,8 +1941,24 @@ if (!mod) {
       settings: { name: projectName, width: resolution.width, height: resolution.height, fps, background },
       sources: compositorSources,
       masterVolume: settings.masterVolume,
+      activeFrameLayers:
+        showFrameTemplateEditor && activeFrameTemplate?.frames[activeFrameIndex]
+          ? activeFrameTemplate.frames[activeFrameIndex].layers
+          : undefined,
     }),
-    [tracks, transitions, projectName, resolution, fps, background, compositorSources, settings.masterVolume]
+    [
+      tracks,
+      transitions,
+      projectName,
+      resolution,
+      fps,
+      background,
+      compositorSources,
+      settings.masterVolume,
+      showFrameTemplateEditor,
+      activeFrameTemplate,
+      activeFrameIndex,
+    ]
   );
 
   const snapOptions: SnapOptionsProp = {
@@ -2929,6 +2951,22 @@ onToggleLoop={() =>
         onUnlink={() => selectedClip && toggleLink(selectedClip.id)}
       />
 
+      {/* Open Frame Template Editor for selected clip */}
+      {selectedClip && (
+        <div className="fixed bottom-6 left-6 z-50">
+          <button
+            onClick={() => {
+              setFrameTemplateClipId(selectedClip.id);
+              setShowFrameTemplateEditor(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#ff6500] text-white text-sm font-medium hover:bg-[#e55a00] transition-colors shadow-lg border border-[#ff6500]/40"
+          >
+            <Layers className="h-4 w-4" />
+            <span>Open Frame Template Editor</span>
+          </button>
+        </div>
+      )}
+
       <ExportDialog
         open={exportOpen}
         onClose={() => setExportOpen(false)}
@@ -3074,6 +3112,28 @@ onClose={() => setShowRecoverDialog(false)}
         patchClip={patchClip}
         setToast={setToast}
         setSelect={setSelect}
+      />
+
+      {/* Frame Template Editor — per-frame reusable template editor */}
+      <FrameTemplateEditor
+        isOpen={showFrameTemplateEditor}
+        onClose={() => setShowFrameTemplateEditor(false)}
+        clipId={frameTemplateClipId}
+        clipName={panelClip?.mediaName ?? 'Clip'}
+        clipDurationSeconds={panelClip?.duration ?? 5}
+        fps={settings.fps}
+        template={activeFrameTemplate}
+        activeFrameIndex={activeFrameIndex}
+        onTemplateCreated={(templateId) => {
+          setToast('Frame template created for clip');
+        }}
+        onTemplateUpdated={(templateId) => {
+          setToast('Frame template updated');
+        }}
+        onTemplateChange={(tpl, idx) => {
+          setActiveFrameTemplate(tpl ?? null);
+          setActiveFrameIndex(idx);
+        }}
       />
 
     </div>

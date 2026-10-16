@@ -306,6 +306,9 @@ export interface TimelineClip {
   /** Free-form effect names, kept for the effects list in the inspector. */
   effects: string[];
 
+  /** Reference to a FrameTemplate if this clip uses per-frame editing. */
+  frameTemplateId?: string | null;
+
   /** Video effects applied to this clip - processed by the compositor per-frame. */
   videoEffects?: VideoEffect[];
 
@@ -592,6 +595,7 @@ export function normaliseClip(raw: Partial<TimelineClip> & { id: string }): Time
     url: raw.url,
     poster: raw.poster,
     effects: raw.effects ?? [],
+    frameTemplateId: raw.frameTemplateId ?? null,
     videoEffects: raw.videoEffects ?? [],
     expressions: raw.expressions ?? {},
     sourceIn: raw.sourceIn ?? 0,

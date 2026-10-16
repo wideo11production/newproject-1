@@ -28,6 +28,16 @@
 // Reversing it means a failed revoke leaves the user still signed IN, which is
 // an honest and recoverable failure. A failed revoke that told them they were
 // signed out is not.
+//
+// =============================================================================
+// LOGOUT MUST CLEAR BOTH COOKIES
+// =============================================================================
+//
+// Logout that only clears `wideo11_session` leaves `wideo11_refresh` alive.
+// The next login then finds a stale refresh token and the user is effectively
+// still signed in. Clear BOTH so logout means logout.
+//
+// =============================================================================
 
 import { NextResponse } from 'next/server';
 
@@ -35,6 +45,21 @@ const AUTH_INTERNAL_URL =
   process.env.AUTH_INTERNAL_URL ?? 'http://auth-service:8085';
 
 const SESSION_COOKIE = 'wideo11_session';
+const REFRESH_COOKIE = 'wideo11_refresh';
+
+/**
+ * Should the session cookie be marked Secure?
+ *
+ * Same rule as login: was THIS request encrypted, never "are we a production
+ * build". If login set `secure: false` (plain http), logout must also use
+ * `secure: false` or the browser keeps two cookies with different scopes and
+ * the user stays "signed in" after logout.
+ */
+function shouldBeSecure(req: Request, nextUrl: URL): boolean {
+  const forwarded = req.headers.get('x-forwarded-proto');
+  if (forwarded) return forwarded.split(',')[0].trim() === 'https';
+  return nextUrl.protocol === 'https:';
+}
 
 export async function POST(request: Request) {
   const cookieHeader = request.headers.get('cookie') ?? '';
@@ -54,9 +79,6 @@ export async function POST(request: Request) {
 
   if (token) {
     try {
-      // The session is DEVICE-scoped: this revokes the token the browser is
-      // holding, and nothing else. A person signed in on their phone stays
-      // signed in there, which is why the user menu says so in plain words.
       const res = await fetch(`${AUTH_INTERNAL_URL}/api/v1/auth/logout`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -65,27 +87,34 @@ export async function POST(request: Request) {
       revoked = res.ok;
       detail = res.ok ? 'session revoked' : `auth-service returned ${res.status}`;
     } catch (e) {
-      // NOT fatal, and the cookie is still cleared below.
-      //
-      // The alternative is the worst outcome available: the user cannot sign out
-      // at all because a dependency is down. Clearing the cookie locally still
-      // stops THIS browser from sending it, which is the part the user asked
-      // for; the server-side row is left to expire.
       detail = `auth-service unreachable: ${e instanceof Error ? e.message : 'unknown'}`;
     }
   }
 
   const res = NextResponse.json({ ok: true, revoked, detail });
 
+  const nextUrl = new URL(request.url);
+  const secure = shouldBeSecure(request, nextUrl);
+
+  // Clear BOTH session AND refresh cookies. Logout that only clears the session
+  // leaves the refresh token alive, so the user is still "logged in" on the next
+  // page load and cannot truly sign out.
   res.cookies.set({
     name: SESSION_COOKIE,
     value: '',
-    // The flags MUST match the ones login used, or the browser keeps a second
-    // cookie with the same name and a different scope - and the user stays
-    // "signed in" to a route that never sees the new one.
     httpOnly: true,
     sameSite: 'lax',
-    secure: false, // dev is plain http; login uses shouldBeSecure()
+    secure,
+    path: '/',
+    maxAge: 0,
+  });
+
+  res.cookies.set({
+    name: REFRESH_COOKIE,
+    value: '',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
     path: '/',
     maxAge: 0,
   });

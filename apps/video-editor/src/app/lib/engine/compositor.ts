@@ -53,6 +53,7 @@ import {
   type TimelineTrack,
   type Transition,
   type VideoEffect,
+  type FrameLayer,
 } from './types';
 import { applyTransition, transitionAt } from './transitions';
 import { attachMedia, applyEffects, resumeAudio } from './audio-graph';
@@ -66,6 +67,15 @@ import { waterReflectionParamsFromClip, waterReflectionOffset } from './effects/
 const SEEK_EPSILON_PAUSED = 0.02;
 const SEEK_EPSILON_PLAYING = 0.45;
 
+/** Hash a string to a hue value 0..360 for consistent layer colors. */
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return Math.abs(hash % 360);
+}
+
 export interface CompositorState {
   tracks: TimelineTrack[];
   transitions: Transition[];
@@ -74,6 +84,8 @@ export interface CompositorState {
   sources: Map<string, { url: string; kind: string }>;
   /** Master output level, 0..1. Second stage, after every clip and track. */
   masterVolume: number;
+  /** Optional active frame template layers to render on top of all clips. */
+  activeFrameLayers?: FrameLayer[];
 }
 
 interface ClipRuntime {
@@ -649,6 +661,46 @@ export class Compositor {
       const clip = clipAt(track, t);
       if (!clip) continue;
       this.paintBranding(clip, ctx, W, H);
+    }
+
+    // Frame template layers on top of everything (per-frame editing overlay).
+    const layers = state.activeFrameLayers?.filter((l) => l.visible) ?? [];
+    if (layers.length > 0) {
+      const sortedLayers = [...layers].sort((a, b) => a.zIndex - b.zIndex);
+      for (const layer of sortedLayers) {
+        ctx.save();
+        const cx = (layer.transform.x ?? 0.5) * W;
+        const cy = (layer.transform.y ?? 0.5) * H;
+        const lw = W * (layer.transform.scale ?? 1);
+        const lh = H * (layer.transform.scale ?? 1);
+        ctx.translate(cx, cy);
+        ctx.rotate(((layer.transform.rotation ?? 0) * Math.PI) / 180);
+        ctx.scale(layer.transform.scale ?? 1, layer.transform.scale ?? 1);
+        ctx.translate(-cx, -cy);
+        ctx.globalAlpha = layer.opacity ?? 1;
+
+        if (layer.type === 'text') {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 32px system-ui';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(layer.content || 'TEXT', cx, cy);
+        } else {
+          const hue = hashString(layer.id);
+          ctx.fillStyle = `hsl(${hue} 60% 40%)`;
+          ctx.fillRect(cx - lw / 2, cy - lh / 2, lw, lh);
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(cx - lw / 2, cy - lh / 2, lw, lh);
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 24px system-ui';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(layer.type.toUpperCase(), cx, cy);
+        }
+
+        ctx.restore();
+      }
     }
 
     // Audio is not a drawing, but it is part of "this frame": elements that
