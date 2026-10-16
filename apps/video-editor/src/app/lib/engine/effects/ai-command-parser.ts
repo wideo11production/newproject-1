@@ -233,11 +233,11 @@ export function buildVideoEffect(
 
 export function mergeEffectParams(
   effect: VideoEffect,
-  updates: Partial<ChromaKeyParams | WaterRippleParams | WaterReflectionParams | BackgroundRemoveParams>
+  updates: Partial<Record<string, number | string | boolean>>
 ): VideoEffect {
   return {
     ...effect,
-    params: { ...effect.params, ...updates },
+    params: { ...effect.params, ...updates } as Record<string, number | string | boolean>,
     appliedAt: Date.now(),
   };
 }

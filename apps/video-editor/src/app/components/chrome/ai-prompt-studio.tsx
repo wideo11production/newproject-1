@@ -303,7 +303,7 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
 
   if (!isOpen) return null;
 
-  const targetDisplayName = panelClip?.mediaName || (clipIds()[0] ? 'first clip on timeline' : 'no clips');
+  const targetDisplayName = panelClip?.mediaName || (allClipIds()[0] ? 'first clip on timeline' : 'no clips');
 
   return (
     <div

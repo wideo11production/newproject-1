@@ -327,6 +327,44 @@ function drawText(
     ctx.restore();
   }
 
+export class Compositor {
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private state: CompositorState | null = null;
+  private runtimes = new Map<string, ClipRuntime>();
+  private scratchA: HTMLCanvasElement;
+  private scratchB: HTMLCanvasElement;
+
+  constructor(canvas: HTMLCanvasElement) {
+    const ctx = canvas.getContext('2d', { alpha: false });
+    if (!ctx) throw new Error('2D canvas context unavailable - the preview cannot render without it');
+    this.canvas = canvas;
+    this.ctx = ctx;
+    this.scratchA = document.createElement('canvas');
+    this.scratchB = document.createElement('canvas');
+    // Published for the timeline's filmstrip. Cleared on dispose so a torn-down
+    // compositor is never reachable.
+    Compositor.live = this;
+  }
+
+  get width(): number {
+    return this.canvas.width;
+  }
+
+  get height(): number {
+    return this.canvas.height;
+  }
+
+  /** Point the compositor at a canvas of a different size (export, resize). */
+  resize(width: number, height: number) {
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.scratchA.width = width;
+    this.scratchA.height = height;
+    this.scratchB.width = width;
+    this.scratchB.height = height;
+  }
+
   // ============================================================================
   // VIDEO EFFECTS - Applied per-clip during compositing
   // ============================================================================
@@ -365,11 +403,9 @@ function drawText(
         }
         case 'water-reflection': {
           // Water reflection is drawn as an overlay below the clip, not on the clip itself
-          // Handled in paint() after the clip is drawn
           break;
         }
         default:
-          // Unknown effect type - skip
           break;
       }
     }
@@ -479,44 +515,6 @@ function drawText(
 
     data.set(temp);
     ctx.putImageData(imageData, x, y);
-  }
-
-export class Compositor {
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private state: CompositorState | null = null;
-  private runtimes = new Map<string, ClipRuntime>();
-  private scratchA: HTMLCanvasElement;
-  private scratchB: HTMLCanvasElement;
-
-  constructor(canvas: HTMLCanvasElement) {
-    const ctx = canvas.getContext('2d', { alpha: false });
-    if (!ctx) throw new Error('2D canvas context unavailable - the preview cannot render without it');
-    this.canvas = canvas;
-    this.ctx = ctx;
-    this.scratchA = document.createElement('canvas');
-    this.scratchB = document.createElement('canvas');
-    // Published for the timeline's filmstrip. Cleared on dispose so a torn-down
-    // compositor is never reachable.
-    Compositor.live = this;
-  }
-
-  get width(): number {
-    return this.canvas.width;
-  }
-
-  get height(): number {
-    return this.canvas.height;
-  }
-
-  /** Point the compositor at a canvas of a different size (export, resize). */
-  resize(width: number, height: number) {
-    this.canvas.width = width;
-    this.canvas.height = height;
-    this.scratchA.width = width;
-    this.scratchA.height = height;
-    this.scratchB.width = width;
-    this.scratchB.height = height;
   }
 
   update(state: CompositorState) {
@@ -1256,3 +1254,4 @@ function loadImage(url: string): HTMLImageElement {
   }
   return img;
 }
+

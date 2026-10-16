@@ -14,10 +14,57 @@ const SESSION_COOKIE = "wideo11_session";
 export const dynamic = "force-dynamic";
 
 const MAX_FPS_CAPABILITY = "max_fps";
+const EXPORT_HEIGHT_CAPABILITY = "export_height";
+const CONCURRENT_TRANSCODES_CAPABILITY = "concurrent_transcodes";
+const MEDIA_ASSETS_CAPABILITY = "media_assets";
+const REEL_ASSETS_CAPABILITY = "reel_assets";
+const SAVE_PROJECTS_CAPABILITY = "save_projects";
+const MONETIZATION_CAPABILITY = "monetization";
+
 const FALLBACK_MAX_FPS = 60;
+const FALLBACK_EXPORT_HEIGHT = 720;
+const FALLBACK_CONCURRENT_TRANSCODES = 1;
+const FALLBACK_MEDIA_ASSETS = 0;
+const FALLBACK_REEL_ASSETS = 0;
+const FALLBACK_SAVE_PROJECTS = 0;
+const FALLBACK_MONETIZATION = 0;
+
+interface PlanLimits {
+  maxFps: number;
+  exportHeight: number;
+  concurrentTranscodes: number;
+  mediaAssets: number;
+  reelAssets: number;
+  saveProjects: number;
+  monetization: boolean;
+}
+
+function readPlanLimits(raw: any): PlanLimits {
+  const limits = raw?.limits ?? {};
+  const toNum = (v: unknown, def: number): number => {
+    const n = typeof v === "string" ? Number(v) : v;
+    return typeof n === "number" && Number.isFinite(n) && n > 0 ? n : def;
+  };
+  return {
+    maxFps: toNum(limits[MAX_FPS_CAPABILITY], FALLBACK_MAX_FPS),
+    exportHeight: toNum(limits[EXPORT_HEIGHT_CAPABILITY], FALLBACK_EXPORT_HEIGHT),
+    concurrentTranscodes: toNum(
+      limits[CONCURRENT_TRANSCODES_CAPABILITY],
+      FALLBACK_CONCURRENT_TRANSCODES
+    ),
+    mediaAssets: toNum(limits[MEDIA_ASSETS_CAPABILITY], FALLBACK_MEDIA_ASSETS),
+    reelAssets: toNum(limits[REEL_ASSETS_CAPABILITY], FALLBACK_REEL_ASSETS),
+    saveProjects: toNum(limits[SAVE_PROJECTS_CAPABILITY], FALLBACK_SAVE_PROJECTS),
+    monetization: toNum(limits[MONETIZATION_CAPABILITY], FALLBACK_MONETIZATION) > 0,
+  };
+}
 
 async function readPlan(authHeaders: Record<string, string>) {
-  const fallback = { plan: "", planName: "", maxFps: FALLBACK_MAX_FPS };
+  const fallback = {
+    plan: "",
+    planName: "",
+    ...readPlanLimits(null),
+  };
   try {
     const res = await fetch(`${AUTH_INTERNAL_URL}/api/v1/auth/me/entitlements`, {
       headers: authHeaders,
@@ -27,12 +74,11 @@ async function readPlan(authHeaders: Record<string, string>) {
     const body = (await res.json().catch(() => null)) as any;
     if (!body) return fallback;
 
-    const raw = body.limits?.[MAX_FPS_CAPABILITY];
-    const n = typeof raw === "string" ? Number(raw) : raw;
+    const limits = readPlanLimits(body.limits);
     return {
       plan: typeof body.plan === "string" ? body.plan : "",
       planName: typeof body.plan_name === "string" ? body.planName : "",
-      maxFps: typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : FALLBACK_MAX_FPS,
+      ...limits,
     };
   } catch {
     return fallback;
@@ -93,6 +139,12 @@ export async function GET() {
       plan: plan.plan || "lifetime_aura",
       planName: plan.planName || "Lifetime AURA",
       maxFps: 240,
+      exportHeight: 2160,
+      concurrentTranscodes: 8,
+      mediaAssets: -1,
+      reelAssets: -1,
+      saveProjects: -1,
+      monetization: true,
     };
   }
 

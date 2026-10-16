@@ -42,6 +42,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { normalizeMaxFps, DEFAULT_MAX_FPS } from './plan';
 
+const FALLBACK_EXPORT_HEIGHT = 720;
+const FALLBACK_CONCURRENT_TRANSCODES = 1;
+const FALLBACK_MEDIA_ASSETS = 0;
+const FALLBACK_REEL_ASSETS = 0;
+const FALLBACK_SAVE_PROJECTS = 0;
+
 /** Where the user is in the access sequence. */
 export type SessionState = 'loading' | 'out' | 'needs_verification' | 'needs_setup' | 'ready';
 
@@ -61,20 +67,28 @@ export interface Session {
    */
   avatarUrl: string;
   /**
-   * The plan CODE and its label, plus the timeline frame-rate ceiling.
+   * The plan CODE and its label, plus the timeline frame-rate ceiling and other
+   * plan-gated capabilities.
    *
-   * The ceiling is the only one of the three the editor branches on. The code
-   * and label are carried so the UI can say "you are on Lifetime AURA" without
-   * hardcoding a name, and so an operator debugging a missing 120fps option can
-   * see which plan was actually resolved rather than guessing.
+   * `maxFps` is the ceiling the editor branches on for frame-rate dropdowns and
+   * playback speeds. `exportHeight` is the maximum export resolution the plan
+   * grants (720 for trial, 1080/2160 for paid). `concurrentTranscodes` caps how
+   * many in-flight ffmpeg jobs this account may hold. `mediaAssets`/`reelAssets`
+   * are upload quotas. `saveProjects` is how many projects may be persisted.
+   * `monetization` is whether the account may earn from ad revenue.
    *
-   * Defaults to 60 — the trial's ceiling — until the server answers. That is
-   * the state the hydration render sees too, so a slow plan read shows the
-   * editor correctly at 60 rather than flashing rates the plan may not grant.
+   * All defaults are the trial's: 60fps, 720p export, 1 concurrent transcode,
+   * zero asset quotas, no monetization — fail closed.
    */
   plan: string;
   planName: string;
   maxFps: number;
+  exportHeight: number;
+  concurrentTranscodes: number;
+  mediaAssets: number;
+  reelAssets: number;
+  saveProjects: number;
+  monetization: boolean;
 }
 
 const INITIAL: Session = {
@@ -86,6 +100,12 @@ const INITIAL: Session = {
   plan: '',
   planName: '',
   maxFps: DEFAULT_MAX_FPS,
+  exportHeight: FALLBACK_EXPORT_HEIGHT,
+  concurrentTranscodes: FALLBACK_CONCURRENT_TRANSCODES,
+  mediaAssets: FALLBACK_MEDIA_ASSETS,
+  reelAssets: FALLBACK_REEL_ASSETS,
+  saveProjects: FALLBACK_SAVE_PROJECTS,
+  monetization: false,
 };
 
 const SIGNED_OUT: Session = {
@@ -97,6 +117,12 @@ const SIGNED_OUT: Session = {
   plan: '',
   planName: '',
   maxFps: DEFAULT_MAX_FPS,
+  exportHeight: FALLBACK_EXPORT_HEIGHT,
+  concurrentTranscodes: FALLBACK_CONCURRENT_TRANSCODES,
+  mediaAssets: FALLBACK_MEDIA_ASSETS,
+  reelAssets: FALLBACK_REEL_ASSETS,
+  saveProjects: FALLBACK_SAVE_PROJECTS,
+  monetization: false,
 };
 
 /**
@@ -123,6 +149,12 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
         plan?: string;
         planName?: string;
         maxFps?: number;
+        exportHeight?: number;
+        concurrentTranscodes?: number;
+        mediaAssets?: number;
+        reelAssets?: number;
+        saveProjects?: number;
+        monetization?: boolean;
       };
       setSession({
         state: body.state ?? 'out',
@@ -133,6 +165,12 @@ export function useSession(): { session: Session; refresh: () => Promise<void> }
         plan: body.plan ?? '',
         planName: body.planName ?? '',
         maxFps: normalizeMaxFps(body.maxFps),
+        exportHeight: typeof body.exportHeight === 'number' ? body.exportHeight : FALLBACK_EXPORT_HEIGHT,
+        concurrentTranscodes: typeof body.concurrentTranscodes === 'number' ? body.concurrentTranscodes : FALLBACK_CONCURRENT_TRANSCODES,
+        mediaAssets: typeof body.mediaAssets === 'number' ? body.mediaAssets : FALLBACK_MEDIA_ASSETS,
+        reelAssets: typeof body.reelAssets === 'number' ? body.reelAssets : FALLBACK_REEL_ASSETS,
+        saveProjects: typeof body.saveProjects === 'number' ? body.saveProjects : FALLBACK_SAVE_PROJECTS,
+        monetization: body.monetization === true,
       });
     } catch {
       setSession(SIGNED_OUT);
