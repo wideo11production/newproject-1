@@ -68,6 +68,7 @@ export function PreviewCanvas({
   onEnded,
   onCanvasReady,
   onNeedPeaks,
+  onHoverClipFrame,
 }: {
   tracks: TimelineTrack[];
   transitions: Transition[];
@@ -91,6 +92,8 @@ export function PreviewCanvas({
   onEnded: () => void;
   onCanvasReady: (canvas: HTMLCanvasElement | null) => void;
   onNeedPeaks: (mediaId: string, url: string) => void;
+  /** Called with the frame WITHIN the hovered clip while hovering. */
+  onHoverClipFrame?: (frame: number) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const compositorRef = useRef<Compositor | null>(null);
@@ -227,9 +230,11 @@ export function PreviewCanvas({
       // frames. The symptom reads as "the logo is broken"; the cause was that
       // two different code paths were deciding what is on screen.
       setHasPictureIfChanged(true);
-      const step = () => {
+    const step = () => {
         const elapsed = (performance.now() - hoverClock.current.wall) / 1000;
-        compositorRef.current?.renderClipOnly(previewClip, frameToSeconds(Math.round(elapsed * fps), fps), true);
+        const frame = Math.round(elapsed * fps);
+        compositorRef.current?.renderClipOnly(previewClip, frameToSeconds(frame, fps), true);
+        onHoverClipFrame?.(frame);
         rafRef.current = requestAnimationFrame(step);
       };
       rafRef.current = requestAnimationFrame(step);

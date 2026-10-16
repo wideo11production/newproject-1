@@ -50,8 +50,7 @@ export function FrameStrip({
   onToggleSizeLock,
   store,
 }: FrameStripProps) {  const [thumbnailWidth, setThumbnailWidth] = useState<number>(template?.frameSize.width ?? DEFAULT_FRAME_SIZE.width);
-  const [thumbnailHeight, setThumbnailHeight] = useState<number>(template?.frameSize.height ?? DEFAULT_FRAME_SIZE.height);
-  const [isResizing, setIsResizing] = useState(false);
+  const [thumbnailHeight, setThumbnailHeight] = useState<number>(template?.frameSize.height ?? DEFAULT_FRAME_SIZE.height);  const [isResizing, setIsResizing] = useState(false);
   const [resizeDir, setResizeDir] = useState<ResizeDirection | null>(null);
 
   const frames = template?.frames ?? [];
@@ -182,11 +181,18 @@ export function FrameStrip({
                 }}
               >
                 {/* Frame content placeholder - shows layer count */}
-                <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]/80">
+                <div className="absolute inset-0 flex items-center justify-center bg-[#1a1a1a]/95 border border-[#2a2a2a]/50">
                   <div className="flex flex-col items-center gap-1">
-                    <span className="text-[10px] font-bold text-white">{frame.index + 1}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ff6500] text-[8px] font-bold text-white shadow-lg">
+                        {frame.index + 1}
+                      </span>
+                    </div>
                     {frame.layers.length > 0 && (
-                      <span className="text-[9px] text-[#ff6500]">{frame.layers.length} layer{frame.layers.length > 1 ? 's' : ''}</span>
+                      <div className="flex h-4 items-center gap-1 rounded bg-[#2a2a2a] px-1.5 py-0.5">
+                        <span className="text-[8px] font-medium text-[#ff6500]">{frame.layers.length}</span>
+                        <span className="text-[8px] text-gray-400">L</span>
+                      </div>
                     )}
                   </div>
                 </div>

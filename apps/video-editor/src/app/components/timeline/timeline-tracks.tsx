@@ -539,6 +539,10 @@ interface TimelineTracksProps {
   /** Roll the cut between two adjacent clips. */
   onRoll: (trackId: string, leftId: string, rightId: string, deltaFrames: number) => void;
   onHoverClip: (clip: TimelineClip | null) => void;
+  /** Current frame WITHIN the hovered clip, for the playhead indicator on hover. */
+  hoverClipFrame: number | null;
+  /** ID of the hovered clip, so we know which clip to draw the playhead on. */
+  hoverClipId: string | null;
   onBladeReady: (fn: () => string | null) => void;
   onToggleTrack: (trackId: string, key: 'muted' | 'visible' | 'locked' | 'solo') => void;
   onTrackVolume: (trackId: string, volume: number) => void;
@@ -617,6 +621,8 @@ export function TimelineTracks({
   selectedIdsCount,
   clipboardHasContent,
   onContextAction,
+  hoverClipId,
+  hoverClipFrame,
 }: TimelineTracksProps) {
   const laneRef = useRef<HTMLDivElement>(null);
   const laneEls = useRef(new Map<string, HTMLDivElement>());
@@ -1282,6 +1288,20 @@ export function TimelineTracks({
                     blank.
                   */}
                   <ClipFilmstrip clip={clip} rowHeight={rowH} />
+
+                  {/* Hover playhead indicator: a thin vertical line showing where
+                      the preview is within the hovered clip. Matches Movavi's
+                      hover-preview behaviour: hover a thumbnail, see it play in
+                      the preview pane, and see a playhead on the thumbnail itself
+                      showing exactly which frame is being previewed. */}
+                  {hoverClipId === clip.id && hoverClipFrame !== null && (
+                    <span
+                      className="pointer-events-none absolute left-0 top-0 bottom-0 w-[1px] bg-[#ff6500] z-20"
+                      style={{
+                        left: Math.round(((hoverClipFrame - startFrame) / lengthFrames) * width),
+                      }}
+                    />
+                  )}
 
                   {clip.poster && !clip.url && (
                     // eslint-disable-next-line @next/next/no-img-element

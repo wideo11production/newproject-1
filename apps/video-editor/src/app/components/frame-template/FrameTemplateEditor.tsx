@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, Maximize, Minimize, Layers, Save, Bot, Zap, MessageSquare, Send } from 'lucide-react';
+import { ChevronLeft, Maximize, Minimize, Layers, Save, Bot, Zap, MessageSquare, Send, Scissors, Undo, Redo, Copy, ClipboardPaste, Trash2, Play as PlayIcon, Pause as PauseIcon, RotateCw, RotateCcw } from 'lucide-react';
 import type { FrameTemplate, FrameLayer } from '../../lib/engine/types';
 import { DEFAULT_FRAME_SIZE, MAX_LAYERS_PER_FRAME, createBlankFrameTemplate } from '../../lib/engine/types';
 import { createFrameTemplateStore } from '../../lib/engine/frame-template/store';
@@ -240,8 +240,8 @@ export function FrameTemplateEditor({
         if (dir.includes('s')) newHeight = startHeight + dy;
         if (dir.includes('n')) newHeight = startHeight - dy;
 
-        newWidth = Math.max(600, Math.min(1400, newWidth));
-        newHeight = Math.max(500, Math.min(900, newHeight));
+        newWidth = Math.max(500, Math.min(1100, newWidth));
+        newHeight = Math.max(400, Math.min(700, newHeight));
 
         setDialogWidth(newWidth);
         setDialogHeight(newHeight);
@@ -360,7 +360,7 @@ export function FrameTemplateEditor({
     <div className="fixed inset-0 z-[70] flex flex-col bg-[#0a0a0a]" onClick={(e) => e.stopPropagation()}>
       {/* Resizable Dialog Container */}
       <div
-        className="relative mx-auto mt-10 mb-10 w-[900px] h-[700px] max-w-[1400px] max-h-[900px] bg-[#121212] border border-[#2a2a2a] shadow-2xl overflow-hidden flex flex-col"
+        className="relative mx-auto mt-8 mb-8 w-[700px] h-[520px] max-w-[1200px] max-h-[800px] bg-[#121212] border border-[#2a2a2a] shadow-2xl overflow-hidden flex flex-col"
         style={{ width: dialogWidth, height: dialogHeight }}
       >
         {/* Dialog resize handles - all sides and corners */}
@@ -375,6 +375,7 @@ export function FrameTemplateEditor({
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-[#1a1a1a] border-b border-[#2a2a2a] z-10">
+          {/* Left: Back + Template info */}
           <div className="flex items-center gap-3">
             <button onClick={handleClose} className="flex items-center gap-2 px-3 py-1.5 rounded bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400 hover:text-white transition-colors">
               <ChevronLeft className="h-4 w-4" />
@@ -391,6 +392,50 @@ export function FrameTemplateEditor({
               </div>
             </div>
           </div>
+
+          {/* Center: Timeline toolbar icons (copy-paste from timeline toolbar) */}
+          <div className="flex items-center gap-1 bg-[#1a1a1a] border border-[#2a2a2a] rounded-md p-1">
+            <button
+              onClick={() => setDialogIsResizing(false)}
+              title="Undo"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <Undo className="h-4 w-4" />
+            </button>
+            <button
+              title="Redo"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <Redo className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => handleAddLayer('image')}
+              title="Add Image Layer"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <Scissors className="h-4 w-4" />
+            </button>
+            <button
+              title="Copy Layer"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
+              title="Paste Layer"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <ClipboardPaste className="h-4 w-4" />
+            </button>
+            <button
+              title="Delete Layer"
+              className="w-8 h-8 rounded bg-[#1a1a1a] hover:bg-[#ff6500]/10 hover:text-[#ff6500] text-gray-400 transition-colors flex items-center justify-center"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Right: AI, Maximize, Export */}
           <div className="flex items-center gap-2">
             <button onClick={() => setAiPanelOpen(!aiPanelOpen)} className={`w-8 h-8 rounded bg-[#1a1a1a] border border-[#2a2a2a] text-gray-400 hover:text-white transition-colors flex items-center justify-center ${aiPanelOpen ? 'bg-[#ff6500]/20 border-[#ff6500]/50 text-[#ff6500]' : ''}`} title="AI Chat">
               <Bot className="h-4 w-4" />

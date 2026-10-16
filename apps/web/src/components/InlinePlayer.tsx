@@ -49,6 +49,10 @@ import {
   Music,
   AlertCircle,
   Check,
+  ThumbsUp,
+  ThumbsDown,
+  Share2,
+  Download,
 } from 'lucide-react';
 import { formatDuration } from '@/lib/media-upload';
 
@@ -115,12 +119,17 @@ export function InlinePlayer({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [playError, setPlayError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   const [playbackRate, setPlaybackRate] = useState(1);
   const [quality, setQuality] = useState('auto');
   const [levels, setLevels] = useState<QualityOption[]>([]);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+
+  const [likes, setLikes] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [disliked, setDisliked] = useState(false);
 
   const isAudio = asset?.kind === 'audio';
   const src = asset?.hls_url ?? '';
@@ -290,6 +299,49 @@ export function InlinePlayer({
     video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + delta));
   }, []);
 
+  const toggleLike = useCallback(() => {
+    if (liked) {
+      setLikes((l) => Math.max(0, l - 1));
+      setLiked(false);
+    } else {
+      setLikes((l) => l + 1);
+      setLiked(true);
+      setDisliked(false);
+    }
+  }, [liked, disliked]);
+
+  const toggleDislike = useCallback(() => {
+    if (disliked) {
+      setDisliked(false);
+    } else {
+      setDisliked(true);
+      if (liked) {
+        setLikes((l) => Math.max(0, l - 1));
+        setLiked(false);
+      }
+    }
+  }, [liked, disliked]);
+
+  const handleShare = useCallback(() => {
+    const url = asset?.watch_href ?? window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: asset?.filename, url }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        /* copied silently - UI could show a toast, but a silent copy is fine */
+      });
+    }
+  }, [asset]);
+
+  const handleDownload = useCallback(() => {
+    const url = asset?.watch_href ?? asset?.hls_url;
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = asset?.filename ?? 'video';
+    a.click();
+  }, [asset]);
+
   if (!asset) return null;
 
   const atBottom = duration > 0 && currentTime >= duration - 0.35;
@@ -402,6 +454,19 @@ export function InlinePlayer({
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-center">
                 <AlertCircle className="h-8 w-8 text-red-400" />
                 <p className="px-4 text-xs text-red-200">{playError}</p>
+                <button
+                  onClick={() => {
+                    setRetryCount((c) => c + 1);
+                    setPlayError(null);
+                    setLoading(true);
+                    // Trigger hls.js reload by toggling src - the effect will re-run
+                    videoRef.current?.removeAttribute('src');
+                    videoRef.current?.load();
+                  }}
+                  className="rounded bg-[#ff6500]/20 border border-[#ff6500]/50 px-3 py-1 text-[11px] text-[#ff6500] hover:bg-[#ff6500]/40 transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             ) : null}
 
@@ -622,6 +687,45 @@ export function InlinePlayer({
             >
               {isFullscreen ? <Minimize className="h-[18px] w-[18px]" /> : <Maximize className="h-[18px] w-[18px]" />}
             </button>
+
+            {/* ---- YouTube-style engagement actions ---- */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleLike}
+                className={`rounded p-1.5 transition-colors ${liked ? `${productAccentBg} text-[#ff6500]` : `${productTextMuted} ${productPanelHover} hover:text-white`}`}
+                aria-label={liked ? 'Liked' : 'Like'}
+                title={liked ? 'Liked' : 'Like'}
+              >
+                <ThumbsUp className="h-[18px] w-[18px]" />
+              </button>
+              <span className={`ml-0.5 text-[11px] font-medium ${liked ? 'text-[#ff6500]' : productTextMuted}`}>
+                {likes}
+              </span>
+              <button
+                onClick={toggleDislike}
+                className={`rounded p-1.5 transition-colors ${disliked ? 'text-red-500' : `${productTextMuted} ${productPanelHover} hover:text-white`}`}
+                aria-label={disliked ? 'Disliked' : 'Dislike'}
+                title={disliked ? 'Disliked' : 'Dislike'}
+              >
+                <ThumbsDown className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                onClick={handleShare}
+                className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
+                aria-label="Share"
+                title="Share"
+              >
+                <Share2 className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                onClick={handleDownload}
+                className={`rounded p-1.5 ${productTextMuted} transition-colors ${productPanelHover} hover:text-white`}
+                aria-label="Download"
+                title="Download"
+              >
+                <Download className="h-[18px] w-[18px]" />
+              </button>
+            </div>
           </div>
 
           {/* end-of-video affordance */}

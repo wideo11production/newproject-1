@@ -237,6 +237,7 @@ const [showAuraStudio, setShowAuraStudio] = useState(false);
   const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
   const [previewClip, setPreviewClip] = useState<TimelineClip | null>(null);
+  const [hoverClipFrame, setHoverClipFrame] = useState<number | null>(null);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
   const [hoveredFrameIndex, setHoveredFrameIndex] = useState<number | null>(null);
 
@@ -2445,6 +2446,7 @@ if (!mod) {
                 viewerLayout={settings.viewerLayout}
                 showBadge={settings.viewerBadge}
                 previewClip={previewClip}
+                onHoverClipFrame={setHoverClipFrame}
                 seekTo={seekTo}
                 onFrame={setPlayheadFrame}
                 onEnded={() => {
@@ -2704,6 +2706,8 @@ onToggleLoop={() =>
                 onMoveCommit={commitMove}
                 onRoll={onRoll}
                 onHoverClip={setPreviewClip}
+                hoverClipFrame={hoverClipFrame}
+                hoverClipId={previewClip?.id ?? null}
                 onBladeReady={setBlade}
                   onToggleTrack={toggleTrack}
                   onTrackVolume={trackVolume}
