@@ -69,6 +69,7 @@ import { AudioPanel } from './panels/audio-panel';
 import { ExpressionsPanel } from './panels/expressions-panel';
 import { trackClick, startClickTracking } from '@/lib/click-tracker';
 import { PluginsPanel } from './panels/plugins-panel';
+import { Layers } from 'lucide-react';
 import { ProjectPanel } from './panels/project-panel';
 import { FrameTemplateEditor } from './frame-template/FrameTemplateEditor';
 import type { FrameTemplate } from '../lib/engine/types';

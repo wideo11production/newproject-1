@@ -17,6 +17,8 @@ import type {
   FrameMask,
   FrameSize,
   TemplateStoreState,
+} from '../types';
+import {
   DEFAULT_FRAME_SIZE,
   MAX_LAYERS_PER_FRAME,
   MIN_FRAME_WIDTH,

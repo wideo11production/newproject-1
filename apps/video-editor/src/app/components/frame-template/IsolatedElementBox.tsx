@@ -17,8 +17,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Maximize, Minimize, RotateCcw, RotateCw, Copy, Check, ChevronLeft } from 'lucide-react';
-import type { FrameLayer, FrameMask, FrameTemplate } from '../../lib/engine/types';
+import { X, Maximize, Minimize, RotateCcw, RotateCw, Copy, Check, ChevronLeft, Trash2 } from 'lucide-react';
+import type { FrameLayer, FrameMask, FrameTemplate, Frame } from '../../lib/engine/types';
 
 interface IsolatedElementBoxProps {
   isOpen: boolean;
