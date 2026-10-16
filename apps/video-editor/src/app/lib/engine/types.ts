@@ -572,6 +572,7 @@ export const PROJECT_VERSION = 2;
 export const DEFAULT_TRACKS: TimelineTrack[] = [
   { id: 'v1', name: 'Video 1', type: 'video', role: 'base', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
   { id: 'a1', name: 'Audio 1', type: 'audio', role: 'base', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
+  { id: 'i1', name: 'Image 1', type: 'image', role: 'base', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
   { id: 't1', name: 'Text 1', type: 'text', role: 'overlay', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: false },
   { id: 'b1', name: 'Branding', type: 'branding', role: 'overlay', clips: [], volume: 1, muted: false, solo: false, visible: true, locked: true },
 ];

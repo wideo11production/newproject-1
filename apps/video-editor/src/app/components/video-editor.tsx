@@ -421,7 +421,7 @@ const [showAuraStudio, setShowAuraStudio] = useState(false);
     startTime: frameToSeconds(startFrame, fps),
     duration: frameToSeconds(lengthFramesN, fps),
     type,
-    thumbnail: item.kind === 'image' ? item.url : undefined,
+    thumbnail: item.kind === 'image' ? item.url : (item.poster ?? item.url),
     url: item.url,
     poster: item.poster ?? undefined,
     effects: [],

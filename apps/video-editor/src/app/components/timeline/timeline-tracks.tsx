@@ -1285,6 +1285,10 @@ export function TimelineTracks({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={clip.poster} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-45" />
                   )}
+                  {clip.type === 'image' && clip.url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={clip.url} alt="" className="pointer-events-none absolute inset-0 h-full w-full object-cover opacity-45" />
+                  )}
 
                   {waveformVisible && (clip.type === 'audio' || clip.type === 'video') && (
                     <Waveform peaks={clip.peaks} width={width} muted={clip.muted} />
