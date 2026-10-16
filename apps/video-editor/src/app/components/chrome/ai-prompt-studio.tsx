@@ -3,38 +3,77 @@
 // ============================================================================
 //
 // Hinglish: Ye ek premium floating AI prompt window hai jo video-editor
-// ke upper floating hota hai (z-index: 50), backdrop blur ke saath, jise user
-// local Ollama models ke saath direct AI interactions kar sake. Ye ek premium
-// feature hai jo editor ke andar se agar chahe to show ho sakti hai.
+// ke upper floating hota hai (z-index: 50), backdrop blur ke saath. User
+// natural language prompts likhta hai (e.g. "remove background", "add water
+// ripple", "save as template") aur AI usse automatically timeline clips par
+// apply karta hai.
 //
-// YE NIA NEW COMPONENT -- Use only when user wants prompt interface
-// ****************************************************************************
+// YE CONNECTS AI TO TIMELINE - prompts actually edit clips, not just advice.
+// ============================================================================
 
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Wifi, WifiOff, Zap, Edit3, Save, Play, Video, Wand2 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Textarea } from '@wideo11/ui/textarea';
-import type { TimelineClip } from '../../lib/engine/types';
+import type { TimelineClip, TimelineTrack, VideoEffect } from '../../lib/engine/types';
+import { parseAICommand, buildVideoEffect, AI_COMMAND_EXAMPLES, type ParsedCommand } from '../../lib/engine/effects/ai-command-parser';
+import { createTemplateStore, clipToTemplate, BUILTIN_TEMPLATES, type TemplateStore } from '../../lib/engine/effects/template-system';
 
 interface AIPromptStudioProps {
   isOpen: boolean;
   onClose: () => void;
   currentClip: TimelineClip | null;
   timelineTime: number;
+  /** The clip currently selected on the timeline (for applying effects). */
+  panelClip: TimelineClip | null;
+  /** All tracks - needed to find clip by ID and apply effects. */
+  tracks: TimelineTrack[];
+  /** Update a clip on the timeline (from video-editor.tsx). */
+  patchClip: (clipId: string, p: Partial<TimelineClip>, coalesceKey?: string) => void;
+  /** Show a toast notification. */
+  setToast: (msg: string) => void;
+  /** Select a clip on the timeline. */
+  setSelect: (ids: string[]) => void;
 }
 
-export function AIPromptStudio({ isOpen, onClose, currentClip, timelineTime }: AIPromptStudioProps) {
+export function AIPromptStudio({
+  isOpen,
+  onClose,
+  currentClip,
+  timelineTime,
+  panelClip,
+  tracks,
+  patchClip,
+  setToast,
+  setSelect,
+}: AIPromptStudioProps) {
   const [prompt, setPrompt] = useState<string>('');
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'ai'; content: string; timestamp: number }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState<'online' | 'offline' | 'checking'>('checking');
+  const [lastCommand, setLastCommand] = useState<ParsedCommand | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Template store (singleton for this session)
+  const templateStoreRef = useRef<TemplateStore | null>(null);
+  if (!templateStoreRef.current) templateStoreRef.current = createTemplateStore();
+  const templateStore = templateStoreRef.current;
+
+  // Seed built-in templates on first mount
+  useEffect(() => {
+    const existing = templateStore.getAllTemplates();
+    if (existing.length === 0) {
+      for (const t of BUILTIN_TEMPLATES) {
+        templateStore.addTemplate(t);
+      }
+    }
+  }, []);
 
   // Ollama connection configuration
   const OLLAMA_ENDPOINT = 'http://127.0.0.1:11434/api/generate';
-  const OLLAMA_MODELS = ['llama3']; // local model pulled into the named volume
+  const OLLAMA_MODELS = ['llama3'];
 
   // Check Ollama status on mount
   useEffect(() => {
@@ -53,21 +92,18 @@ export function AIPromptStudio({ isOpen, onClose, currentClip, timelineTime }: A
           const data = await response.json();
           if (data.models && data.models.length > 0) {
             setOllamaStatus('online');
-            console.log('✅ Ollama AI Online with models:', data.models.map((m: any) => m.name).join(', '));
           } else {
             setOllamaStatus('offline');
           }
         } else {
           setOllamaStatus('offline');
         }
-      } catch (error) {
-        console.log('❌ Ollama AI Offline:', error instanceof Error ? error.message : String(error));
+      } catch {
         setOllamaStatus('offline');
       }
     };
 
     checkOllamaStatus();
-    // Refresh status every 30 seconds
     const interval = setInterval(checkOllamaStatus, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -77,161 +113,197 @@ export function AIPromptStudio({ isOpen, onClose, currentClip, timelineTime }: A
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSubmit = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!prompt.trim() || isProcessing || ollamaStatus !== 'online') return;
+  /** Get all clip IDs across all tracks for command targeting. */
+  const allClipIds = useCallback(() => {
+    return tracks.flatMap((t) => t.clips.map((c) => c.id));
+  }, [tracks]);
 
-    const userMessage = {
-      role: 'user' as const,
-      content: prompt,
-      timestamp: Date.now(),
-    };
+  /** Find a clip by ID across all tracks. */
+  const findClip = useCallback(
+    (clipId: string): TimelineClip | null => {
+      for (const t of tracks) {
+        const c = t.clips.find((x) => x.id === clipId);
+        if (c) return c;
+      }
+      return null;
+    },
+    [tracks]
+  );
 
-    setMessages(prev => [...prev, userMessage]);
-    setPrompt('');
-    setIsProcessing(true);
-
-    try {
-      // Prepare context for AI prompt
-      const contextInfo = {
-        clipInfo: currentClip
-          ? {
-              id: currentClip.id,
-              name: currentClip.mediaName,
-              duration: currentClip.duration,
-              startTime: currentClip.startTime,
-              type: currentClip.type,
-            }
-          : null,
-        timelineTime: timelineTime,
-        projectInfo: {
-          timestamp: new Date().toISOString(),
-          user: 'advchashampalup@gmail.com', // superadmin
-          role: 'superadmin',
-        },
-      };
-
-      const systemPrompt = `
-You are an advanced video editor AI assistant with access to local Ollama models. 
-Context: Timeline: ${contextInfo.timelineTime}s, Clip: ${contextInfo.clipInfo?.name || 'None'}
-
-You can help with:
-- Video generation and editing commands
-- Timeline operations
-- Effects application
-- Export settings
-- Analysis and suggestions
-
-Respond with actionable commands that can be executed locally. 
-
-User Command: ${prompt}
-
-Execute locally with no API costs:
-      `;
-
-      const requestPayload = {
-        model: OLLAMA_MODELS[0], // Use first available model
-        prompt: systemPrompt,
-        stream: false,
-        options: {
-          temperature: 0.7,
-          num_predict: 1024,
-          num_ctx: 4096,
-          num_gpu: -1, // force CPU/GPU balance
-        },
-        format: 'json',
-      };
-
-const response = await fetch(OLLAMA_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestPayload),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status}`);
+  /** Apply a parsed command to the timeline. */
+  const executeCommand = useCallback(
+    async (cmd: ParsedCommand, userPrompt: string) => {
+      const clipIds = allClipIds();
+      if (clipIds.length === 0) {
+        setToast('No clips on timeline. Import a video first, then try again.');
+        return;
       }
 
-      const data = await response.json();
+      // Determine target clip: use selected panelClip, or first available
+      const targetClipId = panelClip?.id || clipIds[0];
+      const targetClip = findClip(targetClipId);
+      if (!targetClip) {
+        setToast('Selected clip not found on timeline.');
+        return;
+      }
 
-      const aiMessage = {
-        role: 'ai' as const,
-        content: data.response || 'No response from AI model',
+      switch (cmd.action) {
+        case 'apply-effect': {
+          if (!cmd.effectType) break;
+          const effect = buildVideoEffect(cmd.effectType, cmd.params || {}, userPrompt);
+          const nextEffects = [...(targetClip.videoEffects ?? []), effect];
+          patchClip(targetClip.id, { videoEffects: nextEffects }, `ai-effect:${cmd.effectType}`);
+          setLastCommand(cmd);
+          setToast(`✅ ${cmd.description} applied to "${targetClip.mediaName}"`);
+          break;
+        }
+
+        case 'remove-effect': {
+          patchClip(targetClip.id, { videoEffects: [] }, 'ai-remove-effect');
+          setLastCommand(cmd);
+          setToast(`✅ All effects removed from "${targetClip.mediaName}"`);
+          break;
+        }
+
+        case 'create-template': {
+          const tpl = clipToTemplate(targetClip, `AI Template ${Date.now()}`, undefined);
+          const id = templateStore.addTemplate(tpl);
+          setLastCommand(cmd);
+          setToast(`✅ Template "${tpl.name}" saved (${id.slice(-6)})`);
+          break;
+        }
+
+        case 'apply-template': {
+          const allTemplates = templateStore.getAllTemplates();
+          if (allTemplates.length === 0) {
+            setToast('No templates saved yet. Say "save as template" first.');
+            return;
+          }
+          // Apply the most recent template
+          const latest = allTemplates[allTemplates.length - 1];
+          const updatedClip = templateStore.applyTemplate(latest.id, targetClip);
+          patchClip(updatedClip.id, {
+            transform: updatedClip.transform,
+            filter: updatedClip.filter,
+            videoEffects: updatedClip.videoEffects ?? [],
+            effects: updatedClip.effects,
+            opacity: updatedClip.opacity,
+            speed: updatedClip.speed,
+          }, `ai-template:${latest.id}`);
+          setLastCommand(cmd);
+          setToast(`✅ Template "${latest.name}" applied to "${targetClip.mediaName}"`);
+          break;
+        }
+
+        case 'info': {
+          setLastCommand(cmd);
+          const examples = AI_COMMAND_EXAMPLES.map((e) => `• "${e.prompt}" → ${e.result}`).join('\n');
+          setToast(cmd.description);
+          // Also add info as AI message
+          setMessages((prev) => [
+            ...prev,
+            { role: 'ai', content: `Available AI commands:\n${examples}\n\nTry any of these in the chat box!`, timestamp: Date.now() },
+          ]);
+          return;
+        }
+
+        default: {
+          setLastCommand(cmd);
+          setToast(cmd.description);
+          break;
+        }
+      }
+    },
+    [allClipIds, panelClip, findClip, patchClip, setToast, templateStore]
+  );
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!prompt.trim() || isProcessing || ollamaStatus !== 'online') return;
+
+      const userMessage = {
+        role: 'user' as const,
+        content: prompt,
         timestamp: Date.now(),
       };
 
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages((prev) => [...prev, userMessage]);
+      setPrompt('');
+      setIsProcessing(true);
 
-    } catch (error) {
-      console.error('AI Processing Error:', error);
-      const errorMessage = {
-        role: 'ai' as const,
-        content: `❌ Error processing AI request: ${error instanceof Error ? error.message : 'Unknown error'}. Make sure Ollama is running locally.`,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
-    }
-  }, [prompt, isProcessing, ollamaStatus, currentClip, timelineTime]);
+      try {
+        // Parse the AI command
+        const clipIds = allClipIds();
+        const cmd = parseAICommand(prompt, clipIds);
 
-  const getConnectionStatus = () => {
-    // Check if AI services are available
-    return {
-      online: true,
-      model: 'llama3.2:1b',
-      local: true,
-      cost: '$0'
-    };
-  };
+        // Execute the command on the timeline
+        await executeCommand(cmd, prompt);
 
-  const connection = getConnectionStatus();
+        // Also get Ollama's conversational response for context
+        try {
+          const contextInfo = {
+            clipInfo: currentClip
+              ? {
+                  id: currentClip.id,
+                  name: currentClip.mediaName,
+                  duration: currentClip.duration,
+                  startTime: currentClip.startTime,
+                  type: currentClip.type,
+                }
+              : null,
+            timelineTime,
+            projectInfo: {
+              timestamp: new Date().toISOString(),
+              user: 'advchashampalup@gmail.com',
+              role: 'superadmin',
+            },
+          };
 
-  const getStatusIcon = () => {
-    switch (ollamaStatus) {
-      case 'online':
-        return <Wifi className="h-3 w-3 text-[#ff6500]" />;
-      case 'offline':
-        return <WifiOff className="h-3 w-3 text-gray-500" />;
-      default:
-        return <Loader2 className="h-3 w-3 animate-spin text-gray-500" />;
-    }
-  };
+          const systemPrompt = `
+You are an advanced video editor AI assistant. The user just said: "${prompt}".
+I have already executed the command on the timeline: ${cmd.description}.
+Context: Timeline ${contextInfo.timelineTime}s, Clip: ${contextInfo.clipInfo?.name || 'None'}.
 
-  const getStatusColor = () => {
-    switch (ollamaStatus) {
-      case 'online':
-        return 'bg-[#ff6500]/10 border border-[#ff6500]/30';
-      case 'offline':
-        return 'bg-[#2a2a2a] border border-[#2a2a2a]';
-      default:
-        return 'bg-[#2a2a2a] border border-[#2a2a2a]';
-    }
-  };
+Respond in a helpful, friendly way. Confirm what was done and suggest next steps.
+Keep it short (2-3 sentences). Write in English but you can use Hinglish terms if natural.
+`;
 
-  const getStatusTextColor = () => {
-    switch (ollamaStatus) {
-      case 'online':
-        return 'text-[#ff6500]';
-      case 'offline':
-        return 'text-gray-500';
-      default:
-        return 'text-gray-500';
-    }
-  };
+          const response = await fetch('http://127.0.0.1:11434/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'llama3',
+              prompt: systemPrompt,
+              stream: false,
+            }),
+          });
 
-  const getStatusText = () => {
-    switch (ollamaStatus) {
-      case 'online':
-        return 'Ollama AI Online';
-      case 'offline':
-        return 'Ollama AI Offline';
-      default:
-        return 'Checking Ollama...';
-    }
-  };
+          if (response.ok) {
+            const data = await response.json();
+            const aiReply = data.response || 'Command executed successfully.';
+            setMessages((prev) => [
+              ...prev,
+              { role: 'ai', content: aiReply, timestamp: Date.now() },
+            ]);
+          }
+        } catch {
+          // Ollama conversational reply is optional - command already executed
+          setMessages((prev) => [
+            ...prev,
+            { role: 'ai', content: '✅ Command executed on timeline. The effect should now be visible in the preview.', timestamp: Date.now() },
+          ]);
+        }
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [prompt, isProcessing, ollamaStatus, currentClip, timelineTime, allClipIds, executeCommand]
+  );
 
   if (!isOpen) return null;
+
+  const targetDisplayName = panelClip?.mediaName || (clipIds()[0] ? 'first clip on timeline' : 'no clips');
 
   return (
     <div
@@ -246,52 +318,54 @@ const response = await fetch(OLLAMA_ENDPOINT, {
 
       {/* AI Prompt Studio Window */}
       <div
-        className="relative w-full max-w-4xl h-[600px] rounded-md bg-[#1a1a1a] border border-[#2a2a2a] flex flex-col shadow-2xl"
+        className="relative rounded-md bg-[#1a1a1a] border border-[#2a2a2a] flex flex-col shadow-2xl overflow-hidden"
+        style={{ width: 420, height: 520, minWidth: 300, minHeight: 320, maxWidth: 700, maxHeight: 700 }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Resize handle */}
+        <div
+          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize bg-[#2a2a2a]/50 hover:bg-[#ff6500]/30"
+        />
+
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a]">
           <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-2 py-1 rounded-full ${getStatusColor()}`}>
-              {getStatusIcon()}
-              <span className={`text-xs font-medium ${getStatusTextColor()}`}>
-                {getStatusText()}
+            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-[#ff6500]/10 border border-[#ff6500]/30">
+              <Wifi className="h-3 w-3 text-[#ff6500]" />
+              <span className={`text-xs font-medium ${ollamaStatus === 'online' ? 'text-[#ff6500]' : 'text-gray-500'}`}>
+                {ollamaStatus === 'online' ? 'Ollama AI Online' : 'Ollama AI Offline'}
               </span>
             </div>
             <MessageSquare className="h-5 w-5 text-[#ff6500]" />
-            <h2 className="text-lg font-semibold text-fg">AI Prompt Studio</h2>
+            <h2 className="text-lg font-semibold text-white">AI Prompt Studio</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-md text-gray-500 hover:text-white hover:bg-[#2a2a2a] transition-colors"
+            className="p-2 rounded-md bg-[#2a2a2a] text-[#ff6500] hover:bg-[#ff6500]/20 hover:text-[#ff6500] transition-colors border border-transparent hover:border-[#ff6500]/40"
           >
-            <X className="h-4 w-4" />
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Context Info */}
-        {(currentClip || timelineTime > 0) && (
-          <div className="px-4 py-2 bg-[#1a1a1a] border-b border-[#2a2a2a]">
-            <div className="flex items-center gap-4 text-xs text-fg-muted">
-              {currentClip && (
-                <div className="flex items-center gap-1">
-                  <span className="font-medium text-fg">Clip:</span>
-                  <span>{currentClip.mediaName}</span>
-                </div>
-              )}
-              <div className="flex items-center gap-1">
-                <span className="font-medium text-fg">Time:</span>
-                <span>{timelineTime.toFixed(2)}s</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="font-medium text-fg">User:</span>
-                <span>advchashampalup@gmail.com (superadmin)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="font-medium text-fg">Role:</span>
-                <span>superadmin</span>
-              </div>
+        {/* Target Clip Info */}
+        <div className="px-4 py-2 bg-[#1a1a1a] border-b border-[#2a2a2a]">
+          <div className="flex items-center gap-4 text-xs text-gray-400">
+            <span className="font-medium text-gray-300">Target:</span>
+            <span className="truncate text-white">{targetDisplayName}</span>
+            <span className="ml-auto text-[8px] text-[#ff6500]">✓ AI Active</span>
+          </div>
+        </div>
+
+        {/* Last Command Feedback */}
+        {lastCommand && (
+          <div className="px-4 py-2 border-b border-[#2a2a2a] bg-[#2a2a2a]/30">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-[#ff6500]" />
+              <span className="text-xs text-[#ff6500]/90 font-medium">
+                {lastCommand.description}
+              </span>
             </div>
+            <p className="text-[10px] text-gray-500 mt-1">{lastCommand.sourcePrompt}</p>
           </div>
         )}
 
@@ -325,14 +399,11 @@ const response = await fetch(OLLAMA_ENDPOINT, {
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
-                  <p className="leading-relaxed whitespace-pre-wrap">
-                    {message.content}
-                  </p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{message.content}</p>
                 </div>
               </div>
             ))
-          )
-          }
+          )}
           <div ref={messagesEndRef} />
         </div>
 
@@ -342,7 +413,15 @@ const response = await fetch(OLLAMA_ENDPOINT, {
             <Textarea
               value={prompt}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrompt(e.target.value)}
-              placeholder="Enter your AI command... (e.g., 'add motion blur to this clip', 'convert to 60fps', 'apply chroma key with green screen')"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  if (prompt.trim() && !isProcessing && ollamaStatus === 'online') {
+                    handleSubmit(e as unknown as React.FormEvent);
+                  }
+                }
+              }}
+              placeholder="Enter your AI command... (e.g., 'remove background', 'add water ripple', 'save as template')"
               className="flex-1 min-h-[44px] max-h-32 resize-none rounded-md border-0 bg-[#1a1a1a] px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/30"
               disabled={isProcessing || ollamaStatus !== 'online'}
             />

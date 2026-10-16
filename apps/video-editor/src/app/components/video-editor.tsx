@@ -3068,7 +3068,12 @@ onClose={() => setShowRecoverDialog(false)}
         isOpen={showAIPromptStudio}
         onClose={() => setShowAIPromptStudio(false)}
         currentClip={panelClip}
+        panelClip={panelClip}
         timelineTime={playheadSeconds}
+        tracks={tracks}
+        patchClip={patchClip}
+        setToast={setToast}
+        setSelect={setSelect}
       />
 
     </div>

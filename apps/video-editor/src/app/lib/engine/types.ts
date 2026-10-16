@@ -57,6 +57,81 @@ export const NEUTRAL_FILTER: ClipFilter = {
   temperature: 0,
 };
 
+// ============================================================================
+// VIDEO EFFECTS - AI-driven per-clip effects applied by the compositor
+// ============================================================================
+
+export type VideoEffectType =
+  | 'chroma-key'
+  | 'water-ripple'
+  | 'water-reflection'
+  | 'background-remove'
+  | 'blur-mask'
+  | 'color-shift'
+  | 'glitch'
+  | 'vignette'
+  | 'film-grain'
+  | 'slow-motion'
+  | 'stabilize';
+
+export interface VideoEffect {
+  id: string;
+  type: VideoEffectType;
+  enabled: boolean;
+  /** Effect-specific parameters, stored as key-value pairs. */
+  params: Record<string, number | string | boolean>;
+  /** When this effect was applied (timestamp). */
+  appliedAt: number;
+  /** AI prompt that generated this effect, if any. */
+  sourcePrompt?: string;
+}
+
+export interface ChromaKeyParams {
+  keyColor: { r: number; g: number; b: number };
+  tolerance: number;
+  softness: number;
+  spillSuppression: number;
+  replaceWith: 'transparent' | 'color' | 'image';
+  replaceColor: { r: number; g: number; b: number };
+  replaceImageUrl?: string;
+}
+
+export interface WaterRippleParams {
+  amplitude: number;
+  frequency: number;
+  speed: number;
+  centerX: number;
+  centerY: number;
+  radius: number;
+}
+
+export interface WaterReflectionParams {
+  intensity: number;
+  waveHeight: number;
+  waveSpeed: number;
+  reflectionHeight: number;
+}
+
+export interface BackgroundRemoveParams {
+  method: 'chroma' | 'ai-segmentation';
+  tolerance: number;
+  edgeFeather: number;
+  backgroundImageUrl?: string;
+  backgroundColor: { r: number; g: number; b: number };
+}
+
+export interface TemplateClip {
+  id: string;
+  name: string;
+  thumbnail?: string;
+  /** The full clip state saved as a template - transform, filter, effects. */
+  clipState: Partial<TimelineClip>;
+  /** Frames this template applies to (per-frame template). */
+  frameRange?: { startFrame: number; endFrame: number };
+  createdAt: number;
+  usageCount: number;
+}
+
 /** Where and how big an overlay clip sits over the base layer. */
 export interface ClipTransform {
   /** 0..1 of canvas width/height, 0.5 = centre. */
@@ -230,6 +305,9 @@ export interface TimelineClip {
   poster?: string;
   /** Free-form effect names, kept for the effects list in the inspector. */
   effects: string[];
+
+  /** Video effects applied to this clip - processed by the compositor per-frame. */
+  videoEffects?: VideoEffect[];
 
   /** Expressions keyed by property name. The compositor evaluates each on every
    *  frame during preview and export. Stored as strings so they survive save/load
@@ -514,6 +592,7 @@ export function normaliseClip(raw: Partial<TimelineClip> & { id: string }): Time
     url: raw.url,
     poster: raw.poster,
     effects: raw.effects ?? [],
+    videoEffects: raw.videoEffects ?? [],
     expressions: raw.expressions ?? {},
     sourceIn: raw.sourceIn ?? 0,
     speed: raw.speed && raw.speed > 0 ? raw.speed : 1,

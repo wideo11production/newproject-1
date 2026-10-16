@@ -46,35 +46,41 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
+
+	"github.com/wideo11/auth-service/internal/model"
 )
 
 // Media upload limits.
 //
-// THE SIZE LIMITS ARE GONE, AND THEY WERE NEVER REAL.
+// THE SIZE LIMITS ARE NOW REAL AND ENFORCED.
 //
-// `DefaultMaxMediaBytes` used to be 8 GB and `DefaultMaxReelBytes` 512 MB.
-// Neither was referenced anywhere - not by `validateMediaUpload`, not by the
-// handler, not by a single call site in the tree. They were a limit printed in
-// the upload UI ("up to 8 GB") and a pair of constants nobody read.
+// `DefaultMaxMediaBytes` is 8 GB — the ceiling for any single media upload.
+// `DefaultMaxReelBytes` is 512 MB — the ceiling for a reel (vertical, short).
+// `DefaultMaxReelSeconds` is 90s — the ceiling for a reel's duration.
+// `DefaultMaxMediaDurationSeconds` is 4 hours — the ceiling for long-form.
 //
-// That is not a belt-and-braces arrangement, it is a lie in the UI: a creator
-// was told their file had a ceiling while nothing was checking. So the numbers
-// are removed rather than kept as honest documentation, because a documented
-// ceiling that is not enforced is worse than no ceiling - it stops a creator
-// from trying something that would have worked.
+// These are checked at TWO points:
 //
-// Uploading is now free and unlimited for every plan, which is the product
-// decision, and the check that MATTERS is the format allowlist below. That one is
-// real and is enforced at initiate; the actual bytes are re-checked by DECODING
-// at the `scanning` stage, because a declared content type is a claim and this
-// function only validates the claim.
+//  1. At upload-ticket creation (CreateMediaUploadTicket): the client's
+//     declared size is checked against the byte cap for its kind. A refusal
+//     here means no presigned URL is ever handed out, so the browser never
+//     starts sending bytes we will reject.
 //
-// WHAT REPLACED THE SIZE CHECK
+//  2. At the transcode callback (MarkTranscodeResult): the MEASURED duration
+//     from ffprobe is checked against the duration cap for its kind. A
+//     refusal here means the asset stays `failed` instead of `ready` — the
+//     client declared 90s but ffprobe measured 400s, and we trust the decoder.
 //
-// Nothing. There is no byte ceiling to enforce. What each KIND still has is a
-// DURATION rule (a reel is short, long-form is not) and a format rule, and those
-// are the two things that are actually validated below.
+// A documented ceiling that is not enforced is worse than no ceiling: it
+// stops a creator from trying something that would have worked. So these
+// are hard refusals, not soft warnings.
 const (
+	// DefaultMaxMediaBytes - 8 GB, the ceiling for any single media upload.
+	DefaultMaxMediaBytes = 8 * 1024 * 1024 * 1024
+
+	// DefaultMaxReelBytes - 512 MB, the ceiling for a reel.
+	DefaultMaxReelBytes = 512 * 1024 * 1024
+
 	// DefaultMaxReelSeconds - 90s.
 	//
 	// 90 is the ceiling Instagram, TikTok and YouTube Shorts all accept without a
@@ -168,6 +174,12 @@ func allowedMediaExtList() []string {
 // CreateMediaUploadTicket mints a presigned PUT so the browser can upload
 // DIRECTLY to MinIO.
 //
+// `sizeBytes` is the client's declared file size, checked against the byte cap
+// for `kind`. A refusal here means no URL is ever handed out, so the browser
+// never starts sending bytes we will reject.
+//
+// `kind` selects which cap applies: `media` gets 8 GB, `reel` gets 512 MB.
+//
 // Why presigned rather than chunked through us: an 8 GB body through a Go
 // handler holds a request open for minutes and blocks a worker for the whole
 // transfer. With a presigned URL the bytes never touch this process, so a
@@ -194,10 +206,30 @@ func (s *StorageService) CreateMediaUploadTicket(
 	ctx context.Context,
 	userID uuid.UUID,
 	filename, mimeType string,
+	sizeBytes int64,
+	kind string,
 ) (*UploadTicket, error) {
 	normalized, ext, err := validateMediaUpload(filename, mimeType)
 	if err != nil {
 		return nil, err
+	}
+
+	// ---- Size cap, enforced BEFORE a URL is minted ----
+	//
+	// Checked here rather than after the upload so a creator who is over the
+	// limit learns it before spending their upload time. The cap depends on
+	// kind: a reel is much smaller than long-form media.
+	var maxBytes int64
+	switch kind {
+	case model.MediaKindReel:
+		maxBytes = DefaultMaxReelBytes
+	default:
+		maxBytes = DefaultMaxMediaBytes
+	}
+	if sizeBytes > 0 && sizeBytes > maxBytes {
+		return nil, fmt.Errorf(
+			"file too large: %d bytes exceeds the %d byte cap for %s uploads",
+			sizeBytes, maxBytes, kind)
 	}
 
 	// Fail loudly and specifically. The failure mode of a silent fallback is

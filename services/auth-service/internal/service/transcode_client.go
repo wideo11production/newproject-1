@@ -366,6 +366,29 @@ func (s *MediaService) MarkTranscodeResult(ctx context.Context, cb TranscodeCall
 		}
 	}
 
+	// ---- LONG-FORM DURATION CAP ----
+	//
+	// Non-reel media is capped at DefaultMaxMediaDurationSeconds (4 hours).
+	// Checked against the MEASURED duration from ffprobe, not the client's
+	// claim, because the claim is just a claim.
+	//
+	// A zero measured duration means "not measured", not "zero seconds", so
+	// it passes here — the probe simply didn't finish, and that is a different
+	// problem than a four-hour file.
+	if asset.Kind != model.MediaKindReel {
+		measuredDuration := updateOr(updates, "duration_seconds", asset.DurationS)
+		if measuredDuration > 0 && measuredDuration > DefaultMaxMediaDurationSeconds {
+			return s.db.WithContext(ctx).Model(&model.MediaAsset{}).
+				Where("id = ?", id).
+				Updates(map[string]any{
+					"status":         model.MediaStatusFailed,
+					"failure_reason": fmt.Sprintf(
+						"this media is %d seconds and long-form is limited to %d — trim it and upload again",
+						measuredDuration, DefaultMaxMediaDurationSeconds),
+				}).Error
+		}
+	}
+
 	// ---- THE MODERATION VERDICT ----
 	//
 	// Written in the SAME update as `status = ready`, and for the reason in

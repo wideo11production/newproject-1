@@ -225,6 +225,7 @@ func (h *AuthHandler) InitMedia(c *gin.Context) {
 	// bucket rules and the same presign TTL.
 	ticket, err := h.storage.CreateMediaUploadTicket(
 		c.Request.Context(), uuidFromString(uid), req.Filename, req.ContentType,
+		req.Size, req.Kind,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid media", "message": err.Error()})

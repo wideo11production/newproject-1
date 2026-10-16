@@ -52,11 +52,15 @@ import {
   type TimelineClip,
   type TimelineTrack,
   type Transition,
+  type VideoEffect,
 } from './types';
 import { applyTransition, transitionAt } from './transitions';
 import { attachMedia, applyEffects, resumeAudio } from './audio-graph';
 import { stockAudioEffects } from './resources.generated';
 import type { StockAudioEffect } from './resources.generated';
+import { chromaKeyParamsFromClip, applyChromaKeyToImageData } from './effects/chroma-key';
+import { waterRippleParamsFromClip, waterRippleDisplacement } from './effects/water-effect';
+import { waterReflectionParamsFromClip, waterReflectionOffset } from './effects/water-effect';
 
 /** How far the playhead may drift from a media element before we seek it. */
 const SEEK_EPSILON_PAUSED = 0.02;
@@ -320,8 +324,162 @@ function drawText(
     }
     charIndex += line.length + 1;
   });
-  ctx.restore();
-}
+    ctx.restore();
+  }
+
+  // ============================================================================
+  // VIDEO EFFECTS - Applied per-clip during compositing
+  // ============================================================================
+
+  /**
+   * Apply all enabled video effects to a clip's drawn region on the canvas.
+   * Called after `blit` in `paint` and `renderClipOnly`.
+   */
+  private applyVideoEffects(
+    ctx: CanvasRenderingContext2D,
+    clip: TimelineClip,
+    rect: { x: number; y: number; w: number; h: number },
+    t: number
+  ) {
+    const effects = clip.videoEffects?.filter((e) => e.enabled) ?? [];
+    if (!effects.length) return;
+
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const { x, y, w, h } = rect;
+
+    // Grab the drawn region as ImageData for pixel manipulation
+    const imageData = ctx.getImageData(x, y, w, h);
+
+    for (const effect of effects) {
+      switch (effect.type) {
+        case 'chroma-key': {
+          const cfg = chromaKeyParamsFromClip(effect.params);
+          applyChromaKeyToImageData(imageData, cfg);
+          break;
+        }
+        case 'water-ripple': {
+          const cfg = waterRippleParamsFromClip(effect.params);
+          this.applyWaterRippleToImageData(imageData, cfg, t);
+          break;
+        }
+        case 'water-reflection': {
+          // Water reflection is drawn as an overlay below the clip, not on the clip itself
+          // Handled in paint() after the clip is drawn
+          break;
+        }
+        default:
+          // Unknown effect type - skip
+          break;
+      }
+    }
+
+    // Write the modified image data back
+    ctx.putImageData(imageData, x, y);
+  }
+
+  /**
+   * Apply water ripple distortion to ImageData in place.
+   */
+  private applyWaterRippleToImageData(
+    imageData: ImageData,
+    cfg: ReturnType<typeof waterRippleParamsFromClip>,
+    t: number
+  ) {
+    const { width: w, height: h, data } = imageData;
+    const temp = new Uint8ClampedArray(data.length);
+
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const { dx, dy } = waterRippleDisplacement(px, py, t, cfg, w, h);
+        const sx = Math.max(0, Math.min(w - 1, Math.round(px + dx)));
+        const sy = Math.max(0, Math.min(h - 1, Math.round(py + dy)));
+        const si = (sy * w + sx) * 4;
+        const ti = (py * w + px) * 4;
+        temp[ti] = data[si];
+        temp[ti + 1] = data[si + 1];
+        temp[ti + 2] = data[si + 2];
+        temp[ti + 3] = data[si + 3];
+      }
+    }
+
+    data.set(temp);
+  }
+
+  /**
+   * Draw a water reflection below the clip's region.
+   * Creates a flipped, distorted mirror of the clip.
+   */
+  private drawWaterReflection(
+    ctx: CanvasRenderingContext2D,
+    clip: TimelineClip,
+    rect: { x: number; y: number; w: number; h: number },
+    t: number
+  ) {
+    const effect = clip.videoEffects?.find((e) => e.type === 'water-reflection' && e.enabled);
+    if (!effect) return;
+
+    const cfg = waterReflectionParamsFromClip(effect.params);
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const { x, y, w, h } = rect;
+
+    const reflectionHeight = h * cfg.reflectionHeight;
+    const reflectionY = y + h;
+
+    ctx.save();
+    ctx.globalAlpha = cfg.intensity;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Flip vertically for reflection
+    ctx.translate(x, reflectionY + reflectionHeight);
+    ctx.scale(1, -1);
+
+    // Draw the clip region flipped
+    ctx.drawImage(
+      this.canvas,
+      x, y, w, h,
+      0, 0, w, reflectionHeight
+    );
+
+    ctx.restore();
+
+    // Apply wave distortion to the reflection using a second pass
+    this.applyWaterReflectionWave(ctx, x, reflectionY, w, reflectionHeight, cfg, t);
+  }
+
+  /**
+   * Apply sine-wave distortion to the water reflection area.
+   */
+  private applyWaterReflectionWave(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    cfg: ReturnType<typeof waterReflectionParamsFromClip>,
+    t: number
+  ) {
+    const imageData = ctx.getImageData(x, y, w, h);
+    const { data } = imageData;
+    const temp = new Uint8ClampedArray(data.length);
+
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const waveOffset = waterReflectionOffset(px, py, t, cfg, w, h);
+        const sx = Math.max(0, Math.min(w - 1, Math.round(px + waveOffset * 0.5)));
+        const si = (py * w + sx) * 4;
+        const ti = (py * w + px) * 4;
+        temp[ti] = data[si];
+        temp[ti + 1] = data[si + 1];
+        temp[ti + 2] = data[si + 2];
+        temp[ti + 3] = data[si + 3];
+      }
+    }
+
+    data.set(temp);
+    ctx.putImageData(imageData, x, y);
+  }
 
 export class Compositor {
   private canvas: HTMLCanvasElement;
@@ -598,6 +756,12 @@ export class Compositor {
     } else {
       drawPlaceholder(ctx, 0, 0, W, H, clip.mediaName);
     }
+
+    // Apply video effects to the hovered clip preview
+    this.applyVideoEffects(ctx, flat, { x: 0, y: 0, w: W, h: H }, time);
+
+    // Draw water reflection for hovered clip preview
+    this.drawWaterReflection(ctx, flat, { x: 0, y: 0, w: W, h: H }, time);
   }
 
   /** Static handle on the live compositor.
@@ -870,6 +1034,13 @@ export class Compositor {
       if (img.complete && img.naturalWidth > 0) this.blit(target, img, img.naturalWidth, img.naturalHeight, rect, pan, clip);
       else drawPlaceholder(target, rect.x, rect.y, rect.w, rect.h, clip.mediaName);
     }
+
+    // Apply video effects (chroma key, water ripple) to the drawn clip
+    this.applyVideoEffects(target, clip, rect, t);
+
+    // Draw water reflection below the clip if enabled
+    this.drawWaterReflection(target, clip, rect, t);
+
     target.restore();
   }
 

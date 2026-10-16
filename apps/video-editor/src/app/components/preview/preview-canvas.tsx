@@ -303,20 +303,25 @@ export function PreviewCanvas({
         ? 'absolute right-3 top-3 w-[32%] max-w-[280px]-edge-strong shadow-xl'
         : '';
 
-  return (
-    <div className="flex h-full min-h-0 items-center justify-center bg-slate-950 p-2">
+    return (
+    <div className="flex h-full min-h-0 items-center justify-center bg-[#0a0a0a] p-2">
       <div
         ref={containerRef}
         onClick={onClick}
         role="img"
         aria-label={"Preview at frame " + currentFrame + ", " + frameToTimecode(currentFrame, fps)}
         data-has-picture={hasPicture ? 'true' : 'false'}
-        className={"relative max-h-full max-w-full cursor-crosshair overflow-hidden rounded bg-black shadow-inner " + layoutClass}
+        className={"relative max-h-full max-w-full cursor-crosshair overflow-hidden rounded bg-[#0a0a0a] shadow-inner " + layoutClass}
         style={{
           aspectRatio: settings.width + " / " + settings.height,
-          width: viewerLayout === 'single' ? '100%' : undefined,
+          width: viewerLayout === 'single' ? '100%' : 'auto',
+          height: viewerLayout === 'single' ? 'auto' : '100%',
           maxHeight: '100%',
+          maxWidth: '100%',
           transform: viewerZoom === 1 ? undefined : "scale(" + viewerZoom + ")",
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
         <canvas ref={canvasRef} className="block h-full w-full" />
@@ -329,7 +334,7 @@ export function PreviewCanvas({
         */}
         {!hasPicture && (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 pb-[9%]"
+            className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2"
             aria-hidden="true"
             data-empty-watermark="true"
           >
