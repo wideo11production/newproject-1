@@ -88,7 +88,7 @@ func newWebhookTestService() *service.BillingService {
 		nil,
 		nil, nil, nil, nil, nil,
 		&noPaymentRepo{},
-		nil, nil, nil, nil,
+		nil, nil, nil, nil, nil,
 	)
 }
 
@@ -516,7 +516,7 @@ func TestWebhookEndpoint_CheckoutSessionCompletedActivates(t *testing.T) {
 	svc := service.NewBillingService(
 		nil,
 		plans, subs, nil, invoices, nil,
-		payments, nil, identity, nil, nil,
+		payments, nil, identity, nil, nil, nil,
 	)
 	svc.SetEntitlementFirer(firer)
 

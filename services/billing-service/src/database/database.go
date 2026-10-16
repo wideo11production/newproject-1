@@ -66,6 +66,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.DeviceRevenueLink{},
 		// ContentRevenue: ad impression revenue linked to asset/channel/user
 		&model.ContentRevenue{},
+		// AdCampaign: advertiser campaigns with budget, flight dates, frequency caps
+		&model.AdCampaign{},
 	)
 }
 

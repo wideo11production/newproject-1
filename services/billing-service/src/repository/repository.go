@@ -121,6 +121,20 @@ type ContentRevenueRepository interface {
 	TotalByUser(ctx context.Context, userID uuid.UUID) (decimal.Decimal, error)
 }
 
+// CampaignRepository defines the interface for ad campaign storage
+type CampaignRepository interface {
+	Create(ctx context.Context, campaign *model.AdCampaign) error
+	GetByID(ctx context.Context, id uuid.UUID) (*model.AdCampaign, error)
+	GetByAdvertiser(ctx context.Context, advertiserID uuid.UUID, limit int, offset int) ([]model.AdCampaign, int64, error)
+	List(ctx context.Context, status *model.CampaignStatus, limit int, offset int) ([]model.AdCampaign, int64, error)
+	Update(ctx context.Context, campaign *model.AdCampaign) error
+	Delete(ctx context.Context, id uuid.UUID) error
+	UpdateSpent(ctx context.Context, id uuid.UUID, spent decimal.Decimal, impressions int64) error
+	GetActive(ctx context.Context, now time.Time) ([]model.AdCampaign, error)
+}
+
+var ErrCampaignNotFound = errors.New("campaign not found")
+
 var ErrContentRevenueNotFound = errors.New("content revenue not found")
 
 // SubscriptionPlanRepository implementation
@@ -726,4 +740,101 @@ func (r *contentRevenueRepository) TotalByUser(
 		Select("COALESCE(SUM(creator_share), 0)").
 		Scan(&total).Error
 	return total, err
+}
+
+// CampaignRepository implementation
+type campaignRepository struct {
+	db *gorm.DB
+}
+
+func NewCampaignRepository(db *gorm.DB) CampaignRepository {
+	return &campaignRepository{db: db}
+}
+
+func (r *campaignRepository) Create(ctx context.Context, campaign *model.AdCampaign) error {
+	if campaign.ID == uuid.Nil {
+		campaign.ID = uuid.New()
+	}
+	campaign.CreatedAt = time.Now()
+	campaign.UpdatedAt = time.Now()
+	campaign.RemainingBudget = campaign.TotalBudget
+	return r.db.WithContext(ctx).Create(campaign).Error
+}
+
+func (r *campaignRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.AdCampaign, error) {
+	var c model.AdCampaign
+	err := r.db.WithContext(ctx).First(&c, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *campaignRepository) GetByAdvertiser(
+	ctx context.Context, advertiserID uuid.UUID, limit int, offset int,
+) ([]model.AdCampaign, int64, error) {
+	var campaigns []model.AdCampaign
+	var total int64
+	query := r.db.WithContext(ctx).Model(&model.AdCampaign{}).Where("advertiser_id = ?", advertiserID)
+	query.Count(&total)
+	query = query.Order("created_at DESC").Limit(limit).Offset(offset)
+	err := query.Find(&campaigns).Error
+	return campaigns, total, err
+}
+
+func (r *campaignRepository) List(
+	ctx context.Context, status *model.CampaignStatus, limit int, offset int,
+) ([]model.AdCampaign, int64, error) {
+	var campaigns []model.AdCampaign
+	var total int64
+	query := r.db.WithContext(ctx).Model(&model.AdCampaign{})
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+	query.Count(&total)
+	query = query.Order("created_at DESC").Limit(limit).Offset(offset)
+	err := query.Find(&campaigns).Error
+	return campaigns, total, err
+}
+
+func (r *campaignRepository) Update(ctx context.Context, campaign *model.AdCampaign) error {
+	campaign.UpdatedAt = time.Now()
+	return r.db.WithContext(ctx).Save(campaign).Error
+}
+
+func (r *campaignRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&model.AdCampaign{}, "id = ?", id).Error
+}
+
+func (r *campaignRepository) UpdateSpent(
+	ctx context.Context, id uuid.UUID, spent decimal.Decimal, impressions int64,
+) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var c model.AdCampaign
+		if err := tx.First(&c, "id = ?", id).Error; err != nil {
+			return err
+		}
+		newSpent := c.SpentBudget.Add(spent)
+		newRemaining := c.TotalBudget.Sub(newSpent)
+		newTotalImpressions := c.TotalImpressions + impressions
+		return tx.Model(&model.AdCampaign{}).
+			Where("id = ?", id).
+			Updates(map[string]any{
+				"spent_budget":       newSpent,
+				"remaining_budget":   newRemaining,
+				"total_impressions":  newTotalImpressions,
+				"total_spent":        newSpent,
+				"updated_at":         time.Now(),
+			}).Error
+	})
+}
+
+func (r *campaignRepository) GetActive(ctx context.Context, now time.Time) ([]model.AdCampaign, error) {
+	var campaigns []model.AdCampaign
+	err := r.db.WithContext(ctx).
+		Where("status = ? AND start_date <= ? AND end_date >= ? AND remaining_budget > 0",
+			model.CampaignStatusActive, now, now).
+		Order("created_at ASC").
+		Find(&campaigns).Error
+	return campaigns, err
 }

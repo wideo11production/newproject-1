@@ -37,6 +37,7 @@ type BillingService struct {
 	entitlement   EntitlementFirer
 	pushAllocRepo repository.PushAllocationRepository
 	contentRevRepo repository.ContentRevenueRepository
+	campaignRepo   repository.CampaignRepository
 	// stripeClient creates real Stripe Checkout Sessions. Optional
 	// (nil = checkout uses the placeholder generator for tests/dev).
 	// Set via SetStripeClient.
@@ -66,6 +67,7 @@ func NewBillingService(
 	identityRepo repository.UserIdentityRepository,
 	pushAllocRepo repository.PushAllocationRepository,
 	contentRevRepo repository.ContentRevenueRepository,
+	campaignRepo   repository.CampaignRepository,
 ) *BillingService {
 	return &BillingService{
 		db:             db,
@@ -79,6 +81,7 @@ func NewBillingService(
 		identityRepo:   identityRepo,
 		pushAllocRepo:  pushAllocRepo,
 		contentRevRepo: contentRevRepo,
+		campaignRepo:   campaignRepo,
 	}
 }
 
@@ -1317,6 +1320,316 @@ type serviceAdRevenueResult struct {
 	PlatformShare     decimal.Decimal
 	CreatorSubscribed bool
 	RecordID          uint
+}
+
+// ---------------------------------------------------------------------------
+// Campaign service methods
+// ---------------------------------------------------------------------------
+
+// CampaignRequest is the input for creating/updating a campaign.
+type CampaignRequest struct {
+	Name                 string     `json:"name" binding:"required"`
+	Description          string     `json:"description"`
+	TotalBudget          string     `json:"total_budget" binding:"required"`
+	Currency             string     `json:"currency"`
+	StartDate            string     `json:"start_date" binding:"required"`
+	EndDate              string     `json:"end_date" binding:"required"`
+	DailyImpressionCap   int        `json:"daily_impression_cap"`
+	FrequencyCapPerUser  int        `json:"frequency_cap_per_user"`
+	PacingType           string     `json:"pacing_type"`
+	ContentTypes         []string   `json:"content_types"`
+	Regions              []string   `json:"regions"`
+}
+
+// CampaignResponse is the output for campaign reads.
+type CampaignResponse struct {
+	ID                 uuid.UUID      `json:"id"`
+	AdvertiserID       uuid.UUID      `json:"advertiser_id"`
+	Name               string         `json:"name"`
+	Description        string         `json:"description"`
+	Status             model.CampaignStatus `json:"status"`
+	TotalBudget        decimal.Decimal `json:"total_budget"`
+	SpentBudget        decimal.Decimal `json:"spent_budget"`
+	RemainingBudget    decimal.Decimal `json:"remaining_budget"`
+	Currency           string         `json:"currency"`
+	StartDate          time.Time      `json:"start_date"`
+	EndDate            time.Time      `json:"end_date"`
+	DailyImpressionCap int            `json:"daily_impression_cap"`
+	FrequencyCapPerUser int           `json:"frequency_cap_per_user"`
+	PacingType         string         `json:"pacing_type"`
+	ContentTypes       []string       `json:"content_types"`
+	Regions            []string       `json:"regions"`
+	TotalImpressions   int64          `json:"total_impressions"`
+	TotalClicks        int64          `json:"total_clicks"`
+	TotalSpent         decimal.Decimal `json:"total_spent"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+}
+
+// CreateCampaign creates a new ad campaign.
+// Requires AuthRequired - advertiser_id from verified token.
+func (s *BillingService) CreateCampaign(
+	ctx context.Context,
+	authUserID uuid.UUID,
+	req CampaignRequest,
+) (*CampaignResponse, error) {
+	budget, err := decimal.NewFromString(req.TotalBudget)
+	if err != nil {
+		return nil, fmt.Errorf("invalid total_budget: %w", err)
+	}
+
+	startDate, err := time.Parse(time.RFC3339, req.StartDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start_date: %w", err)
+	}
+
+	endDate, err := time.Parse(time.RFC3339, req.EndDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end_date: %w", err)
+	}
+
+	if endDate.Before(startDate) {
+		return nil, fmt.Errorf("end_date must be after start_date")
+	}
+
+	if budget.LessThanOrEqual(decimal.Zero) {
+		return nil, fmt.Errorf("total_budget must be greater than 0")
+	}
+
+	currency := req.Currency
+	if currency == "" {
+		currency = "INR"
+	}
+
+	dailyCap := req.DailyImpressionCap
+	if dailyCap <= 0 {
+		dailyCap = 1000
+	}
+
+	freqCap := req.FrequencyCapPerUser
+	if freqCap <= 0 {
+		freqCap = 10
+	}
+
+	pacing := req.PacingType
+	if pacing == "" {
+		pacing = "even"
+	}
+
+	campaign := &model.AdCampaign{
+		AdvertiserID:        authUserID,
+		Name:                req.Name,
+		Description:         req.Description,
+		Status:              model.CampaignStatusDraft,
+		TotalBudget:         budget,
+		SpentBudget:         decimal.Zero,
+		RemainingBudget:     budget,
+		Currency:            currency,
+		StartDate:           startDate,
+		EndDate:             endDate,
+		DailyImpressionCap:  dailyCap,
+		FrequencyCapPerUser: freqCap,
+		PacingType:          pacing,
+		ContentTypes:        req.ContentTypes,
+		Regions:             req.Regions,
+	}
+
+	if err := s.campaignRepo.Create(ctx, campaign); err != nil {
+		return nil, fmt.Errorf("failed to create campaign: %w", err)
+	}
+
+	return campaignToResponse(campaign), nil
+}
+
+// GetCampaign returns a campaign by ID.
+func (s *BillingService) GetCampaign(
+	ctx context.Context,
+	campaignID uuid.UUID,
+) (*CampaignResponse, error) {
+	campaign, err := s.campaignRepo.GetByID(ctx, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("campaign not found: %w", err)
+	}
+	return campaignToResponse(campaign), nil
+}
+
+// ListCampaigns returns campaigns for an advertiser.
+func (s *BillingService) ListCampaigns(
+	ctx context.Context,
+	advertiserID uuid.UUID,
+	limit, offset int,
+) ([]*CampaignResponse, int64, error) {
+	campaigns, total, err := s.campaignRepo.GetByAdvertiser(ctx, advertiserID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	responses := make([]*CampaignResponse, 0, len(campaigns))
+	for _, c := range campaigns {
+		responses = append(responses, campaignToResponse(&c))
+	}
+	return responses, total, nil
+}
+
+// ListAllCampaigns returns all campaigns (superadmin only).
+// ListAllCampaigns returns all campaigns (superadmin only).
+func (s *BillingService) ListAllCampaigns(
+	ctx context.Context,
+	status *model.CampaignStatus,
+	limit, offset int,
+) ([]*CampaignResponse, int64, error) {
+	campaigns, total, err := s.campaignRepo.List(ctx, status, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	responses := make([]*CampaignResponse, 0, len(campaigns))
+	for _, c := range campaigns {
+		responses = append(responses, campaignToResponse(&c))
+	}
+	return responses, total, nil
+}
+
+// UpdateCampaign updates a campaign.
+func (s *BillingService) UpdateCampaign(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	authUserID uuid.UUID,
+	req CampaignRequest,
+) (*CampaignResponse, error) {
+	campaign, err := s.campaignRepo.GetByID(ctx, campaignID)
+	if err != nil {
+		return nil, fmt.Errorf("campaign not found: %w", err)
+	}
+
+	if campaign.AdvertiserID != authUserID {
+		return nil, fmt.Errorf("not authorized to update this campaign")
+	}
+
+	if req.Name != "" {
+		campaign.Name = req.Name
+	}
+	if req.Description != "" {
+		campaign.Description = req.Description
+	}
+	if req.TotalBudget != "" {
+		budget, err := decimal.NewFromString(req.TotalBudget)
+		if err != nil {
+			return nil, fmt.Errorf("invalid total_budget: %w", err)
+		}
+		campaign.TotalBudget = budget
+		campaign.RemainingBudget = campaign.TotalBudget.Sub(campaign.SpentBudget)
+	}
+	if req.Currency != "" {
+		campaign.Currency = req.Currency
+	}
+	if req.StartDate != "" {
+		startDate, err := time.Parse(time.RFC3339, req.StartDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start_date: %w", err)
+		}
+		campaign.StartDate = startDate
+	}
+	if req.EndDate != "" {
+		endDate, err := time.Parse(time.RFC3339, req.EndDate)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end_date: %w", err)
+		}
+		campaign.EndDate = endDate
+	}
+	if req.DailyImpressionCap > 0 {
+		campaign.DailyImpressionCap = req.DailyImpressionCap
+	}
+	if req.FrequencyCapPerUser > 0 {
+		campaign.FrequencyCapPerUser = req.FrequencyCapPerUser
+	}
+	if req.PacingType != "" {
+		campaign.PacingType = req.PacingType
+	}
+	if len(req.ContentTypes) > 0 {
+		campaign.ContentTypes = req.ContentTypes
+	}
+	if len(req.Regions) > 0 {
+		campaign.Regions = req.Regions
+	}
+
+	if err := s.campaignRepo.Update(ctx, campaign); err != nil {
+		return nil, fmt.Errorf("failed to update campaign: %w", err)
+	}
+	return campaignToResponse(campaign), nil
+}
+
+// DeleteCampaign deletes a campaign (only if draft or completed).
+func (s *BillingService) DeleteCampaign(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	authUserID uuid.UUID,
+) error {
+	campaign, err := s.campaignRepo.GetByID(ctx, campaignID)
+	if err != nil {
+		return fmt.Errorf("campaign not found: %w", err)
+	}
+
+	if campaign.AdvertiserID != authUserID {
+		return fmt.Errorf("not authorized to delete this campaign")
+	}
+
+	if campaign.Status != model.CampaignStatusDraft && campaign.Status != model.CampaignStatusCompleted {
+		return fmt.Errorf("cannot delete campaign in %s status", campaign.Status)
+	}
+
+	return s.campaignRepo.Delete(ctx, campaignID)
+}
+
+// GetActiveCampaigns returns all active campaigns (for ad serving).
+func (s *BillingService) GetActiveCampaigns(
+	ctx context.Context,
+	now time.Time,
+) ([]*CampaignResponse, error) {
+	campaigns, err := s.campaignRepo.GetActive(ctx, now)
+	if err != nil {
+		return nil, err
+	}
+	responses := make([]*CampaignResponse, 0, len(campaigns))
+	for _, c := range campaigns {
+		responses = append(responses, campaignToResponse(&c))
+	}
+	return responses, nil
+}
+
+// RecordCampaignImpression records an impression against a campaign.
+// Deducts from remaining budget and increments impression count.
+func (s *BillingService) RecordCampaignImpression(
+	ctx context.Context,
+	campaignID uuid.UUID,
+	impressionCost decimal.Decimal,
+) error {
+	return s.campaignRepo.UpdateSpent(ctx, campaignID, impressionCost, 1)
+}
+
+// campaignToResponse converts a model.AdCampaign to CampaignResponse.
+func campaignToResponse(c *model.AdCampaign) *CampaignResponse {
+	return &CampaignResponse{
+		ID:                 c.ID,
+		AdvertiserID:       c.AdvertiserID,
+		Name:               c.Name,
+		Description:        c.Description,
+		Status:             c.Status,
+		TotalBudget:        c.TotalBudget,
+		SpentBudget:        c.SpentBudget,
+		RemainingBudget:    c.RemainingBudget,
+		Currency:           c.Currency,
+		StartDate:          c.StartDate,
+		EndDate:            c.EndDate,
+		DailyImpressionCap: c.DailyImpressionCap,
+		FrequencyCapPerUser: c.FrequencyCapPerUser,
+		PacingType:         c.PacingType,
+		ContentTypes:       c.ContentTypes,
+		Regions:            c.Regions,
+		TotalImpressions:   c.TotalImpressions,
+		TotalClicks:        c.TotalClicks,
+		TotalSpent:         c.TotalSpent,
+		CreatedAt:          c.CreatedAt,
+		UpdatedAt:          c.UpdatedAt,
+	}
 }
 
 // UserRevenueSummary is per-user ad revenue aggregation.

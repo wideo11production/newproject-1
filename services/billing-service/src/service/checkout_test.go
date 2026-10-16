@@ -162,7 +162,7 @@ func TestCreateCheckoutSession_WritesTransactionID(t *testing.T) {
 		subs,
 		nil, invoices, nil,
 		payments,
-		nil, identity, nil, nil,
+		nil, identity, nil, nil, nil,
 	)
 
 	result, err := svc.CreateCheckoutSession(context.Background(),
@@ -225,7 +225,7 @@ func TestActivateByProviderPayment_ResolvesThroughCheckoutChain(t *testing.T) {
 		subRepo,
 		nil, invoices, nil,
 		payments,
-		nil, identity, nil, nil,
+		nil, identity, nil, nil, nil,
 	)
 	svc.SetEntitlementFirer(firer)
 
@@ -318,7 +318,7 @@ func TestCreateCheckoutSession_RejectsUnknownPlan(t *testing.T) {
 		&fakeSubRepo{},
 		nil, &recordingInvoiceRepo{}, nil,
 		payments,
-		nil, &checkoutIdentityRepo{}, nil, nil,
+		nil, &checkoutIdentityRepo{}, nil, nil, nil,
 	)
 
 	_, err := svc.CreateCheckoutSession(context.Background(),
@@ -346,7 +346,7 @@ func TestCreateCheckoutSession_GeneratesSessionID(t *testing.T) {
 		&fakeSubRepo{},
 		nil, &recordingInvoiceRepo{}, nil,
 		payments,
-		nil, &checkoutIdentityRepo{}, nil, nil,
+		nil, &checkoutIdentityRepo{}, nil, nil, nil,
 	)
 
 	result, err := svc.CreateCheckoutSession(context.Background(),
@@ -405,7 +405,7 @@ func TestCreateCheckoutSession_UsesStripeClient(t *testing.T) {
 		subs,
 		nil, invoices, nil,
 		payments,
-		nil, identity, nil, nil,
+		nil, identity, nil, nil, nil,
 	)
 	svc.SetStripeClient(mockStripe)
 
@@ -476,7 +476,7 @@ func TestCreateCheckoutSession_StripeFailureReturnsError(t *testing.T) {
 		subs,
 		nil, invoices, nil,
 		payments,
-		nil, identity, nil, nil,
+		nil, identity, nil, nil, nil,
 	)
 	svc.SetStripeClient(mockStripe)
 

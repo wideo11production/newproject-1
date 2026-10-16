@@ -136,6 +136,7 @@ func newTestService(plan *model.SubscriptionPlan, identity *fakeIdentityRepo, su
 		identity,
 		nil, // pushAllocRepo - not on the Subscribe path
 		nil, // contentRevRepo - not on the Subscribe path
+		nil, // campaignRepo - not on the Subscribe path
 	)
 	firer := &fakeFirer{}
 	svc.SetEntitlementFirer(firer)
@@ -293,7 +294,7 @@ func TestSubscribeWithoutAFirerStillSubscribes(t *testing.T) {
 	subs := &fakeSubRepo{}
 	svc := NewBillingService(nil,
 		&fakePlanRepo{plan: testPlan()}, subs,
-		nil, nil, nil, nil, nil, identity, nil, nil)
+		nil, nil, nil, nil, nil, identity, nil, nil, nil)
 
 	if _, err := svc.Subscribe(context.Background(),
 		"11111111-2222-3333-4444-555555555555", "pro-monthly", false); err != nil {

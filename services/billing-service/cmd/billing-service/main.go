@@ -50,8 +50,9 @@ func main() {
 	identityRepo := repository.NewUserIdentityRepository(db)
 	pushAllocRepo := repository.NewPushAllocationRepository(db)
 	contentRevRepo := repository.NewContentRevenueRepository(db)
+	campaignRepo := repository.NewCampaignRepository(db)
 
-	billingSvc := service.NewBillingService(db, planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo)
+	billingSvc := service.NewBillingService(db, planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo, campaignRepo)
 
 	// ---- THE PLAN CATALOGUE, SEEDED BEFORE ANY REQUEST IS ANSWERED ----
 	//

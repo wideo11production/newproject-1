@@ -191,6 +191,28 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 		adRev.GET("/revenue/user-summary", h.GetUserRevenueSummary)
 	}
 
+	// ---- PERSONAL: ad campaign booking ----
+	//
+	// Advertiser creates and manages their own campaigns.
+	// AuthRequired - advertiser_id from verified token.
+	campaigns := r.Group("/campaigns", middleware.AuthRequired())
+	{
+		campaigns.POST("", h.CreateCampaign)
+		campaigns.GET("", h.ListCampaigns)
+		campaigns.GET("/:campaign_id", h.GetCampaign)
+		campaigns.PUT("/:campaign_id", h.UpdateCampaign)
+		campaigns.DELETE("/:campaign_id", h.DeleteCampaign)
+	}
+
+	// ---- PUBLIC: active campaigns for ad serving ----
+	//
+	// No auth required - this is what the ad server reads to decide
+	// which campaigns are eligible to serve.
+	campaignsPublic := r.Group("/campaigns/active")
+	{
+		campaignsPublic.GET("", h.GetActiveCampaigns)
+	}
+
 	// ---- TAX RATES: read public, write admin ----
 	taxes := r.Group("/taxes")
 	{
@@ -865,5 +887,318 @@ func (h *Handler) GetUserRevenueSummary(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"rows": rows,
 		"count": len(rows),
+	})
+}
+
+// CreateCampaign creates a new ad campaign.
+// Requires AuthRequired - advertiser_id from verified token.
+func (h *Handler) CreateCampaign(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	var req service.CampaignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	campaign, err := h.svc.CreateCampaign(c.Request.Context(), authUserID, req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":                campaign.ID,
+		"advertiser_id":     campaign.AdvertiserID,
+		"name":              campaign.Name,
+		"description":       campaign.Description,
+		"status":            campaign.Status,
+		"total_budget":      campaign.TotalBudget.String(),
+		"spent_budget":      campaign.SpentBudget.String(),
+		"remaining_budget":  campaign.RemainingBudget.String(),
+		"currency":          campaign.Currency,
+		"start_date":        campaign.StartDate,
+		"end_date":          campaign.EndDate,
+		"daily_impression_cap": campaign.DailyImpressionCap,
+		"frequency_cap_per_user": campaign.FrequencyCapPerUser,
+		"pacing_type":        campaign.PacingType,
+		"content_types":      campaign.ContentTypes,
+		"regions":            campaign.Regions,
+		"created_at":         campaign.CreatedAt,
+		"updated_at":         campaign.UpdatedAt,
+	})
+}
+
+// GetCampaign returns a campaign by ID.
+// Requires AuthRequired - checks ownership.
+func (h *Handler) GetCampaign(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	campaignID, err := uuid.Parse(c.Param("campaign_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign ID"})
+		return
+	}
+
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	campaign, err := h.svc.GetCampaign(c.Request.Context(), campaignID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Check ownership
+	if campaign.AdvertiserID != authUserID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "not authorized to view this campaign"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                campaign.ID,
+		"advertiser_id":     campaign.AdvertiserID,
+		"name":              campaign.Name,
+		"description":       campaign.Description,
+		"status":            campaign.Status,
+		"total_budget":      campaign.TotalBudget.String(),
+		"spent_budget":      campaign.SpentBudget.String(),
+		"remaining_budget":  campaign.RemainingBudget.String(),
+		"currency":          campaign.Currency,
+		"start_date":        campaign.StartDate,
+		"end_date":          campaign.EndDate,
+		"daily_impression_cap": campaign.DailyImpressionCap,
+		"frequency_cap_per_user": campaign.FrequencyCapPerUser,
+		"pacing_type":        campaign.PacingType,
+		"content_types":      campaign.ContentTypes,
+		"regions":            campaign.Regions,
+		"total_impressions":  campaign.TotalImpressions,
+		"total_clicks":       campaign.TotalClicks,
+		"total_spent":        campaign.TotalSpent.String(),
+		"created_at":         campaign.CreatedAt,
+		"updated_at":         campaign.UpdatedAt,
+	})
+}
+
+// ListCampaigns returns campaigns for the authenticated advertiser.
+// Requires AuthRequired.
+func (h *Handler) ListCampaigns(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	limit := 20
+	offset := 0
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if o := c.Query("offset"); o != "" {
+		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
+
+	campaigns, total, err := h.svc.ListCampaigns(c.Request.Context(), authUserID, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows := make([]gin.H, 0, len(campaigns))
+	for _, camp := range campaigns {
+		rows = append(rows, gin.H{
+			"id":                 camp.ID,
+			"advertiser_id":      camp.AdvertiserID,
+			"name":               camp.Name,
+			"description":        camp.Description,
+			"status":             camp.Status,
+			"total_budget":       camp.TotalBudget.String(),
+			"spent_budget":       camp.SpentBudget.String(),
+			"remaining_budget":   camp.RemainingBudget.String(),
+			"currency":           camp.Currency,
+			"start_date":         camp.StartDate,
+			"end_date":           camp.EndDate,
+			"daily_impression_cap": camp.DailyImpressionCap,
+			"frequency_cap_per_user": camp.FrequencyCapPerUser,
+			"pacing_type":         camp.PacingType,
+			"content_types":      camp.ContentTypes,
+			"regions":            camp.Regions,
+			"total_impressions":  camp.TotalImpressions,
+			"total_spent":        camp.TotalSpent.String(),
+			"created_at":         camp.CreatedAt,
+			"updated_at":         camp.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"campaigns": rows,
+		"count":     len(rows),
+		"total":     total,
+		"limit":     limit,
+		"offset":    offset,
+	})
+}
+
+// UpdateCampaign updates a campaign.
+// Requires AuthRequired - checks ownership.
+func (h *Handler) UpdateCampaign(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	campaignID, err := uuid.Parse(c.Param("campaign_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign ID"})
+		return
+	}
+
+	var req service.CampaignRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	campaign, err := h.svc.UpdateCampaign(c.Request.Context(), campaignID, authUserID, req)
+	if err != nil {
+		if err.Error() == "not authorized to update this campaign" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "campaign not found: record not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":                campaign.ID,
+		"advertiser_id":     campaign.AdvertiserID,
+		"name":              campaign.Name,
+		"description":       campaign.Description,
+		"status":            campaign.Status,
+		"total_budget":      campaign.TotalBudget.String(),
+		"spent_budget":      campaign.SpentBudget.String(),
+		"remaining_budget":  campaign.RemainingBudget.String(),
+		"currency":          campaign.Currency,
+		"start_date":        campaign.StartDate,
+		"end_date":          campaign.EndDate,
+		"daily_impression_cap": campaign.DailyImpressionCap,
+		"frequency_cap_per_user": campaign.FrequencyCapPerUser,
+		"pacing_type":        campaign.PacingType,
+		"content_types":      campaign.ContentTypes,
+		"regions":            campaign.Regions,
+		"created_at":         campaign.CreatedAt,
+		"updated_at":         campaign.UpdatedAt,
+	})
+}
+
+// DeleteCampaign deletes a campaign (only if draft or completed).
+// Requires AuthRequired - checks ownership.
+func (h *Handler) DeleteCampaign(c *gin.Context) {
+	billingUserID, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	campaignID, err := uuid.Parse(c.Param("campaign_id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid campaign ID"})
+		return
+	}
+
+	authUserID, err := h.svc.ResolveAuthUserID(c.Request.Context(), billingUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.svc.DeleteCampaign(c.Request.Context(), campaignID, authUserID); err != nil {
+		if err.Error() == "not authorized to delete this campaign" {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		if err.Error() == "campaign not found: record not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "campaign not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "campaign deleted"})
+}
+
+// GetActiveCampaigns returns all active campaigns (for ad serving).
+// Requires AuthRequired.
+func (h *Handler) GetActiveCampaigns(c *gin.Context) {
+	_, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	campaigns, err := h.svc.GetActiveCampaigns(c.Request.Context(), now)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows := make([]gin.H, 0, len(campaigns))
+	for _, camp := range campaigns {
+		rows = append(rows, gin.H{
+			"id":                 camp.ID,
+			"name":               camp.Name,
+			"status":             camp.Status,
+			"total_budget":       camp.TotalBudget.String(),
+			"remaining_budget":   camp.RemainingBudget.String(),
+			"currency":           camp.Currency,
+			"start_date":         camp.StartDate,
+			"end_date":           camp.EndDate,
+			"daily_impression_cap": camp.DailyImpressionCap,
+			"frequency_cap_per_user": camp.FrequencyCapPerUser,
+			"pacing_type":         camp.PacingType,
+			"content_types":      camp.ContentTypes,
+			"regions":            camp.Regions,
+			"total_impressions":  camp.TotalImpressions,
+			"created_at":         camp.CreatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"campaigns": rows,
+		"count":     len(rows),
 	})
 }

@@ -127,7 +127,7 @@ func TestSubscribeAcceptsTheAuthUUIDToken(t *testing.T) {
 	firer := &recordingFirer{}
 	svc := service.NewBillingService(nil,
 		uuidPlanRepo{}, subs,
-		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil)
+		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil, nil)
 	svc.SetEntitlementFirer(firer)
 
 	r := subscribeRouter(t, svc)
@@ -171,7 +171,7 @@ func TestSubscribeStillRejectsABareUintToken(t *testing.T) {
 	subs := &uuidSubRepo{}
 	svc := service.NewBillingService(nil,
 		uuidPlanRepo{}, subs,
-		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil)
+		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil, nil)
 
 	r := subscribeRouter(t, svc)
 	token := mintTestToken(t, "9999", "user")
