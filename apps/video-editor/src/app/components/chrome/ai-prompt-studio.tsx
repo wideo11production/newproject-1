@@ -33,8 +33,8 @@ export function AIPromptStudio({ isOpen, onClose, currentClip, timelineTime }: A
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Ollama connection configuration
-  const OLLAMA_ENDPOINT = 'http://ollama:11434/api/generate';
-  const OLLAMA_MODELS = ['llama3.2:1b', 'gemma3:1b', 'qwen3:0.5b', 'phi4:14b']; // local models
+  const OLLAMA_ENDPOINT = 'http://127.0.0.1:11434/api/generate';
+  const OLLAMA_MODELS = ['llama3']; // local model pulled into the named volume
 
   // Check Ollama status on mount
   useEffect(() => {
@@ -43,7 +43,7 @@ export function AIPromptStudio({ isOpen, onClose, currentClip, timelineTime }: A
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-        const response = await fetch('http://ollama:11434/api/tags', {
+        const response = await fetch('http://127.0.0.1:11434/api/tags', {
           signal: controller.signal,
         });
 
