@@ -92,6 +92,23 @@ jobs:
       - name: Typecheck (turbo, all packages)
         run: pnpm typecheck
 
+      # ---- CI gates: check scripts from tools/ ----
+      #
+      # Ye scripts project ke internal contracts ko verify karte hain -
+      # click-ledger field alignment, session persistence, UI exports,
+      # TypeScript audit, service triage. Inko CI me chalana zaroori hai
+      # taaki koi change silently koi contract nahi toot deta.
+      #
+      # Sirf wo scripts jo browser ke bina chalte hain (no CHROME_BIN,
+      # no Playwright). Browser-dependent scripts chalaye jaate hain
+      # local dev aur staging me.
+      - name: CI gates (Node check scripts)
+        run: |
+          for f in tools/check-click-ledger.mjs tools/check-session-ui.mjs tools/check-superadmin-login.mjs tools/check-ui-exports.mjs tools/type-audit.mjs tools/triage-services.mjs tools/check-media-pipeline.mjs tools/check-app-gates.mjs; do
+            echo "=== Running $f ==="
+            node "$f" || exit 1
+          done
+
       - name: Security Scan (Example: using GitHub CodeQL)
         uses: github/codeql-action/init@v2
         with:

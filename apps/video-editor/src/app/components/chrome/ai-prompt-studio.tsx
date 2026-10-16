@@ -190,22 +190,33 @@ const response = await fetch(OLLAMA_ENDPOINT, {
   const getStatusIcon = () => {
     switch (ollamaStatus) {
       case 'online':
-        return <Wifi className="h-3 w-3 text-emerald-500" />;
+        return <Wifi className="h-3 w-3 text-[#ff6500]" />;
       case 'offline':
-        return <WifiOff className="h-3 w-3 text-red-500" />;
+        return <WifiOff className="h-3 w-3 text-gray-500" />;
       default:
-        return <Loader2 className="h-3 w-3 animate-spin text-amber-500" />;
+        return <Loader2 className="h-3 w-3 animate-spin text-gray-500" />;
     }
   };
 
   const getStatusColor = () => {
     switch (ollamaStatus) {
       case 'online':
-        return 'text-emerald-500 bg-emerald-500/10';
+        return 'bg-[#ff6500]/10 border border-[#ff6500]/30';
       case 'offline':
-        return 'text-red-500 bg-red-500/10';
+        return 'bg-[#2a2a2a] border border-[#2a2a2a]';
       default:
-        return 'text-amber-500 bg-amber-500/10';
+        return 'bg-[#2a2a2a] border border-[#2a2a2a]';
+    }
+  };
+
+  const getStatusTextColor = () => {
+    switch (ollamaStatus) {
+      case 'online':
+        return 'text-[#ff6500]';
+      case 'offline':
+        return 'text-gray-500';
+      default:
+        return 'text-gray-500';
     }
   };
 
@@ -244,7 +255,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-2 px-2 py-1 rounded-full ${getStatusColor()}`}>
               {getStatusIcon()}
-              <span className="text-xs font-medium text-fg-muted">
+              <span className={`text-xs font-medium ${getStatusTextColor()}`}>
                 {getStatusText()}
               </span>
             </div>
