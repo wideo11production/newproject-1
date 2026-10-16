@@ -246,12 +246,11 @@ const response = await fetch(OLLAMA_ENDPOINT, {
 
       {/* AI Prompt Studio Window */}
       <div
-        className="relative w-full max-w-4xl h-[600px] rounded-md-edge-strong bg-surface-raised border border-surface-overlay
-                   flex flex-col shadow-2xl"
+        className="relative w-full max-w-4xl h-[600px] rounded-md bg-[#1a1a1a] border border-[#2a2a2a] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-surface-overlay">
+        <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a]">
           <div className="flex items-center gap-3">
             <div className={`flex items-center gap-2 px-2 py-1 rounded-full ${getStatusColor()}`}>
               {getStatusIcon()}
@@ -264,7 +263,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-md text-fg-muted hover:text-fg hover:bg-surface-overlay transition-colors"
+            className="p-2 rounded-md text-gray-500 hover:text-white hover:bg-[#2a2a2a] transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -272,7 +271,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
 
         {/* Context Info */}
         {(currentClip || timelineTime > 0) && (
-          <div className="px-4 py-2 bg-surface-raised border-b border-surface-overlay">
+          <div className="px-4 py-2 bg-[#1a1a1a] border-b border-[#2a2a2a]">
             <div className="flex items-center gap-4 text-xs text-fg-muted">
               {currentClip && (
                 <div className="flex items-center gap-1">
@@ -299,10 +298,10 @@ const response = await fetch(OLLAMA_ENDPOINT, {
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-fg-muted">
-              <Bot className="h-12 w-12 mb-4" />
-              <p className="text-sm">No messages yet. Start your first AI prompt!</p>
-              <p className="text-xs mt-1">Local Ollama AI is ready for commands.</p>
+            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+              <Bot className="h-12 w-12 mb-4 text-gray-500" />
+              <p className="text-sm text-gray-300">No messages yet. Start your first AI prompt!</p>
+              <p className="text-xs mt-1 text-gray-500">Local Ollama AI is ready for commands.</p>
             </div>
           ) : (
             messages.map((message) => (
@@ -322,7 +321,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
                     ) : (
                       <Bot className="h-3 w-3" />
                     )}
-                    <span className="text-xs opacity-70">
+                    <span className="text-xs text-gray-500">
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </span>
                   </div>
@@ -338,19 +337,19 @@ const response = await fetch(OLLAMA_ENDPOINT, {
         </div>
 
         {/* Input Area */}
-        <div className="p-4 border-t border-surface-overlay bg-surface-raised">
+        <div className="p-4 border-t border-[#2a2a2a] bg-[#1a1a1a]">
           <form onSubmit={handleSubmit} className="flex gap-3">
             <Textarea
               value={prompt}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setPrompt(e.target.value)}
               placeholder="Enter your AI command... (e.g., 'add motion blur to this clip', 'convert to 60fps', 'apply chroma key with green screen')"
-              className="flex-1 min-h-[44px] max-h-32 resize-none"
+              className="flex-1 min-h-[44px] max-h-32 resize-none rounded-md border-0 bg-[#1a1a1a] px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/30"
               disabled={isProcessing || ollamaStatus !== 'online'}
             />
             <Button
               type="submit"
               disabled={!prompt.trim() || isProcessing || ollamaStatus !== 'online'}
-              className="self-end h-11 px-6"
+              className="self-end h-11 px-6 rounded-md bg-[#ff6500] font-medium text-white hover:bg-[#e55a00] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isProcessing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

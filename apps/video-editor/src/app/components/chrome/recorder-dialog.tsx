@@ -1340,16 +1340,16 @@ export function RecorderDialog({
                 "recording shows no preview" was reported against what is otherwise
                 a working feature. */}
             {useCam ? (
-              <video
-                ref={camPreviewRef}
-                muted
-                playsInline
-                className="aspect-video w-full rounded bg-black object-contain"
-              />
+                <video
+                  ref={camPreviewRef}
+                  muted
+                  playsInline
+                  className="aspect-video w-full rounded bg-[#0a0a0a] object-contain"
+                />
             ) : (
               /* Audio-only: a large live level bar instead of a black rectangle.
                  This is the feedback that was missing entirely. */
-              <div className="flex h-24 flex-col items-center justify-center gap-3 rounded bg-black">
+              <div className="flex h-24 flex-col items-center justify-center gap-3 rounded bg-[#0a0a0a]">
                 <Mic className="h-6 w-6 text-gray-600" aria-hidden="true" />
                 <span className="text-[10px] uppercase tracking-widest text-gray-500">
                   Microphone only
@@ -1362,7 +1362,7 @@ export function RecorderDialog({
                 actually coming in? */}
             {useMic && (
               <div>
-                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+                <div className="h-2 w-full overflow-hidden rounded-full bg-[#2a2a2a]">
                   <div
                     ref={levelRef}
                     className="h-full rounded-full transition-[width] duration-75 ease-out"
@@ -1470,7 +1470,7 @@ export function RecorderDialog({
               // A recorded clip is usually audio-only or video-only, so a fixed
               // 16:9 box letterboxes a portrait phone recording into a thin strip.
               // `object-contain` keeps it whole rather than cropping it.
-              className="max-h-64 w-full rounded bg-black object-contain"
+              className="max-h-64 w-full rounded bg-[#0a0a0a] object-contain"
             />
             {/*
               THE COMBINED / SEPARATE CHOICE.
