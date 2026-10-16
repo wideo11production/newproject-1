@@ -13,6 +13,7 @@ import (
 	"newproject/services/analytics-service/src/database"
 	"newproject/services/analytics-service/src/handler"
 	"newproject/services/analytics-service/src/middleware"
+	"newproject/services/analytics-service/src/nats"
 	"newproject/services/analytics-service/src/repository"
 	"newproject/services/analytics-service/src/service"
 	"newproject/services/analytics-service/src/telemetry"
@@ -80,10 +81,13 @@ func main() {
 
 	// ---- Realtime firehose (NATS JetStream) ----
 	//
-	// Started BEFORE the listener, so the first request already has a publisher
-	// waiting. It cannot block startup: connecting happens in a goroutine and a
-	// failure just means "clicks recorded, not published" - the database write is
-	// the one that matters.
+	// Publisher: every UI click goes onto NATS JetStream AFTER the database
+	// write. Cannot block startup: NATS outage means "clicks recorded, not
+	// published" - the database write is the one that matters.
+	//
+	// Consumer: reads ClickEvents from the TELEMETRY stream and updates
+	// realtime dashboards. Without a consumer, the stream accumulates messages
+	// that are never read - "durable but unread".
 	publisherCtx, publisherCancel := context.WithCancel(context.Background())
 	defer publisherCancel()
 
@@ -92,8 +96,21 @@ func main() {
 		publisher = telemetry.New(natsURL, cfg.Telemetry.PublishQueueSize)
 		publisher.Start(publisherCtx)
 		defer publisher.Stop()
+
+		// ---- Click-ledger consumer ----
+		consumer, err := nats.NewConsumer(natsURL)
+		if err != nil {
+			log.Printf("[CLICK-CONSUMER] failed to create: %v - realtime click consumption disabled", err)
+		} else {
+			if err := consumer.Start(); err != nil {
+				log.Printf("[CLICK-CONSUMER] failed to start: %v - realtime click consumption disabled", err)
+				consumer.Stop()
+			} else {
+				defer consumer.Stop()
+			}
+		}
 	} else {
-		log.Println("[TELEMETRY] NATS URL not configured - click events will be recorded but not published")
+		log.Println("[TELEMETRY] NATS URL not configured - click events will be recorded but not published or consumed in realtime")
 	}
 
 	h := handler.NewHandler(analyticsSvc, uiClickRepo, int(retentionWindow.Hours()/24), publisher)
