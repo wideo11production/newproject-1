@@ -312,7 +312,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
                 <div
                   className={`max-w-xs lg:max-w-md px-4 py-3 rounded-md text-sm font-medium transition-all ${message.role === 'user'
                     ? 'bg-[#ff6500] text-white rounded-br-none'
-                    : 'bg-[#1a1a1a] text-gray-300 rounded-bl-none border border-[#2a2a2a]'
+                    : 'bg-[#1a1a1a] text-white rounded-bl-none border border-[#2a2a2a]'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -321,7 +321,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
                     ) : (
                       <Bot className="h-3 w-3" />
                     )}
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-white/90">
                       {new Date(message.timestamp).toLocaleTimeString()}
                     </span>
                   </div>

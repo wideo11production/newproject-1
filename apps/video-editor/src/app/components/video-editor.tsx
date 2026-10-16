@@ -67,6 +67,7 @@ import { TemplatesPanel } from './panels/templates-panel';
 import { FiltersPanel, TitlesPanel, StickersPanel, PanZoomPanel, LayoutsPanel } from './panels/style-panels';
 import { AudioPanel } from './panels/audio-panel';
 import { ExpressionsPanel } from './panels/expressions-panel';
+import { trackClick, startClickTracking } from '@/lib/click-tracker';
 import { PluginsPanel } from './panels/plugins-panel';
 import { ProjectPanel } from './panels/project-panel';
 import {
@@ -1608,6 +1609,7 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
    * the user put it there - and it removes the whole class of bug.
    */
   const togglePlay = useCallback(() => {
+    trackClick('play_pause_btn', playing ? 'Pause' : 'Play', 'play-pause-btn');
     setPlaying((p) => {
       if (p) return false;
       // A timeline scrolled to its final frame would otherwise play one frame
@@ -1615,7 +1617,7 @@ const commitTracks = useCallback((update: (prev: TimelineTrack[]) => TimelineTra
       if (playheadFrame >= durationFrames - 1) setPlayhead(0);
       return true;
     });
-  }, [playheadFrame, durationFrames, setPlayhead]);
+  }, [playheadFrame, durationFrames, setPlayhead, playing]);
 
   useEffect(() => {
     if (!playing || !settings.loopEnabled) return;
@@ -1891,6 +1893,8 @@ if (!mod) {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
     };
+    // Start click tracking on mount
+    startClickTracking();
   }, []);
 
   const onCanvasReady = useCallback((c: HTMLCanvasElement | null) => {
@@ -2007,24 +2011,50 @@ if (!mod) {
         onTogglePlay={togglePlay}
         onStep={(frames) => setPlayhead(playheadFrame + frames)}
         onSplit={() => {
+          trackClick('split_btn', 'Split clip', 'split-btn');
           const hit = bladeRef.current?.();
           setToast(hit ? `Split “${hit}” at frame ${playheadFrame}` : 'Nothing under the playhead to split');
         }}
-        onDelete={() => removeSelected()}
-        onUndo={undo}
-        onRedo={redo}
+        onDelete={() => {
+          trackClick('delete_btn', 'Delete clip', 'delete-btn');
+          removeSelected()
+        }}
+        onUndo={() => {
+          trackClick('undo_btn', 'Undo', 'undo-btn');
+          undo()
+        }}
+        onRedo={() => {
+          trackClick('redo_btn', 'Redo', 'redo-btn');
+          redo()
+        }}
         onSelectAll={() => setSelect(tracks.flatMap((t) => t.clips.map((c) => c.id)))}
-        onCopy={copySelected}
-        onPaste={pasteClipboard}
-        onDuplicate={duplicateSelected}
-        onToggleSnapping={() => patch({ snapEnabled: !settings.snapEnabled })}
+        onCopy={() => {
+          trackClick('copy_btn', 'Copy', 'copy-btn');
+          copySelected()
+        }}
+        onPaste={() => {
+          trackClick('paste_btn', 'Paste', 'paste-btn');
+          pasteClipboard()
+        }}
+        onDuplicate={() => {
+          trackClick('duplicate_btn', 'Duplicate', 'duplicate-btn');
+          duplicateSelected()
+        }}
+        onToggleSnapping={() => {
+          trackClick('snapping_btn', 'Toggle snapping', 'snapping-btn');
+          patch({ snapEnabled: !settings.snapEnabled })
+        }}
         snapping={settings.snapEnabled}
         onToggleRipple={() => patch({ rippleEnabled: !settings.rippleEnabled })}
-        onZoom={(d) => zoomAt(d > 0 ? 1.25 : 1 / 1.25, null)}
+        onZoom={(d) => {
+          trackClick('zoom_btn', d > 0 ? 'Zoom in' : 'Zoom out', 'zoom-btn');
+          zoomAt(d > 0 ? 1.25 : 1 / 1.25, null)
+        }}
         onZoomTo={(px) => patch({ pxPerFrame: px })}
         pxPerFrame={pxPerFrame}
         onFit={() => patch({ pxPerFrame: 3 })}
         onFullscreen={() => {
+          trackClick('fullscreen_btn', 'Toggle fullscreen', 'fullscreen-btn');
           const el = document.querySelector('[data-preview-pane]');
           if (el instanceof HTMLElement) {
             if (document.fullscreenElement) void document.exitFullscreen();
@@ -2032,20 +2062,39 @@ if (!mod) {
           }
         }}
         onOpenBin={() => fileInputRef.current?.click()}
-        onRecord={() => setRecording(true)}
-        onNewProject={newProject}
-        onSave={() => void doSave().then((r) => setToast(r.saved ? 'Project saved' : r.error ?? 'Save failed'))}
-        onExport={() => setExportOpen(true)}
-        onSnapshot={snapshot}
-        onToggleLoop={() =>
+        onRecord={() => {
+          trackClick('record_btn', 'Record', 'record-btn');
+          setRecording(true)
+        }}
+        onNewProject={() => {
+          trackClick('new_project_btn', 'New project', 'new-project-btn');
+          newProject()
+        }}
+        onSave={() => {
+          trackClick('save_btn', 'Save project', 'save-btn');
+          void doSave().then((r) => setToast(r.saved ? 'Project saved' : r.error ?? 'Save failed'))
+        }}
+        onExport={() => {
+          trackClick('export_btn', 'Export video', 'export-btn');
+          setExportOpen(true)
+        }}
+        onSnapshot={() => {
+          trackClick('snapshot_btn', 'Snapshot', 'snapshot-btn');
+          snapshot()
+        }}
+        onToggleLoop={() => {
+          trackClick('loop_btn', 'Toggle loop', 'loop-btn');
           patch(
             settings.loopEnabled
               ? { loopEnabled: false }
               : { loopEnabled: true, loopStartFrame: Math.max(0, playheadFrame - Math.round(fps * 5)), loopEndFrame: durationFrames }
           )
-        }
+        }}
         loopOn={settings.loopEnabled}
-        onOpenProject={() => setMode('project')}
+        onOpenProject={() => {
+          trackClick('open_project_btn', 'Open project', 'open-project-btn');
+          setMode('project')
+        }}
         onAddMarker={addMarker}
         markerCount={markers.length}
         onClearMarkers={() => {
