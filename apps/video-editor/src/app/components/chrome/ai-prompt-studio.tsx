@@ -313,7 +313,7 @@ const response = await fetch(OLLAMA_ENDPOINT, {
                 <div
                   className={`max-w-xs lg:max-w-md px-4 py-3 rounded-md text-sm font-medium transition-all ${message.role === 'user'
                     ? 'bg-[#ff6500] text-white rounded-br-none'
-                    : 'bg-surface-overlay text-fg-muted rounded-bl-none border border-surface-overlay'
+                    : 'bg-[#1a1a1a] text-gray-300 rounded-bl-none border border-[#2a2a2a]'
                   }`}
                 >
                   <div className="flex items-center gap-2 mb-1">
@@ -361,18 +361,18 @@ const response = await fetch(OLLAMA_ENDPOINT, {
           </form>
 
           {ollamaStatus !== 'online' && (
-            <div className="mt-3 p-3 rounded-md bg-red-500/10 border border-red-500/30">
-              <p className="text-xs text-red-500">
+            <div className="mt-3 p-3 rounded-md bg-[#2a2a2a] border border-[#2a2a2a]">
+              <p className="text-xs text-gray-400">
                 ⚠️ Ollama AI is not running. Please start Ollama locally:
-                <code className="block mt-1 p-1 bg-surface-overlay rounded text-xs">
+                <code className="block mt-1 p-1 bg-[#1a1a1a] rounded text-xs text-gray-300">
                   docker run -d -p 11434:11434 --name ollama ollama/ollama:latest -v ollama-models:/root/.ollama
                 </code>
               </p>
             </div>
           )}
 
-          <div className="mt-3 flex items-center justify-between text-xs text-fg-muted">
-            <span> χρήAI processing - no API costs</span>
+          <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+            <span>Local Ollama AI processing — no API costs</span>
             <span>Models: {OLLAMA_MODELS.join(', ')}</span>
           </div>
         </div>
