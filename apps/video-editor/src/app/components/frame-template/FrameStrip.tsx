@@ -1,11 +1,11 @@
 // ============================================================================
-// FRAME STRIP - Horizontal per-frame thumbnails with drag resize
+// FRAME STRIP - Horizontal per-frame thumbnails with all-side drag resize
 // ============================================================================
 //
 // Shows all frames of the active template as a horizontal scrollable strip.
 // Each frame thumbnail:
 //   - Default size = 3x normal (premium look)
-//   - Drag resize handle: min 100px, max 500px width
+//   - Drag resize handles on ALL sides: top, bottom, left, right, corners
 //   - Active frame highlighted with #ff6500 border
 //   - Click to select frame (opens in FrameCanvas)
 //   - Frame counter: "Frame N of M"
@@ -19,6 +19,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FrameTemplate, Frame } from '../../lib/engine/types';
 import { DEFAULT_FRAME_SIZE, MIN_FRAME_WIDTH, MAX_FRAME_WIDTH } from '../../lib/engine/types';
 import { createFrameTemplateStore } from '../../lib/engine/frame-template/store';
+
+type ResizeDirection = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
+
+const CURSORS: Record<ResizeDirection, string> = {
+  n: 'cursor-n-resize',
+  s: 'cursor-s-resize',
+  e: 'cursor-e-resize',
+  w: 'cursor-w-resize',
+  ne: 'cursor-ne-resize',
+  nw: 'cursor-nw-resize',
+  se: 'cursor-se-resize',
+  sw: 'cursor-sw-resize',
+};
+
+const HANDLE_CLASS = 'absolute w-3 h-3 bg-[#2a2a2a]/60 hover:bg-[#ff6500]/80';
 
 interface FrameStripProps {
   template: FrameTemplate | null;
@@ -34,61 +49,88 @@ export function FrameStrip({
   onResize,
   onToggleSizeLock,
   store,
-}: FrameStripProps) {
-  const [thumbnailWidth, setThumbnailWidth] = useState<number>(template?.frameSize.width ?? DEFAULT_FRAME_SIZE.width);
+}: FrameStripProps) {  const [thumbnailWidth, setThumbnailWidth] = useState<number>(template?.frameSize.width ?? DEFAULT_FRAME_SIZE.width);
+  const [thumbnailHeight, setThumbnailHeight] = useState<number>(template?.frameSize.height ?? DEFAULT_FRAME_SIZE.height);
   const [isResizing, setIsResizing] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const resizeHandleRef = useRef<HTMLDivElement>(null);
+  const [resizeDir, setResizeDir] = useState<ResizeDirection | null>(null);
 
   const frames = template?.frames ?? [];
   const activeIndex = template?.activeFrameIndex ?? 0;
   const sizeLocked = template?.sizeLocked ?? true;
 
-  // Sync thumbnail width from template when it changes externally
+  // Sync thumbnail size from template when it changes externally
   useEffect(() => {
     if (template) {
       setThumbnailWidth(template.frameSize.width);
+      setThumbnailHeight(template.frameSize.height);
     }
   }, [template]);
 
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsResizing(true);
+  const handleResizeStart = useCallback(
+    (e: React.MouseEvent, dir: ResizeDirection) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsResizing(true);
+      setResizeDir(dir);
 
-    const startX = e.clientX;
-    const startWidth = thumbnailWidth;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startWidth = thumbnailWidth;
+      const startHeight = thumbnailHeight;
 
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!isResizing) return;
-      const dx = ev.clientX - startX;
-      let newWidth = startWidth + dx;
-      newWidth = Math.max(MIN_FRAME_WIDTH, Math.min(MAX_FRAME_WIDTH, newWidth));
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!isResizing) return;
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
 
-      // Maintain aspect ratio (16:9)
-      const newHeight = Math.round((newWidth * 9) / 16);
+        let newWidth = startWidth;
+        let newHeight = startHeight;
 
-      setThumbnailWidth(newWidth);
-      onResize(newWidth, newHeight);
+        // Horizontal resize
+        if (dir.includes('e')) newWidth = startWidth + dx;
+        if (dir.includes('w')) newWidth = startWidth - dx;
 
-      // If size locked, update store which will update all frames
-      if (sizeLocked) {
-        store.resizeFrameSize(template?.id ?? '', { width: newWidth, height: newHeight });
-      }
-    };
+        // Vertical resize
+        if (dir.includes('s')) newHeight = startHeight + dy;
+        if (dir.includes('n')) newHeight = startHeight - dy;
 
-    const onMouseUp = () => {
-      setIsResizing(false);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
+        // Clamp
+        newWidth = Math.max(MIN_FRAME_WIDTH, Math.min(MAX_FRAME_WIDTH, newWidth));
+        newHeight = Math.max(MIN_FRAME_WIDTH, Math.min(MAX_FRAME_WIDTH, newHeight));
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-  }, [isResizing, thumbnailWidth, onResize, sizeLocked, store, template?.id]);
+        setThumbnailWidth(newWidth);
+        setThumbnailHeight(newHeight);
+        onResize(newWidth, newHeight);
+
+        // If size locked, update store which will update all frames
+        if (sizeLocked) {
+          store.resizeFrameSize(template?.id ?? '', { width: newWidth, height: newHeight });
+        }
+      };
+
+      const onMouseUp = () => {
+        setIsResizing(false);
+        setResizeDir(null);
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+      };
+
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    },
+    [isResizing, thumbnailWidth, thumbnailHeight, onResize, sizeLocked, store, template?.id]
+  );
 
   const handleSizeLockToggle = useCallback(() => {
     onToggleSizeLock();
   }, [onToggleSizeLock]);
+
+  const renderResizeHandle = (dir: ResizeDirection, className: string) => (
+    <div
+      className={`${HANDLE_CLASS} ${className} ${CURSORS[dir]}`}
+      onMouseDown={(e) => handleResizeStart(e, dir)}
+    />
+  );
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0a] border-r border-[#2a2a2a] overflow-hidden">
@@ -116,7 +158,7 @@ export function FrameStrip({
 
       {/* Scrollable frame thumbnails strip */}
       <div
-        ref={containerRef}
+        ref={null}
         className="flex-1 overflow-x-auto overflow-y-hidden px-2 py-2 bg-[#0a0a0a] scrollbar-hide"
         style={{ scrollBehavior: 'smooth' }}
       >
@@ -136,7 +178,7 @@ export function FrameStrip({
                 }`}
                 style={{
                   width: thumbnailWidth,
-                  height: Math.round((thumbnailWidth * 9) / 16),
+                  height: thumbnailHeight,
                 }}
               >
                 {/* Frame content placeholder - shows layer count */}
@@ -155,22 +197,30 @@ export function FrameStrip({
                     ACTIVE
                   </div>
                 )}
+
+                {/* Resize handles - All sides and corners */}
+                {/* Top edge */}
+                {renderResizeHandle('n', 'top-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-b')}
+                {/* Bottom edge */}
+                {renderResizeHandle('s', 'bottom-0 left-1/2 -translate-x-1/2 w-2 h-2 rounded-t')}
+                {/* Left edge */}
+                {renderResizeHandle('w', 'top-1/2 -translate-y-1/2 left-0 w-2 h-2 rounded-r')}
+                {/* Right edge */}
+                {renderResizeHandle('e', 'top-1/2 -translate-y-1/2 right-0 w-2 h-2 rounded-l')}
+                {/* Top-left corner */}
+                {renderResizeHandle('nw', 'top-0 left-0')}
+                {/* Top-right corner */}
+                {renderResizeHandle('ne', 'top-0 right-0')}
+                {/* Bottom-left corner */}
+                {renderResizeHandle('sw', 'bottom-0 left-0')}
+                {/* Bottom-right corner */}
+                {renderResizeHandle('se', 'bottom-0 right-0')}
               </div>
 
               {/* Frame label */}
               <div className="mt-1 text-[10px] text-gray-400 truncate w-full text-center">
                 F{frame.index + 1}
               </div>
-
-              {/* Drag resize handle (bottom-right corner of thumbnail) */}
-              <div
-                ref={resizeHandleRef}
-                className="absolute bottom-0 right-0 w-3 h-3 cursor-se-resize bg-[#2a2a2a]/60 hover:bg-[#ff6500]/80 rounded-bl rounded-tr rounded-tl"
-                onMouseDown={(e) => {
-                  e.stopPropagation();
-                  handleMouseDown(e as unknown as React.MouseEvent);
-                }}
-              />
             </div>
           ))}
           {/* Add new frame button */}

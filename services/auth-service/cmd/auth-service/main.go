@@ -248,7 +248,7 @@ func main() {
 	// ho sake (DEVICE_LIMIT_ENABLED). `cfg == nil` par service SECURE default
 	// maanta hai - limit chalu, cap 3.
 	securitySvc := service.NewSecurityService(db, cfg)
-	securityHandler := handler.NewSecurityHandler(securitySvc, authService)
+	securityHandler := handler.NewSecurityHandler(securitySvc, authService, nil)
 
 	// =========================================================================
 	// REDIS - rate limiting + JWT revocation denylist
@@ -443,6 +443,7 @@ func main() {
 	if redisClient != nil {
 		mfaStore := authredis.NewMFAChallengeStore(redisClient.Keys(), 5*time.Minute)
 		authHandler.SetMFAChallengeStore(mfaStore)
+		securityHandler.SetMFAChallengeStore(mfaStore)
 	}
 
 	// ---- Give the SUPERADMIN handler the same entitlement service ----

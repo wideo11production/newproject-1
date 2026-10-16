@@ -549,6 +549,7 @@ interface TimelineTracksProps {
   onRemoveTransition: (id: string) => void;
   onChangeTransition: (id: string, patch: Partial<Transition>) => void;
   onOpenInspector: (clipId: string) => void;
+  onOpenFrameTemplateEditor: (clipId: string) => void;
   onToggleLink: (clipId: string) => void;
   onDropMedia: (mediaId: string, trackId: string, atFrame: number) => void;
   onDropHoverChange: (trackId: string | null) => void;
@@ -607,6 +608,7 @@ export function TimelineTracks({
   onRemoveTransition,
   onChangeTransition,
   onOpenInspector,
+  onOpenFrameTemplateEditor,
   onToggleLink,
   onDropMedia,
   onDropHoverChange,
@@ -1245,12 +1247,12 @@ export function TimelineTracks({
                   }}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
-                    onOpenInspector(clip.id);
+                    onOpenFrameTemplateEditor(clip.id);
                   }}
                   onPointerDown={(e) => beginMove(e, clip, track)}
                   onMouseEnter={() => onHoverClip(clip)}
                   onMouseLeave={() => onHoverClip(null)}
-                  title={`${clip.mediaName} · frames ${startFrame}–${startFrame + lengthFrames} (${lengthFrames}f, ${frameToTimecode(lengthFrames, fps)}) — drag to move (lanes included), an edge to trim, the amber corner to fade, double-click for properties`}
+                  title={`${clip.mediaName} · frames ${startFrame}–${startFrame + lengthFrames} (${lengthFrames}f, ${frameToTimecode(lengthFrames, fps)}) — drag to move (lanes included), an edge to trim, the amber corner to fade, double-click for frame template editor`}
                   className={[
                     // `gap` and `border` pulled back to 1px: at the old density
                     // every clip carried a visible frame plus a rounded,

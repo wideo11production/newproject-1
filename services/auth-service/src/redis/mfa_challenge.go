@@ -73,3 +73,24 @@ func (s *MFAChallengeStore) Delete(ctx context.Context, challengeID string) erro
 	key := fmt.Sprintf("mfa:challenge:%s", challengeID)
 	return s.client.Del(ctx, key).Err()
 }
+
+// MarkVerified marks that MFA has been successfully verified for this user.
+// Subsequent login attempts should skip the MFA/PIN requirement for this user.
+func (s *MFAChallengeStore) MarkVerified(ctx context.Context, userID uuid.UUID) error {
+	key := fmt.Sprintf("mfa:verified:%s", userID)
+	return s.client.Set(ctx, key, "1", s.ttl).Err()
+}
+
+// HasVerified checks if MFA has been recently verified for this user.
+// Returns true if a valid MFA verification exists (within TTL).
+func (s *MFAChallengeStore) HasVerified(ctx context.Context, userID uuid.UUID) (bool, error) {
+	key := fmt.Sprintf("mfa:verified:%s", userID)
+	val, err := s.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return val == "1", nil
+}

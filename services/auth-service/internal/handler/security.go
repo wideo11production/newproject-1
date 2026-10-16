@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -13,17 +14,24 @@ import (
 
 	"github.com/wideo11/auth-service/internal/model"
 	"github.com/wideo11/auth-service/internal/service"
+	"github.com/wideo11/auth-service/src/redis"
 )
 
 // SecurityHandler security endpoints handle karta hai
 type SecurityHandler struct {
-	svc     *service.SecurityService
-	authSvc *service.AuthService
+	svc            *service.SecurityService
+	authSvc        *service.AuthService
+	mfaChallengeStore *redis.MFAChallengeStore
 }
 
 // NewSecurityHandler naya handler banata hai
-func NewSecurityHandler(svc *service.SecurityService, authSvc *service.AuthService) *SecurityHandler {
-	return &SecurityHandler{svc: svc, authSvc: authSvc}
+func NewSecurityHandler(svc *service.SecurityService, authSvc *service.AuthService, mfaStore *redis.MFAChallengeStore) *SecurityHandler {
+	return &SecurityHandler{svc: svc, authSvc: authSvc, mfaChallengeStore: mfaStore}
+}
+
+// SetMFAChallengeStore MFA challenge store set karta hai (post-construction set ke liye)
+func (h *SecurityHandler) SetMFAChallengeStore(store *redis.MFAChallengeStore) {
+	h.mfaChallengeStore = store
 }
 
 // currentUserID middleware se context me rakhta hai
@@ -299,6 +307,13 @@ func (h *SecurityHandler) VerifyPIN(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid PIN"})
 		return
+	}
+
+	// Mark MFA as verified for this user so subsequent login doesn't require MFA again
+	if h.mfaChallengeStore != nil {
+		if err := h.mfaChallengeStore.MarkVerified(c.Request.Context(), user.ID); err != nil {
+			log.Printf("[MFA] failed to mark verified for %s: %v", user.Email, err)
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{

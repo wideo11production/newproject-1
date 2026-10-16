@@ -187,9 +187,10 @@ export function StudioMediaCard({
 
   // ---- list variant ----
   //
-  // The play button is always present rather than appearing on hover: a list row
-  // that hides its own control is a row nobody can act on without knowing to
-  // hover first.
+  // Compact YouTube-style list row: thumbnail left, metadata middle, actions right.
+  // Row height is kept in step with grid cards by using a tight thumbnail box,
+  // single-line text, and minimal padding - the row never grows taller than a
+  // grid card's thumbnail + caption, so grid and list feel the same density.
   if (variant === 'list') {
     return (
       <article
@@ -206,31 +207,12 @@ export function StudioMediaCard({
           }
         }}
         tabIndex={0}
-        className={`group flex cursor-pointer items-center gap-2.5 rounded-xl ${productPanel} p-1.5 transition-colors ${productPanelHover} ${glow}`}
+        className={`group flex cursor-pointer items-center gap-2 rounded-xl ${productPanel} p-1 transition-colors ${productPanelHover} ${glow}`}
       >
-        {/* ---- the thumbnail, sized by THIS row ----
-            `aspect="fill"` plus an explicit box, so the frame takes the size the row
-            gives it rather than deriving one from its own width. The two used to
-            disagree, and the frame overflowed and was clipped.
-
-            The box is still a fixed landscape shape, because a list ROW is a
-            landscape shape - a portrait box would make every row as tall as it is
-            wide and the list could not fit beside the player. So a portrait clip is
-            letterboxed inside this box by `object-cover` cropping, which is the
-            right trade for a row. The grid variant above gets the true shape.
-
-            The two boxes are 48x28 and 72x40 - near enough to 16:9 that
-            `object-cover` crops a hair rather than stretching, which is why a poster
-            never looks squashed. They differ by 50% in width, which is the
-            difference Small/Medium was supposed to show all along: before, the size
-            was never passed down into a list row at all, so the buttons did nothing
-            here while working perfectly on the grid.
-
-            Medium is 40px tall against the 56px this row used to force, and the row's
-            padding came down from 8px to 6px with it. */}
+        {/* ---- thumbnail: fixed 16:9 box matching grid card proportions ---- */}
         <div
           className={`relative shrink-0 overflow-hidden rounded-lg bg-black ${
-            size === 'small' ? 'h-7 w-12' : 'h-10 w-[72px]'
+            size === 'small' ? 'h-6 w-[48px]' : 'h-9 w-[64px]'
           }`}
         >
           <HoverPreviewThumbnail
@@ -239,9 +221,6 @@ export function StudioMediaCard({
             filename={filename}
             posterUrl={posterUrl}
             previewUrl={previewUrl}
-            // The real duration, not 0. It was hardcoded to 0 here, which is why a
-            // list row showed no duration badge while a grid card did - the two
-            // variants of the same card were reading different props.
             durationSeconds={durationSeconds}
             aspect="fill"
             className="!rounded-none !bg-transparent"
@@ -251,11 +230,11 @@ export function StudioMediaCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium text-white" title={filename}>
+          <p className="truncate text-xs font-medium text-white leading-tight" title={filename}>
             {filename}
           </p>
-          <div className={`mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] ${productTextMuted}`}>
-            <span className={`rounded ${productSunken} px-1.5 py-0.5 capitalize`}>{kind}</span>
+          <div className={`mt-0.5 flex flex-wrap items-center gap-1 text-[9px] ${productTextMuted}`}>
+            <span className={`rounded ${productSunken} px-1 py-0.5 capitalize`}>{kind}</span>
             {durationSeconds > 0 ? <span>{formatDuration(durationSeconds)}</span> : null}
             {width && height ? <span>
                 {width}x{height}

@@ -37,6 +37,7 @@ import {
   ScanLine,
   Video,
   MessageSquare,
+  Layers,
 } from 'lucide-react';
 import { ToolbarGroup } from './menu-bar';
 import {
@@ -92,6 +93,7 @@ interface TimelineToolbarProps {
    *  recording icon — same 10px glyph + muted->#ff6500 hover pattern. */
   onRecord?: () => void;
   onTogglePromptStudio: () => void;
+  onOpenFrameTemplateEditor?: () => void;
 }
 
 export function TimelineToolbar({
@@ -128,6 +130,7 @@ export function TimelineToolbar({
   onRecord,
   isPromptStudioOpen,
   onTogglePromptStudio,
+  onOpenFrameTemplateEditor,
 }: TimelineToolbarProps) {
   const zoomPct = Math.round((pxPerFrame / 3) * 100);
 
@@ -256,6 +259,17 @@ export function TimelineToolbar({
         onClick: () => {},
         disabled: selectedCount !== 1,
         active: linkedSelection,
+      },
+    ],
+    [
+      {
+        id: 'frametemplate',
+        label: 'Frame Template Editor',
+        hint: 'Open per-frame reusable template editor for selected clip',
+        shortcut: 'T',
+        Icon: Layers,
+        onClick: () => onOpenFrameTemplateEditor?.(),
+        disabled: selectedCount === 0,
       },
     ],
     [

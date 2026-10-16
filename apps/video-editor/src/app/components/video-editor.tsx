@@ -2565,6 +2565,15 @@ onToggleLoop={() =>
             onEdgeEdit={edgeEdit}
             isPromptStudioOpen={showAIPromptStudio}
             onTogglePromptStudio={() => setShowAIPromptStudio((o) => !o)}
+            onOpenFrameTemplateEditor={() => {
+              const id = selectedIdsArr.length === 1 ? selectedIdsArr[0] : null;
+              if (id) {
+                setFrameTemplateClipId(id);
+                setShowFrameTemplateEditor(true);
+              } else {
+                setToast('Select one clip first to open Frame Template Editor');
+              }
+            }}
           />
           {/*
             RULER ROW — FIXED: does NOT scroll vertically with clips.
@@ -2705,6 +2714,10 @@ onToggleLoop={() =>
                   onRemoveTransition={removeTransition}
                   onChangeTransition={changeTransition}
                   onOpenInspector={setInspecting}
+                  onOpenFrameTemplateEditor={(clipId) => {
+                    setFrameTemplateClipId(clipId);
+                    setShowFrameTemplateEditor(true);
+                  }}
                   onToggleLink={toggleLink}
                   onDropMedia={(mediaId, trackId, atFrame) => {
                     const item = media.byId.get(mediaId);

@@ -699,21 +699,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// ---- MFA CHECK: if user has PIN configured, require MFA at login (2FA) ----
 	// Only proceed to issue tokens if PIN is NOT configured. If PIN is configured,
 	// return a challenge and wait for PIN verification via /mfa/verify.
+	//
+	// IMPORTANT: If MFA was already verified in this login flow (challenge marked
+	// as verified via /mfa/verify), skip the MFA requirement and proceed normally.
+	// This prevents the infinite loop where login → MFA → login → MFA → ...
 	if h.mfaChallengeStore != nil && h.securitySvc != nil {
-		hasPIN, _ := h.securitySvc.HasPIN(ctx, user.ID)
-		if hasPIN {
-			ch, err := h.mfaChallengeStore.Create(ctx, user.ID, user.Email)
-			if err == nil {
-				c.JSON(http.StatusOK, gin.H{
-					"mfa_required":  true,
-					"challenge_id":  ch.ChallengeID,
-					"expires_at":    ch.ExpiresAt,
-					"message":       "Verify your 6-digit security PIN to complete login",
-				})
-				return
+		// Check if MFA was already verified for this user in this login flow
+		hasVerified, _ := h.mfaChallengeStore.HasVerified(ctx, user.ID)
+		if !hasVerified {
+			hasPIN, _ := h.securitySvc.HasPIN(ctx, user.ID)
+			if hasPIN {
+				ch, err := h.mfaChallengeStore.Create(ctx, user.ID, user.Email)
+				if err == nil {
+					c.JSON(http.StatusOK, gin.H{
+						"mfa_required":  true,
+						"challenge_id":  ch.ChallengeID,
+						"expires_at":    ch.ExpiresAt,
+						"message":       "Verify your 6-digit security PIN to complete login",
+					})
+					return
+				}
+				// If challenge creation fails, log and fall through to normal login
+				log.Printf("[MFA] challenge creation failed for %s: %v - proceeding without MFA", user.Email, err)
 			}
-			// If challenge creation fails, log and fall through to normal login
-			log.Printf("[MFA] challenge creation failed for %s: %v - proceeding without MFA", user.Email, err)
 		}
 	}
 
