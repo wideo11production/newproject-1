@@ -85,6 +85,7 @@ func newWebhookTestService() *service.BillingService {
 	// eight stay nil. The constructor does not dereference them, and a nil here
 	// is the honest signal that this service is wired for one purpose only.
 	return service.NewBillingService(
+		nil,
 		nil, nil, nil, nil, nil,
 		&noPaymentRepo{},
 		nil, nil, nil, nil,
@@ -513,6 +514,7 @@ func TestWebhookEndpoint_CheckoutSessionCompletedActivates(t *testing.T) {
 	firer := &webhookFirer{}
 
 	svc := service.NewBillingService(
+		nil,
 		plans, subs, nil, invoices, nil,
 		payments, nil, identity, nil, nil,
 	)

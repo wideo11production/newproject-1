@@ -125,6 +125,7 @@ func (f *fakeFirer) GrantSubscription(_ context.Context, authUserID, planCode st
 // reaches are nil - and would panic loudly if it tried.
 func newTestService(plan *model.SubscriptionPlan, identity *fakeIdentityRepo, subs *fakeSubRepo) (*BillingService, *fakeFirer) {
 	svc := NewBillingService(
+		nil,
 		&fakePlanRepo{plan: plan},
 		subs,
 		nil, // taxRepo - not on the Subscribe path
@@ -290,7 +291,8 @@ func TestSubscribeSurvivesAFiredGrantFailure(t *testing.T) {
 func TestSubscribeWithoutAFirerStillSubscribes(t *testing.T) {
 	identity := &fakeIdentityRepo{billing: 42}
 	subs := &fakeSubRepo{}
-	svc := NewBillingService(&fakePlanRepo{plan: testPlan()}, subs,
+	svc := NewBillingService(nil,
+		&fakePlanRepo{plan: testPlan()}, subs,
 		nil, nil, nil, nil, nil, identity, nil, nil)
 
 	if _, err := svc.Subscribe(context.Background(),

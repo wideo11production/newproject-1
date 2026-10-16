@@ -77,7 +77,7 @@ func TestIdentityAdapterIsConstructedAndPassed(t *testing.T) {
 		"repository.NewUserIdentityRepository(db)",
 		"repository.NewPushAllocationRepository(db)",
 		"repository.NewContentRevenueRepository(db)",
-		"service.NewBillingService(planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo)",
+		"service.NewBillingService(db, planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo)",
 	} {
 		if !strings.Contains(mainSrc, want) {
 			t.Errorf("main.go is missing %q.\n"+

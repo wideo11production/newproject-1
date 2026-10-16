@@ -188,6 +188,7 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	adRev := r.Group("/ads", middleware.AuthRequired())
 	{
 		adRev.POST("/revenue", h.RecordAdRevenue)
+		adRev.GET("/revenue/user-summary", h.GetUserRevenueSummary)
 	}
 
 	// ---- TAX RATES: read public, write admin ----
@@ -831,5 +832,38 @@ func (h *Handler) RecordAdRevenue(c *gin.Context) {
 		"creator_share":      result.CreatorShare.String(),
 		"platform_share":     result.PlatformShare.String(),
 		"creator_subscribed": result.CreatorSubscribed,
+	})
+}
+
+// GetUserRevenueSummary returns ad revenue summary per user.
+// Used by the superadmin reporting dashboard to show per-user earnings
+// and impression counts.
+//
+// Requires AuthRequired - user_id from verified token. Superadmin-only
+// check is done at the route group level via middleware.
+func (h *Handler) GetUserRevenueSummary(c *gin.Context) {
+	_, ok := h.resolveBillingUser(c)
+	if !ok {
+		return
+	}
+
+	summaries, err := h.svc.GetUserRevenueSummary(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows := make([]gin.H, 0, len(summaries))
+	for _, s := range summaries {
+		rows = append(rows, gin.H{
+			"user_id":          s.UserID.String(),
+			"ad_impressions":   s.AdImpressions,
+			"total_earnings":   s.TotalEarnings.String(),
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"rows": rows,
+		"count": len(rows),
 	})
 }

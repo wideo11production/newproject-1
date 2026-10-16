@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
+	"gorm.io/gorm"
 	"newproject/services/billing-service/src/model"
 	"newproject/services/billing-service/src/repository"
 )
@@ -17,7 +18,8 @@ import (
 // BillingService orchestrates billing operations including invoice management,
 // payment processing, and reconciliation.
 type BillingService struct {
-	planRepo      repository.SubscriptionPlanRepository
+	db           *gorm.DB
+	planRepo     repository.SubscriptionPlanRepository
 	subRepo       repository.SubscriptionRepository
 	taxRepo       repository.TaxRateRepository
 	invoiceRepo   repository.InvoiceRepository
@@ -53,6 +55,7 @@ type EntitlementFirer interface {
 
 // NewBillingService creates a new BillingService with all required repositories.
 func NewBillingService(
+	db *gorm.DB,
 	planRepo repository.SubscriptionPlanRepository,
 	subRepo repository.SubscriptionRepository,
 	taxRepo repository.TaxRateRepository,
@@ -65,15 +68,16 @@ func NewBillingService(
 	contentRevRepo repository.ContentRevenueRepository,
 ) *BillingService {
 	return &BillingService{
-		planRepo:      planRepo,
-		subRepo:       subRepo,
-		taxRepo:       taxRepo,
-		invoiceRepo:   invoiceRepo,
-		itemRepo:      itemRepo,
-		paymentRepo:   paymentRepo,
-		expenseRepo:   expenseRepo,
-		identityRepo:  identityRepo,
-		pushAllocRepo: pushAllocRepo,
+		db:             db,
+		planRepo:       planRepo,
+		subRepo:        subRepo,
+		taxRepo:        taxRepo,
+		invoiceRepo:    invoiceRepo,
+		itemRepo:       itemRepo,
+		paymentRepo:    paymentRepo,
+		expenseRepo:    expenseRepo,
+		identityRepo:   identityRepo,
+		pushAllocRepo:  pushAllocRepo,
 		contentRevRepo: contentRevRepo,
 	}
 }
@@ -1313,6 +1317,41 @@ type serviceAdRevenueResult struct {
 	PlatformShare     decimal.Decimal
 	CreatorSubscribed bool
 	RecordID          uint
+}
+
+// UserRevenueSummary is per-user ad revenue aggregation.
+type UserRevenueSummary struct {
+	UserID         uuid.UUID
+	AdImpressions  int64
+	TotalEarnings  decimal.Decimal
+}
+
+// GetUserRevenueSummary aggregates ad revenue per user from content_revenue.
+func (s *BillingService) GetUserRevenueSummary(ctx context.Context) ([]UserRevenueSummary, error) {
+	var rows []struct {
+		UserID         uuid.UUID      `gorm:"column:user_id"`
+		AdImpressions  int64          `gorm:"column:ad_impressions"`
+		TotalEarnings  decimal.Decimal `gorm:"column:total_earnings"`
+	}
+
+	err := s.db.WithContext(ctx).
+		Model(&model.ContentRevenue{}).
+		Select("user_id, COUNT(*) as ad_impressions, COALESCE(SUM(creator_share), 0) as total_earnings").
+		Group("user_id").
+		Scan(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	summaries := make([]UserRevenueSummary, 0, len(rows))
+	for _, r := range rows {
+		summaries = append(summaries, UserRevenueSummary{
+			UserID:         r.UserID,
+			AdImpressions:  r.AdImpressions,
+			TotalEarnings:  r.TotalEarnings,
+		})
+	}
+	return summaries, nil
 }
 
 

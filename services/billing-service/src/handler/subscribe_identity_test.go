@@ -125,7 +125,8 @@ func TestSubscribeAcceptsTheAuthUUIDToken(t *testing.T) {
 
 	subs := &uuidSubRepo{}
 	firer := &recordingFirer{}
-	svc := service.NewBillingService(uuidPlanRepo{}, subs,
+	svc := service.NewBillingService(nil,
+		uuidPlanRepo{}, subs,
 		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil)
 	svc.SetEntitlementFirer(firer)
 
@@ -168,7 +169,8 @@ func TestSubscribeStillRejectsABareUintToken(t *testing.T) {
 	t.Setenv("JWT_SECRET_KEY", testJWTSecret)
 
 	subs := &uuidSubRepo{}
-	svc := service.NewBillingService(uuidPlanRepo{}, subs,
+	svc := service.NewBillingService(nil,
+		uuidPlanRepo{}, subs,
 		nil, nil, nil, nil, nil, &uuidIdentityRepo{billing: 42}, nil, nil)
 
 	r := subscribeRouter(t, svc)

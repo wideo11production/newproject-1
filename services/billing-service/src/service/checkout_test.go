@@ -157,6 +157,7 @@ func TestCreateCheckoutSession_WritesTransactionID(t *testing.T) {
 	identity := &checkoutIdentityRepo{}
 
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		subs,
 		nil, invoices, nil,
@@ -219,6 +220,7 @@ func TestActivateByProviderPayment_ResolvesThroughCheckoutChain(t *testing.T) {
 	subRepo := &activatingSubRepo{}
 
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		subRepo,
 		nil, invoices, nil,
@@ -311,6 +313,7 @@ func (r *activatingSubRepo) List(context.Context, model.SubscriptionStatus, int,
 func TestCreateCheckoutSession_RejectsUnknownPlan(t *testing.T) {
 	payments := &recordingPaymentRepo{}
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		&fakeSubRepo{},
 		nil, &recordingInvoiceRepo{}, nil,
@@ -338,6 +341,7 @@ func TestCreateCheckoutSession_RejectsUnknownPlan(t *testing.T) {
 func TestCreateCheckoutSession_GeneratesSessionID(t *testing.T) {
 	payments := &recordingPaymentRepo{}
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		&fakeSubRepo{},
 		nil, &recordingInvoiceRepo{}, nil,
@@ -396,6 +400,7 @@ func TestCreateCheckoutSession_UsesStripeClient(t *testing.T) {
 	}
 
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		subs,
 		nil, invoices, nil,
@@ -466,6 +471,7 @@ func TestCreateCheckoutSession_StripeFailureReturnsError(t *testing.T) {
 	}
 
 	svc := NewBillingService(
+		nil,
 		checkoutPlanRepo{},
 		subs,
 		nil, invoices, nil,
