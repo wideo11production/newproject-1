@@ -36,6 +36,7 @@
  * tree, and reading a prop is the only way to get a typed, comparable value.
  */
 
+import { useState } from 'react';
 import { Play, Radio, Trash2 } from 'lucide-react';
 import { HoverPreviewThumbnail } from '../HoverPreviewThumbnail';
 import { formatDuration } from '@/lib/media-upload';
@@ -163,6 +164,7 @@ export function StudioMediaCard({
   const { play, current } = useInlinePlayer();
   const isActive = current?.id === id;
   const canPlay = Boolean(playUrl);
+  const [hovering, setHovering] = useState(false);
 
   const asset: InlinePlayerAsset = {
     id,
@@ -209,11 +211,9 @@ export function StudioMediaCard({
         tabIndex={0}
         className={`group flex cursor-pointer items-center gap-2 rounded-xl ${productPanel} p-1 transition-colors ${productPanelHover} ${glow}`}
       >
-        {/* ---- thumbnail: fixed 16:9 box matching grid card proportions ---- */}
+        {/* ---- thumbnail: fixed aspect matching Grafana-style list row ---- */}
         <div
-          className={`relative shrink-0 overflow-hidden rounded-lg bg-black ${
-            size === 'small' ? 'h-6 w-[48px]' : 'h-9 w-[64px]'
-          }`}
+          className={`relative shrink-0 overflow-hidden rounded-lg border-0 bg-black ${size === 'small' ? 'h-6 w-[48px]' : 'h-9 w-[64px]'}`}
         >
           <HoverPreviewThumbnail
             id={id}
@@ -222,11 +222,15 @@ export function StudioMediaCard({
             posterUrl={posterUrl}
             previewUrl={previewUrl}
             durationSeconds={durationSeconds}
-            aspect="fill"
+            aspect={cardAspect(kind, durationSeconds, width, height)}
             className="!rounded-none !bg-transparent"
             showCaption={false}
             onPlayClick={activate}
           />
+          {/* Hover playhead indicator: thin vertical line showing play progress */}
+          {hovering && canPlay && (
+            <div className="absolute inset-x-0 bottom-0 h-[2px] bg-[#ff6500] z-20" style={{ animation: 'playhead 2s linear infinite' }} />
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -294,8 +298,15 @@ export function StudioMediaCard({
       data-active={isActive ? 'true' : 'false'}
       data-asset-id={id}
       aria-label={filename}
-      className={`group relative overflow-hidden rounded-xl ${productPanel} transition-colors ${productPanelHover} ${glow}`}
+      onMouseEnter={() => { if (canPlay) { setHovering(true); play(asset); } }}
+      onMouseLeave={() => { setHovering(false); }}
+      className={`group relative overflow-hidden rounded-xl ${productPanel} transition-colors ${productPanelHover} ${glow} cursor-pointer`}
+          title={`${filename} ${width && height ? `${width}x${height}` : ''} ${durationSeconds > 0 ? formatDuration(durationSeconds) : ''}`}
     >
+      {/* Red playhead bar on hover - Movavi style */}
+      {hovering && canPlay && (
+        <div className="absolute inset-x-0 bottom-0 h-[2px] bg-red-500 z-20" style={{ animation: 'playhead 2s linear infinite' }} />
+      )}
       <HoverPreviewThumbnail
         id={id}
         kind={kind}
@@ -318,64 +329,6 @@ export function StudioMediaCard({
         className="!rounded-none"
       />
 
-      {/* ---- caption + action row ---- */}
-      <div className="p-2">
-        <p className="truncate text-[11px] font-medium text-white" title={filename}>
-          {filename}
-        </p>
-        <p className={`mt-0.5 truncate text-[10px] ${productTextMuted}`}>
-          {canPlay ? (durationSeconds > 0 ? formatDuration(durationSeconds) : 'Ready') : 'Not ready'}
-          {subtitle ? ` · ${subtitle}` : ''}
-        </p>
-
-        {/* The action row: Play | Go Live | Delete, icons only.
-            All three sit here in the card footer rather than on the thumbnail, so
-            the frame stays a clean hover-preview surface. Each is an icon plus a
-            tooltip - the words they used to carry ("Play", "Go Live", "Live")
-            overflowed a narrow card and overlapped each other. */}
-        <div className="mt-1.5 flex items-center gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              activate();
-            }}
-            disabled={!canPlay}
-            aria-label={`Play ${filename}`}
-            title={canPlay ? 'Play here' : 'Not playable yet'}
-            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productAccentBg} text-white transition-colors ${productAccentHoverBg} disabled:opacity-40`}
-          >
-            <Play className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-
-          <PublishAffordance
-            eligible={eligibleForPublish && canPlay}
-            isLive={isLive}
-            onPublish={onPublish}
-          />
-
-          {onDelete ? (
-            <button
-              onClick={(e) => {
-                // Without this the click also activates the card behind it, so a
-                // delete would open the confirm dialog AND the player.
-                e.stopPropagation();
-                onDelete();
-              }}
-              aria-label={`Delete ${filename}`}
-              title="Delete"
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${productSunken} text-red-400 transition-colors hover:bg-red-500/20`}
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-      </div>
-
-      {isActive ? (
-        <span className={`pointer-events-none absolute left-1.5 top-1.5 rounded-full ${productAccentBg} px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white`}>
-          Playing
-        </span>
-      ) : null}
     </article>
   );
 }
