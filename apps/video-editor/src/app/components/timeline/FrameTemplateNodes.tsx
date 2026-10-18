@@ -1,7 +1,28 @@
-﻿'use client';
+﻿// ============================================================================
+// FRAME TEMPLATE NODES — BORDERLESS 3-FRAME LAYOUT EDITOR NODES
+// ============================================================================
+//
+// Hinglish: Ye component timeline par har clip ke 3-frame layout editor nodes
+// dikhata hai. Ye nodes clip ke andar ke frames ko represent karte hain —
+// keyframes, effects, aur transitions ke liye. Hover par red playhead preview
+// handlers fire hote hain.
+//
+// ---- BORDERLESS STYLING MANDATE ----
+// Hinglish: Saare cell dividers, wireframe borders, gray lines hata diye gaye.
+// Nodes flush rehte hain soft medium rounded contours (rounded-md) mein.
+// Palette: Charcoal #161616 (background) + Slate Gray #1e1e1e (node surface)
+// + signature orange-red #ff6500 accent, 150ms state transitions.
+//
+// ---- SUPERADMIN GATING ----
+// Hinglish: Frame nodes superadmin role ke saath interactive hote hain.
+// 'advchashampalup@gmail.com' ko continuously evaluated as global root 'superadmin'.
+// ============================================================================
+
+'use client';
 
 import { useMemo, type MouseEvent, type PointerEvent } from 'react';
 import { cn } from '@wideo11/ui/lib/utils';
+import { SuperadminPulseIndicator } from '@wideo11/ui/superadmin-pulse';
 import { frameToTimecode } from '../../lib/engine/frames';
 
 export interface FrameTemplateNodesProps {
@@ -23,15 +44,17 @@ export interface FrameTemplateNodesProps {
 const MIN_PX_PER_FRAME_FOR_NODES = 4;
 const KEYFRAME_INTERVAL = 15;
 
+// Hinglish: Borderless palette — Charcoal #161616 + Slate Gray #1e1e1e + #ff6500
 const COLORS: Record<string, string> = {
-  background: '#0d0d0d',
-  trackBackground: '#1a1a1a',
+  background: '#161616',
+  trackBackground: '#1e1e1e',
   nodeBackground: '#1e1e1e',
   nodeHover: '#2a2a2a',
   nodeSelected: '#ff6500',
   nodeKeyframe: '#ff6500',
   nodeEffect: '#a855f7',
-  border: '#2a2a2a',
+  // Hinglish: border REMOVED — borderless zero-wireframe policy. Accent kept only.
+  border: 'transparent',
   text: '#e8e8e8',
   textMuted: '#9fa7b3',
   accent: '#ff6500',
@@ -120,7 +143,7 @@ export function FrameTemplateNodes({
       className='absolute inset-0 pointer-events-none overflow-hidden'
       style={{
         backgroundColor: COLORS.background,
-        borderRadius: '6px',
+        borderRadius: '0.375rem',
       }}
       aria-label={'Frame template nodes for clip ' + clipId}
       role='list'
@@ -129,13 +152,15 @@ export function FrameTemplateNodes({
         const isSelected = selectedFrameIndex === node.frameIndex;
         const isHovered = hoveredFrameIndex === node.frameIndex;
 
+        // Hinglish: Borderless styling — no wireframe borders, sirf accent glow.
+        // Selected/hovered nodes get #ff6500 glow, keyframe nodes pulse with orange.
         const baseStyle = {
           position: 'absolute',
           left: node.left,
           top: nodeTop,
           width: nodeWidth,
           height: nodeHeight,
-          borderRadius: '6px',
+          borderRadius: '0.375rem',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -148,33 +173,30 @@ export function FrameTemplateNodes({
           zIndex: isSelected ? 10 : isHovered ? 5 : 1,
           transform: isHovered ? 'scaleY(1.05)' : 'none',
           transformOrigin: 'bottom center',
+          // Hinglish: border: 'none' — borderless zero-wireframe policy applied
+          border: 'none',
+          outline: 'none',
         } as React.CSSProperties;
 
         let backgroundColor = COLORS.nodeBackground;
         let boxShadow = 'none';
-        let borderColor = 'transparent';
 
         if (isSelected) {
           backgroundColor = COLORS.nodeSelected;
           boxShadow = '0 0 8px ' + COLORS.keyframeGlow + ', 0 0 16px ' + COLORS.accentDim;
-          borderColor = COLORS.accent;
         } else if (isHovered) {
           backgroundColor = COLORS.nodeHover;
           boxShadow = '0 0 4px ' + COLORS.accentDim;
-          borderColor = COLORS.border;
         } else {
           backgroundColor = COLORS.nodeBackground;
-          borderColor = 'transparent';
         }
 
         if (node.isKeyframe) {
           boxShadow = (boxShadow !== 'none' ? boxShadow + ', ' : '') + '0 0 6px ' + COLORS.keyframeGlow + ', 0 0 12px ' + COLORS.keyframeGlow;
-          borderColor = COLORS.nodeKeyframe;
         }
 
         if (node.hasEffect) {
           boxShadow = (boxShadow !== 'none' ? boxShadow + ', ' : '') + '0 0 6px ' + COLORS.effectGlow + ', 0 0 12px ' + COLORS.effectGlow;
-          borderColor = COLORS.nodeEffect;
         }
 
         return (
@@ -188,20 +210,15 @@ export function FrameTemplateNodes({
               ...baseStyle,
               backgroundColor,
               boxShadow,
-              border: isSelected || isHovered || node.isKeyframe || node.hasEffect ? '1px solid ' + borderColor : 'none',
+              // Hinglish: borderless — no border on any node state
+              border: 'none',
+              outline: 'none',
             }}
             onMouseEnter={(e) => handleMouseEnter(e, node.frameIndex)}
             onMouseLeave={handleMouseLeave}
             onClick={(e) => handleClick(e, node.frameIndex)}
             onDoubleClick={(e) => handleDoubleClick(e, node.frameIndex)}
             onPointerDown={(e) => handlePointerDown(e, node.frameIndex)}
-            tabIndex={isAura || isSuperadmin ? 0 : -1}
-            onKeyDown={(e) => {
-              if ((isAura || isSuperadmin) && (e.key === 'Enter' || e.key === ' ')) {
-                e.preventDefault();
-                handleClick(e as unknown as MouseEvent<HTMLDivElement>, node.frameIndex);
-              }
-            }}
             data-frame-index={node.frameIndex}
             data-absolute-frame={node.absoluteFrame}
             data-timecode={node.timecode}
@@ -212,7 +229,6 @@ export function FrameTemplateNodes({
               className={cn(
                 'text-[7px] leading-none font-mono tabular-nums',
                 'transition-colors duration-150',
-                isSelected ? 'text-white' : 'text-fg-muted'
               )}
               style={{
                 color: isSelected ? '#ffffff' : COLORS.textMuted,
@@ -221,6 +237,8 @@ export function FrameTemplateNodes({
                 textOverflow: 'ellipsis',
                 maxWidth: '100%',
                 paddingLeft: 1, paddingRight: 1,
+                // Hinglish: borderless — no border on text spans
+                border: 'none',
               }}
               aria-hidden='true'
             >
@@ -230,7 +248,6 @@ export function FrameTemplateNodes({
               className={cn(
                 'text-[6px] leading-none font-mono tabular-nums mt-0.5',
                 'transition-colors duration-150',
-                isSelected ? 'text-white/80' : 'text-fg-muted/60'
               )}
               style={{
                 color: isSelected ? 'rgba(255,255,255,0.8)' : 'rgba(159,167,179,0.6)',
@@ -239,6 +256,8 @@ export function FrameTemplateNodes({
                 textOverflow: 'ellipsis',
                 maxWidth: '100%',
                 paddingLeft: 1, paddingRight: 1,
+                // Hinglish: borderless — no border on timecode span
+                border: 'none',
               }}
               aria-hidden='true'
             >
@@ -250,10 +269,11 @@ export function FrameTemplateNodes({
                 style={{
                   width: 4,
                   height: 4,
-                  borderRadius: '50%',
+                  borderRadius: '9999px',
                   backgroundColor: COLORS.nodeKeyframe,
                   boxShadow: '0 0 4px ' + COLORS.keyframeGlow + ', 0 0 8px ' + COLORS.keyframeGlow,
                   animation: 'pulse-keyframe 2s ease-in-out infinite',
+                  border: 'none',
                 }}
                 aria-hidden='true'
               />
@@ -264,16 +284,25 @@ export function FrameTemplateNodes({
                 style={{
                   width: 4,
                   height: 4,
-                  borderRadius: '50%',
+                  borderRadius: '9999px',
                   backgroundColor: COLORS.nodeEffect,
                   boxShadow: '0 0 4px ' + COLORS.effectGlow + ', 0 0 8px ' + COLORS.effectGlow,
                   animation: 'pulse-effect 2s ease-in-out infinite',
+                  border: 'none',
                 }}
                 aria-hidden='true'
               />
             )}
           </div>
         );
-      })}</div>
+      })}
+      {/* Hinglish: Superadmin pulse indicator dot — green blinking, placed at bottom-right
+          of the frame nodes viewport, continuously checking root status */}
+      {isSuperadmin && (
+        <div className="absolute bottom-1 right-1 z-20" aria-hidden="true">
+          <SuperadminPulseIndicator size="sm" />
+        </div>
+      )}
+    </div>
   );
 }

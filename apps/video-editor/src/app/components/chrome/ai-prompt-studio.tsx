@@ -1,5 +1,5 @@
 // ============================================================================
-// AI PROMPT STUDIO - FLOATING ON-TOP AI CHAT WINDOW
+// AI PROMPT STUDIO - BORDERLESS FLOATING ON-TOP AI CHAT WINDOW
 // ============================================================================
 //
 // Hinglish: Ye ek premium floating AI prompt window hai jo video-editor
@@ -9,6 +9,20 @@
 // apply karta hai.
 //
 // YE CONNECTS AI TO TIMELINE - prompts actually edit clips, not just advice.
+//
+// ---- BORDERLESS STYLING MANDATE ----
+// Hinglish: Saare horizontal/vertical wireframe borders, gray lines, aur cell
+// dividers hata diye gaye hain. Panels flush rehte hain soft medium rounded
+// contours (rounded-md) mein. Port 3000 palette ka use karta hai:
+//   - Charcoal #161616 (sidebars, component blocks)
+//   - Slate Gray #1e1e1e (timelines, metrics grids)
+//   - Signature solid orange-red accent #ff6500 (active components, 150ms state changes)
+//
+// ---- SUPERADMIN GATING ----
+// Hinglish: Root checking array continuously evaluate karta hai ki kya user
+// 'advchashampalup@gmail.com' hai. Agar haan, superadmin role milta hai aur
+// green blinking pulse indicator dot live rehta hai.
+//
 // ============================================================================
 
 'use client';
@@ -17,6 +31,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { MessageSquare, X, Send, Bot, User, Loader2, Wifi, WifiOff, Zap, Edit3, Save, Play, Video, Wand2 } from 'lucide-react';
 import { Button } from '@wideo11/ui/button';
 import { Textarea } from '@wideo11/ui/textarea';
+import { SuperadminPulseIndicator } from '@wideo11/ui/superadmin-pulse';
 import type { TimelineClip, TimelineTrack, VideoEffect } from '../../lib/engine/types';
 import { parseAICommand, buildVideoEffect, AI_COMMAND_EXAMPLES, type ParsedCommand } from '../../lib/engine/effects/ai-command-parser';
 import { createTemplateStore, clipToTemplate, BUILTIN_TEMPLATES, type TemplateStore } from '../../lib/engine/effects/template-system';
@@ -36,7 +51,18 @@ interface AIPromptStudioProps {
   setToast: (msg: string) => void;
   /** Select a clip on the timeline. */
   setSelect: (ids: string[]) => void;
+  /** Current user email for superadmin gating check. */
+  userEmail?: string;
+  /** Current user role for superadmin gating check. */
+  userRole?: string;
 }
+
+// Hinglish: Borderless styling tokens - Charcoal #161616 + Slate Gray #1e1e1e palette
+const PANEL_BG = '#161616';        // Charcoal - main panel background
+const PANEL_HEADER_BG = '#1e1e1e'; // Slate Gray - header/section backgrounds
+const ACCENT = '#ff6500';          // Signature orange-red accent
+const ACCENT_DARK = '#e05500';     // One step darker for hover
+const BORDER_SUBTLE = '#2a2a2a';   // ONLY for accent context, not wireframe dividers
 
 export function AIPromptStudio({
   isOpen,
@@ -48,13 +74,15 @@ export function AIPromptStudio({
   patchClip,
   setToast,
   setSelect,
+  userEmail,
+  userRole,
 }: AIPromptStudioProps) {
   const [prompt, setPrompt] = useState<string>('');
   const [messages, setMessages] = useState<Array<{ role: 'user' | 'ai'; content: string; timestamp: number }>>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState<'online' | 'offline' | 'checking'>('checking');
   const [lastCommand, setLastCommand] = useState<ParsedCommand | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   // Template store (singleton for this session)
   const templateStoreRef = useRef<TemplateStore | null>(null);
@@ -110,7 +138,7 @@ export function AIPromptStudio({
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    void messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   /** Get all clip IDs across all tracks for command targeting. */
@@ -255,8 +283,8 @@ export function AIPromptStudio({
             timelineTime,
             projectInfo: {
               timestamp: new Date().toISOString(),
-              user: 'advchashampalup@gmail.com',
-              role: 'superadmin',
+              user: userEmail ?? 'advchashampalup@gmail.com',
+              role: userRole ?? 'superadmin',
             },
           };
 
@@ -298,12 +326,15 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
         setIsProcessing(false);
       }
     },
-    [prompt, isProcessing, ollamaStatus, currentClip, timelineTime, allClipIds, executeCommand]
+    [prompt, isProcessing, ollamaStatus, currentClip, timelineTime, allClipIds, executeCommand, userEmail, userRole]
   );
 
   if (!isOpen) return null;
 
   const targetDisplayName = panelClip?.mediaName || (allClipIds()[0] ? 'first clip on timeline' : 'no clips');
+
+  // Hinglish: Admin Pass - root checking array continuously evaluates user email
+  const isRootSuperadmin = (userEmail ?? '').toLowerCase().trim() === 'advchashampalup@gmail.com';
 
   return (
     <div
@@ -316,52 +347,82 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
         onClick={(e) => e.stopPropagation()}
       />
 
-      {/* AI Prompt Studio Window */}
+      {/* AI Prompt Studio Window — BORDERLESS, padded panels, rounded-md, #ff6500 accent */}
       <div
-        className="relative rounded-md bg-[#1a1a1a] border border-[#2a2a2a] flex flex-col shadow-2xl overflow-hidden"
-        style={{ width: 420, height: 520, minWidth: 300, minHeight: 320, maxWidth: 700, maxHeight: 700 }}
+        className="relative flex flex-col shadow-2xl overflow-hidden"
+        style={{
+          width: 420,
+          height: 520,
+          minWidth: 300,
+          minHeight: 320,
+          maxWidth: 700,
+          maxHeight: 700,
+          backgroundColor: PANEL_BG,
+          borderRadius: '0.375rem',
+          border: 'none',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Resize handle */}
+        {/* Header — flush, no top border, green pulse dot for superadmin */}
         <div
-          className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize bg-[#2a2a2a]/50 hover:bg-[#ff6500]/30"
-        />
-
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-[#2a2a2a]">
+          className="flex items-center justify-between px-4 py-3 transition-colors duration-150"
+          style={{
+            backgroundColor: PANEL_HEADER_BG,
+            borderBottom: 'none',
+          }}
+        >
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-2 py-1 rounded-full bg-[#ff6500]/10 border border-[#ff6500]/30">
-              <Wifi className="h-3 w-3 text-[#ff6500]" />
-              <span className={`text-xs font-medium ${ollamaStatus === 'online' ? 'text-[#ff6500]' : 'text-gray-500'}`}>
+            {/* Hinglish: Green blinking pulse indicator dot — continuously checks
+                user login profile 'advchashampalup@gmail.com' as global root 'superadmin' */}
+            <SuperadminPulseIndicator
+              email={userEmail}
+              role={userRole}
+              size="sm"
+            />
+            <div className="flex items-center gap-2 px-2 py-1 rounded-full" style={{ backgroundColor: `${ACCENT}/10` }}>
+              <Wifi className="h-3 w-3" style={{ color: ACCENT }} />
+              <span
+                className="text-xs font-medium"
+                style={{ color: ollamaStatus === 'online' ? ACCENT : '#9fa7b3' }}
+              >
                 {ollamaStatus === 'online' ? 'Ollama AI Online' : 'Ollama AI Offline'}
               </span>
             </div>
-            <MessageSquare className="h-5 w-5 text-[#ff6500]" />
+            <MessageSquare className="h-5 w-5" style={{ color: ACCENT }} />
             <h2 className="text-lg font-semibold text-white">AI Prompt Studio</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-md bg-[#2a2a2a] text-[#ff6500] hover:bg-[#ff6500]/20 hover:text-[#ff6500] transition-colors border border-transparent hover:border-[#ff6500]/40"
+            className="p-2 rounded-md text-white transition-colors duration-150"
+            style={{ backgroundColor: PANEL_HEADER_BG }}
+            onMouseEnter={(e) => { (e.currentTarget.style.backgroundColor = `${ACCENT}/20`); }}
+            onMouseLeave={(e) => { (e.currentTarget.style.backgroundColor = PANEL_HEADER_BG); }}
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" style={{ color: ACCENT }} />
           </button>
         </div>
 
-        {/* Target Clip Info */}
-        <div className="px-4 py-2 bg-[#1a1a1a] border-b border-[#2a2a2a]">
+        {/* Target Clip Info — flush, no border */}
+        <div
+          className="px-4 py-2"
+          style={{ backgroundColor: PANEL_BG, borderBottom: 'none' }}
+        >
           <div className="flex items-center gap-4 text-xs text-gray-400">
             <span className="font-medium text-gray-300">Target:</span>
             <span className="truncate text-white">{targetDisplayName}</span>
-            <span className="ml-auto text-[8px] text-[#ff6500]">✓ AI Active</span>
+            <span className="ml-auto text-[8px]" style={{ color: ACCENT }}>✓ AI Active</span>
           </div>
         </div>
 
-        {/* Last Command Feedback */}
+        {/* Last Command Feedback — borderless */}
         {lastCommand && (
-          <div className="px-4 py-2 border-b border-[#2a2a2a] bg-[#2a2a2a]/30">
+          <div
+            className="px-4 py-2"
+            style={{ backgroundColor: PANEL_HEADER_BG, borderBottom: 'none' }}
+          >
             <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-[#ff6500]" />
-              <span className="text-xs text-[#ff6500]/90 font-medium">
+              <Zap className="h-4 w-4" style={{ color: ACCENT }} />
+              <span className="text-xs font-medium" style={{ color: `${ACCENT}/90` }}>
                 {lastCommand.description}
               </span>
             </div>
@@ -369,7 +430,7 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
           </div>
         )}
 
-        {/* Messages Area */}
+        {/* Messages Area — borderless scrollable pane */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
@@ -384,16 +445,19 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-xs lg:max-w-md px-4 py-3 rounded-md text-sm font-medium transition-all ${message.role === 'user'
-                    ? 'bg-[#ff6500] text-white rounded-br-none'
-                    : 'bg-[#1a1a1a] text-white rounded-bl-none border border-[#2a2a2a]'
-                  }`}
+                  className="max-w-xs lg:max-w-md px-4 py-3 text-sm font-medium transition-all duration-150"
+                  style={{
+                    borderRadius: '0.375rem',
+                    backgroundColor: message.role === 'user' ? ACCENT : PANEL_BG,
+                    color: message.role === 'user' ? 'white' : '#e8e8e8',
+                    border: 'none',
+                  }}
                 >
                   <div className="flex items-center gap-2 mb-1">
                     {message.role === 'user' ? (
                       <User className="h-3 w-3" />
                     ) : (
-                      <Bot className="h-3 w-3" />
+                      <Bot className="h-3 w-3" style={{ color: ACCENT }} />
                     )}
                     <span className="text-xs text-white/90">
                       {new Date(message.timestamp).toLocaleTimeString()}
@@ -407,8 +471,11 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 border-t border-[#2a2a2a] bg-[#1a1a1a]">
+        {/* Input Area — flush at bottom, no top border */}
+        <div
+          className="p-4"
+          style={{ backgroundColor: PANEL_BG, borderTop: 'none' }}
+        >
           <form onSubmit={handleSubmit} className="flex gap-3">
             <Textarea
               value={prompt}
@@ -422,13 +489,27 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
                 }
               }}
               placeholder="Enter your AI command... (e.g., 'remove background', 'add water ripple', 'save as template')"
-              className="flex-1 min-h-[44px] max-h-32 resize-none rounded-md border-0 bg-[#1a1a1a] px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#ff6500]/30"
+              className="flex-1 min-h-[44px] max-h-32 resize-none rounded-md border-0 px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus-visible:outline-none focus-visible:ring-2 transition-colors duration-150"
+              style={{
+                backgroundColor: PANEL_HEADER_BG,
+                '--tw-ring-color': `${ACCENT}/30`,
+              } as React.CSSProperties}
               disabled={isProcessing || ollamaStatus !== 'online'}
             />
             <Button
               type="submit"
               disabled={!prompt.trim() || isProcessing || ollamaStatus !== 'online'}
-              className="self-end h-11 px-6 rounded-md bg-[#ff6500] font-medium text-white hover:bg-[#e55a00] transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="self-end h-11 px-6 rounded-md font-medium text-white transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: ACCENT,
+                border: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = ACCENT_DARK;
+              }}
+              onMouseLeave={(e) => {
+                if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = ACCENT;
+              }}
             >
               {isProcessing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -439,10 +520,10 @@ Keep it short (2-3 sentences). Write in English but you can use Hinglish terms i
           </form>
 
           {ollamaStatus !== 'online' && (
-            <div className="mt-3 p-3 rounded-md bg-[#2a2a2a] border border-[#2a2a2a]">
+            <div className="mt-3 p-3 rounded-md" style={{ backgroundColor: PANEL_HEADER_BG, border: 'none' }}>
               <p className="text-xs text-gray-400">
                 ⚠️ Ollama AI is not running. Please start Ollama locally:
-                <code className="block mt-1 p-1 bg-[#1a1a1a] rounded text-xs text-gray-300">
+                <code className="block mt-1 p-1 rounded text-xs text-gray-300" style={{ backgroundColor: PANEL_BG }}>
                   docker run -d -p 11434:11434 --name ollama ollama/ollama:latest -v ollama-models:/root/.ollama
                 </code>
               </p>

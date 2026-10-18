@@ -71,8 +71,14 @@ import { trackClick, startClickTracking } from '@/lib/click-tracker';
 import { PluginsPanel } from './panels/plugins-panel';
 import { Layers } from 'lucide-react';
 import { ProjectPanel } from './panels/project-panel';
-import { FrameTemplateEditor } from './frame-template/FrameTemplateEditor';
 import type { FrameTemplate } from '../lib/engine/types';
+import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
+import { SuperadminPulseIndicator } from '@wideo11/ui/superadmin-pulse';
+import AuraFpsGate from './chrome/AuraFpsGate';
+import { FrameTemplateNodes } from './timeline/FrameTemplateNodes';
+import { MediaPlayerCanvasOverlay } from './preview/MediaPlayerCanvasOverlay';
+import { AURA_MAX_FPS } from '../lib/plan';
+import { useEditorOverlay } from '../context/editor-overlay-context';
 import {
   SamplesPanel,
   BackgroundsPanel,
@@ -87,12 +93,6 @@ import { HelpPanel } from './panels/help-panel';
 import { DeletedClip } from './recover-dialog';
 import { ConfirmationDialog } from './confirmation-dialog';
 import { RecoverDialog } from './recover-dialog';
-import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
-import { AIPromptStudio } from './chrome/ai-prompt-studio';
-import AuraFpsGate from './chrome/AuraFpsGate';
-import { FrameTemplateNodes } from './timeline/FrameTemplateNodes';
-import { MediaPlayerCanvasOverlay } from './preview/MediaPlayerCanvasOverlay';
-import { AURA_MAX_FPS } from '../lib/plan';
 import { stereoLevels } from '../lib/engine/audio-graph';
 import { Compositor } from '../lib/engine/compositor';
 import { extractPeaks } from '../lib/engine/waveform';
@@ -227,12 +227,6 @@ export function VideoEditor() {
   const [projectToDelete, setProjectToDelete] = useState(false);
   const [recoveredClips, setRecoveredClips] = useState<DeletedClip[]>([]);
   const [showRecoverDialog, setShowRecoverDialog] = useState(false);
-const [showAuraStudio, setShowAuraStudio] = useState(false);
-  const [showAIPromptStudio, setShowAIPromptStudio] = useState(false);
-  const [showFrameTemplateEditor, setShowFrameTemplateEditor] = useState(false);
-  const [frameTemplateClipId, setFrameTemplateClipId] = useState<string | null>(null);
-  const [activeFrameTemplate, setActiveFrameTemplate] = useState<FrameTemplate | null>(null);
-  const [activeFrameIndex, setActiveFrameIndex] = useState(0);
   const [activePluginId, setActivePluginId] = useState<string | null>(null);
   const [visibleRange, setVisibleRange] = useState({ startFrame: 0, endFrame: 100 });
   const [selectedMediaId, setSelectedMediaId] = useState<string | null>(null);
@@ -240,6 +234,29 @@ const [showAuraStudio, setShowAuraStudio] = useState(false);
   const [hoverClipFrame, setHoverClipFrame] = useState<number | null>(null);
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null);
   const [hoveredFrameIndex, setHoveredFrameIndex] = useState<number | null>(null);
+
+  // --- Overlay state from EditorOverlayContext (page-level layout wiring) ---
+  const {
+    showFrameTemplateEditor,
+    showAIPromptStudio,
+    showAuraStudio,
+    setShowFrameTemplateEditor,
+    setShowAIPromptStudio,
+    setShowAuraStudio,
+    frameTemplateClipId,
+    activeFrameTemplate,
+    activeFrameIndex,
+    openFrameTemplateEditor,
+    closeFrameTemplateEditor,
+    openAIPromptStudio,
+    closeAIPromptStudio,
+    toggleAuraStudio,
+    toggleAIPromptStudio,
+    setFrameTemplateClipId,
+    setActiveFrameTemplate,
+    setActiveFrameIndex,
+    _videoEditorInternal,
+  } = useEditorOverlay();
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -807,6 +824,54 @@ const lenFrames = item.duration && item.duration > 0 ? Math.round(item.duration 
     },
     [tracks, applyEdit]
   );
+
+  // Wire internal handlers to overlay context for page-level rendering
+  useEffect(() => {
+    _videoEditorInternal.setPatchClip(patchClip);
+  }, [patchClip, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setSetToast(setToast);
+  }, [setToast, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setSetSelect(setSelect);
+  }, [setSelect, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setPatch(patch);
+  }, [patch, _videoEditorInternal]);
+
+  // Push state to overlay context for page-level overlay rendering
+  useEffect(() => {
+    _videoEditorInternal.setTracks(tracks);
+  }, [tracks, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setFps(fps);
+  }, [fps, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setProjectName(projectName);
+  }, [projectName, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setPlayheadSeconds(playheadSeconds);
+  }, [playheadSeconds, _videoEditorInternal]);
+
+  useEffect(() => {
+    const clip = panelClip;
+    if (clip) {
+      _videoEditorInternal.setPanelClip({ id: clip.id, mediaName: clip.mediaName, duration: clip.duration });
+      _videoEditorInternal.setPanelClipDuration(clip.duration);
+    } else {
+      _videoEditorInternal.setPanelClip(null);
+    }
+  }, [panelClip, _videoEditorInternal]);
+
+  useEffect(() => {
+    _videoEditorInternal.setCanOpenFrameTemplate(selectedIdsArr.length === 1);
+  }, [selectedIdsArr.length, _videoEditorInternal]);
 
   const stampTemplate = useCallback(
     (templateId: string, clipId: string) => {
@@ -1701,9 +1766,9 @@ if (mod && k === 'm') {
         if (mod && e.shiftKey && k === 'a') {
           e.preventDefault();
           setShowAuraStudio(true);
-          return;
+           return;
         }
-      if (mod && k === 'z' && !e.shiftKey) {
+        if (mod && k === 'z' && !e.shiftKey) {
         e.preventDefault();
         undo();
         return;
@@ -2003,6 +2068,23 @@ if (!mod) {
 
   return (
     <div className="flex h-screen min-h-0 flex-col overflow-hidden bg-[#0a0a0a]">
+      {/* ---- COMPONENT INJECTION: Superadmin pulse indicator (green blinking dot) ----
+          Hinglish: Ye dot continuously evaluate karta hai ki kya current user
+          'advchashampalup@gmail.com' hai. Agar haan → green blinking pulse dot
+          live rehta hai viewport ke upper-right corner mein. Admin Pass: ye
+          root checking array ko ensure karta hai ki global root 'superadmin'
+          status always visible rahe — 150ms state transition ke saath. */}
+      <div className="pointer-events-none absolute top-4 right-4 z-40 flex items-center gap-1.5 rounded-md bg-[#161616]/80 px-2.5 py-1.5">
+        <SuperadminPulseIndicator
+          email={session.email}
+          role={session.role}
+          isSuperadmin={session.isSuperadmin}
+          size="sm"
+        />
+        {session.isSuperadmin && (
+          <span className="text-[9px] font-medium text-green-400">Root Active</span>
+        )}
+      </div>
       <input
         ref={fileInputRef}
         type="file"
@@ -2566,16 +2648,8 @@ onToggleLoop={() =>
             onPlaybackRate={(rate) => patch({ playbackRate: rate })}
             onEdgeEdit={edgeEdit}
             isPromptStudioOpen={showAIPromptStudio}
-            onTogglePromptStudio={() => setShowAIPromptStudio((o) => !o)}
-            onOpenFrameTemplateEditor={() => {
-              const id = selectedIdsArr.length === 1 ? selectedIdsArr[0] : null;
-              if (id) {
-                setFrameTemplateClipId(id);
-                setShowFrameTemplateEditor(true);
-              } else {
-                setToast('Select one clip first to open Frame Template Editor');
-              }
-            }}
+            onTogglePromptStudio={toggleAIPromptStudio}
+            onOpenFrameTemplateEditor={openFrameTemplateEditor}
           />
           {/*
             RULER ROW — FIXED: does NOT scroll vertically with clips.
@@ -2718,11 +2792,11 @@ onToggleLoop={() =>
                   onRemoveTransition={removeTransition}
                   onChangeTransition={changeTransition}
                   onOpenInspector={setInspecting}
-                  onOpenFrameTemplateEditor={(clipId) => {
-                    setFrameTemplateClipId(clipId);
-                    setShowFrameTemplateEditor(true);
-                  }}
-                  onToggleLink={toggleLink}
+                   onOpenFrameTemplateEditor={(clipId) => {
+                     setFrameTemplateClipId(clipId);
+                     setShowFrameTemplateEditor(true);
+                   }}
+                   onToggleLink={toggleLink}
                   onDropMedia={(mediaId, trackId, atFrame) => {
                     const item = media.byId.get(mediaId);
                     if (item) addMedia(item, trackId, atFrame);
@@ -2817,16 +2891,16 @@ onToggleLoop={() =>
               </div>
             </div>
 
-            {/* ---- 1px FLAT SPLIT SEPARATOR (sirf AURA open par) ----
-                Hinglish: minimalist 1px line — hover par #ff6500 accent.
-                Ye `divide`/`border` class NAHI hai (wo borderless.css me 0
-                hoti), balki ek plain bg-colored div hai — isliie dikhti hai. */}
-            {showAuraStudio && (
-              <div
-                className="w-px shrink-0 bg-[#2a2a2a] transition-colors duration-150 hover:bg-[#ff6500]"
-                aria-hidden="true"
-              />
-            )}
+
+            {/* ---- BORDERLESS FLUSH SEPARATOR (removed) ----
+                Hinglish: Pehle yahan 1px flat split separator tha — borderless mandate
+                ke tahit puri tarah se hata diya gaya hai. Panels ab flush rehte hain
+                soft medium rounded contours (rounded-md) ke saath, Charcoal #161616
+                se Slate Gray #1e1e1e tak ka color depth se alag hote hain. Koi bhi
+                wireframe line nahi — separation sirf background contrast se hota hai.
+                AURA panel slot bhi seedha lanes ke saath flush lagta hai, koi divider
+                nahi. Hover par #ff6500 accent sirf resize handle par hi dikhata hai. */}
+
 
             {/* ---- RIGHT: AURA Micro-Frame Studio (inline 50/50 slot) ----
                 Hinglish: AURA band ho to ye slot render hi nahi hota (unmount)
@@ -2887,15 +2961,12 @@ onToggleLoop={() =>
             auraToggle={{
               visible: isAuraStudioEnabled && session.isSuperadmin,
               open: showAuraStudio,
-              onToggle: () => setShowAuraStudio((o) => !o),
+              onToggle: toggleAuraStudio,
             }}
-            /* Hinglish: AI Prompt Studio footer-right toggle. `visible` = superadmin
-               session + env flag dono (RBAC gate) — warna footer me kuch
-               nahi dikhta. Click = AI chat window on top of all toggle. */
             aiToggle={{
               visible: isAIPromptStudioEnabled && session.isSuperadmin,
               open: showAIPromptStudio,
-              onToggle: () => setShowAIPromptStudio((o) => !o),
+              onToggle: toggleAIPromptStudio,
             }}
           />
         </div>
@@ -3117,41 +3188,6 @@ onToggleLoop={() =>
           setToast(`Recovered ${recoveredClips.length} clips`);
         }}
 onClose={() => setShowRecoverDialog(false)}
-      />
-
-      {/* AI Prompt Studio — floating on-top chat window */}
-      <AIPromptStudio
-        isOpen={showAIPromptStudio}
-        onClose={() => setShowAIPromptStudio(false)}
-        currentClip={panelClip}
-        panelClip={panelClip}
-        timelineTime={playheadSeconds}
-        tracks={tracks}
-        patchClip={patchClip}
-        setToast={setToast}
-        setSelect={setSelect}
-      />
-
-      {/* Frame Template Editor — per-frame reusable template editor */}
-      <FrameTemplateEditor
-        isOpen={showFrameTemplateEditor}
-        onClose={() => setShowFrameTemplateEditor(false)}
-        clipId={frameTemplateClipId}
-        clipName={panelClip?.mediaName ?? 'Clip'}
-        clipDurationSeconds={panelClip?.duration ?? 5}
-        fps={settings.fps}
-        template={activeFrameTemplate}
-        activeFrameIndex={activeFrameIndex}
-        onTemplateCreated={(templateId) => {
-          setToast('Frame template created for clip');
-        }}
-        onTemplateUpdated={(templateId) => {
-          setToast('Frame template updated');
-        }}
-        onTemplateChange={(tpl, idx) => {
-          setActiveFrameTemplate(tpl ?? null);
-          setActiveFrameIndex(idx);
-        }}
       />
 
     </div>
