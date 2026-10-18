@@ -277,7 +277,7 @@ export default function AdViewGuard({
     <div
 		ref={containerRef}
 		data-ad-id={adId}
-      className="relative overflow-hidden rounded-md border-800 bg-gray-900/60"
+      className="relative overflow-hidden rounded-md border-0 bg-[#1e1e1e]"
     >
       {/* Ad content */}
       <div className="p-4">{children}</div>
@@ -346,7 +346,7 @@ export default function AdViewGuard({
           <p className="text-sm font-medium text-green-300">View recorded</p>
           <button
             onClick={reset}
-            className="rounded-md border-700 px-4 py-2 text-sm text-gray-300 hover:bg-gray-800"
+            className="rounded-md border-0 bg-[#1e1e1e] px-4 py-2 text-sm text-[#ffffff] hover:bg-[#2a2a2a]"
           >
             View again
           </button>

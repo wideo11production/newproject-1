@@ -39,6 +39,7 @@
     "./jwt-payload": "./src/jwt-payload.ts",
     "./label": "./src/label.tsx",
     "./lib/utils": "./src/lib/utils.ts",
+    "./superadmin-pulse": "./src/superadmin-pulse.tsx",
     "./menubar": "./src/menubar.tsx",
     "./navigation-menu": "./src/navigation-menu.tsx",
     "./popover": "./src/popover.tsx",

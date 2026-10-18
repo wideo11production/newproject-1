@@ -171,7 +171,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
               </thead>
               <tbody>
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="border-t-800">
+                  <tr key={i} className="border-0 border-b border-[#2a2a2a]">
                     <td className="p-2 text-gray-300">item-{i + 1}</td>
                     <td className="text-right p-2 text-gray-400">{Math.floor(Math.random() * 1000)}</td>
                     <td className="text-right p-2">
@@ -257,7 +257,7 @@ export default function DashboardEditor({ dashboard, onUpdate }: DashboardProps)
           <ScrollArea className="h-full">
             <div className="space-y-2 p-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="border-500/20 bg-red-500/5 rounded p-2">
+                <div key={i} className="border-0 bg-red-500/5 rounded-md p-2">
                   <div className="flex items-center space-x-2">
                     <XCircle className="h-2.5 w-2.5 text-red-400" />
                     <span className="font-medium text-red-300">

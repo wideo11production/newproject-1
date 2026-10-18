@@ -15,11 +15,12 @@ import (
 )
 
 type Handler struct {
-	svc *service.BillingService
+	svc              *service.BillingService
+	complianceHandler *ComplianceHandler
 }
 
 func NewHandler(svc *service.BillingService) *Handler {
-	return &Handler{svc: svc}
+	return &Handler{svc: svc, complianceHandler: NewComplianceHandler(svc)}
 }
 
 // resolveBillingUser turns the VERIFIED token claim into the
@@ -189,6 +190,17 @@ func (h *Handler) RegisterRoutes(r *gin.Engine) {
 	{
 		adRev.POST("/revenue", h.RecordAdRevenue)
 		adRev.GET("/revenue/user-summary", h.GetUserRevenueSummary)
+	}
+
+	// ---- INTERNAL: compliance enforcement (token-gated, auth-service calls) ----
+	//
+	// POST /compliance/violation   - auth-service reports non-educational upload
+	//                                  from student tier channel → enforcement
+	// GET  /compliance/frozen/:uid - wallet-service checks if user's withdrawals frozen
+	compliance := r.Group("/compliance", middleware.AuthRequired())
+	{
+		compliance.POST("/violation", h.complianceHandler.ReportViolation)
+		compliance.GET("/frozen/:userID", h.complianceHandler.CheckFrozen)
 	}
 
 	// ---- PERSONAL: ad campaign booking ----

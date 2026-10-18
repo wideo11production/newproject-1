@@ -26,8 +26,11 @@
       "@wideo11/config": [
         "../../packages/config/src"
       ],
+      "@wideo11/ui": [
+        "../../packages/ui/src/index.ts"
+      ],
       "@wideo11/ui/*": [
-        "../../packages/ui/src/components/*"
+        "../../packages/ui/src/*"
       ]
     },
     "plugins": [

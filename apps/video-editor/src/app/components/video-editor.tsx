@@ -74,6 +74,8 @@ import { ProjectPanel } from './panels/project-panel';
 import type { FrameTemplate } from '../lib/engine/types';
 import { AuraMicroFrameStudio } from './aura-micro-frame-studio';
 import { SuperadminPulseIndicator } from '@wideo11/ui/superadmin-pulse';
+import { FrameTemplateEditor } from './frame-template/FrameTemplateEditor';
+import { AIPromptStudio } from './chrome/ai-prompt-studio';
 import AuraFpsGate from './chrome/AuraFpsGate';
 import { FrameTemplateNodes } from './timeline/FrameTemplateNodes';
 import { MediaPlayerCanvasOverlay } from './preview/MediaPlayerCanvasOverlay';
@@ -2792,10 +2794,10 @@ onToggleLoop={() =>
                   onRemoveTransition={removeTransition}
                   onChangeTransition={changeTransition}
                   onOpenInspector={setInspecting}
-                   onOpenFrameTemplateEditor={(clipId) => {
-                     setFrameTemplateClipId(clipId);
-                     setShowFrameTemplateEditor(true);
-                   }}
+                    onOpenFrameTemplateEditor={(clipId) => {
+                      setFrameTemplateClipId(clipId);
+                      openFrameTemplateEditor();
+                    }}
                    onToggleLink={toggleLink}
                   onDropMedia={(mediaId, trackId, atFrame) => {
                     const item = media.byId.get(mediaId);
@@ -3046,7 +3048,7 @@ onToggleLoop={() =>
           <button
             onClick={() => {
               setFrameTemplateClipId(selectedClip.id);
-              setShowFrameTemplateEditor(true);
+              openFrameTemplateEditor();
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-md bg-[#ff6500] text-white text-sm font-medium hover:bg-[#e55a00] transition-colors shadow-lg border border-[#ff6500]/40"
           >
@@ -3188,6 +3190,45 @@ onToggleLoop={() =>
           setToast(`Recovered ${recoveredClips.length} clips`);
         }}
 onClose={() => setShowRecoverDialog(false)}
+      />
+
+      {/* AI Prompt Studio — superadmin-gated, borderless styling */}
+      {isAIPromptStudioEnabled && session.isSuperadmin && (
+        <AIPromptStudio
+          isOpen={showAIPromptStudio}
+          onClose={closeAIPromptStudio}
+          currentClip={selectedClip ?? null}
+          panelClip={panelClip ?? null}
+          timelineTime={playheadSeconds}
+          tracks={tracks}
+          patchClip={patchClip}
+          setToast={setToast}
+          setSelect={setSelect}
+          userEmail={session.email}
+          userRole={session.role}
+        />
+      )}
+
+      {/* Frame Template Editor — per-frame reusable template editor */}
+      <FrameTemplateEditor
+        isOpen={showFrameTemplateEditor}
+        onClose={closeFrameTemplateEditor}
+        clipId={frameTemplateClipId}
+        clipName={panelClip?.mediaName ?? 'Clip'}
+        clipDurationSeconds={panelClip?.duration ?? 5}
+        fps={settings.fps}
+        template={activeFrameTemplate}
+        activeFrameIndex={activeFrameIndex}
+        onTemplateCreated={(templateId) => {
+          setToast('Frame template created for clip');
+        }}
+        onTemplateUpdated={(templateId) => {
+          setToast('Frame template updated');
+        }}
+        onTemplateChange={(tpl, idx) => {
+          setActiveFrameTemplate(tpl ?? null);
+          setActiveFrameIndex(idx);
+        }}
       />
 
     </div>

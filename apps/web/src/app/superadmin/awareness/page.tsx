@@ -115,7 +115,7 @@ export default function AwarenessReportsPage() {
           <div className="flex items-center gap-3">
             <a
               href="/"
-              className="flex h-9 w-9 items-center justify-center rounded-md border-700 text-gray-400 transition-colors hover:bg-gray-800"
+              className="flex h-9 w-9 items-center justify-center rounded-md border-0 bg-[#1e1e1e] text-[#888888] transition-colors hover:bg-[#2a2a2a]"
             >
               <ArrowLeft className="h-2.5 w-2.5" />
             </a>
@@ -129,7 +129,7 @@ export default function AwarenessReportsPage() {
           <button
             onClick={load}
             disabled={loading}
-            className="flex items-center gap-2 rounded-md border-700 bg-gray-900 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-800 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md border-0 bg-[#1e1e1e] px-3 py-2 text-sm text-[#ffffff] transition-colors hover:bg-[#2a2a2a] disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <RefreshCw className="h-2.5 w-2.5" />}
             Refresh
@@ -159,7 +159,7 @@ export default function AwarenessReportsPage() {
             className={`rounded-md px-3 py-1.5 text-sm ${
               filter === 'all'
                 ? 'bg-blue-600 text-white'
-                : 'border-700 text-gray-400 hover:bg-gray-800'
+                : 'border-0 bg-[#1e1e1e] text-[#888888] hover:bg-[#2a2a2a]'
             }`}
           >
             All ({events.length})
@@ -169,7 +169,7 @@ export default function AwarenessReportsPage() {
             className={`rounded-md px-3 py-1.5 text-sm ${
               filter === 'critical'
                 ? 'bg-red-600 text-white'
-                : 'border-700 text-gray-400 hover:bg-gray-800'
+                : 'border-0 bg-[#1e1e1e] text-[#888888] hover:bg-[#2a2a2a]'
             }`}
           >
             Critical ({criticalCount})
@@ -177,7 +177,7 @@ export default function AwarenessReportsPage() {
         </div>
 
         {error ? (
-          <div className="rounded-md border-700/60 bg-red-950/40 p-4 text-sm text-red-300">
+          <div className="rounded-md border-0 border-[#4d2a2a] bg-red-950/40 p-4 text-sm text-red-300">
             {error}
           </div>
         ) : loading ? (
@@ -195,7 +195,7 @@ export default function AwarenessReportsPage() {
             {byUser.map(([email, userEvents]) => (
               <div
                 key={email}
-                className="rounded-md border-800 bg-gray-900/50 p-5"
+                className="rounded-md border-0 bg-[#1e1e1e] p-5"
               >
                 <div className="mb-4 flex items-center justify-between">
                   <div>
@@ -251,7 +251,7 @@ export default function AwarenessReportsPage() {
         )}
 
         {/* ---- Data not yet available (honest notice) ---- */}
-        <div className="mt-6 rounded-md border-800 bg-gray-900/40 p-4">
+        <div className="mt-6 rounded-md border-0 bg-[#1e1e1e] p-4">
           <p className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-300">
             <Wallet className="h-2.5 w-2.5" />
             Not yet tracked

@@ -54,6 +54,35 @@ func main() {
 
 	billingSvc := service.NewBillingService(db, planRepo, subRepo, taxRepo, invoiceRepo, itemRepo, paymentRepo, expenseRepo, identityRepo, pushAllocRepo, contentRevRepo, campaignRepo)
 
+	// ---- AURA STUDENT GATE ENGINE ----
+	//
+	// StudentIdentityRepository wiring ke baad StudentService construct
+	// karo. Ye service educational-violation par 25% penalty + revocation
+	// handle karta hai. auth-service ke compliance check failure par
+	// billing-service ko call aayega - isliye StudentService must be
+	// wired here before routes register hote hain.
+	//
+	// Hinglish: student violation penalty engine ke liye repository wiring
+	studentIdentityRepo := repository.NewStudentIdentityRepository(db)
+	studentSvc := service.NewStudentService(studentIdentityRepo, subRepo, planRepo)
+	billingSvc.SetStudentService(studentSvc)
+	log.Printf("[billing] AURA student gate engine wired (25%% revocation penalty ready)")
+
+	// ---- COMPLIANCE ENFORCEMENT ENGINE ----
+	//
+	// Compliance violation tracker + system log warning templates.
+	// auth-service calls POST /compliance/violation when student tier
+	// channel uploads non-educational content. Engine enforces:
+	//   Step 1: warning system log
+	//   Step 2: channel SUSPENDED + wallet withdrawal freeze + 25% penalty
+	complianceViolationRepo := repository.NewComplianceViolationRepository(db)
+	systemLogRepo := repository.NewSystemLogRepository(db)
+	enforcementEngine := service.NewComplianceEnforcementEngine(
+		complianceViolationRepo, systemLogRepo, subRepo, planRepo,
+	)
+	billingSvc.SetComplianceEnforcement(enforcementEngine)
+	log.Printf("[billing] compliance enforcement engine wired (warning + suspension + 25%% penalty ready)")
+
 	// ---- THE PLAN CATALOGUE, SEEDED BEFORE ANY REQUEST IS ANSWERED ----
 	//
 	// Seven tiers are declared in `service.Tiers()` and `subscription_plans` had
@@ -190,6 +219,25 @@ func main() {
 
 		// Device ad revenue - superadmin ledger ke liye (cross-DB data source)
 		payoutProtected.GET("/admin/device-revenue", payoutHandler.GetDeviceRevenues)
+	}
+
+	// ---- Student Violation Revocation (Phase 1) ----
+	//
+	// Internal endpoint: auth-service calls this when a student-tier channel
+	// attempts a non-educational upload (content_compliance.go violation).
+	// billing-service then: (1) revokes student identity, (2) applies 25%
+	// plan-price penalty, (3) logs the violation.
+	//
+	// Protected by `RequireServiceToken("auth")` - same JWT_SECRET_KEY
+	// shared across services, discriminated by `service` claim.
+	// No user JWT can reach here (user tokens lack the `service` claim).
+	//
+	// Hinglish: auth-service violation detection -> billing-service penalty
+	studentHandler := handler.NewStudentHandler(billingSvc)
+	studentProtected := r.Group("/internal")
+	studentProtected.Use(middleware.RequireServiceToken([]byte(jwtSecret), "auth"))
+	{
+		studentProtected.POST("/student/violation", studentHandler.RevokeForViolation)
 	}
 
 	r.GET("/health", func(c *gin.Context) {

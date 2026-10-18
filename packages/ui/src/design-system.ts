@@ -810,3 +810,12 @@ export const grafanaFocusRingVisible = 'focus-visible:outline-none focus-visible
 /** The hero gradient, applied to clipped text rather than a surface. */
 export const productHeroGradientText =
   'bg-gradient-to-r from-[#ff6500] to-[#ff8a3d] bg-clip-text text-transparent';
+
+/** BORDERLESS CARD - rounded-md, border-0, background contrast only. Used for
+ * student verification form base (#161616) and warning banners (#1e1e1e).
+ * No gray lines, no wireframe margins, no cell borders. */
+export const borderlessCard = 'rounded-md border-0';
+
+/** FOCUS FLASH - #ff6500 ring animation, 150ms loop. Applied to focused
+ * inputs and confirm buttons via the focus-flash-150ms CSS keyframe. */
+export const focusFlash = 'focus-flash-150ms';

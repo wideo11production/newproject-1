@@ -145,7 +145,7 @@ export function BackgroundsPanel() {
           <input
             type="text"
             defaultValue="#000000"
-            className="w-full rounded-edge bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none"
+            className="w-full rounded-md border-0 bg-surface-raised px-1 font-mono text-[8px] text-fg focus:border-[#ff6500] focus:outline-none focus:ring-1 focus:ring-[#ff6500]"
             aria-label="Custom background hex"
           />
         </Field>
@@ -339,7 +339,7 @@ export function ToolsPanel({ settings, onToggle }: ToolsPanelProps) {
               return (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between-edge py-1.5 last:border-b-0"
+                  className="flex items-center justify-between-edge py-1.5 last:border-0"
                 >
                   <div>
                     <span className="text-[8px] font-medium text-fg">{t.label}</span>

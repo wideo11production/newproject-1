@@ -425,9 +425,9 @@ export function MediaUpload({
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
         className={[
-          'relative rounded-lg border-2 border-dashed p-8 text-center transition-colors',
-          dragging ? 'border-primary bg-primary/5' : 'border-muted',
-          busy ? 'opacity-60' : 'hover:border-primary/50',
+          'relative rounded-md border-0 border-dashed border-[#2a2a2a] p-8 text-center transition-colors',
+          dragging ? 'border-[#ff6500] bg-[#ff6500]/5' : '',
+          busy ? 'opacity-60' : 'hover:border-[#ff6500]/50',
         ].join(' ')}
       >
         <input

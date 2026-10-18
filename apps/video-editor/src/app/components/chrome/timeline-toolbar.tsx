@@ -383,7 +383,7 @@ export function TimelineToolbar({
               aria-label={b.label}
               title={`${b.label}\n${b.hint}${b.shortcut ? `\nShortcut: ${b.shortcut}` : ''}`}
               className={[
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded transition-colors duration-150',
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-md border-0 transition-colors duration-150',
                 b.disabled
                   ? 'cursor-not-allowed text-fg-muted'
                   : b.active
@@ -432,7 +432,7 @@ export function TimelineToolbar({
           >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
+          <SelectContent className="rounded-md border-0 bg-[#161616] text-[7px] text-fg shadow-none">
             {speedOptions.map((r) => {
               const isMicroSpeed = MICRO_PLAYBACK_SPEEDS.includes(r as (typeof MICRO_PLAYBACK_SPEEDS)[number]);
               const blocked = isMicroSpeed && !auraRates;
@@ -467,7 +467,7 @@ export function TimelineToolbar({
           >
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="rounded-md border-0 bg-[#1a1a1a] text-[7px] text-fg shadow-none">
+          <SelectContent className="rounded-md border-0 bg-[#161616] text-[7px] text-fg shadow-none">
             {fpsOptions.map((f) => {
               const blocked = AURA_ONLY_FPS.includes(f as (typeof AURA_ONLY_FPS)[number]) && !auraRates;
               return (

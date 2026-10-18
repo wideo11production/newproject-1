@@ -195,7 +195,7 @@ function LiveAvatar({
           and for anyone with reduced motion. */}
       <span
         aria-hidden="true"
-        className="absolute -inset-[2px] rounded-full border-500/50"
+        className="absolute -inset-[2px] rounded-full border border-[#ff6500]/50"
       />
 
       <span

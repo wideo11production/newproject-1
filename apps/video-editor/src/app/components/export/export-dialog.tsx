@@ -238,10 +238,10 @@ export function ExportDialog({
             </PanelSection>
           )}
 
-          {error && <p className="rounded border-900 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}
+          {error && <p className="rounded-md border-0 bg-rose-950/30 p-2 text-[8px] text-rose-300">{error}</p>}
 
           {result && (
-            <div className="rounded border-900 bg-emerald-950/20 p-2">
+            <div className="rounded-md border-0 bg-emerald-950/20 p-2">
               <p className="flex items-center gap-1.5 text-[8px] text-emerald-300">
                 <Check className="h-2 w-2" aria-hidden="true" />
                 {result.name} · {(result.size / 1024 ** 2).toFixed(1)} MB

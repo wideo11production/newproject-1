@@ -1914,7 +1914,7 @@ export function TimelineFooter({
   const audioTracks = tracks.filter((t) => t.type === 'audio' && t.visible);
   const hasAudio = audioTracks.length > 0;
   return (
-    <div className="timeline-footer relative flex h-7 shrink-0 items-center justify-between border-t border-[#2a2a2a] bg-[#1e1e1e] px-3 font-mono text-[8px]">
+    <div className="timeline-footer relative flex h-7 shrink-0 items-center justify-between border-0 bg-[#161616] px-3 font-mono text-[8px]">
       <div className="flex items-center gap-3 text-fg-secondary">
         <span title="Timecode at the playhead, HH:MM:SS:FF">TC {frameToTimecode(currentFrame, fps)}</span>
         <span className="text-fg-muted/40">|</span>

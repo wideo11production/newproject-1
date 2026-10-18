@@ -76,6 +76,9 @@ type mediaRequest struct {
 	// page and in its counts. Optional: a creator uploads before they have a
 	// channel, and ownership is checked server-side.
 	ChannelID string `json:"channel_id"`
+	// ContentCategory - 'educational' or 'general'. Required when channel_id
+	// is provided and channel is student_tier=true (educational-only enforcement).
+	ContentCategory string `json:"content_category"`
 	// ContentHash is the browser-computed SHA-256 of the file bytes. It exists so
 	// a re-upload of the SAME file reuses the renditions already in the bucket
 	// instead of paying a second ffmpeg pass (SYSTEM-PLAN §5.3). A claim, not a
@@ -181,7 +184,58 @@ func (h *AuthHandler) InitMedia(c *gin.Context) {
 		channelID = &parsed
 	}
 
-	// ---- Re-upload dedup (§5.3) ----
+	// ---- Student content compliance gate (Phase 1) ----
+	//
+	// Jab channel student_tier=true ho, to uske uploads sirf educational content_category ke allowed hain. Non-educational upload block kar diya jaata hai aur compliance violation billing-service enforcement loop ko jaata hai (penalty + suspension pipeline).
+	//
+	// Fail-closed: DB error -> upload blocked (generic message).
+	if channelID != nil {
+		category := strings.TrimSpace(req.ContentCategory)
+		if category == "" {
+			category = "general"
+		}
+		complianceDecision, cerr := h.authService.RequireStudentContentCompliance(
+			c.Request.Context(), *channelID, category)
+		if cerr != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "message": "Could not verify content compliance. Please try again.", "reason": "compliance_check_unavailable"})
+			return
+		}
+		if complianceDecision != nil && !complianceDecision.Allowed {
+			// ---- Student violation penalty: notify billing-service ----
+			//
+			// Content compliance violation detected on a student-tier channel.
+			// auth-service blocks the upload (403 below); billing-service
+			// applies the 25% revocation penalty + verification revocation.
+			//
+			// This call is BEST-EFFORT: the upload is ALREADY blocked.
+			// A billing-service outage or client-not-configured must NOT
+			// change the 403 response — the block is the enforcement, the
+			// penalty is the consequence. Failures are logged, not returned.
+			//
+			// Hinglish: compliance violation par billing-service penalty call
+			userID := c.GetString("user_id")
+			if h.billingClient != nil && userID != "" {
+				violationReq := service.StudentViolationRequest{
+					UserID:    userID,
+					Reason:    complianceDecision.Reason,
+					ChannelID: channelID.String(),
+				}
+				if result, verr := h.billingClient.ReportStudentViolation(c.Request.Context(), violationReq); verr != nil {
+					log.Printf("[STUDENT-GATE] penalty notification failed for user %s: %v", userID, verr)
+				} else {
+					log.Printf("[STUDENT-GATE] violation penalty %s for user %s (revoked=%v, penalty=%s, applied=%v)",
+						complianceDecision.Reason, userID, result.Revoked, result.PenaltyAmount, result.PenaltyApplied)
+				}
+			} else if h.billingClient == nil {
+				log.Printf("[STUDENT-GATE] violation detected for user %s but billing client not configured - upload blocked, penalty not forwarded", userID)
+			}
+			// The upload IS blocked regardless of billing-service status.
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden", "message": complianceDecision.Message, "reason": complianceDecision.Reason})
+			return
+		}
+	}
+
+	// ---- Re-upload dedup (5.3) ----
 	//
 	// Checked FIRST, before the quota and before any URL is minted, because a hit
 	// means no bytes move at all: the file is already in the bucket, already
@@ -906,5 +960,7 @@ func writeMediaError(c *gin.Context, err error) {
 // isErr keeps `errors.Is` out of every branch above, and keeps the switch
 // readable as a policy rather than as a comparison chain.
 func isErr(err, target error) bool { return errors.Is(err, target) }
+
+
 
 

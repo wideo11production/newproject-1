@@ -620,12 +620,12 @@ export function EditorToolbar({
             <Select value={String(fps)} onValueChange={(v) => onFpsChange(Number(v))}>
               <SelectTrigger
                 aria-label="Timeline frame rate"
-                className="h-6 w-[68px] rounded-md border-0 bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+                className="h-6 w-[68px] rounded-md border-0 bg-[#161616] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent
-                className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
+                className="rounded-md border-0 bg-[#161616] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
               >
                 {fpsOptions.map((f) => {
                   const isAuraOnly = AURA_ONLY_FPS.includes(f as any);
@@ -660,12 +660,12 @@ export function EditorToolbar({
             <Select value={String(playbackRate)} onValueChange={(v) => onPlaybackRate(Number(v))}>
               <SelectTrigger
                 aria-label="Playback speed"
-                className="h-6 w-[68px] rounded-md border-0 bg-[#1a1a1a] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
+                className="h-6 w-[68px] rounded-md border-0 bg-[#161616] px-1 font-mono text-[8px] text-fg-muted outline-none transition-colors duration-150 hover:text-[#ff6500] focus:text-[#ff6500] focus:ring-1 focus:ring-[#ff6500]"
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent
-                className="rounded-md border-0 bg-[#1a1a1a] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
+                className="rounded-md border-0 bg-[#161616] text-[8px] font-mono text-fg shadow-none [scrollbar-width:thin]"
               >
                 {speedOptions.map((r) => {
                   const isMicroSpeed = MICRO_PLAYBACK_SPEEDS.includes(r as any);

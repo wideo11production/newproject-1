@@ -125,13 +125,13 @@ export default function ResetPasswordPage() {
 
         {/* Success/error message */}
         {status === 'success' && (
-          <div className="flex items-start gap-2 rounded-md border-700/60 bg-green-950/40 p-4">
+          <div className="flex items-start gap-2 rounded-md border-0 border-[#2e4d33] bg-green-950/40 p-4">
             <Mail className="mt-0.5 h-2.5 w-2.5 shrink-0 text-green-300" aria-hidden="true" />
             <span>{message}</span>
           </div>
         )}
         {status === 'error' && (
-          <div className="flex items-start gap-2 rounded-md border-700/60 bg-red-950/40 p-4">
+          <div className="flex items-start gap-2 rounded-md border-0 border-[#4d2a2a] bg-red-950/40 p-4">
             <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0 text-red-300" aria-hidden="true" />
             <span>{message}</span>
           </div>

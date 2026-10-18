@@ -1,0 +1,32 @@
+# Video Editor values
+replicaCount: 1
+
+image:
+  repository: wideo11/video-editor
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 3002
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+env:
+  NODE_ENV: "production"
+  AUTH_SERVICE_URL: "http://auth-service:8085"
+  NEXT_PUBLIC_AUTH_API_URL: "http://localhost:3000/api/auth"
+  JWT_SECRET_KEY: "wideo11-super-secret-key-change-me"
+  PORT: "3002"
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70

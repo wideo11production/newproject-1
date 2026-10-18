@@ -434,6 +434,24 @@ func main() {
 	}
 	authHandler.SetEntitlementService(entitlementSvc)
 
+	// ---- Student violation penalty client ----
+	//
+	// auth-service detects content compliance violations (content_compliance.go)
+	// but the 25% revocation penalty lives in billing-service. This client
+	// calls billing-service's /internal/student/violation endpoint when a
+	// violation is detected.
+	//
+	// Optional: a missing client means violations are still BLOCKED (upload
+	// denied), but the penalty revocation is not forwarded to billing-service.
+	// This is fail-open for the block, fail-closed for the penalty.
+	// Hinglish: student violation penalty ke liye billing-service client
+	if bc, err := service.NewBillingClient(); err != nil {
+		log.Printf("[STUDENT-GATE] billing penalty client OFF: %v - violations will block uploads but not apply penalties", err)
+	} else {
+		authHandler.SetBillingClient(bc)
+		log.Printf("[STUDENT-GATE] billing penalty client wired (25%% revocation penalty ready)")
+	}
+
 	// The one-trial-per-BROWSER cap. Without this the table is empty and every
 	// browser gets unlimited trials, which is the failure mode the cap exists to
 	// prevent. See internal/service/trial_device.go.

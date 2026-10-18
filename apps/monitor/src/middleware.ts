@@ -84,11 +84,11 @@ const gate = createGate({
   // Monitor exposes host resource usage, container counts, and per-panel
   // Prometheus history. That is infrastructure data, not public product data.
   // Only the operator should see it. Anyone else gets a 403 (API) or a
-  // redirect to the dashboard (page).
+  // 401 (page) - no redirect, because monitor has no login page and no
+  // `/dashboard` route to send them to.
   roleGate: {
     paths: ['/', '/api/metrics', '/api/timeseries'],
     roles: ['superadmin'],
-    pageRedirect: '/dashboard',
   },
 });
 

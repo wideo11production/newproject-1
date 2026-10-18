@@ -149,7 +149,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
               <Tooltip key={pt.type}>
                 <TooltipTrigger asChild>
                   <div
-                    className="bg-gray-900/50 border-700 rounded-md p-3 cursor-grab active:cursor-grabbing hover:border-gray-600 transition-colors"
+                    className="bg-[#1e1e1e] border-0 rounded-md p-3 cursor-grab active:cursor-grabbing hover:bg-[#2a2a2a] transition-colors"
                     draggable
                     onDragStart={() => setDraggedPanel(pt)}
                     onDragEnd={() => setDraggedPanel(null)}
@@ -192,7 +192,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
       >
         {panels.length === 0 ? (
           <div 
-            className="border-2-dashed-700 rounded-md p-8 text-center h-full flex items-center justify-center"
+            className="border-0 border-dashed border-[#2a2a2a] rounded-md p-8 text-center h-full flex items-center justify-center"
             onDragOver={handleDragOver}
             onDrop={handleDrop}
           >
@@ -208,7 +208,7 @@ export default function DashboardEditor({ dashboard, onSave, onUpdate }: Dashboa
             {panels.map((panel, index) => (
               <div 
                 key={panel.id} 
-                className="col-span-4 bg-gray-900/50 border-700 rounded-md shadow-lg cursor-move hover:shadow-xl transition-shadow"
+                className="col-span-4 bg-[#1e1e1e] border-0 rounded-md shadow-lg cursor-move hover:shadow-xl transition-shadow"
                 style={{ order: index }}
                 draggable
               >
@@ -339,7 +339,7 @@ function renderPanelContent(panel: Panel) {
             </thead>
             <tbody>
               {Array.from({ length: 6 }).map((_, i) => (
-                <tr key={i} className="border-t-800">
+                <tr key={i} className="border-0 border-b border-[#2a2a2a]">
                   <td className="p-2 text-gray-300">endpoint-{i + 1}</td>
                   <td className="text-right p-2 text-gray-400">{Math.floor(Math.random() * 1000)}</td>
                   <td className="text-right p-2">
@@ -424,7 +424,7 @@ function renderPanelContent(panel: Panel) {
         <ScrollArea className="h-full">
           <div className="space-y-2 p-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-start space-x-3 p-2 rounded border-500/20 bg-red-500/5">
+              <div key={i} className="flex items-start space-x-3 p-2 rounded-md border-0 bg-red-500/5">
                 <AlertCircle className="h-2.5 w-2.5 text-red-400 mt-0.5 flex-shrink-0" />
                 <div className="flex-1">
                   <div className="font-medium text-ink">

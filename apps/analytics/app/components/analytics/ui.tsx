@@ -67,7 +67,7 @@ export function Stat({
   const toneClass =
     tone === 'good' ? 'text-emerald-400' : tone === 'warn' ? 'text-amber-400' : value === 'n/a' ? 'text-gray-500' : 'text-gray-100';
   return (
-    <div className="rounded border-800 bg-gray-900/60 p-3" title={hint}>
+    <div className="rounded-md border-0 bg-[#161616] p-3" title={hint}>
       <div className="truncate text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
       <div className={`mt-1 text-xl font-semibold tabular-nums ${toneClass}`}>
         {value}
@@ -90,7 +90,7 @@ export function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded border-800 bg-gray-900/40 p-3">
+    <div className="rounded-md border-0 bg-[#1e1e1e] p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-medium text-gray-200">{title}</h3>
         {error ? <span className="text-[11px] text-red-400">{error}</span> : null}

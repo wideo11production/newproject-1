@@ -546,7 +546,7 @@ export default function SecuritySetupGate({
 
         <CardContent className="px-8 pb-8">
           {error ? (
-            <div className="mb-4 flex items-start gap-2 rounded-md border-700/60 bg-red-950/40 p-3 text-sm text-red-300">
+            <div className="mb-4 flex items-start gap-2 rounded-md border-0 border-[#4d2a2a] bg-red-950/40 p-3 text-sm text-red-300">
               <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" />
               <span>{error}</span>
             </div>
@@ -659,7 +659,7 @@ export default function SecuritySetupGate({
                   User ko bataya jaata hai ki PIN change karne par kya
                   hota hai - transparency best practice hai. */}
       {changingPin ? (
-        <p className="rounded-md border-700/40 bg-amber-950/20 p-2.5 text-[11px] leading-relaxed text-amber-300/90">
+        <p className="rounded-md border-0 border-[#4d2a2a] bg-amber-950/20 p-2.5 text-[11px] leading-relaxed text-amber-300/90">
           When you change your PIN, every other signed-in device is signed
           out - including this one. Your old PIN stops working immediately,
           and you will be asked to log in again with the new PIN.
@@ -677,12 +677,12 @@ export default function SecuritySetupGate({
               </div>
 
               {[1, 2, 3].map((pos) => (
-                <div key={pos} className="space-y-2 rounded-md border-800 p-3">
+                <div key={pos} className="space-y-2 rounded-md border-0 border-[#2a2a2a] p-3">
                   <Label className="text-xs text-gray-400">Question {pos}</Label>
                   <select
                     value={picked[pos] ?? ''}
                     onChange={(e) => setPicked((p) => ({ ...p, [pos]: e.target.value }))}
-                    className="h-10 w-full rounded-md border-700 bg-gray-950 px-3 text-sm text-ink focus:border-blue-500 focus:outline-none"
+                    className="h-10 w-full rounded-md border-0 border-[#2a2a2a] bg-[#1e1e1e] px-3 text-sm text-[#ffffff] focus:border-[#ff6500] focus:ring-1 focus:ring-[#ff6500] focus:outline-none"
                   >
                     <option value="">Select a question...</option>
                     {availableQuestions.map((q) => (
@@ -795,7 +795,7 @@ export default function SecuritySetupGate({
                    - device me sensor nahi  -> skip + PIN/Questions se aage
                 */
                   <div className="space-y-3">
-                    <div className="rounded-md border-700 bg-gray-900/50 p-3 text-sm text-gray-300">
+                    <div className="rounded-md border-0 bg-[#1e1e1e] p-3 text-sm text-[#ffffff]">
                       <p className="font-medium">Biometrics not available on this device</p>
 
                       {/* ---- DIAGNOSTIC: ASLI WAJAH BATHAO ----
@@ -841,7 +841,7 @@ export default function SecuritySetupGate({
                   <Button
                     onClick={skipBiometric}
                     disabled={busy}
-                    className="h-11 w-full rounded-md border-700 bg-gray-900 text-gray-300 hover:bg-gray-800"
+                    className="h-11 w-full rounded-md border-0 border-[#2a2a2a] bg-[#0d0d0d] text-[#ffffff] hover:bg-[#161616]"
                   >
                     {busy ? <Loader2 className="mx-auto h-2.5 w-2.5 animate-spin" /> : 'Continue without biometric'}
                   </Button>
@@ -862,7 +862,7 @@ export default function SecuritySetupGate({
               redirect karta hai. Ye effect har render check karta hai, isliye
               chahe complete status kaise bhi aaye - redirect ho jayega. */}
           {status?.setup_complete && (
-            <div className="mt-4 flex items-center gap-2 rounded-md border-700/60 bg-emerald-950/40 p-3 text-sm text-emerald-300">
+            <div className="mt-4 flex items-center gap-2 rounded-md border-0 border-[#2e4d33] bg-emerald-950/40 p-3 text-sm text-emerald-300">
               <CheckCircle2 className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
               <span>Security setup complete. Taking you to your dashboard...</span>
               <Loader2 className="ml-auto h-2.5 w-2.5 animate-spin" aria-hidden="true" />

@@ -78,8 +78,16 @@ type AuthHandler struct {
 
 	// transcode hands a stored asset to the transcoding service. May be nil, in
 	// which case an upload is recorded and the transcode is not queued - never a
-	// failed request.
+	// failed upload.
 	transcode *service.TranscodeClient
+
+	// billingClient calls billing-service for student violation penalties.
+	// May be nil - in which case compliance violations are blocked by auth-service
+	// but the 25% penalty/revocation is NOT forwarded to billing-service.
+	// This is fail-open for the upload (upload was already blocked) but
+	// fail-closed for the financial penalty (better to not charge than to
+	// charge through an unconfigured client).
+	billingClient *service.BillingClient
 
 	// deviceSlots is the lifetime plan's device allowance. Read-only here; the
 	// enforcement happens in the register path (see DeviceSlotService).
@@ -160,6 +168,17 @@ func (h *AuthHandler) SetMFAChallengeStore(s *redis.MFAChallengeStore) {
 // SetTranscodeClient wires the transcoding handoff.
 func (h *AuthHandler) SetTranscodeClient(t *service.TranscodeClient) {
 	h.transcode = t
+}
+
+// SetBillingClient wires the billing-service student violation penalty client.
+//
+// Optional: nil means student violation penalties are NOT forwarded to
+// billing-service. The upload is still blocked by the compliance check;
+// only the 25% penalty revocation step is skipped.
+//
+// Hinglish: student violation penalty ke liye billing-service client wiring
+func (h *AuthHandler) SetBillingClient(b *service.BillingClient) {
+	h.billingClient = b
 }
 
 // SetDeviceSlotService wires the lifetime device allowance.

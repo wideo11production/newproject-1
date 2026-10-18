@@ -40,7 +40,7 @@ export default function AlertsRoute() {
             <select
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              className="w-32 rounded-md bg-gray-800/50 border-700 text-gray-300"
+              className="w-32 rounded-md border-0 bg-[#161616] text-[#ffffff]"
               aria-label="Filter alerts"
             >
               <option value="all">All Alerts</option>

@@ -331,7 +331,7 @@ className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center
             `break-all` rather than an ellipsis: an email cut mid-character is
             useless for telling two accounts apart, which is the entire job.
           */}
-          <div className="border-b-edge px-2 py-1.5">
+          <div className="border-0 px-2 py-1.5 ">
             <p className="break-all text-[8px] font-medium text-fg">{session.email}</p>
             <p className="mt-0.5 text-[8px] capitalize text-fg-muted">{session.role}</p>
           </div>
@@ -370,7 +370,7 @@ className="relative box-border flex h-7 w-7 shrink-0 items-center justify-center
             THIS device only, and their other devices stay signed in. That
             distinction is the whole reason device-scoped logout was built.
           */}
-          <p className="border-t-edge px-2 pt-1.5 pb-1 text-[8px] leading-relaxed text-fg-muted">
+          <p className="border-0 px-2 pt-1.5 pb-1 text-[8px] leading-relaxed text-fg-muted">
             Logging out ends this device only. Your other devices stay signed in.
           </p>
         </div>

@@ -42,6 +42,14 @@ type BillingService struct {
 	// (nil = checkout uses the placeholder generator for tests/dev).
 	// Set via SetStripeClient.
 	stripeClient  StripeCheckoutClient
+	// student - AURA student gate engine: verification state, identity
+	// token, and the 25% educational-violation penalty law.
+	// Optional (nil = student gate features are OFF).
+	// Set via SetStudentService.
+	student *StudentService
+	// enforcement - AURA compliance enforcement loop: warning → suspension + 25% penalty.
+	// Optional (nil = enforcement features are OFF). Set via SetComplianceEnforcement.
+	enforcement *ComplianceEnforcementEngine
 }
 
 // EntitlementFirer records a sale as a plan grant in auth-service.
@@ -101,6 +109,46 @@ func (s *BillingService) SetEntitlementFirer(f EntitlementFirer) {
 // for tests and dev environments without real Stripe credentials.
 func (s *BillingService) SetStripeClient(c StripeCheckoutClient) {
 	s.stripeClient = c
+}
+
+// SetStudentService wires the AURA student gate engine.
+//
+// Hinglish: student gate penalty logic billing-service ke andar hi hota
+// hai. Ye setter isliye use hota hai kyunki StudentService ka
+// construction main.go mein hi hoti hai (repository wiring ke baad).
+// Nil-safe: student features gracefully OFF agar not wired ho.
+func (s *BillingService) SetStudentService(ss *StudentService) {
+	s.student = ss
+}
+
+// StudentService returns the wired student gate engine, or nil if not wired.
+//
+// Nil-safe: callers check before calling. This is the read accessor that
+// the handler layer uses; `SetStudentService` is the write accessor called
+// from main.go.
+func (s *BillingService) StudentService() *StudentService {
+	return s.student
+}
+
+// IdentityRepo returns the identity adapter (UUID↔uint bridge).
+//
+// Hinglish: auth-service UUID ko billing-service uint mein resolve karne ke liye
+func (s *BillingService) IdentityRepo() repository.UserIdentityRepository {
+	return s.identityRepo
+}
+
+// SetComplianceEnforcement wires the AURA compliance enforcement engine.
+//
+// Hinglish: compliance enforcement loop (warning → suspension + 25% penalty)
+// ke liye engine wiring. main.go se repository wiring ke baad call hota hai.
+// Nil-safe: enforcement features gracefully OFF agar not wired ho.
+func (s *BillingService) SetComplianceEnforcement(ce *ComplianceEnforcementEngine) {
+	s.enforcement = ce
+}
+
+// ComplianceEnforcement returns the wired enforcement engine, or nil if not wired.
+func (s *BillingService) ComplianceEnforcement() *ComplianceEnforcementEngine {
+	return s.enforcement
 }
 
 // InvoiceItemRequest represents a request to create an invoice item

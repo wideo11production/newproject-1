@@ -1,0 +1,28 @@
+replicaCount: 1
+image:
+  repository: wideo11/push-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+service:
+  type: ClusterIP
+  port: 8084
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+env:
+  NODE_ENV: "production"
+  DATABASE_URL: "postgresql://wideo11:wideo11_password@postgres:5432/wideo11"
+  REDIS_URL: "redis://redis:6379"
+  VAPID_PUBLIC_KEY: "your-vapid-public-key"
+  VAPID_PRIVATE_KEY: "your-vapid-private-key"
+  VAPID_SUBJECT: "mailto:admin@wideo11.com"
+  PORT: "8084"
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70

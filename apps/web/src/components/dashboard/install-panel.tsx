@@ -205,7 +205,7 @@ export function InstallPanel({ onClose }: { onClose: () => void }) {
                 warning isliye zaroori hai taki user confuse na ho ki QR
                 "kharab" hai. */}
             {isLocalhost ? (
-              <div className="w-full rounded-md border-700/50 bg-amber-950/20 p-2.5">
+              <div className="w-full rounded-md border-0 border-[#2a2a2a] bg-amber-950/20 p-2.5">
                 <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-300">
                   <AlertTriangle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
                   <span>

@@ -357,7 +357,7 @@ function VerifyContent() {
                 setElapsed(0);
                 setMessage('');
               }}
-              className="mt-1 rounded-md border-700 px-3 py-1.5 text-xs text-gray-300 transition-colors hover:bg-gray-800"
+              className="mt-1 rounded-md border-0 bg-[#1e1e1e] px-3 py-1.5 text-xs text-[#ffffff] transition-colors hover:bg-[#2a2a2a]"
             >
               Try again
             </button>
@@ -575,7 +575,7 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
   if (state === 'sent') {
     return (
       <div className="space-y-3">
-        <div className="flex items-start gap-2.5 rounded-md border-700/60 bg-emerald-950/40 p-3 text-xs text-emerald-300">
+        <div className="flex items-start gap-2.5 rounded-md border-0 border-[#2e4d33] bg-emerald-950/40 p-3 text-xs text-emerald-300">
           <Send className="mt-0.5 h-2.5 w-2.5 shrink-0" />
           <p className="leading-relaxed">{feedback}</p>
         </div>
@@ -642,7 +642,7 @@ function ResendPanel({ initialEmail }: { initialEmail: string }) {
               429 par retryAfter seconds dikhate hain taaki user ko pata ho
               EXACTLY kitna wait karna hai (rather than guessing). */}
           {state === 'error' && feedback ? (
-            <div className="rounded-md border-700/50 bg-amber-950/30 p-2.5">
+            <div className="rounded-md border-0 border-[#4d3312] bg-amber-950/30 p-2.5">
               <p className="text-[11px] leading-relaxed text-amber-300">
                 {feedback}
               </p>

@@ -1322,7 +1322,7 @@ export function RecorderDialog({
         )}
 
         {error && (
-          <div className="flex items-start gap-2 rounded border-800 bg-amber-950/40 p-2.5 text-[8px] text-amber-300">
+          <div className="flex items-start gap-2 rounded-md border-0 bg-amber-950/40 p-2.5 text-[8px] text-amber-300">
             <AlertTriangle className="mt-0.5 h-2 w-2 shrink-0" />
             <span>{error}</span>
           </div>

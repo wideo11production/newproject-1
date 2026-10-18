@@ -739,7 +739,7 @@ export default function UserSettingsPage() {
               settings?.content_upload_allowed === false ? (
                 <p
                   role="status"
-                  className="flex items-start gap-1.5 rounded-md border-700/50 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
+                  className="flex items-start gap-1.5 rounded-md border-0 border-[#4d3312] bg-amber-950/30 px-3 py-2 text-[11px] text-amber-300"
                 >
                   <AlertTriangle
                     className="mt-0.5 h-2.5 w-2.5 shrink-0"

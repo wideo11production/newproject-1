@@ -262,7 +262,7 @@ function Stat({
             : 'text-gray-100';
   return (
     <div
-      className="rounded border-800 bg-gray-900/60 p-3"
+      className="rounded-md border-0 bg-[#161616] p-3"
       title={hint}
     >
       <div className="truncate text-[11px] uppercase tracking-wide text-gray-500">
@@ -291,7 +291,7 @@ function Panel({
   error?: string;
 }) {
   return (
-    <div className="rounded border-800 bg-gray-900/40 p-3">
+    <div className="rounded-md border-0 bg-[#1e1e1e] p-3">
       <div className="mb-1 flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-medium text-gray-200">{title}</h3>
         {error ? (
@@ -314,7 +314,7 @@ function NotInstrumented({
 }) {
   return (
     <div
-      className="flex items-center justify-between-800/60 py-1.5 last:border-b-0"
+      className="flex items-center justify-between border-0 border-b border-[#2a2a2a] py-1.5 last:border-0"
       title={why}
     >
       <span className="text-xs text-gray-400">{label}</span>

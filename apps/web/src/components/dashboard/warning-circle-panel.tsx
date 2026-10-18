@@ -282,7 +282,7 @@ export default function WarningCirclePanel({
                   <p className={`text-xs ${grafanaTextMuted}`}>No active alerts</p>
                 </div>
               ) : (
-                <div className="divide-y divide-gray-800">
+                <div className="border-0">
                   {visibleAlerts.map((alert) => {
                     const Icon = SEVERITY_ICON[alert.severity] || Bell;
                     const colorClass = SEVERITY_COLOR[alert.severity] || grafanaTextMuted;

@@ -1,0 +1,27 @@
+replicaCount: 1
+image:
+  repository: wideo11/billing-service
+  pullPolicy: IfNotPresent
+  tag: "latest"
+service:
+  type: ClusterIP
+  port: 8082
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+env:
+  NODE_ENV: "production"
+  DATABASE_URL: "postgresql://wideo11:wideo11_password@postgres:5432/wideo11"
+  REDIS_URL: "redis://redis:6379"
+  AUTH_SERVICE_URL: "http://auth-service:8085"
+  JWT_SECRET_KEY: "wideo11-super-secret-key-change-me"
+  PORT: "8082"
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70

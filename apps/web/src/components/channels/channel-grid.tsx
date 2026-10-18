@@ -151,7 +151,7 @@ export default function ChannelGrid({
   // ---- Error ----
   if (error) {
     return (
-      <div className="rounded-md border-900/40 bg-red-950/20 px-5 py-4 text-[13px] text-red-200/80">
+      <div className="rounded-md border-0 bg-red-950/20 px-5 py-4 text-[13px] text-red-200/80">
         <div className="flex items-start gap-2.5">
           <AlertCircle className="mt-0.5 h-2.5 w-2.5 shrink-0" aria-hidden="true" />
           <span>{error}</span>

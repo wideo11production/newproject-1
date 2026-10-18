@@ -1,0 +1,180 @@
+# Wideo11 CI/CD Pipeline
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  REGISTRY_USERNAME: ${{ github.actor }}
+  REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  # ============================================================================
+  # TEST
+  # ============================================================================
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - video-editor
+          - web
+          - superadmin
+          - monitor
+          - currency
+          - admin
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        working-directory: ${{ github.workspace }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Run typecheck
+        working-directory: ${{ github.workspace }}
+        run: pnpm --filter ${{ matrix.service }} run typecheck
+
+  # ============================================================================
+  # GO SERVICES - BUILD + TEST
+  # ============================================================================
+  go-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - auth-service
+          - billing-service
+          - push-service
+          - ads-service
+          - analytics-service
+          - transcoding-service
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build
+        working-directory: ${{ github.workspace }}/${{ matrix.service }}
+        run: go build ./...
+
+      - name: Test
+        working-directory: ${{ github.workspace }}/${{ matrix.service }}
+        run: go test ./... -count=1
+
+  # ============================================================================
+  # BUILD AND PUSH DOCKER IMAGES
+  # ============================================================================
+  build:
+    needs: [test, go-test]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: auth-service
+            context: services/auth-service
+          - name: billing-service
+            context: services/billing-service
+          - name: push-service
+            context: services/push-service
+          - name: ads-service
+            context: services/ads-service
+          - name: analytics-service
+            context: services/analytics-service
+          - name: video-editor
+            context: apps/video-editor
+          - name: web
+            context: apps/web
+          - name: superadmin
+            context: apps/superadmin
+          - name: monitor
+            context: apps/monitor
+          - name: currency
+            context: apps/currency
+          - name: admin
+            context: apps/admin
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ env.REGISTRY_PASSWORD }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ github.workspace }}/${{ matrix.service.context }}
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service.name }}:${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.service.name }}:latest
+
+  # ============================================================================
+  # DEPLOY TO KUBERNETES
+  # ============================================================================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/k8s-deploy@v4
+        with:
+          namespace: wideo11
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infrastructure/kubernetes/
+          kubectl rollout status deployment/wideo11-auth-service --timeout=300s
+          kubectl rollout status deployment/wideo11-video-editor --timeout=300s
+          kubectl rollout status deployment/wido11-web --timeout=300s
+          kubectl rollout status deployment/wideo11-superadmin --timeout=300s
+          kubectl rollout status deployment/wido11-billing-service --timeout=300s
+
+  # ============================================================================
+  # SMOKE TESTS
+  # ============================================================================
+  smoke-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for services to be ready
+        run: sleep 30
+
+      - name: Test login endpoint
+        run: |
+          curl -f -X POST http://localhost:3000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"advchashampalup@gmail.com","password":"Rajaghenna123*#"}' || exit 1
+
+      - name: Test superadmin login
+        run: |
+          curl -f -X POST http://localhost:3000/api/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"advchashampalup@gmail.com","password":"Rajaghenna123*#"}' || exit 1
